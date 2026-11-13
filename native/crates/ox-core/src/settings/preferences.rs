@@ -384,6 +384,18 @@ pub struct Preferences {
     /// default, so they always show; stored only when on.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub hide_expand_arrows: bool,
+    /// The navigation pane adds the app's own rows to Windows 11's: a
+    /// capacity bar under each drive (SIDE-018), Recent files, Recent
+    /// locations and the Recycle Bin (SIDE-025, SIDE-026). On by default,
+    /// as the pane was before; stored only when off, which gives Windows
+    /// 11's pane (SIDE-034).
+    #[serde(skip_serializing_if = "is_true")]
+    pub more_navigation_pane_items: bool,
+    /// A tab's menu is the app's own, with Move tab to new window, Move
+    /// tab to window… and Open windows… (TAB-012). On by default; stored
+    /// only when off, which gives Windows 11's tab menu (TAB-060).
+    #[serde(skip_serializing_if = "is_true")]
+    pub more_tab_menu_items: bool,
     /// The sidebar's icon size in pixels (16, 22, 32 or 48), or 0 for the
     /// automatic size (Dolphin's Places panel Icon Size). Stored only when
     /// chosen.
@@ -403,6 +415,20 @@ pub struct Preferences {
     /// after the current tab (Dolphin's `OpenNewTabAfterLastTab`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub open_tabs_at_end: bool,
+    /// Home shows Quick access and the Recent and Favorites lists, as
+    /// Windows 11 File Explorer's Home does, instead of the home folder's
+    /// contents (HOME-012). Off by default; stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub home_quick_access: bool,
+    /// The files added to Favorites, by location, in the order they were
+    /// added (HOME-014). Stored only when there is one.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub favorites: Vec<String>,
+    /// The sections of Home the user folded, by the keys the app gives
+    /// them, so Home opens as it was left (HOME-016). Stored only when one
+    /// is folded.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub home_folded: Vec<String>,
     /// A start without locations reopens the tabs of the last window
     /// closed (Dolphin's `RememberOpenedTabs`, Explorer's "Restore
     /// previous folder windows at logon"); off, as in Explorer.
@@ -530,6 +556,10 @@ pub struct Preferences {
     /// On by default; stored only when off.
     #[serde(skip_serializing_if = "is_true")]
     pub update_checks: bool,
+    /// Show the command bar's Update button while a release waits
+    /// (UPD-001). On by default, as the owner chose; stored only when off.
+    #[serde(skip_serializing_if = "is_true")]
+    pub show_update_button: bool,
     /// When the app last looked for a release by itself, in seconds since
     /// the Unix epoch. Stored once it has.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -557,6 +587,8 @@ const MAX_SECTION_KEY: usize = 32;
 /// The most sidebar places that may be hidden one by one, and the longest
 /// location.
 const MAX_HIDDEN_PLACES: usize = 64;
+/// The most files Favorites keeps.
+const MAX_FAVORITES: usize = 500;
 const MAX_PLACE_LOCATION: usize = 4096;
 
 /// The sidebar icon sizes the user may choose, in pixels; 0 is automatic.
@@ -609,10 +641,15 @@ impl Default for Preferences {
             desktop_font: false,
             hide_sidebar: false,
             hide_expand_arrows: false,
+            more_navigation_pane_items: true,
+            more_tab_menu_items: true,
             sidebar_icon_size: 0,
             hidden_sidebar_sections: Vec::new(),
             hidden_sidebar_places: Vec::new(),
             open_tabs_at_end: false,
+            home_quick_access: false,
+            favorites: Vec::new(),
+            home_folded: Vec::new(),
             restore_session: false,
             startup_folder: None,
             begin_in_split_view: false,
@@ -639,6 +676,7 @@ impl Default for Preferences {
             folder_views: Vec::new(),
             downloads_group_by: None,
             update_checks: true,
+            show_update_button: true,
             update_checked_at: None,
             update_notice_dismissed: None,
         }
@@ -723,12 +761,34 @@ impl Preferences {
         if let Some(places) = places {
             self.hidden_sidebar_places.clone_from(places);
         }
+        if let Some(favorites) = &update.favorites {
+            self.favorites = canonical_favorites(favorites);
+        }
+        let folded = update.home_folded.as_ref().filter(|keys| {
+            keys.len() <= MAX_HIDDEN_SECTIONS
+                && keys.iter().all(|key| {
+                    !key.is_empty()
+                        && key.len() <= MAX_SECTION_KEY
+                        && key.chars().all(|c| c.is_ascii_alphanumeric())
+                })
+        });
+        if let Some(folded) = folded {
+            self.home_folded.clone_from(folded);
+        }
     }
 
-    /// The daily update check: whether it runs, when it last did, and the
+    /// Whether `uri` is among the Favorites, compared by its canonical
+    /// form ([`favorite_key`]), as it may come from GIO (HOME-014).
+    pub fn is_favorite(&self, uri: &str) -> bool {
+        favorite_key(uri).is_some_and(|key| self.favorites.contains(&key))
+    }
+
+    /// The daily update check: whether it runs, when it last did, whether
+    /// the command bar shows Update, and the
     /// release whose notice was dismissed (UPD-001).
     fn apply_update_checks(&mut self, update: &PreferencesUpdate) {
         replace_if_some(&mut self.update_checks, update.update_checks);
+        replace_if_some(&mut self.show_update_button, update.show_update_button);
         if let Some(checked_at) = update.update_checked_at {
             self.update_checked_at = Some(checked_at);
         }
@@ -779,6 +839,11 @@ impl Preferences {
         replace_if_some(&mut self.progress_details, update.progress_details);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
         replace_if_some(&mut self.hide_expand_arrows, update.hide_expand_arrows);
+        replace_if_some(
+            &mut self.more_navigation_pane_items,
+            update.more_navigation_pane_items,
+        );
+        replace_if_some(&mut self.more_tab_menu_items, update.more_tab_menu_items);
         let icon_size = update
             .sidebar_icon_size
             .filter(|size| SIDEBAR_ICON_SIZES.contains(size));
@@ -807,6 +872,7 @@ impl Preferences {
         }
         let columns_changed = self.apply_view_options(update);
         replace_if_some(&mut self.open_tabs_at_end, update.open_tabs_at_end);
+        replace_if_some(&mut self.home_quick_access, update.home_quick_access);
         replace_if_some(&mut self.restore_session, update.restore_session);
         replace_if_some(&mut self.begin_in_split_view, update.begin_in_split_view);
         replace_if_some(
@@ -982,6 +1048,10 @@ pub struct PreferencesUpdate {
     /// Hide the navigation pane's expand arrows until it is pointed at, or
     /// always show them.
     pub hide_expand_arrows: Option<bool>,
+    /// Keep the app's own rows in the navigation pane, or show Windows'.
+    pub more_navigation_pane_items: Option<bool>,
+    /// Keep the app's own tab menu, or show Windows'.
+    pub more_tab_menu_items: Option<bool>,
     /// New sidebar icon size; one of [`SIDEBAR_ICON_SIZES`] or ignored.
     pub sidebar_icon_size: Option<u32>,
     /// Replaces the hidden sidebar sections; up to 16 short ASCII keys,
@@ -992,6 +1062,13 @@ pub struct PreferencesUpdate {
     pub hidden_sidebar_places: Option<Vec<String>>,
     /// Open tabs from a folder at the end, or after the current tab.
     pub open_tabs_at_end: Option<bool>,
+    /// Open Quick access on Home.
+    pub home_quick_access: Option<bool>,
+    /// Replaces the Favorites; up to 500 locations, else ignored.
+    pub favorites: Option<Vec<String>>,
+    /// Replaces Home's folded sections; up to 16 short ASCII keys, else
+    /// ignored.
+    pub home_folded: Option<Vec<String>>,
     /// Reopen the last window's tabs on a start without locations.
     pub restore_session: Option<bool>,
     /// Where new windows open; empty for Home. A location the location
@@ -1047,6 +1124,8 @@ pub struct PreferencesUpdate {
     pub downloads_group_by: Option<GroupBy>,
     /// Look for a newer release once a day when the app starts.
     pub update_checks: Option<bool>,
+    /// Show the command bar's Update button while a release waits.
+    pub show_update_button: Option<bool>,
     /// When the app last looked for a release by itself.
     pub update_checked_at: Option<u64>,
     /// The release whose update notice was dismissed; a value that is not
@@ -1107,6 +1186,8 @@ impl PreferencesUpdate {
             desktop_font: flag("desktopFont"),
             hide_sidebar: flag("hideSidebar"),
             hide_expand_arrows: flag("hideExpandArrows"),
+            more_navigation_pane_items: flag("moreNavigationPaneItems"),
+            more_tab_menu_items: flag("moreTabMenuItems"),
             sidebar_icon_size: values
                 .get("sidebarIconSize")
                 .and_then(Value::as_u64)
@@ -1114,6 +1195,9 @@ impl PreferencesUpdate {
             hidden_sidebar_sections: values.get("hiddenSidebarSections").and_then(read_keys),
             hidden_sidebar_places: values.get("hiddenSidebarPlaces").and_then(read_keys),
             open_tabs_at_end: flag("openTabsAtEnd"),
+            home_quick_access: flag("homeQuickAccess"),
+            favorites: values.get("favorites").and_then(read_keys),
+            home_folded: values.get("homeFolded").and_then(read_keys),
             restore_session: flag("restoreSession"),
             startup_folder: text("startupFolder").map(str::to_owned),
             begin_in_split_view: flag("beginInSplitView"),
@@ -1143,6 +1227,7 @@ impl PreferencesUpdate {
                 .and_then(Value::as_str)
                 .and_then(GroupBy::from_key),
             update_checks: flag("updateChecks"),
+            show_update_button: flag("showUpdateButton"),
             update_checked_at: values.get("updateCheckedAt").and_then(Value::as_u64),
             update_notice_dismissed: text("updateNoticeDismissed").map(str::to_owned),
         })
@@ -1156,6 +1241,44 @@ fn read_keys(value: &Value) -> Option<Vec<String>> {
         .iter()
         .map(|key| key.as_str().map(str::to_owned))
         .collect()
+}
+
+/// The favorites of `favorites` that name a location the app can open,
+/// in their canonical form, each once, at most [`MAX_FAVORITES`]: a local
+/// path, a share, a remote folder (without its user name) or a connected
+/// device, never one with a password, of another scheme, a relative path
+/// or a virtual place. The file may have been edited by
+/// hand, and Home hands each favorite to GIO.
+fn canonical_favorites(favorites: &[String]) -> Vec<String> {
+    let mut kept: Vec<String> = Vec::new();
+    for location in favorites.iter().filter_map(|uri| favorite_key(uri)) {
+        if kept.contains(&location) {
+            continue;
+        }
+        kept.push(location);
+        if kept.len() == MAX_FAVORITES {
+            break;
+        }
+    }
+    kept
+}
+
+/// The form Favorites keeps `uri` in, and compares it by: an address with
+/// its scheme (never a path read against the current folder), normalised,
+/// a remote one without its user name, as settings.json holds none
+/// (SAFE-010). `None` for what cannot be a favorite: empty, too long,
+/// with control characters or a password, of a scheme the app does not
+/// open, or a virtual place. The address GIO gives a file (with `(`, `!`
+/// or a user name) has the same key as the favorite it adds (HOME-014).
+pub fn favorite_key(uri: &str) -> Option<String> {
+    if uri.is_empty() || uri.len() > MAX_PLACE_LOCATION || uri.contains(char::is_control) {
+        return None;
+    }
+    crate::location::scheme(uri)?;
+    let location = crate::location::normalise(uri)
+        .map(|uri| crate::location::without_user(&uri))
+        .ok()?;
+    (!crate::location::is_virtual_location(&location)).then_some(location)
 }
 
 /// A text size given as a true integer. Python checks `type(size) is int`,
@@ -1225,6 +1348,40 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    /// Favorites from a damaged or hand-edited file keep only locations
+    /// the app can open, in their canonical form, each once: a name with
+    /// credentials, another URI scheme, a virtual place or a relative path
+    /// is left out, and a remote one loses its user name, so nothing
+    /// else is handed to GIO by Home (HOME-014).
+    #[test]
+    fn favorites_keep_only_canonical_locations() {
+        let update = PreferencesUpdate::from_json(&json!({
+            "favorites": [
+                "file:///home/ana/Notes%201.txt",
+                "file:///home/ana/./Notes 1.txt",
+                "smb://NAS/Team/plan.odt",
+                "smb://ana:secret@nas/Team/plan.odt",
+                "sftp://ana@host/plan.txt",
+                "http://example.com/x",
+                "javascript:alert(1)",
+                "trash:///old.txt",
+                "relative/path.txt",
+                ""
+            ]
+        }))
+        .expect("an object");
+        let mut preferences = Preferences::default();
+        preferences.apply(&update);
+        assert_eq!(
+            preferences.favorites,
+            [
+                "file:///home/ana/Notes%201.txt",
+                "smb://nas/Team/plan.odt",
+                "sftp://host/plan.txt"
+            ]
+        );
+    }
 
     /// Downloads is grouped by date modified until the user chooses
     /// another Group by there, kept apart from the shared style, or in its
@@ -1710,6 +1867,38 @@ mod tests {
         assert_eq!(stored["hideExpandArrows"], json!(true));
         let read = PreferencesUpdate::from_json(&stored).expect("read back");
         assert_eq!(read.hide_expand_arrows, Some(true));
+    }
+
+    /// The app's extras beyond Windows 11's tab menu and navigation pane
+    /// start on, as both were before they could be turned off, and are not
+    /// stored then; each one turned off, for Windows' layout, is saved and
+    /// read back, and turned on again leaves the file.
+    ///
+    /// parity: TAB-060, SIDE-034
+    #[test]
+    fn tab_menu_and_navigation_pane_extras_start_on_and_are_stored_when_off() {
+        let keys = ["moreTabMenuItems", "moreNavigationPaneItems"];
+        let mut preferences = Preferences::default();
+        assert!(preferences.more_tab_menu_items && preferences.more_navigation_pane_items);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        for key in keys {
+            assert!(stored.get(key).is_none(), "{key} is not stored by default");
+        }
+        let all = |on: bool| {
+            let values = keys.iter().map(|key| ((*key).to_owned(), json!(on))).collect();
+            PreferencesUpdate::from_json(&Value::Object(values)).expect("valid preferences")
+        };
+        preferences.apply(&all(false));
+        assert!(!preferences.more_tab_menu_items && !preferences.more_navigation_pane_items);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        for key in keys {
+            assert_eq!(stored[key], json!(false), "{key} is stored once off");
+        }
+        let mut read = Preferences::default();
+        read.apply(&PreferencesUpdate::from_json(&stored).expect("read back"));
+        assert_eq!(read, preferences, "read back as saved");
+        preferences.apply(&all(true));
+        assert_eq!(preferences, Preferences::default());
     }
 
     /// The clipboard's extras beyond Windows start on, as they were before

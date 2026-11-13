@@ -28,6 +28,15 @@ const STARTUP_FOLDER: RowText = RowText {
                open explorer to",
 };
 
+const HOME_QUICK_ACCESS: RowText = RowText {
+    title: "Open Quick access on Home",
+    description: "Home shows your Quick access folders, the files you opened lately and your \
+                  favorite files, as in Windows 11, instead of the home folder's contents. Off \
+                  by default.",
+    keywords: "home page quick access recent files favorites favourites pinned folders windows 11 \
+               start page landing",
+};
+
 const RESTORE_SESSION: RowText = RowText {
     title: "Reopen my tabs when OpenXplorer starts",
     description: "Starting OpenXplorer without a folder reopens the tabs and split panes the last \
@@ -83,6 +92,16 @@ fn shown_folder(uri: Option<&str>) -> String {
 pub(super) fn startup_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Start up"));
     group.add_row(&startup_folder_row(page));
+    let home = SettingRow::new(HOME_QUICK_ACCESS);
+    let home_quick_access = PreferenceBinding {
+        read: |preferences| preferences.home_quick_access,
+        write: |on| PreferencesUpdate {
+            home_quick_access: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    home.add_control(&page.preference_switch(home_quick_access), ControlName::RowTitle);
+    group.add_row(&home);
     let restore = SettingRow::new(RESTORE_SESSION);
     let binding = PreferenceBinding {
         read: |preferences| preferences.restore_session,

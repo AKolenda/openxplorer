@@ -21,7 +21,7 @@ from verify_layout import InstalledTree, Report, VerificationError
 
 # The version at the top of each channel's metainfo, which a verified tree
 # must carry.
-METAINFO_VERSIONS = {Channel.PREVIEW: '2.0.16', Channel.STABLE: '2.0.16'}
+METAINFO_VERSIONS = {Channel.PREVIEW: '2.0.17', Channel.STABLE: '2.0.17'}
 
 
 @dataclass(frozen=True)

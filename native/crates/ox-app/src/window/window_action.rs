@@ -40,6 +40,9 @@ pub(crate) enum WindowAction {
     /// Copies the tab whose id is the `u64` target right after it, in
     /// front, with its history (Duplicate tab).
     DuplicateTab,
+    /// Closes every tab to the right of the one whose id is the `u64`
+    /// target.
+    CloseTabsToTheRight,
     /// Reopens the most recently closed tab (Ctrl+Shift+T).
     ReopenClosedTab,
     /// Reopens the closed tab at the `u32` target, 0 being the most
@@ -408,6 +411,17 @@ pub(crate) enum WindowAction {
     /// Opens the folder of the one selected search result in a new
     /// window, with the result selected there.
     OpenFileLocationInWindow,
+    /// Adds the file in the string target to Favorites (HOME-014).
+    AddToFavorites,
+    /// Removes the file in the string target from Favorites (HOME-014).
+    RemoveFromFavorites,
+    /// Opens the item in the string target as a double-click does: a
+    /// folder in the tab, a file in its default application (Home's
+    /// Recent and Favorites).
+    OpenItemAt,
+    /// Opens the folder of the item in the string target with the item
+    /// selected (Home's Open file location).
+    OpenFileLocationOf,
     /// Save search: adds the search shown to the sidebar (SRCH-038).
     SaveSearch,
     /// Opens the saved search whose `(folder, text)` is the target.
@@ -531,6 +545,7 @@ impl WindowAction {
             WindowAction::ShowTabNumber => "show-tab-number",
             WindowAction::CloseOtherTabs => "close-other-tabs",
             WindowAction::DuplicateTab => "duplicate-tab",
+            WindowAction::CloseTabsToTheRight => "close-tabs-to-the-right",
             WindowAction::ReopenClosedTab => "reopen-closed-tab",
             WindowAction::RestoreClosedTab => "restore-closed-tab",
             WindowAction::OpenSelectionInTabs => "open-selection-in-tabs",
@@ -681,6 +696,10 @@ impl WindowAction {
             WindowAction::RunServiceAction => "run-service-action",
             WindowAction::OpenFileLocationInTab => "open-file-location-in-tab",
             WindowAction::OpenFileLocationInWindow => "open-file-location-in-window",
+            WindowAction::AddToFavorites => "add-to-favorites",
+            WindowAction::RemoveFromFavorites => "remove-from-favorites",
+            WindowAction::OpenItemAt => "open-item-at",
+            WindowAction::OpenFileLocationOf => "open-file-location-of",
             WindowAction::SaveSearch => "save-search",
             WindowAction::OpenSavedSearch => "open-saved-search",
             WindowAction::ForgetSavedSearch => "forget-saved-search",

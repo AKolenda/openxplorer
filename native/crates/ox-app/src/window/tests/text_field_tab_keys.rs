@@ -107,8 +107,8 @@ fn window_with_tabs(fixture: &Fixture, tabs: usize) -> TestWindow {
     test
 }
 
-/// Ctrl+T in `field` opens a new tab, of the home folder as the New tab
-/// button does, with 1 and with 3 tabs open.
+/// Ctrl+T in `field` opens a new tab, of Home as the New tab button
+/// does, with 1 and with 3 tabs open.
 fn ctrl_t_opens_a_tab_from(field: Field) {
     for tabs in [1, 3] {
         let fixture = Fixture::standard();
@@ -123,10 +123,11 @@ fn ctrl_t_opens_a_tab_from(field: Field) {
             || test.window.tab_count() == tabs + 1,
         );
         test.wait_for_listing("the new tab");
-        let home = ox_core::location::file_uri(&gtk::glib::home_dir());
+        // Home as the New tab button opens it: the home folder, or the
+        // Home page with "Open Quick access on Home" (HOME-012).
         assert_eq!(
             test.window.current_uri(),
-            Some(home),
+            Some(test.window.home_location()),
             "{field:?}: the new tab shows Home"
         );
         assert!(

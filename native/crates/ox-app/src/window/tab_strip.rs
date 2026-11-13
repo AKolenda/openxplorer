@@ -38,7 +38,7 @@ use crate::icons::{self, Art, ArtImage, Icon};
 use super::gestures;
 use super::menu_popover::MenuEntry;
 use super::session::TabId;
-use super::tab_menu::tab_menu;
+use super::tab_menu::{tab_menu, TabMenuFacts};
 use super::window_action::WindowAction;
 
 pub(in crate::window) use carried_tab::MARGIN as CARRIED_MARGIN;
@@ -172,6 +172,7 @@ mod imp {
             let menu = MenuPopover::new(Vec::new());
             menu.set_offset(0, 0);
             menu.set_parent(&*self.obj());
+            menu.add_controller(super::close_the_menus_tab_on_ctrl_w());
             menu.connect_closed(glib::clone!(
                 #[weak(rename_to = strip)]
                 self.obj(),
@@ -523,16 +524,63 @@ fn menu_on_keys(id: TabId) -> gtk::ShortcutController {
             let Some(strip) = tab.ancestor(TabStrip::static_type()).and_downcast::<TabStrip>() else {
                 return glib::Propagation::Proceed;
             };
-            let is_only_tab = strip.imp().shown.borrow().len() <= 1;
+            let facts = menu_facts(&strip, id);
             let focus = tab.root().and_then(|root| root.focus());
             strip.imp().menu_opener.set(focus.as_ref());
-            strip.show_menu_under_tab(id, tab_menu(id, is_only_tab));
+            strip.show_menu_under_tab(id, tab_menu(id, facts));
             glib::Propagation::Stop
         });
         let trigger = gtk::ShortcutTrigger::parse_string(key);
         shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(action)));
     }
     shortcuts
+}
+
+impl TabStrip {
+    /// Closes the tab menu that is open and returns its tab, the one its
+    /// Close tab row closes; `None`, leaving any other menu open, while no
+    /// tab menu is shown. A right-click leaves a background tab in the
+    /// background, so this is not always the tab in front.
+    pub(in crate::window) fn dismiss_tab_menu(&self) -> Option<TabId> {
+        let menu = self.imp().menu.get().filter(|menu| menu.is_visible())?;
+        let tab = menu
+            .items()
+            .into_iter()
+            .find(|item| item.action == WindowAction::CloseTabById.into())
+            .and_then(|item| item.target)
+            .and_then(|target| TabId::from_variant(&target))?;
+        menu.popdown();
+        Some(tab)
+    }
+
+    /// Opens the menu of the tab at `index`, counted from 0, under it;
+    /// false when there is no such tab.
+    pub(in crate::window) fn open_menu_of_tab(&self, index: usize) -> bool {
+        let tab = self.imp().shown.borrow().get(index).map(|(view, _)| view.id);
+        let Some(id) = tab else {
+            return false;
+        };
+        let facts = menu_facts(self, id);
+        self.imp().menu_opener.set(None);
+        self.show_menu_under_tab(id, tab_menu(id, facts));
+        true
+    }
+}
+
+/// What the menu of tab `id` in `strip` depends on: whether it is the
+/// only tab or the last one, and whether Settings adds the app's own
+/// items (TAB-060).
+fn menu_facts(strip: &TabStrip, id: TabId) -> TabMenuFacts {
+    let shown = strip.imp().shown.borrow();
+    let extra_items = strip
+        .root()
+        .and_downcast::<super::BrowserWindow>()
+        .is_some_and(|window| window.context().settings_data().preferences.more_tab_menu_items);
+    TabMenuFacts {
+        is_only_tab: shown.len() <= 1,
+        is_last_tab: shown.last().is_none_or(|(view, _)| view.id == id),
+        extra_items,
+    }
 }
 
 /// A right-click on the tab `id` opens its menu there.
@@ -550,9 +598,9 @@ fn menu_on_right_click(id: TabId) -> gtk::GestureClick {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let in_tab = graphene::Point::new(x as f32, y as f32);
         if let Some(point) = tab.compute_point(&strip, &in_tab) {
-            let is_only_tab = strip.imp().shown.borrow().len() <= 1;
+            let facts = menu_facts(&strip, id);
             strip.imp().menu_opener.set(None);
-            strip.show_menu(tab_menu(id, is_only_tab), point);
+            strip.show_menu(tab_menu(id, facts), point);
         }
     });
     click
@@ -582,6 +630,33 @@ fn mark_previous_version(widget: &gtk::Box, title: &str, snapshot: &str) {
         &[("title", title), ("snapshot", snapshot)],
     );
     widget.update_property(&[gtk::accessible::Property::Label(&name)]);
+}
+
+/// Ctrl+W, which a tab's menu shows beside Close tab, closes the tab whose
+/// menu is open, as that row does, and the menu with it. The open menu
+/// takes the keyboard, so the window's own Ctrl+W, which closes the tab in
+/// front, never sees the key; and a right-click leaves a background tab in
+/// the background, so the tab in front is not always the menu's.
+fn close_the_menus_tab_on_ctrl_w() -> gtk::ShortcutController {
+    let shortcuts = gtk::ShortcutController::new();
+    shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let close = gtk::CallbackAction::new(|menu, _| {
+        let Some(strip) = menu.parent().and_downcast::<TabStrip>() else {
+            return glib::Propagation::Proceed;
+        };
+        let Some(tab) = strip.dismiss_tab_menu() else {
+            return glib::Propagation::Proceed;
+        };
+        run_on(
+            Some(strip.upcast()),
+            WindowAction::CloseTabById,
+            &tab.to_variant(),
+        );
+        glib::Propagation::Stop
+    });
+    let trigger = gtk::ShortcutTrigger::parse_string("<Primary>w");
+    shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(close)));
+    shortcuts
 }
 
 /// Runs the tab action `action` on the tab `id` from `widget`, when the

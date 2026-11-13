@@ -49,6 +49,7 @@ mod geometry;
 mod group_by;
 mod group_heading_look;
 mod history;
+mod home_page;
 mod icons;
 mod input;
 mod item_check_boxes;

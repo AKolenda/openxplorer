@@ -3,7 +3,8 @@
 //! in `v2.0.0:desktop/ui/app.js`, styled by `.side-entry` in `style.css`.
 //!
 //! A row is an expander chevron (This PC, Network), a 16-pixel icon, the
-//! name (with a capacity bar under a drive's) and, on Quick access rows, the
+//! name (with a capacity bar under a drive's, when Settings asks for one)
+//! and, on Quick access rows, the
 //! pin. The accent bar of the selected
 //! row (`.side-entry.selected:before`) is an overlay at the row's left
 //! edge, outside the padding, as the web page positions it.
@@ -66,13 +67,25 @@ fn name_label(text: &str) -> gtk::Label {
         .build()
 }
 
+/// How every row is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct RowLook {
+    /// The icon size in pixels, 0 for automatic (SIDE-012).
+    pub icon_size: u32,
+    /// Mounted drives show a capacity bar (SIDE-018); off, as Windows 11's
+    /// navigation pane draws them (SIDE-034).
+    pub capacity_bars: bool,
+}
+
 /// The name of `entry`, with a thin capacity bar under it for a mounted
-/// drive, as Dolphin's Places panel shows (SIDE-018); the bar turns red
-/// when the drive is nearly full and its tooltip says how much is free.
-fn name_and_capacity(entry: &SidebarEntry) -> gtk::Widget {
+/// drive `with_capacity`, as Dolphin's Places panel shows (SIDE-018); the
+/// bar turns red when the drive is nearly full and its tooltip says how
+/// much is free.
+fn name_and_capacity(entry: &SidebarEntry, with_capacity: bool) -> gtk::Widget {
     let name = name_label(&entry.label);
-    let Some(PlaceMenu::Drive { uri, .. }) = &entry.menu else {
-        return name.upcast();
+    let uri = match &entry.menu {
+        Some(PlaceMenu::Drive { uri, .. }) if with_capacity => uri,
+        _ => return name.upcast(),
     };
     let texts = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -84,9 +97,9 @@ fn name_and_capacity(entry: &SidebarEntry) -> gtk::Widget {
     texts.upcast()
 }
 
-/// The chevron, icon, name and pin of `entry`, its icon `icon_size`
-/// pixels or automatic for 0, and the chevron as `collapsed` says.
-fn row_content(entry: &SidebarEntry, icon_size: u32, collapsed: bool) -> gtk::Box {
+/// The chevron, icon, name and pin of `entry`, drawn as `look` says, and
+/// the chevron as `collapsed` says.
+fn row_content(entry: &SidebarEntry, look: RowLook, collapsed: bool) -> gtk::Box {
     // The gaps are CSS margins on the parts (see `.side-entry` in
     // resources/skin/sidebar.css), so no box spacing.
     let content = gtk::Box::builder().css_classes(["side-entry"]).build();
@@ -95,13 +108,13 @@ fn row_content(entry: &SidebarEntry, icon_size: u32, collapsed: bool) -> gtk::Bo
             content.append(&chevron);
         }
     }
-    let icon = row_icon(entry.icon, icon_size);
+    let icon = row_icon(entry.icon, look.icon_size);
     if matches!(entry.icon, Art::Network(_)) {
         // The network pipe says what it means (`.side-icon.shared`).
         icon.set_tooltip_text(Some(&ox_core::i18n::gettext("Network share")));
     }
     content.append(&icon);
-    content.append(&name_and_capacity(entry));
+    content.append(&name_and_capacity(entry, look.capacity_bars));
     if entry.pinned {
         let pin = icons::image(Icon::Pin, PIN_SIZE);
         pin.add_css_class("pin");
@@ -213,9 +226,9 @@ fn placement_classes(entry: &SidebarEntry) -> Vec<&'static str> {
 /// The row for `entry`, which runs `win.go-to` or `win.mount-volume`,
 /// drawn for its section `collapsed` or expanded: a head shows it, and
 /// the rows inside a collapsed section are hidden (SIDE-033).
-pub(super) fn sidebar_row(entry: &SidebarEntry, icon_size: u32, collapsed: bool) -> gtk::ListBoxRow {
+pub(super) fn sidebar_row(entry: &SidebarEntry, look: RowLook, collapsed: bool) -> gtk::ListBoxRow {
     let overlay = gtk::Overlay::builder()
-        .child(&row_content(entry, icon_size, collapsed))
+        .child(&row_content(entry, look, collapsed))
         .build();
     overlay.add_overlay(&selection_bar());
     let row = gtk::ListBoxRow::builder()

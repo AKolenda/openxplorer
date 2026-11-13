@@ -13,6 +13,9 @@
 //!   `context-menu`, `properties` or `details-pane`;
 //! - `action=<name>:<target>`: runs it with a string target, such as
 //!   `open-tab-background:/home/demo/Documents`;
+//! - `tab-menu=<number>`: opens the right-click menu of the tab at
+//!   `<number>`, counted from 1, under it, as the Menu key on that tab
+//!   does;
 //! - `titles-menu=<column>`: opens the details view's column titles'
 //!   menu on the title of `<column>` (`name`, `size`, ...), as a
 //!   right-click on it does;
@@ -81,6 +84,8 @@ pub(crate) enum SceneStep {
         /// Its string target, if it takes one.
         target: Option<String>,
     },
+    /// Open the menu of the tab at this number, counted from 1.
+    TabMenu(usize),
     /// Open the column titles' menu on this column's title.
     TitlesMenu(String),
     /// Open the submenu of the open context menu's item with this label.
@@ -137,6 +142,11 @@ impl SceneStep {
         match verb.trim() {
             "select" => Some(Self::Select(argument.to_owned())),
             "submenu" => Some(Self::Submenu(argument.to_owned())),
+            "tab-menu" => argument
+                .parse()
+                .ok()
+                .filter(|number| *number > 0)
+                .map(Self::TabMenu),
             "titles-menu" => Some(Self::TitlesMenu(argument.to_owned())),
             "tab" => Some(Self::Tab(argument.to_owned())),
             "row" => Some(Self::Row(argument.to_owned())),
@@ -188,6 +198,10 @@ impl SceneStep {
                     .map(|()| crate::window::MENU_OPENING_MOTION)
                     .map_err(|_| format!("the window has no action “{name}”"))
             }
+            Self::TabMenu(number) => window
+                .open_tab_menu(*number)
+                .then_some(crate::window::MENU_OPENING_MOTION)
+                .ok_or_else(|| format!("there is no tab {number}")),
             Self::TitlesMenu(column) => window
                 .open_titles_menu_on(column)
                 .then_some(crate::window::MENU_OPENING_MOTION)
@@ -420,6 +434,17 @@ mod tests {
                 SceneStep::Wait(Duration::from_millis(250)),
             ]
         );
+    }
+
+    /// `tab-menu=2` opens the second tab's menu; tabs count from 1.
+    #[test]
+    fn a_scene_opens_a_tabs_menu_by_its_number() {
+        assert_eq!(
+            SceneStep::parse_scene("tab-menu=2"),
+            Some(vec![SceneStep::TabMenu(2)])
+        );
+        assert_eq!(SceneStep::parse_scene("tab-menu=0"), None);
+        assert_eq!(SceneStep::parse_scene("tab-menu=last"), None);
     }
 
     #[test]

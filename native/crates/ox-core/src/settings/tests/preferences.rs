@@ -646,6 +646,33 @@ fn a_template_keeps_downloads_grouped_by_date() {
     assert_eq!(style.grouping(), GroupBy::Modified);
 }
 
+/// The command bar's Update button shows until the user turns it off in
+/// Settings › About; only the choice to hide it is stored, so a file
+/// that saved `showUpdateButton: true` reads as the default and drops
+/// the key on its next save.
+///
+/// parity: UPD-001
+#[test]
+fn the_command_bar_update_button_shows_until_turned_off() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    assert!(store.snapshot().preferences.show_update_button);
+    save_preferences(&mut store, &json!({"showUpdateButton": false}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).expect("saved");
+    assert!(file.contains("\"showUpdateButton\": false"), "{file}");
+    let reopened = Settings::open(root.path()).snapshot().preferences;
+    assert!(!reopened.show_update_button);
+    save_preferences(&mut store, &json!({"showUpdateButton": true}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).expect("saved");
+    assert!(!file.contains("showUpdateButton"), "shown is not stored");
+    assert!(
+        Settings::open(root.path())
+            .snapshot()
+            .preferences
+            .show_update_button
+    );
+}
+
 /// "Shift+F10 opens the classic menu" is off as it comes, so Shift+F10
 /// opens the right-click menu as in Windows 11; turned on, it is saved
 /// and read back, and stored only while on.
@@ -675,4 +702,81 @@ fn the_shift_f10_classic_menu_choice_is_off_and_saved_only_when_on() {
             .preferences
             .shift_f10_classic
     );
+}
+
+/// A favorite is matched by its canonical form, so the address GIO gives a
+/// file (with `(`, `!` or a remote user name) adds it once and removes it
+/// again, and is known as a favorite (HOME-014).
+///
+/// parity: HOME-014
+#[test]
+fn a_favorite_is_added_and_removed_by_its_gio_address() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    let shown = PreferencesUpdate {
+        home_quick_access: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    store.update_preferences(&shown).expect("Home shows Favorites");
+    let local = "file:///home/ana/Notes%20(1)!.txt";
+    let remote = "sftp://ana@build/srv/plan.txt";
+    let canonical = favorite_key(local).expect("a local file");
+    assert_eq!(favorite_key(remote).as_deref(), Some("sftp://build/srv/plan.txt"));
+
+    store.set_favorite(local, true).expect("added");
+    store.set_favorite(local, true).expect("added again");
+    store.set_favorite(remote, true).expect("added");
+    let preferences = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(
+        preferences.favorites,
+        [canonical.clone(), "sftp://build/srv/plan.txt".to_owned()]
+    );
+    assert!(preferences.is_favorite(local));
+    assert!(preferences.is_favorite(&canonical));
+    assert!(preferences.is_favorite("sftp://build/srv/plan.txt"));
+    assert!(!preferences.is_favorite("file:///home/ana/Other.txt"));
+
+    store.set_favorite(local, false).expect("removed");
+    store.set_favorite(remote, false).expect("removed");
+    assert!(Settings::open(root.path())
+        .snapshot()
+        .preferences
+        .favorites
+        .is_empty());
+}
+
+/// Favorites change only while "Open Quick access on Home" is on, as the
+/// file holds it when the change runs: a command from a menu opened
+/// before the option was turned off, in this window or another, adds or
+/// removes nothing (HOME-014).
+///
+/// parity: HOME-014
+#[test]
+fn favorites_change_only_while_home_shows_them() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    let notes = "file:///home/ana/Notes.txt";
+    let plan = "file:///home/ana/Plan.txt";
+    let option = |on: bool| PreferencesUpdate {
+        home_quick_access: Some(on),
+        ..PreferencesUpdate::default()
+    };
+    store.set_favorite(notes, true).expect("ignored while off");
+    assert!(Settings::open(root.path())
+        .snapshot()
+        .preferences
+        .favorites
+        .is_empty());
+
+    store.update_preferences(&option(true)).expect("on");
+    store.set_favorite(notes, true).expect("added");
+    // Another window turns the option off; this store has not read it.
+    Settings::open(root.path())
+        .update_preferences(&option(false))
+        .expect("off elsewhere");
+    store.set_favorite(plan, true).expect("ignored");
+    store.set_favorite(notes, false).expect("ignored");
+    let preferences = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(preferences.favorites, [notes]);
+    assert!(!preferences.home_quick_access);
 }

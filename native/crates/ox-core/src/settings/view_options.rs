@@ -33,8 +33,8 @@ pub struct ViewOptions {
     /// Items show a preview of their contents in place of their icon
     /// (Dolphin's Show Previews).
     pub show_previews: bool,
-    /// Items in network folders get previews too; off, as Dolphin's "Skip
-    /// previews for remote files" starts.
+    /// Items in network folders get previews too; on, as Windows Explorer
+    /// shows thumbnails on a share (Dolphin and Files start with it off).
     pub remote_previews: bool,
     /// Files over [`PREVIEW_SIZE_LIMIT`] get no preview.
     pub skip_large_previews: bool,
@@ -57,7 +57,7 @@ impl Default for ViewOptions {
     fn default() -> Self {
         Self {
             show_previews: true,
-            remote_previews: false,
+            remote_previews: true,
             skip_large_previews: true,
             preview_pictures: true,
             preview_videos: true,

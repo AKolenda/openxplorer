@@ -509,6 +509,8 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Use the desktop font",
             "Compact view",
             "Hide expand arrows in the sidebar",
+            "Show more items in the navigation pane",
+            "Show more items in the tab menu",
             "Right-click menu",
             "Buttons in the right-click menu",
             "Shift+F10 opens the classic menu",

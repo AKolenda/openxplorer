@@ -9,11 +9,12 @@ use std::fs;
 
 use gtk::glib;
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use ox_core::settings::{ContextMenu, PreferencesUpdate, Settings, StripPosition};
 
 use super::file_ops_support::{
-    dialog_over, is_enabled, is_renaming_in_place, name_editor, open_dialog, require_private_trash,
-    select_names, text_field, wait_for_no_dialog,
+    dialog_over, is_enabled, is_renaming_in_place, is_triggered_by, name_editor, open_dialog,
+    require_private_trash, select_names, shortcuts_of, text_field, wait_for_no_dialog,
 };
 use crate::test_support::harness::{
     capture_popover, settle, wait_for_frames, wait_until, Fixture, TestWindow,
@@ -772,7 +773,7 @@ fn right_clicking_a_pin_opens_its_menu() {
     );
 }
 
-/// parity: TAB-012, TAB-013
+/// parity: TAB-012, TAB-013, TAB-060
 #[gtk::test]
 fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder() {
     let fixture = Fixture::standard();
@@ -808,6 +809,7 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
             "-",
             "Close tab",
             "Close other tabs",
+            "Close tabs to the right",
         ]
     );
     assert!(
@@ -815,6 +817,25 @@ fn right_clicking_a_tab_opens_its_menu_and_duplicate_tab_opens_the_same_folder()
         "tabs move between windows"
     );
     assert!(menu.row("Move tab to window…").is_sensitive());
+    assert!(!menu.row("Close other tabs").is_sensitive(), "the only tab");
+    assert!(
+        !menu.row("Close tabs to the right").is_sensitive(),
+        "the last tab"
+    );
+    menu.popdown();
+    // Off, the tab menu is Windows 11's (TAB-060).
+    test.set_more_tab_menu_items(false);
+    right_click.emit_by_name::<()>("pressed", &[&1_i32, &5.0_f64, &5.0_f64]);
+    let menu = test.window.tab_strip().menu();
+    assert_eq!(
+        menu.row_labels(),
+        [
+            "Close tab",
+            "Close other tabs",
+            "Close tabs to the right",
+            "Duplicate tab",
+        ]
+    );
     menu.row("Duplicate tab").emit_activate();
     wait_until("the duplicate tab", || test.window.tab_count() == 2);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
@@ -891,6 +912,69 @@ fn the_menu_key_and_shift_f10_open_the_focused_tabs_menu() {
             "Escape gives the keyboard back to the tab"
         );
     }
+}
+
+/// Ctrl+W, which a tab's menu shows beside Close tab, closes the tab
+/// whose menu is open, not the tab in front: a right-click leaves a
+/// background tab in the background, so the menu's own tab is the one
+/// Close tab and its shortcut act on. The menu closes with it.
+///
+/// parity: TAB-012
+#[gtk::test]
+fn ctrl_w_in_a_background_tabs_menu_closes_that_tab() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    for name in ["Documents", "Pictures"] {
+        test.window.add_tab(&fixture.uri_of(name)).expect("a folder");
+        test.wait_for_listing(name);
+    }
+    let tab_list = test.window.tab_strip().tab_list();
+    let first = tab_list.first_child().expect("three tabs");
+    let right_click = first
+        .observe_controllers()
+        .into_iter()
+        .filter_map(|controller| controller.ok().and_downcast::<gtk::GestureClick>())
+        .find(|click| click.button() == gtk::gdk::BUTTON_SECONDARY)
+        .expect("a tab opens its menu on a right-click");
+    right_click.emit_by_name::<()>("pressed", &[&1_i32, &5.0_f64, &5.0_f64]);
+    let menu = test.window.tab_strip().menu();
+    assert!(menu.is_visible());
+    assert_eq!(
+        test.window.current_uri(),
+        Some(fixture.uri_of("Pictures")),
+        "a right-click leaves the tab in the background"
+    );
+
+    // The open menu has the keyboard, so Ctrl+W reaches its shortcuts
+    // first.
+    let ctrl_w = shortcuts_of(menu.upcast_ref(), gtk::PropagationPhase::Capture)
+        .into_iter()
+        .find(|shortcut| {
+            shortcut.trigger().is_some_and(|trigger| {
+                is_triggered_by(&trigger, gtk::gdk::Key::w, gtk::gdk::ModifierType::CONTROL_MASK)
+            })
+        })
+        .expect("the tab menu takes Ctrl+W");
+    let action = ctrl_w.action().expect("a shortcut runs something");
+    assert!(action.activate(gtk::ShortcutActionFlags::empty(), &menu, None));
+
+    wait_until("the first tab to close", || test.window.tab_count() == 2);
+    assert_eq!(
+        test.window.current_uri(),
+        Some(fixture.uri_of("Pictures")),
+        "the tab in front stays open"
+    );
+    let titles: Vec<String> = test
+        .window
+        .imp()
+        .session
+        .borrow()
+        .tabs()
+        .iter()
+        .map(|tab| tab.uri().to_owned())
+        .collect();
+    assert_eq!(titles, [fixture.uri_of("Documents"), fixture.uri_of("Pictures")]);
+    wait_until("the menu to close", || !menu.is_visible());
 }
 
 /// Mount disk image and Analyse disk usage start their tool on the

@@ -179,22 +179,38 @@ impl BrowserWindow {
     pub(super) fn render_places(&self) {
         let places = self.places();
         let searches = self.context().saved_searches();
-        let mut entries = sidebar::sidebar_entries(&places, &searches, &self.imp().locations.borrow());
-        // Recent files hides while the desktop remembers no history
-        // (SAFE-022), as in Nautilus.
-        let remembers = self.context().recent_policy().remember;
-        let fixed = sidebar::recent_and_bin_entries(self.imp().trash_items.get());
-        entries.extend(fixed.into_iter().filter(|entry| {
-            remembers
-                || !matches!(
-                    entry.menu,
-                    Some(
-                        super::place_menus::PlaceMenu::RecentFiles
-                            | super::place_menus::PlaceMenu::RecentLocations
+        let mut entries = sidebar::sidebar_entries(
+            &places,
+            &searches,
+            &self.imp().locations.borrow(),
+            self.context().settings_data().preferences.home_quick_access,
+        );
+        // Windows 11's navigation pane has neither capacity bars nor
+        // Recent files, Recent locations and the Recycle Bin; Settings'
+        // "Show more items in the navigation pane" adds them (SIDE-034).
+        let more_items = self
+            .context()
+            .settings_data()
+            .preferences
+            .more_navigation_pane_items;
+        if more_items {
+            // Recent files hides while the desktop remembers no history
+            // (SAFE-022), as in Nautilus.
+            let remembers = self.context().recent_policy().remember;
+            let fixed = sidebar::recent_and_bin_entries(self.imp().trash_items.get());
+            entries.extend(fixed.into_iter().filter(|entry| {
+                remembers
+                    || !matches!(
+                        entry.menu,
+                        Some(
+                            super::place_menus::PlaceMenu::RecentFiles
+                                | super::place_menus::PlaceMenu::RecentLocations
+                        )
                     )
-                )
-        }));
+            }));
+        }
         let (rows, anything_hidden) = self.shown_sidebar_rows(entries);
+        self.sidebar().set_capacity_bars(more_items);
         self.sidebar().set_rows(rows, anything_hidden);
         if let Some(uri) = self.current_uri() {
             self.sidebar().select(&uri);
@@ -230,6 +246,36 @@ impl BrowserWindow {
             return;
         };
         let body = self.pane_on(side).landing();
+        if page == Page::Home && !self.context().settings_data().preferences.home_quick_access {
+            // "Open Quick access on Home" was turned off while the pane
+            // showed Home: it goes to the home folder (NAV-038), which
+            // loading a tab on the Home page does while the setting is off.
+            let id = {
+                let session = self.imp().session.borrow();
+                let active = session.active();
+                active
+                    .into_iter()
+                    .chain(active.and_then(super::session::Tab::beside))
+                    .find(|tab| tab.side == side)
+                    .map(|tab| tab.id)
+            };
+            if let Some(id) = id {
+                glib::idle_add_local_once(glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    move || window.load_tab(id, super::loading::LoadMode::Navigate)
+                ));
+            }
+            return;
+        }
+        if page == Page::Home {
+            body.remove_css_class("this-pc");
+            let preferences = self.context().settings_data().preferences;
+            let locations = self.imp().locations.borrow();
+            super::home_page::render(body, places, &preferences, &locations);
+            return;
+        }
+        super::home_page::leave(body);
         let locations = self.imp().locations.borrow();
         landing::render(body, page, places, &locations, self.skin().drawn_text_size());
     }

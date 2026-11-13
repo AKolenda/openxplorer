@@ -109,19 +109,25 @@ fn assert_copied_after(
 /// The tab menu's "Duplicate tab" on the first, middle and last of three
 /// tabs puts the copy right after that tab and brings it to the front,
 /// with the same folder, view and history, as in Windows 11 File
-/// Explorer. The right-click itself leaves the tab in front as it was.
+/// Explorer, in the app's own menu and in Windows 11's (Settings' "Show
+/// more items in the tab menu" off). The right-click itself leaves the
+/// tab in front as it was.
 ///
-/// parity: TAB-012, TAB-013
+/// parity: TAB-012, TAB-013, TAB-060
 #[gtk::test]
 fn duplicate_tab_puts_the_copy_right_after_its_tab_in_front() {
     let _theme = ThemeGuard::keep();
-    for ((theme, theme_name), original) in [(Theme::Light, "light"), (Theme::Dark, "dark")]
-        .into_iter()
-        .flat_map(|theme| (0..3).map(move |original| (theme, original)))
-    {
+    let themes = [(Theme::Light, "light"), (Theme::Dark, "dark")];
+    let cases = themes.into_iter().flat_map(|theme| {
+        [true, false]
+            .into_iter()
+            .flat_map(move |extra| (0..3).map(move |original| (theme, extra, original)))
+    });
+    for ((theme, theme_name), extra_items, original) in cases {
         skin().set_theme(theme);
         let fixture = Fixture::standard();
         let test = three_tabs_with_history(&fixture);
+        test.set_more_tab_menu_items(extra_items);
         let before = tab_ids(&test);
         // The original shows its folder as tiles.
         test.window.switch_tab(before[original]);
@@ -133,7 +139,12 @@ fn duplicate_tab_puts_the_copy_right_after_its_tab_in_front() {
         test.window.switch_tab(front);
         test.wait_for_listing("the tab in front");
         wait_for_frames(&test.window, 2);
-        let case = format!("{theme_name}: tab {} of 3", original + 1);
+        let menu_name = if extra_items {
+            "app's menu"
+        } else {
+            "Windows 11's menu"
+        };
+        let case = format!("{theme_name}, {menu_name}: tab {} of 3", original + 1);
 
         let tab = tab_widget(&test, original);
         let point = middle_of(&tab, &tab);
@@ -146,9 +157,16 @@ fn duplicate_tab_puts_the_copy_right_after_its_tab_in_front() {
             Some(front),
             "{case}: right-clicking a tab behind leaves it behind"
         );
+        assert_eq!(
+            menu.row_labels().len(),
+            if extra_items { 8 } else { 4 },
+            "{case}: {:?}",
+            menu.row_labels()
+        );
         menu.row("Duplicate tab").emit_activate();
 
         assert_copied_after(&test, &fixture, &before, original, FolderView::Tiles, &case);
+        test.set_more_tab_menu_items(true);
     }
 }
 
@@ -157,22 +175,26 @@ fn duplicate_tab_puts_the_copy_right_after_its_tab_in_front() {
 /// as the tab menu's item does. Pressed with check.py's display's real
 /// keyboard.
 ///
-/// parity: TAB-012, TAB-013
+/// parity: TAB-012, TAB-013, TAB-060
 #[gtk::test]
 fn duplicate_tab_from_the_keyboard_puts_the_copy_right_after_its_tab() {
     let _theme = ThemeGuard::keep();
     let mut keyboard = Pointer::connect();
     for (theme, theme_name) in [(Theme::Light, "light"), (Theme::Dark, "dark")] {
         skin().set_theme(theme);
-        duplicate_from_the_keyboard(&mut keyboard, theme_name);
+        for extra_items in [true, false] {
+            duplicate_from_the_keyboard(&mut keyboard, theme_name, extra_items);
+        }
     }
 }
 
 /// Duplicates the middle of three tabs from the keyboard, in the theme
-/// `theme_name` names, and checks the copy.
-fn duplicate_from_the_keyboard(keyboard: &mut Pointer, theme_name: &str) {
+/// `theme_name` names, from the app's own tab menu or, without
+/// `extra_items`, Windows 11's, and checks the copy.
+fn duplicate_from_the_keyboard(keyboard: &mut Pointer, theme_name: &str, extra_items: bool) {
     let fixture = Fixture::standard();
     let test = three_tabs_with_history(&fixture);
+    test.set_more_tab_menu_items(extra_items);
     let before = tab_ids(&test);
     // The middle tab, in front, with the keyboard on it.
     let original = 1;
@@ -203,8 +225,9 @@ fn duplicate_from_the_keyboard(keyboard: &mut Pointer, theme_name: &str) {
         &before,
         original,
         FolderView::Details,
-        &format!("{theme_name}: Shift+F10, Duplicate tab"),
+        &format!("{theme_name}, extra items {extra_items}: Shift+F10, Duplicate tab"),
     );
+    test.set_more_tab_menu_items(true);
 }
 
 /// A double-click on a tab copies it the same way, right after itself.
