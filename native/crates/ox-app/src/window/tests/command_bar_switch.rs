@@ -830,3 +830,36 @@ fn the_open_menu_closes_when_the_tab_or_location_changes() {
     session.test.activate("go-to", Some(&documents));
     session.expect_only_open(None, "View open, the window shows another folder");
 }
+
+/// A primary press on the open menu's own button dragged off the button
+/// before the release cancels the button's click: the menu is then not
+/// left on screen while the keyboard is outside it, as the press moved
+/// the keyboard to the button.
+///
+/// parity: CMD-005, CMD-031
+#[gtk::test]
+fn a_press_on_the_open_menus_button_dragged_off_never_strands_the_menu() {
+    let mut session = Session::open(None);
+    session.open_by_click("View");
+    let menu = menu_of(&session.test, "View");
+    wait_until("the keyboard in the menu", || has_keyboard(&session.test, &menu));
+    let on_button = session.middle_of(&menu_button(&session.test, "View"));
+    let bar = session.test.window.command_bar().clone();
+    let off_button = session.on_screen(
+        &bar,
+        (f64::from(bar.width()) - 300.0, f64::from(bar.height()) / 2.0),
+    );
+
+    session.pointer.move_to(on_button.0, on_button.1);
+    session.pointer.press(Button::Primary);
+    session.pointer.glide(on_button, off_button, 10);
+    session.pointer.release(Button::Primary);
+    wait_for(QUIET);
+
+    let open = !session.open_menus().is_empty();
+    assert!(
+        !open || has_keyboard(&session.test, &menu),
+        "View is open while the keyboard is on {:?}",
+        gtk::prelude::GtkWindowExt::focus(&session.test.window).map(|focus| focus.type_().name())
+    );
+}
