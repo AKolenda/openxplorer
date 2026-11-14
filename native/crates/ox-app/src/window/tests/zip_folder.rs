@@ -484,7 +484,7 @@ fn hidden_members_are_announced_in_the_message_line() {
     test.wait_for_listing("the ZIP's listing");
 
     assert!(test.names().is_empty());
-    assert_eq!(test.window.shown_message(), "1 unsafe names or links are hidden.");
+    assert_eq!(test.window.shown_message(), "1 unsafe name or link is hidden.");
 }
 
 /// Writes `Linked.zip` into `fixture` with Python's `zipfile`: a folder

@@ -505,6 +505,12 @@ mod tests {
             listing_notice(&listing),
             "2 unsafe names or links are hidden. Showing the first 5,000 entries."
         );
+        let one = ArchiveListing {
+            hidden_unsafe_count: 1,
+            is_truncated: false,
+            ..listing
+        };
+        assert_eq!(listing_notice(&one), "1 unsafe name or link is hidden.");
     }
 
     #[test]

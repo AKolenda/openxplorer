@@ -170,24 +170,42 @@ fn special_files_and_paths_through_a_link_are_still_refused() {
     }
 }
 
-/// The archive browser still hides links: only files and folders are
-/// listed, and links are counted as hidden.
+/// The archive browser lists a relative link that stays inside the
+/// archive, as extracting it keeps it (ARC-016): `bundle/lib/libx.so ->
+/// libx.so.1` shows beside its library. A link that leaves the archive,
+/// an absolute link and special files stay hidden and are counted.
 ///
-/// parity: ARC-004
+/// parity: ARC-004, ARC-016
 #[test]
-fn the_browser_still_hides_links() {
+fn the_browser_lists_safe_links_and_hides_the_rest() {
     let temporary = tempfile::tempdir().expect("a temporary folder");
-    let archive = temporary.path().join("Links.tar.gz");
-    write_tar(&archive, &["f:libx.so.1:library", "l:libx.so:libx.so.1"]);
+    let archive = temporary.path().join("Bundle.tar.gz");
+    write_tar(
+        &archive,
+        &[
+            "f:bundle/lib/libx.so.1:library",
+            "l:bundle/lib/libx.so:libx.so.1",
+            "l:bundle/lib/docs:../docs",
+            "f:bundle/docs/readme.txt:read me",
+            "l:bundle/lib/escape:../../../outside",
+            "l:bundle/lib/hosts:/etc/hosts",
+            "p:bundle/lib/pipe",
+        ],
+    );
     let browser = ArchiveBrowser::new(opener(), temporary.path().join("previews"));
 
     let listing = browser
-        .list(&file_uri(&archive), "", &Cancellation::new())
+        .list(&file_uri(&archive), "bundle/lib/", &Cancellation::new())
         .expect("lists");
 
     let names: Vec<&str> = listing.entries.iter().map(|entry| entry.name.as_str()).collect();
-    assert_eq!(names, ["libx.so.1"]);
-    assert_eq!(listing.hidden_unsafe_count, 1);
+    assert_eq!(names, ["docs", "libx.so", "libx.so.1"]);
+    assert_eq!(
+        listing.hidden_unsafe_count, 3,
+        "the escaping link, the absolute link and the pipe"
+    );
+    let link = &listing.entries[1];
+    assert!(!link.can_open, "a link is not opened as a copy of its own");
 }
 
 /// Compressing into a name ending `.tar` writes a plain TAR, which the
