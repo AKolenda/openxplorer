@@ -406,6 +406,40 @@ fn arrows_home_end_and_page_keys_move_and_shift_extends_from_the_anchor() {
     );
 }
 
+/// Changing the view keeps the item with the keyboard: after End the last
+/// item has it, and Ctrl+Shift+2 (Large icons) and Ctrl+Shift+6 (Details)
+/// keep it on that item, scrolled into view, rather than jumping to the
+/// top of the list, as Windows Explorer keeps it.
+///
+/// parity: SEL-007, VIEW-001
+#[gtk::test]
+fn changing_the_view_keeps_the_focused_item_in_view() {
+    let fixture = Fixture::with_files(LONG_FOLDER);
+    let test = TestWindow::open(&fixture.uri());
+    let none = gdk::ModifierType::empty();
+    let views = gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::SHIFT_MASK;
+    let last = u32::try_from(LONG_FOLDER).expect("small") - 1;
+    start_at(&test, 0);
+    press_key(&test, gdk::Key::End, none);
+    assert_eq!(selected(&test), [last]);
+    let pane = test.window.folder_pane();
+    for (key, view) in [(gdk::Key::_2, "Large icons"), (gdk::Key::_6, "Details")] {
+        press_key(&test, key, views);
+        wait_until(&format!("{view}: the last item in view, with the keyboard"), || {
+            let shown = pane.view_widget();
+            let in_view = pane.owners().widget_at(last).is_some_and(|cell| {
+                cell.is_ancestor(&shown)
+                    && cell.compute_bounds(&shown).is_some_and(|bounds| {
+                        let bottom = f64::from(bounds.y() + bounds.height());
+                        bounds.y() >= 0.0 && bottom <= f64::from(shown.height()) + 1.0
+                    })
+            });
+            in_view && pane.focused_position() == Some(last)
+        });
+        assert_eq!(selected(&test), [last], "{view}: the selection stays");
+    }
+}
+
 /// parity: SEL-009
 #[gtk::test]
 fn ctrl_arrows_move_without_selecting_and_ctrl_space_toggles() {
