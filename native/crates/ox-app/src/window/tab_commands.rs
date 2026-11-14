@@ -2,7 +2,8 @@
 //! Tab commands Dolphin has beyond opening, closing and switching:
 //! Alt+1…9 and Alt+0 (TAB-007), Open in new tabs for several folders
 //! (TAB-027), Close other tabs (TAB-015), Windows 11's Close tabs to the
-//! right (TAB-059) and reopening closed tabs (TAB-016).
+//! right (TAB-059) and Duplicate tab (TAB-013), and reopening closed tabs
+//! (TAB-016).
 //!
 //! A closed tab is remembered with its history, selection and scroll
 //! position, most recent first, as Dolphin's "Recently Closed Tabs" does.
@@ -47,8 +48,8 @@ impl ClosedTab {
 
 impl BrowserWindow {
     /// Adds `win.show-tab-number`, `win.close-other-tabs`,
-    /// `win.close-tabs-to-the-right`, `win.reopen-closed-tab` and
-    /// `win.restore-closed-tab`.
+    /// `win.close-tabs-to-the-right`, `win.duplicate-tab`,
+    /// `win.reopen-closed-tab` and `win.restore-closed-tab`.
     pub(super) fn install_tab_commands(&self) {
         let show_number = gio::ActionEntry::builder(WindowAction::ShowTabNumber.name())
             .parameter_type(Some(glib::VariantTy::UINT32))
@@ -75,6 +76,7 @@ impl BrowserWindow {
                 WindowAction::CloseTabsToTheRight,
                 BrowserWindow::close_tabs_to_the_right,
             ),
+            tab_action(WindowAction::DuplicateTab, BrowserWindow::duplicate_tab),
             plain_action(
                 WindowAction::OpenSelectionInTabs,
                 BrowserWindow::open_selection_in_tabs,
@@ -125,6 +127,21 @@ impl BrowserWindow {
             .collect();
         for uri in folders {
             self.open_tab_or_report(&uri, TabPlacement::Background);
+        }
+    }
+
+    /// Duplicate tab: copies tab `id` right after it, in front, showing
+    /// the same folder with the same Back and Forward history, as Windows
+    /// 11 File Explorer does, from the tab menu and a double-click on the
+    /// tab. A file dialog keeps one tab.
+    fn duplicate_tab(&self, id: TabId) {
+        if self.is_picking() || self.refuse_while_tabs_move() {
+            return;
+        }
+        self.save_tab_view();
+        let copy = self.imp().session.borrow_mut().duplicate(id);
+        if let Some(copy) = copy {
+            self.show_tab(copy);
         }
     }
 
