@@ -437,7 +437,10 @@ fn an_offline_share_says_so_plainly_and_names_it() {
         message.contains("\\\\example.invalid\\Studio\\Photos"),
         "the message names the share: {message:?}"
     );
-    assert!(!message.contains(RAW), "the raw error is not the message: {message:?}");
+    assert!(
+        !message.contains(RAW),
+        "the raw error is not the message: {message:?}"
+    );
     assert!(page.offers_try_again(), "Try again stays");
     let details = descendants::<gtk::Expander>(&page.root)
         .into_iter()

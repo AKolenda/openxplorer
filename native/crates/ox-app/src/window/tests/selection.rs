@@ -425,17 +425,20 @@ fn changing_the_view_keeps_the_focused_item_in_view() {
     let pane = test.window.folder_pane();
     for (key, view) in [(gdk::Key::_2, "Large icons"), (gdk::Key::_6, "Details")] {
         press_key(&test, key, views);
-        wait_until(&format!("{view}: the last item in view, with the keyboard"), || {
-            let shown = pane.view_widget();
-            let in_view = pane.owners().widget_at(last).is_some_and(|cell| {
-                cell.is_ancestor(&shown)
-                    && cell.compute_bounds(&shown).is_some_and(|bounds| {
-                        let bottom = f64::from(bounds.y() + bounds.height());
-                        bounds.y() >= 0.0 && bottom <= f64::from(shown.height()) + 1.0
-                    })
-            });
-            in_view && pane.focused_position() == Some(last)
-        });
+        wait_until(
+            &format!("{view}: the last item in view, with the keyboard"),
+            || {
+                let shown = pane.view_widget();
+                let in_view = pane.owners().widget_at(last).is_some_and(|cell| {
+                    cell.is_ancestor(&shown)
+                        && cell.compute_bounds(&shown).is_some_and(|bounds| {
+                            let bottom = f64::from(bounds.y() + bounds.height());
+                            bounds.y() >= 0.0 && bottom <= f64::from(shown.height()) + 1.0
+                        })
+                });
+                in_view && pane.focused_position() == Some(last)
+            },
+        );
         assert_eq!(selected(&test), [last], "{view}: the selection stays");
     }
 }

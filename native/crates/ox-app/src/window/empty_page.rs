@@ -263,7 +263,8 @@ impl EmptyPage {
         self.message.set_visible(!message.is_empty());
         let details = match state {
             EmptyState::Unavailable {
-                details: Some(details), ..
+                details: Some(details),
+                ..
             } => Some(details.as_str()),
             _ => None,
         };

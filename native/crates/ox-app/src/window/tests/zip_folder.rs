@@ -787,9 +787,16 @@ fn an_opened_archive_is_named_the_same_in_the_tab_and_the_address_bar() {
         .filter_map(ButtonExt::label)
         .map(|label| label.to_string())
         .collect();
-    assert_eq!(crumbs.last().map(String::as_str), Some("Bundle.tar.gz"), "{crumbs:?}");
+    assert_eq!(
+        crumbs.last().map(String::as_str),
+        Some("Bundle.tar.gz"),
+        "{crumbs:?}"
+    );
     let title = test.window.title().map(String::from).unwrap_or_default();
-    assert!(title.starts_with("Bundle.tar.gz "), "the window's title: {title:?}");
+    assert!(
+        title.starts_with("Bundle.tar.gz "),
+        "the window's title: {title:?}"
+    );
 }
 
 /// Every kind of TAR the app reads opens in the tab like a ZIP, as

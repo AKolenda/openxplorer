@@ -49,7 +49,10 @@ fn a_finished_move_succeeds_when_the_server_stops_before_its_cleanup() {
     assert!(result.presented.is_empty(), "{result:?}");
     assert!(result.recovery.is_empty(), "{result:?}");
     assert!(!source.exists(), "the original is removed");
-    assert_eq!(read(&fixture.destination_folder.join("plan.pdf")), "fictional plan");
+    assert_eq!(
+        read(&fixture.destination_folder.join("plan.pdf")),
+        "fictional plan"
+    );
 }
 
 /// A copy that fails midway, even one the backend itself reports as

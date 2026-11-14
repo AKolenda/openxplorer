@@ -240,7 +240,11 @@ fn a_zero_tar_time_has_no_date() {
         .arg(&dated)
         .output()
         .expect("Python 3 writes the reference archive");
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let listing = browser
         .list(&file_uri(&dated), "", &Cancellation::new())
         .expect("lists");
