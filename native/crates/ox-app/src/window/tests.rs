@@ -20,6 +20,7 @@ mod clipboard_switches;
 mod closing;
 mod column_fitting;
 mod command_bar;
+mod command_bar_switch;
 mod compact_density;
 mod compact_spacing;
 mod context_menus;

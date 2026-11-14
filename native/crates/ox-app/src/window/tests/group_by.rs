@@ -1002,17 +1002,17 @@ fn a_press_in_the_window_closes_every_menu_and_a_press_on_a_menu_none() {
     let window: &gtk::Widget = test.window.upcast_ref();
 
     let surface = gtk::prelude::NativeExt::surface(&menu);
-    crate::window::menu_popover::close_menus_in(window, surface.as_ref());
+    crate::window::menu_popover::close_menus_in(window, surface.as_ref(), None);
     assert!(menu.is_visible(), "a press on the menu");
     let surface = gtk::prelude::NativeExt::surface(&group_by);
-    crate::window::menu_popover::close_menus_in(window, surface.as_ref());
+    crate::window::menu_popover::close_menus_in(window, surface.as_ref(), None);
     assert!(
         menu.is_visible() && group_by.is_visible(),
         "a press on the submenu"
     );
 
     let window_surface = gtk::prelude::NativeExt::surface(&test.window);
-    crate::window::menu_popover::close_menus_in(window, window_surface.as_ref());
+    crate::window::menu_popover::close_menus_in(window, window_surface.as_ref(), None);
     assert!(!menu.is_visible(), "the Sort menu closed");
     assert!(!sort.is_active(), "the Sort button is up");
     wait_past_the_submenu_delay(&test);
