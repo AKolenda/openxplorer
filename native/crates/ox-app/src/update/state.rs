@@ -416,6 +416,33 @@ mod tests {
         assert_eq!(UpdateState::Checking.versions_text(RUNNING), "Installed: 1.1.4");
     }
 
+    /// A failed check reads plainly in About: the installed version on a
+    /// line of its own, then one sentence that says the check failed and
+    /// why, without "GitHub could not check".
+    ///
+    /// parity: UPD-001
+    #[test]
+    fn a_refused_check_reads_plainly_under_the_version() {
+        let refused = UpdateState::after_check(
+            Err(UpdateError::CheckRefused { status: 403 }),
+            Installation::DebianPackage,
+        );
+        assert_eq!(
+            refused.status_text(),
+            "Couldn't check for updates (HTTP 403). Try again later."
+        );
+        assert_eq!(
+            refused.about_summary(RUNNING),
+            "Installed: 1.1.4\nCouldn't check for updates (HTTP 403). Try again later."
+        );
+        let offline = UpdateState::after_check(Err(UpdateError::Unreachable), Installation::DebianPackage);
+        assert_eq!(
+            offline.about_summary(RUNNING),
+            "Installed: 1.1.4\nCouldn't check for updates. Could not reach GitHub. Check your \
+             connection and try again."
+        );
+    }
+
     #[test]
     fn a_check_becomes_up_to_date_available_or_a_pending_restart() {
         let installation = Installation::DebianPackage;
