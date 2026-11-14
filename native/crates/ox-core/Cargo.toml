@@ -52,6 +52,7 @@ oo7.workspace = true
 flate2.workspace = true
 bzip2.workspace = true
 lzma-rust2.workspace = true
+sevenz-rust2.workspace = true
 crc32fast.workspace = true
 ruzstd.workspace = true
 # The updater's HTTPS client. libsoup is GNOME's HTTP library: it uses the
