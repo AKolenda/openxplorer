@@ -42,9 +42,10 @@ is missing.
   their navigation pane glyphs (TAB-010); column titles have no tooltip
   (VIEW-029); the Rename File question names the file being renamed
   (OPS-010); Backspace in an Open or Save dialog goes up (NAV-004); Alt at
-  a drop makes shortcuts (DND-017). Windows 11 opens Home with Quick
-  access by default; "Open Quick access on Home" stays off here, the
-  owner's choice.
+  a drop makes shortcuts (DND-017); Compress to offers 7z File (ARC-023);
+  focus rings show only after keyboard navigation (ACC-009). Windows 11
+  opens Home with Quick access by default; "Open Quick access on Home"
+  stays off here, the owner's choice.
 - **Checks this environment cannot run.** LOOK-028 (fractional scales and a
   window moving between monitors of different scales need a Wayland
   compositor), ACC-003 (nobody has checked the file list with Orca; the icon
@@ -69,8 +70,8 @@ is missing.
   supported build targets and Flatpak configuration.
 - **Archives.** Browsing and extraction support ZIP and compressed TAR. 7z,
   RAR, encrypted ZIP and ZIP64 still need additional codecs or format support.
-  Windows 11 offers Compress to › 7z File; no 7z writer is in the dependency
-  tree yet.
+  Compress to › 7z File writes 7z archives (sevenz-rust2); browsing and
+  extracting 7z is not supported yet.
 - **Flatpak:** "Show in folder" answers only while OpenXplorer runs unless the
   desktop's Background portal starts it at login (native/packaging/README.md,
   "Differences inside the Flatpak"). Flathub publication needs the owner.

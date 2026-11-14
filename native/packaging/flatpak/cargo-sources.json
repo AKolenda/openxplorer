@@ -1471,6 +1471,19 @@
     {
         "type": "archive",
         "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/lzma-rust2/lzma-rust2-0.16.5.crate",
+        "sha256": "ca93e534d1142d1d0dcca6d25fe302508a5dfb40b302802904577725ea0b695b",
+        "dest": "cargo/vendor/lzma-rust2-0.16.5"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"ca93e534d1142d1d0dcca6d25fe302508a5dfb40b302802904577725ea0b695b\", \"files\": {}}",
+        "dest": "cargo/vendor/lzma-rust2-0.16.5",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
         "url": "https://static.crates.io/crates/lzma-rust2/lzma-rust2-0.25.0.crate",
         "sha256": "ef1d73c59a56771343712b22ea5615092c612c16ba291c0979e3105dfeec4890",
         "dest": "cargo/vendor/lzma-rust2-0.25.0"
@@ -2129,6 +2142,19 @@
         "type": "inline",
         "contents": "{\"package\": \"6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26\", \"files\": {}}",
         "dest": "cargo/vendor/serde_spanned-1.1.1",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/sevenz-rust2/sevenz-rust2-0.20.2.crate",
+        "sha256": "29225600349ef74beda5a9fffb36ac660a24613c0bde9315d0c49be1d51e9c24",
+        "dest": "cargo/vendor/sevenz-rust2-0.20.2"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"29225600349ef74beda5a9fffb36ac660a24613c0bde9315d0c49be1d51e9c24\", \"files\": {}}",
+        "dest": "cargo/vendor/sevenz-rust2-0.20.2",
         "dest-filename": ".cargo-checksum.json"
     },
     {

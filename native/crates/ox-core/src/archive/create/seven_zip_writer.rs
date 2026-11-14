@@ -6,7 +6,7 @@
 //! A 7z archive starts with a header that says where its last header is,
 //! so the writer goes back to the start once every entry is written: the
 //! output must be seekable. A local file is, and so is a file on a share
-//! that GVfs writes; an output that is not is refused before anything is
+//! that `GVfs` writes; an output that is not is refused before anything is
 //! compressed.
 
 use std::io::{self, Read, Seek, SeekFrom, Write};
