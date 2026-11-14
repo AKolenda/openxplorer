@@ -1062,7 +1062,13 @@ fn a_quick_access_tiles_menu_draws_no_ring_around_its_rows() {
         crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
         crate::test_support::harness::wait_for_frames(&test.window, 2);
     };
-    let close = |menu: &crate::window::menu_popover::MenuPopover| {
+    // The pointer leaves the menu before it closes, onto the tile left of
+    // where the menu opened: GTK 4.14 can crash (gdk_surface_request_motion)
+    // when a popover closes under the tests' resting pointer (see
+    // tests/focus.rs).
+    let off_the_menu = (x - 40, y);
+    let close = |pointer: &mut Pointer, menu: &crate::window::menu_popover::MenuPopover| {
+        pointer.move_to(off_the_menu.0, off_the_menu.1);
         menu.popdown();
         wait_until("the menu to close", || !menu.is_mapped());
     };
@@ -1073,7 +1079,7 @@ fn a_quick_access_tiles_menu_draws_no_ring_around_its_rows() {
     pointer.release(Button::Secondary);
     let menu = open_tile_menu(&test);
     seen.push(("right-click", keyboard_in_menu(&test, &menu)));
-    close(&menu);
+    close(&mut pointer, &menu);
     settle();
 
     pointer.hold_key(gtk::gdk::Key::Shift_L);
@@ -1081,7 +1087,7 @@ fn a_quick_access_tiles_menu_draws_no_ring_around_its_rows() {
     pointer.let_go_key(gtk::gdk::Key::Shift_L);
     let menu = open_tile_menu(&test);
     seen.push(("Shift+F10", keyboard_in_menu(&test, &menu)));
-    close(&menu);
+    close(&mut pointer, &menu);
     settle();
 
     home_page::tile_named(body(&test), "Desktop").grab_focus();
@@ -1090,7 +1096,7 @@ fn a_quick_access_tiles_menu_draws_no_ring_around_its_rows() {
     pointer.tap_key(gtk::gdk::Key::Menu);
     let menu = open_tile_menu(&test);
     seen.push(("Tab, then Menu", keyboard_in_menu(&test, &menu)));
-    close(&menu);
+    close(&mut pointer, &menu);
     // Back to where Xvfb starts the pointer (see tests/focus.rs).
     pointer.move_to(720, 500);
 
