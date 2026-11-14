@@ -332,6 +332,37 @@ impl NetworkRows {
     }
 }
 
+impl NetworkLocation {
+    /// Spells the share in this row's label as `uri`, the address the user
+    /// browsed, spells it, when the label starts with the share as GIO
+    /// wrote it ("studio on nas") and only the case differs: the address
+    /// bar shows the share as the address spells it, so the navigation
+    /// pane says "Studio on nas" too. Any other label stays.
+    fn respell_share(&mut self, uri: &str) {
+        let (Some(ours), Some(theirs)) = (smb_share_name(&self.uri), smb_share_name(uri)) else {
+            return;
+        };
+        if ours == theirs || glib::casefold(&ours) != glib::casefold(&theirs) {
+            return;
+        }
+        if let Some(rest) = self.label.strip_prefix(ours.as_str()) {
+            self.label = format!("{theirs}{rest}");
+        }
+    }
+}
+
+/// The share an SMB location is on, decoded, or `None` for a server or
+/// another kind of location.
+fn smb_share_name(uri: &str) -> Option<String> {
+    let parts = split_location(uri).ok()?;
+    if parts.scheme != "smb" {
+        return None;
+    }
+    let path = unquote_lossy(&parts.path);
+    let share = path.trim_start_matches('/').split('/').next()?;
+    (!share.is_empty()).then(|| share.to_owned())
+}
+
 /// The scheme and authority of an SFTP, FTP, WebDAV or NFS location;
 /// `None` for SMB and local locations, whose rows are told apart by path.
 fn remote_server(uri: &str) -> Option<(String, String)> {
@@ -350,6 +381,9 @@ impl NetworkLocation {
         if later.is_saved {
             self.uri = later.uri;
             self.label = later.label;
+        } else if !later.is_connected {
+            // A browsed address, not a mount: the user's spelling.
+            self.respell_share(&later.uri);
         }
         self.is_saved |= later.is_saved;
         self.is_connected |= later.is_connected;
