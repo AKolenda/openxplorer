@@ -301,6 +301,18 @@ pub(crate) struct BrowserWindow {
     pub(super) tooltips_off: Cell<super::quiet_tooltips::TooltipsOff>,
     /// The widgets whose tooltips were turned off, to turn them on again.
     pub(super) muted_tooltips: RefCell<Vec<glib::WeakRef<gtk::Widget>>>,
+    /// Where the pointer was last seen over the window, in its
+    /// coordinates (VIEW-073).
+    pub(super) pointer_now: Cell<Option<(f64, f64)>>,
+    /// Where the pointer was when a press hid the tooltip shown: tooltips
+    /// come back once it moved from there (VIEW-073).
+    pub(super) pointer_when_hidden: Cell<Option<(f64, f64)>>,
+    /// Whether the window hides GTK's tooltip popup when it shows while
+    /// tooltips are off (VIEW-073).
+    pub(super) watches_tooltip: Cell<bool>,
+    /// The menu or other popover with the keyboard, whose closing lets
+    /// tooltips back (VIEW-073).
+    pub(super) watched_popover: glib::WeakRef<gtk::Popover>,
     /// The tab a file drag hovers over, and the timer that shows it.
     pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
     /// The scroll of a zone a file drag hovers near the edge of.

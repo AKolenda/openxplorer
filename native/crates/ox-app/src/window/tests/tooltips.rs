@@ -46,7 +46,6 @@ fn cell_of(test: &TestWindow, name: &str) -> FileCell {
         .into_iter()
         .find(|cell| {
             cell.is_drawable()
-                && cell.has_tooltip()
                 && descendants::<gtk::Label>(cell)
                     .iter()
                     .any(|label| label.text() == name)

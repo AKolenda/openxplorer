@@ -139,7 +139,6 @@ impl BrowserWindow {
         // Added last, its key handler runs before the field's other ones.
         refuse_forbidden_characters(&editor);
         cell.show_name_editor(&editor);
-        self.quiet_tooltips_while_renaming(&editor);
         editor.grab_focus();
         // With the extension left out, the whole name shown is selected.
         let selected = if hidden_extension.is_some() {
@@ -508,37 +507,6 @@ impl BrowserWindow {
             cell,
             move || window.close_name_editor(&cell)
         ));
-    }
-
-    /// Turns tooltips off while `editor` shows, so none covers it
-    /// (VIEW-073), and back on once no name is edited in place: Tab may
-    /// already have moved the rename on to another item's field.
-    fn quiet_tooltips_while_renaming(&self, editor: &gtk::Entry) {
-        self.quiet_tooltips_for_rename(true);
-        editor.connect_unmap(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |_| {
-                glib::idle_add_local_once(glib::clone!(
-                    #[weak]
-                    window,
-                    move || {
-                        if !window.edits_a_name_in_place() {
-                            window.quiet_tooltips_for_rename(false);
-                        }
-                    }
-                ));
-            }
-        ));
-    }
-
-    /// Whether a field edits a name in place in either pane.
-    fn edits_a_name_in_place(&self) -> bool {
-        self.folder_panes().iter().any(|pane| {
-            crate::window::widget_tree::descendants::<gtk::Entry>(&pane.view_widget())
-                .iter()
-                .any(|field| field.has_css_class(NAME_EDITOR_CLASS) && field.is_mapped())
-        })
     }
 
     /// Gives the view back its focus, then shows the name again. Focus

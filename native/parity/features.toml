@@ -4435,7 +4435,7 @@ native_note = "native/crates/ox-app/src/folder_view/details/column_fit.rs (fit_a
 id = "VIEW-073"
 area = "VIEW"
 title = "No tooltip left over menus, the rename box or the next folder"
-behaviour = "A tooltip shown over an item or a column title goes once a key or a mouse button is pressed in the window, so none covers the menu that Shift+F10, the Menu key or a right-click opens, the rename box F2 opens or the folder a double-click opens. Tooltips stay off while the keyboard is in a menu or another popover and while a name is renamed in place, and the tooltip of the place left goes with every change of location. The next tooltip shows once the pointer rests again. On X11 and Wayland."
+behaviour = "A tooltip shown over an item or a column title goes once a key or a mouse button is pressed in the window, so none covers the menu that Shift+F10, the Menu key or a right-click opens, the rename box F2 opens or the folder a double-click opens. Tooltips stay off while the keyboard is in a menu or another popover and while a name is renamed in place, and the tooltip of the place left goes with every change of location. The next tooltip shows once the pointer has moved and rests again. On X11 and Wayland."
 origin = ["openxplorer"]
 priority = "should"
 openxplorer = "missing"
@@ -4445,7 +4445,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/quiet_tooltips.rs (install_tooltip_hiding, hide_tooltip, quiet_tooltips_for_rename and the menu reason of TooltipsOff); native/crates/ox-app/src/window/file_ops/inline_rename.rs (quiet_tooltips_while_renaming); native/crates/ox-app/src/window/location_view.rs (render_location hides the tooltip). GTK 4 has no call that hides a tooltip: the window turns its widgets' tooltips off while GTK looks under the pointer again, then back on. Tested with a real pointer and keys in native/crates/ox-app/src/window/tests/tooltips.rs (no_tooltip_stays_over_a_menu_the_rename_box_or_the_next_folder)."
+native_note = "native/crates/ox-app/src/window/quiet_tooltips.rs (install_tooltip_hiding, hide_tooltip, pointer_moved, follow_focus_for_tooltips, watch_tooltip_window and the Pressed, Menu and Rename reasons of TooltipsOff); native/crates/ox-app/src/window/location_view.rs (render_location hides the tooltip). GTK 4 has no call that hides a tooltip: the window turns its widgets' tooltips off and has GTK look under the pointer again, which hides it; they stay off until the pointer moves 3 pixels, as GTK would otherwise show at once the tooltip of whatever comes under a resting pointer, such as the first row of the folder a double-click opened, and a tooltip a widget made since then shows is hidden again. The keyboard in a menu, another popover or a rename box keeps them off until it leaves, or the popover closes. Tested with a real pointer and keys in native/crates/ox-app/src/window/tests/tooltips.rs (no_tooltip_stays_over_a_menu_the_rename_box_or_the_next_folder)."
 
 [[feature]]
 id = "SEL-001"
