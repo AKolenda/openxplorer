@@ -295,8 +295,9 @@ pub(crate) struct BrowserWindow {
     pub(super) drop_labels: RefCell<DropLabels>,
     /// The drop menu, built when first needed.
     pub(super) drop_menu: OnceCell<MenuPopover>,
-    /// Why tooltips are off now: a drag of this window's items, and the
-    /// drop menu, show none, as in Windows Explorer (DND-027).
+    /// Why tooltips are off now: a drag of this window's items, the drop
+    /// menu, a rename in place and a menu with the keyboard show none, as
+    /// in Windows Explorer (DND-027, VIEW-073).
     pub(super) tooltips_off: Cell<super::quiet_tooltips::TooltipsOff>,
     /// The widgets whose tooltips were turned off, to turn them on again.
     pub(super) muted_tooltips: RefCell<Vec<glib::WeakRef<gtk::Widget>>>,

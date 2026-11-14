@@ -98,6 +98,7 @@ mod tab_dragging;
 mod tabs;
 mod text_field_tab_keys;
 mod tiles_and_content;
+mod tooltips;
 pub(super) mod view_styles;
 mod views;
 mod worker_questions;
