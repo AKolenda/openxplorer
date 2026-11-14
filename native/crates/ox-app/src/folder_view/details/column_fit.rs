@@ -36,10 +36,6 @@ const RESIZE_EDGE: f64 = 8.0;
 /// How many pixels Left and Right change a focused title's column.
 const NUDGE_STEP: i32 = 10;
 
-/// What a title says about its edge (`handle.title` in app.js).
-const TITLE_TOOLTIP: &str =
-    crate::i18n::message_id("Drag to resize · double-click to fit loaded items (up to 2,000)");
-
 impl DetailsView {
     /// Lets the titles fit and nudge their columns, and keeps dragged
     /// widths within the columns' limits.
@@ -47,7 +43,9 @@ impl DetailsView {
         let Some(header) = self.header() else { return };
         for (column, title) in self.titles(&header) {
             title.set_focusable(true);
-            title.set_tooltip_text(Some(ox_core::i18n::gettext_static(TITLE_TOOLTIP)));
+            // Windows 11 File Explorer shows no tooltip on its column
+            // titles (checked on Windows 11 on 2026-11-14), so neither do
+            // these, unlike app.js's `handle.title`.
             describe_resizing(&title, column);
             let keys = gtk::EventControllerKey::new();
             keys.connect_key_pressed(glib::clone!(

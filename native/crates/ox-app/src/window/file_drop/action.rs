@@ -10,7 +10,7 @@
 //! copies. A plain drag of this app's own items then does what Windows
 //! Explorer does: it moves them onto a folder of their drive and copies
 //! them to another drive ([`drive`](super::drive)); Ctrl held at the drop
-//! copies and Shift moves. Ask opens the menu of Windows Explorer's
+//! copies, Shift moves and Alt makes shortcuts to them. Ask opens the menu of Windows Explorer's
 //! right-button drag: Copy here, Move here, Create shortcuts here and
 //! Cancel. A drag of this app's own items made with the secondary button
 //! always asks, whatever keys are held, as in Windows Explorer (DND-027).
@@ -207,10 +207,11 @@ pub(crate) enum DropAction {
     Copy,
     /// Moves them in (Shift).
     Move,
-    /// Makes links to them (Ctrl+Shift).
+    /// Makes links to them (Ctrl+Shift, or Alt for this app's own items).
     Link,
-    /// Asks with the drop menu (Alt, the middle button, or a drag made
-    /// with the secondary button), for a drag from this origin.
+    /// Asks with the drop menu (the middle button, a drag made with the
+    /// secondary button, or the desktop's "ask" key for another app's
+    /// items), for a drag from this origin.
     Ask(DragOrigin),
 }
 
@@ -270,15 +271,24 @@ impl DropAction {
     }
 
     /// What a drop that settled on `self` runs once the keys `held` at the
-    /// drop are known, as in Windows Explorer: a copy of this app's own
-    /// items becomes a move when Shift is held, and with no key held it
-    /// moves within their drive ([`DropRun::MoveWithinDrive`]). Ctrl keeps
-    /// the copy, and a drop from another app keeps whatever it settled on.
+    /// drop are known, as in Windows Explorer: Alt alone makes shortcuts
+    /// to this app's own items ("Alt+mouse drag a file: When you drop the
+    /// file, create a shortcut to the original file in that location",
+    /// Windows' keyboard shortcuts, support.microsoft.com), also where the
+    /// desktop turned Alt into "ask", as GNOME Shell does on Wayland; a
+    /// copy of them becomes a move when Shift is held, and with no key held
+    /// it moves within their drive ([`DropRun::MoveWithinDrive`]). Ctrl
+    /// keeps the copy, and a drop from another app keeps whatever it
+    /// settled on.
     pub(crate) fn with_keys(self, origin: DragOrigin, held: gdk::ModifierType) -> DropRun {
+        let held = held & ACTION_KEYS;
+        let asks_or_copies = matches!(self, Self::Copy | Self::Ask(_));
+        if origin == DragOrigin::ThisApp && asks_or_copies && held == gdk::ModifierType::ALT_MASK {
+            return DropRun::Run(Self::Link);
+        }
         if origin != DragOrigin::ThisApp || self != Self::Copy {
             return DropRun::Run(self);
         }
-        let held = held & ACTION_KEYS;
         if held == gdk::ModifierType::SHIFT_MASK {
             DropRun::Run(Self::Move)
         } else if held.is_empty() {

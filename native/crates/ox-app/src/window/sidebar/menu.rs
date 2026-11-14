@@ -126,6 +126,24 @@ pub(in crate::window) fn pin_menu(uri: &str, caching: Option<Caching>, editable:
     entries
 }
 
+/// Compress to, for the folder at `uri`: ZIP File, TAR File and
+/// Additional options, as Windows 11 offers them on a pinned folder.
+pub(in crate::window) fn compress_to_item(uri: &str) -> MenuItem {
+    let target = |label: &str, glyph: Icon, action: WindowAction| -> MenuItem {
+        MenuItem::with_text_target(&ox_core::i18n::gettext(label), glyph, action, uri)
+    };
+    MenuItem::submenu(
+        ox_core::i18n::gettext_static("Compress to"),
+        Icon::FolderZip,
+        WindowAction::CompressToOf,
+        vec![
+            target("ZIP File", Icon::FolderZip, WindowAction::CompressToZipOf).into(),
+            target("TAR File", Icon::FolderZip, WindowAction::CompressToTarOf).into(),
+            target("Additional options", Icon::FolderZip, WindowAction::CompressToOf).into(),
+        ],
+    )
+}
+
 /// What This PC's and Network's menus show besides their fixed items.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct HeadMenuState {
@@ -366,16 +384,7 @@ impl Sidebar {
         let target = |label: &str, glyph: Icon, action: WindowAction| -> MenuItem {
             MenuItem::with_text_target(&ox_core::i18n::gettext(label), glyph, action, uri)
         };
-        let compress = MenuItem::submenu(
-            ox_core::i18n::gettext_static("Compress to"),
-            Icon::FolderZip,
-            WindowAction::CompressToOf,
-            vec![
-                target("ZIP File", Icon::FolderZip, WindowAction::CompressToZipOf).into(),
-                target("TAR File", Icon::FolderZip, WindowAction::CompressToTarOf).into(),
-                target("Additional options", Icon::FolderZip, WindowAction::CompressToOf).into(),
-            ],
-        );
+        let compress = compress_to_item(uri);
         let new = MenuItem::submenu(
             ox_core::i18n::gettext_static("New"),
             Icon::Add,

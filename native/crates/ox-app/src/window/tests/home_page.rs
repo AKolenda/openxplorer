@@ -955,7 +955,9 @@ fn a_quick_access_tiles_menu_is_windows_11s() {
         // As Escape closes it.
         menu.popdown();
         wait_until("the menu to close", || !menu.is_visible());
-        wait_until("the keyboard back on the tile", || tile.has_focus());
+        wait_until("the keyboard back on the tile", || {
+            gtk::prelude::GtkWindowExt::focus(&test.window).as_ref() == Some(tile.upcast_ref::<gtk::Widget>())
+        });
     }
     let windows: Vec<String> = [
         "Open",
@@ -988,7 +990,12 @@ fn a_quick_access_tiles_menu_is_windows_11s() {
     wait_until("the classic menu", || open_classic().is_some());
     let classic = open_classic().expect("the classic menu is open");
     let rows = classic.row_labels();
-    for extra in ["Open folder with…", "Previous versions", "Copy", "Unpin from Quick access"] {
+    for extra in [
+        "Open folder with…",
+        "Previous versions",
+        "Copy",
+        "Unpin from Quick access",
+    ] {
         assert!(rows.iter().any(|row| row == extra), "{extra} in {rows:?}");
     }
     assert!(classic.strip_labels().is_empty());

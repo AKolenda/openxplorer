@@ -3914,7 +3914,11 @@ mod tests {
         for _ in 0..5 {
             glib::MainContext::default().iteration(false);
         }
-        assert_eq!(window.current_uri().as_deref(), Some("file:///"), "/ has no folder above");
+        assert_eq!(
+            window.current_uri().as_deref(),
+            Some("file:///"),
+            "/ has no folder above"
+        );
         window.cancel_picking();
         let (response, _) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_CANCELLED);

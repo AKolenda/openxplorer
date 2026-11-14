@@ -62,7 +62,10 @@ fn a_standard_folders_tab_shows_its_navigation_pane_glyph() {
     }
     shown.push(("Work", tab_art(&test, &file_uri(&home.join("Work")))));
     expected.push(("Work", vec![Art::Folder]));
-    shown.push(("Home", tab_art(&test, &file_uri(&home))));
+    // The window's own home folder, which Home opens while Quick access
+    // is off, as it is by default.
+    let home_folder = test.window.home_location();
+    shown.push(("Home", tab_art(&test, &home_folder)));
     expected.push(("Home", vec![Art::Glyph(Page::Home.icon())]));
 
     assert_eq!(shown, expected);
