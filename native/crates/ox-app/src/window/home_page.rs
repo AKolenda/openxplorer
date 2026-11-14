@@ -77,8 +77,10 @@ const TILE_EMBLEM: i32 = 20;
 /// tiles about 284 pixels apart across and 60 down.
 const TILE_CONTENT: (i32, i32) = (284, 60);
 /// A tile's height in Compact view, which draws the tiles closer as it
-/// does the list's rows: the folder and its three lines still fit.
-const COMPACT_TILE_HEIGHT: i32 = 48;
+/// does the list's rows: the folder and its three lines still fit, with
+/// a few pixels left above and below, so a pin never touches the name of
+/// the tile under it.
+const COMPACT_TILE_HEIGHT: i32 = 54;
 /// Pixels of the pin glyph under a pinned folder's location.
 const PIN_GLYPH: i32 = 12;
 /// Most tiles a row of Quick access holds; the pane's width decides.
@@ -404,8 +406,8 @@ const LOCATION_WIDTH: i32 = 300;
 /// Home's spacing, measured on Windows 11's Home: its chevrons about 30
 /// pixels in from the pane's edge, the first tile's name about 37
 /// pixels under the heading's middle, 45 pixels from the last tiles to
-/// the pills, 51 from the pills' middle to the column headers' and 50
-/// from there to the first row's.
+/// the pills, 51 from the pills' middle to the column headers', and the
+/// first row right under the headers, one row (36 pixels) from theirs.
 const SECTION_INDENT: i32 = 14;
 /// Quick access's tiles stand further in than the heading: their folders
 /// about 92 pixels from the pane's edge, as in Windows 11.
@@ -414,7 +416,6 @@ const LIST_INDENT: i32 = 48;
 const TILES_BELOW_HEADING: i32 = 6;
 const PILLS_BELOW_TILES: i32 = 45;
 const HEADER_BELOW_PILLS: i32 = 19;
-const ROWS_BELOW_HEADER: i32 = 14;
 /// The narrowest Name gets in a narrow window, and the narrowest Date
 /// accessed and File location.
 const NARROWEST_NAME: i32 = 140;
@@ -548,9 +549,10 @@ impl Columns {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         row.add_css_class("home-list-header");
         row.set_halign(gtk::Align::Start);
-        row.set_size_request(-1, ROW_PITCH);
+        // As tall as a row, and right above the first: no empty band
+        // between the titles and the rows, in the Compact view too.
+        row.set_size_request(-1, self.pitch);
         row.set_margin_top(HEADER_BELOW_PILLS);
-        row.set_margin_bottom(ROWS_BELOW_HEADER);
         // Name stands over the rows' icons, as in Windows 11; the rows'
         // indent is a spacer, as a size group counts a cell's margins.
         let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);

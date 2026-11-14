@@ -605,8 +605,8 @@ fn home_is_spaced_as_windows_11_home() {
     near(
         "headers to the first row",
         middle(&metrics.rows[0]) - middle(&metrics.header),
-        50,
-        3,
+        36,
+        1,
     );
     let (name, date, location) = (
         bounds(&test, &metrics.columns[0]).x,
@@ -1010,5 +1010,5 @@ fn compact_view_draws_quick_access_tiles_closer() {
     test.activate("compact-density", None);
     wait_until("Compact view", || test.window.shows_compact_density());
     crate::test_support::harness::wait_for_frames(&test.window, 3);
-    assert_eq!(tile(&test), 48, "a compact tile");
+    assert_eq!(tile(&test), 54, "a compact tile");
 }
