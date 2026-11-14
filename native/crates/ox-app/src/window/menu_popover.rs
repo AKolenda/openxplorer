@@ -186,6 +186,11 @@ mod imp {
                 .propagate_natural_height(true)
                 .max_content_height(super::height::UNKNOWN_MONITOR_LIMIT)
                 .child(&list)
+                // The keyboard goes to the rows, never to the scroller
+                // around them, which would draw a ring around the whole
+                // list: Windows 11's menus show where the keyboard is with
+                // the row's highlight alone (HOME-013, ACC-009).
+                .focusable(false)
                 .build();
             content.append(&rows);
             // Once shown, the menu fits the monitor its own popup is on.
@@ -207,6 +212,20 @@ mod imp {
             popover.connect_map(|popover| {
                 if !popover.imp().is_submenu.get() {
                     popover.focus_first_item();
+                    // A menu made for one opening, as a place's or a Home
+                    // tile's, is mapped before GTK has given its new popup
+                    // the keyboard, which then went to the first thing that
+                    // takes it: the scroller around the rows, with a ring
+                    // around the whole list. The first row takes it again
+                    // once GTK is done, unless a row has it already.
+                    let menu = popover.downgrade();
+                    glib::idle_add_local_once(move || {
+                        if let Some(menu) = menu.upgrade() {
+                            if menu.is_mapped() && !menu.a_row_has_the_keyboard() {
+                                menu.focus_first_item();
+                            }
+                        }
+                    });
                 }
             });
             popover.connect_closed(super::MenuPopover::forget_hover);
@@ -584,6 +603,16 @@ impl MenuPopover {
     }
 
     /// Moves the keyboard to the first item that can be chosen.
+    /// Whether one of the menu's rows has the keyboard.
+    fn a_row_has_the_keyboard(&self) -> bool {
+        let list = self.list().clone();
+        let focus = self
+            .root()
+            .and_downcast::<gtk::Window>()
+            .and_then(|window| GtkWindowExt::focus(&window));
+        focus.is_some_and(|focus| focus.is::<gtk::ListBoxRow>() && focus.is_ancestor(&list))
+    }
+
     fn focus_first_item(&self) {
         if let Some(row) = first_enabled_row(self.list()) {
             row.grab_focus();
