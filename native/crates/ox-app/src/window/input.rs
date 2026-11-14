@@ -107,6 +107,7 @@ impl BrowserWindow {
             }
         ));
         self.install_focus_regions();
+        self.show_the_focus_ring_only_for_keyboard_moves();
         self.install_tab_order();
         super::menu_popover::close_menus_on_press(self);
     }
