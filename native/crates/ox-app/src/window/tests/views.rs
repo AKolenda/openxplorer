@@ -540,10 +540,11 @@ fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
 }
 
 /// Choosing a view while the keyboard is on no item but the first, and
-/// nothing is selected, starts it from the top and saves it (an item that has the keyboard stays in
-/// view: selection.rs, changing_the_view_keeps_the_focused_item_in_view);
-/// Explorer's keys choose Details (Ctrl+Shift+6) and the icon sizes
-/// (Ctrl+Shift+1 to 4), and Alt+Shift+P opens the details pane.
+/// nothing is selected, starts it from the top and saves it (an item
+/// that has the keyboard stays in view: `selection.rs`,
+/// `changing_the_view_keeps_the_focused_item_in_view`); Explorer's keys
+/// choose Details (Ctrl+Shift+6) and the icon sizes (Ctrl+Shift+1 to 4),
+/// and Alt+Shift+P opens the details pane.
 ///
 /// parity: VIEW-006, VIEW-007, VIEW-009, VIEW-063
 #[gtk::test]

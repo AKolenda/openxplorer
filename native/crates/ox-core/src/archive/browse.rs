@@ -211,22 +211,13 @@ impl ListingRows {
     /// folder of this folder's that it is inside. `link_target` is where a
     /// TAR's symbolic link points.
     fn add(&mut self, member: &ZipMember, link_target: Option<&str>) {
-        let is_link = match link_target {
-            Some(target) => {
-                if !is_listable_link(member, target) {
-                    self.hidden_unsafe_count += 1;
-                    return;
-                }
-                true
-            }
-            None => {
-                if !is_listable(member) {
-                    self.hidden_unsafe_count += 1;
-                    return;
-                }
-                false
-            }
-        };
+        let is_link = link_target.is_some();
+        let is_shown =
+            link_target.map_or_else(|| is_listable(member), |target| is_listable_link(member, target));
+        if !is_shown {
+            self.hidden_unsafe_count += 1;
+            return;
+        }
         let relative = match member.name.strip_prefix(self.prefix.as_str()) {
             Some(relative) if !relative.is_empty() => relative,
             _ => return,

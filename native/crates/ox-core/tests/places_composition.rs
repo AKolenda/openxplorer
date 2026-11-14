@@ -272,7 +272,7 @@ fn a_share_mapped_for_this_session_keeps_its_letter() {
 }
 
 /// A browsed share is named after its mount, but with the share spelled
-/// as the user's address spells it: GVfs writes the share in lower case
+/// as the user's address spells it: `GVfs` writes the share in lower case
 /// ("studio on 127.0.0.1"), and the address bar shows "Studio", so the
 /// navigation pane says "Studio on 127.0.0.1". A share mapped with a
 /// label, or saved, keeps its own label.
