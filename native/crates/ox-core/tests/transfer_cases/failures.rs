@@ -26,6 +26,32 @@ fn backup_in(fixture: &Fixture) -> PathBuf {
     fixture.destination_folder.join(backup)
 }
 
+/// A move finished by copying is done once its copy is published and its
+/// original removed. When the server stops right after that, the empty
+/// private staging folder cannot be removed, but nothing of the user's is
+/// missing or partial: the move reports success, with no error, no
+/// question and no "Incomplete staging folder" notice.
+///
+/// parity: XFER-013, XFER-002
+#[test]
+fn a_finished_move_succeeds_when_the_server_stops_before_its_cleanup() {
+    let fixture = Fixture::new();
+    let source = fixture.source_folder.join("plan.pdf");
+    write(&source, "fictional plan");
+    let mut engine = fixture
+        .engine(Faults::new(Fault::StopsAfterCopy, &fixture.cancel))
+        .with_move_by_copying_question(|_: &MoveByCopyingItem| true);
+
+    let result = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
+
+    assert_eq!(result.done, [file_uri(&source)], "{result:?}");
+    assert!(result.errors.is_empty(), "{result:?}");
+    assert!(result.presented.is_empty(), "{result:?}");
+    assert!(result.recovery.is_empty(), "{result:?}");
+    assert!(!source.exists(), "the original is removed");
+    assert_eq!(read(&fixture.destination_folder.join("plan.pdf")), "fictional plan");
+}
+
 /// A copy that fails midway, even one the backend itself reports as
 /// cancelled, keeps the existing item and removes its private staging.
 ///
