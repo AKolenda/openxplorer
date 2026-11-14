@@ -117,6 +117,70 @@ fn ask_window_for_password(
     (operation, replies, dialog)
 }
 
+/// Connect as guest looks like the link it is, in the accent colour, and
+/// stands apart from the keyring note above it, not like more of the
+/// note's text.
+///
+/// parity: NET-011
+#[gtk::test]
+fn connect_as_guest_is_a_link_set_apart_from_the_note() {
+    let test = TestWindow::open(Page::Network.uri());
+    let operation = test
+        .window
+        .network()
+        .prompts()
+        .create("smb://nas/share")
+        .expect("an SMB share");
+    let flags = gtk::gio::AskPasswordFlags::NEED_USERNAME
+        | gtk::gio::AskPasswordFlags::NEED_PASSWORD
+        | gtk::gio::AskPasswordFlags::SAVING_SUPPORTED
+        | gtk::gio::AskPasswordFlags::ANONYMOUS_SUPPORTED;
+    operation.emit_by_name::<()>("ask-password", &[&"", &"sam", &"WORKGROUP", &flags]);
+    let sign_in = Rc::clone(test.window.network().sign_in());
+    wait_until("the sign-in dialog", || sign_in.shown_dialog().is_some());
+    let dialog = sign_in.shown_dialog().expect("the sign-in dialog");
+    wait_until("the dialog drawn", || dialog.is_mapped() && dialog.width() > 0);
+    wait_for(Duration::from_millis(200));
+
+    let guest = descendants::<gtk::Button>(&dialog)
+        .into_iter()
+        .find(|button| button.label().as_deref() == Some("Connect as guest"))
+        .expect("Connect as guest");
+    assert!(guest.is_visible());
+    let note = descendants::<gtk::Box>(&dialog)
+        .into_iter()
+        .find(|widget| widget.has_css_class("sign-in-note"))
+        .expect("the keyring note");
+    let text = descendants::<gtk::Label>(&note)
+        .into_iter()
+        .next()
+        .expect("the note's text");
+    let link = descendants::<gtk::Label>(&guest)
+        .into_iter()
+        .next()
+        .expect("the button's text");
+    let heading = descendants::<gtk::Label>(&dialog)
+        .into_iter()
+        .find(|label| label.has_css_class("dialog-title"))
+        .expect("the dialog's heading");
+    assert_ne!(link.color(), text.color(), "the link is not drawn as the note");
+    assert_ne!(link.color(), heading.color(), "the link is not drawn as text");
+    let note_bottom = note
+        .compute_bounds(&dialog)
+        .map(|bounds| bounds.y() + bounds.height())
+        .expect("the note is laid out");
+    let guest_top = guest
+        .compute_bounds(&dialog)
+        .map(|bounds| bounds.y())
+        .expect("the button is laid out");
+    assert!(
+        guest_top - note_bottom >= 12.0,
+        "Connect as guest is {} px under the note",
+        guest_top - note_bottom
+    );
+    dialog.close();
+}
+
 /// A credential that worked is kept for the window; when the keyring
 /// cannot save it, the window says so.
 ///
