@@ -164,17 +164,17 @@ fn a_favorite_file_is_listed_opened_and_removed() {
     let notes = fixture.uri_of("Notes 2.txt");
     test.activate("add-to-favorites", Some(&notes));
     wait_until("the favorite", || {
-        home_page::list_names(body(&test)) == ["Notes 2.txt"]
+        home_page::list_names(body(&test)) == ["Notes 2"]
     });
     assert_eq!(
         test.context.settings_data().preferences.favorites,
         std::slice::from_ref(&notes)
     );
-    let labels = home_page::menu_labels(body(&test), "Notes 2.txt");
+    let labels = home_page::menu_labels(body(&test), "Notes 2");
     assert!(labels.contains(&"Open file location".to_owned()), "{labels:?}");
     assert!(labels.contains(&"Remove from Favorites".to_owned()), "{labels:?}");
 
-    home_page::open_item(body(&test), "Notes 2.txt");
+    home_page::open_item(body(&test), "Notes 2");
     wait_until("the file to be opened", || {
         !test.context.recorded_launches().is_empty()
     });
@@ -288,13 +288,13 @@ fn a_recent_file_opens_the_real_file_and_its_location() {
     let test = home_window(&fixture);
 
     wait_until("the recent file", || {
-        home_page::list_names(body(&test)).contains(&"plan.txt".to_owned())
+        home_page::list_names(body(&test)).contains(&"plan".to_owned())
     });
-    let labels = home_page::menu_labels(body(&test), "plan.txt");
+    let labels = home_page::menu_labels(body(&test), "plan");
     assert!(labels.contains(&"Open file location".to_owned()), "{labels:?}");
     assert!(labels.contains(&"Add to Favorites".to_owned()), "{labels:?}");
 
-    home_page::open_item(body(&test), "plan.txt");
+    home_page::open_item(body(&test), "plan");
     wait_until("the file to be opened", || {
         !test.context.recorded_launches().is_empty()
     });
@@ -304,6 +304,49 @@ fn a_recent_file_opens_the_real_file_and_its_location() {
     test.wait_for_listing("the file's folder");
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
     assert_eq!(test.selected_names(), ["plan.txt"]);
+}
+
+/// Recent and Favorites name files as the file list does: without the
+/// extension of a known type while extensions are hidden, as by default
+/// in Windows, and whole once View > Show > File name extensions is on.
+/// The row still opens the real file.
+///
+/// parity: HOME-014, HOME-015, VIEW-069
+#[gtk::test]
+fn recent_and_favorites_follow_the_file_name_extensions_setting() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/plan.txt"), b"Fictional plan\n").expect("fixture file");
+    let plan = fixture.uri_of("Documents/plan.txt");
+    add_to_desktop_history(&plan, "text/plain");
+    let test = home_window(&fixture);
+    wait_until("the recent file, without its extension", || {
+        home_page::list_names(body(&test)).contains(&"plan".to_owned())
+    });
+    assert!(
+        !home_page::list_names(body(&test)).contains(&"plan.txt".to_owned()),
+        "{:?}",
+        home_page::list_names(body(&test))
+    );
+    test.activate("add-to-favorites", Some(&fixture.uri_of("Notes 2.txt")));
+    home_page::choose_tab(body(&test), "Favorites");
+    wait_until("the favorite, without its extension", || {
+        home_page::list_names(body(&test)) == ["Notes 2"]
+    });
+
+    test.activate("file-name-extensions", None);
+    wait_until("the favorite, whole", || {
+        home_page::list_names(body(&test)) == ["Notes 2.txt"]
+    });
+    home_page::choose_tab(body(&test), "Recent");
+    wait_until("the recent file, whole", || {
+        home_page::list_names(body(&test)).contains(&"plan.txt".to_owned())
+    });
+    home_page::open_item(body(&test), "plan.txt");
+    wait_until("the file to be opened", || {
+        !test.context.recorded_launches().is_empty()
+    });
+    assert_eq!(test.context.recorded_launches(), std::slice::from_ref(&plan));
 }
 
 /// Quick access and the Recent / Favorites list fold and unfold from
@@ -387,7 +430,7 @@ fn the_list_has_name_date_accessed_and_file_location_columns() {
     add_to_desktop_history(&fixture.uri_of("Documents/plan.txt"), "text/plain");
     let test = home_window(&fixture);
     wait_until("the recent file", || {
-        home_page::list_names(body(&test)).contains(&"plan.txt".to_owned())
+        home_page::list_names(body(&test)).contains(&"plan".to_owned())
     });
 
     assert!(home_page::tab_has_icon(body(&test), "Recent"));
@@ -396,9 +439,9 @@ fn the_list_has_name_date_accessed_and_file_location_columns() {
         home_page::list_headers(body(&test)),
         ["Name", "Date accessed", "File location"]
     );
-    let cells = home_page::row_cells(body(&test), "plan.txt");
+    let cells = home_page::row_cells(body(&test), "plan");
     assert_eq!(cells.len(), 3, "{cells:?}");
-    assert_eq!(cells[0], "plan.txt");
+    assert_eq!(cells[0], "plan");
     assert!(!cells[1].is_empty() && cells[1] != "—", "a date: {cells:?}");
     assert!(cells[2].ends_with("Example projects/Documents"), "{cells:?}");
 }
@@ -573,8 +616,8 @@ fn home_is_spaced_as_windows_11_home() {
     near("Name to Date accessed", date - name, 484, 2);
     near("Date accessed to File location", location - date, 298, 2);
     near("Name from the pane's edge", name - page.x, 90, 4);
-    let cells = home_page::row_cell_widgets(body(&test), "plan.txt");
-    let icon = home_page::row_icon(body(&test), "plan.txt");
+    let cells = home_page::row_cell_widgets(body(&test), "plan");
+    let icon = home_page::row_icon(body(&test), "plan");
     near("a row's icon under Name", bounds(&test, &icon).x, name, 1);
     near(
         "a row's name right of its icon",
@@ -643,7 +686,7 @@ fn recent_lists_nothing_while_the_desktop_remembers_no_recent_files() {
     add_to_desktop_history(&fixture.uri_of("Documents/plan.txt"), "text/plain");
     let test = home_window(&fixture);
     wait_until("the recent file", || {
-        home_page::list_names(body(&test)).contains(&"plan.txt".to_owned())
+        home_page::list_names(body(&test)).contains(&"plan".to_owned())
     });
 
     // GNOME's privacy switch, which leaves the desktop's list, and so
@@ -862,7 +905,7 @@ fn favorites_rows_come_at_once_and_their_dates_only_when_shown() {
     home_page::choose_tab(body(&test), "Favorites");
     assert_eq!(
         home_page::list_names(body(&test)),
-        ["Notes 2.txt"],
+        ["Notes 2"],
         "listed at once, before any file is read"
     );
     home_page::choose_tab(body(&test), "Recent");
@@ -877,7 +920,7 @@ fn favorites_rows_come_at_once_and_their_dates_only_when_shown() {
 
     home_page::choose_tab(body(&test), "Favorites");
     wait_until("the date", || {
-        home_page::row_cells(body(&test), "Notes 2.txt")
+        home_page::row_cells(body(&test), "Notes 2")
             .get(1)
             .is_some_and(|date| !date.is_empty() && date != "—")
     });
