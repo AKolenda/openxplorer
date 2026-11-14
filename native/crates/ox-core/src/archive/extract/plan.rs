@@ -300,7 +300,7 @@ fn link_segments(
 /// # Errors
 ///
 /// [`ArchiveError::UnsafeLink`] naming the link otherwise.
-pub(super) fn check_link_target(name: &str, segments: &[String], target: &str) -> Result<(), ArchiveError> {
+pub(in crate::archive) fn check_link_target(name: &str, segments: &[String], target: &str) -> Result<(), ArchiveError> {
     let refuse = || ArchiveError::UnsafeLink(name.trim_end_matches('/').to_owned());
     let is_plain_text = !target.is_empty()
         && target.chars().count() <= MAX_NAME_CHARS

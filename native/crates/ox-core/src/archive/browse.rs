@@ -11,6 +11,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use super::extract::check_link_target;
 use super::member_names::{is_previewable, is_safe_member};
 use super::preview::MAX_PREVIEW_BYTES;
 use super::source::{open_archive, ArchiveOpener};
@@ -117,9 +118,11 @@ impl ArchiveBrowser {
         let prefix = folder_prefix(prefix)?;
         let archive = open_archive(self.opener.as_ref(), uri, cancel)?;
         let mut rows = ListingRows::new(prefix);
-        for member in archive.members() {
+        let link_targets = archive.link_targets();
+        for (index, member) in archive.members().iter().enumerate() {
             cancel.check()?;
-            rows.add(member);
+            let link_target = link_targets.and_then(|targets| targets.get(&index));
+            rows.add(member, link_target.map(String::as_str));
             if rows.is_full() {
                 break;
             }
@@ -169,6 +172,20 @@ pub(crate) fn is_listable(member: &ZipMember) -> bool {
         && member.file_type() != MemberFileType::LinkOrSpecial
 }
 
+/// ARC-004, ARC-016: true for a TAR's symbolic link to `target` that the
+/// browser shows, as extracting keeps it: a safe name the archive
+/// records unaltered, and a relative target that stays inside the
+/// archive (the rule of [`check_link_target`]). Every other link, and
+/// every special file, stays hidden.
+fn is_listable_link(member: &ZipMember, target: &str) -> bool {
+    if !is_safe_member(&member.name) || !member.has_unaltered_name() {
+        return false;
+    }
+    let name = member.name.trim_end_matches('/');
+    let segments: Vec<String> = name.split('/').map(str::to_owned).collect();
+    check_link_target(name, &segments, target).is_ok()
+}
+
 /// The rows of one folder, collected member by member.
 #[derive(Debug)]
 struct ListingRows {
@@ -191,17 +208,34 @@ impl ListingRows {
     }
 
     /// Adds the row `member` shows in this folder, if any: itself, or the
-    /// folder of this folder's that it is inside.
-    fn add(&mut self, member: &ZipMember) {
-        if !is_listable(member) {
-            self.hidden_unsafe_count += 1;
-            return;
-        }
+    /// folder of this folder's that it is inside. `link_target` is where a
+    /// TAR's symbolic link points.
+    fn add(&mut self, member: &ZipMember, link_target: Option<&str>) {
+        let is_link = match link_target {
+            Some(target) => {
+                if !is_listable_link(member, target) {
+                    self.hidden_unsafe_count += 1;
+                    return;
+                }
+                true
+            }
+            None => {
+                if !is_listable(member) {
+                    self.hidden_unsafe_count += 1;
+                    return;
+                }
+                false
+            }
+        };
         let relative = match member.name.strip_prefix(self.prefix.as_str()) {
             Some(relative) if !relative.is_empty() => relative,
             _ => return,
         };
-        let entry = entry_for(&self.prefix, relative, member);
+        let mut entry = entry_for(&self.prefix, relative, member);
+        if is_link && matches!(entry.kind, ArchiveEntryKind::File { .. }) {
+            // A link holds no data of its own to open as a copy.
+            entry.can_open = false;
+        }
         if self.shown.insert(entry.member.clone()) {
             self.entries.push(entry);
         }

@@ -426,13 +426,15 @@ impl ArchiveBrowserView {
 pub(crate) fn listing_notice(listing: &ArchiveListing) -> String {
     let mut notices = Vec::new();
     if listing.hidden_unsafe_count > 0 {
-        notices.push(ox_core::i18n::format_message(
-            "{hidden_unsafe_count} unsafe names or links are hidden.",
-            &[(
-                "hidden_unsafe_count",
-                &ox_core::format::group_digits(listing.hidden_unsafe_count as u64),
-            )],
-        ));
+        let count = listing.hidden_unsafe_count as u64;
+        notices.push(
+            ox_core::i18n::ngettext(
+                "{hidden_unsafe_count} unsafe name or link is hidden.",
+                "{hidden_unsafe_count} unsafe names or links are hidden.",
+                count,
+            )
+            .replace("{hidden_unsafe_count}", &ox_core::format::group_digits(count)),
+        );
     }
     if listing.is_truncated {
         notices.push(ox_core::i18n::gettext_static("Showing the first 5,000 entries.").to_owned());
