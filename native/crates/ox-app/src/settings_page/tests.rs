@@ -873,19 +873,31 @@ fn the_network_thumbnails_switch_is_off_by_default_and_saved_only_when_changed()
     assert!(!switch.is_active(), "off by default");
     let settings_file = settings.test.settings_directory().join("settings.json");
     let stored = || std::fs::read_to_string(&settings_file).unwrap_or_default();
-    assert!(!stored().contains("remotePreviews"), "nothing stored: {}", stored());
+    assert!(
+        !stored().contains("remotePreviews"),
+        "nothing stored: {}",
+        stored()
+    );
 
     switch.set_active(true);
     wait_until("the choice to be saved", || {
         settings.saved_preferences().view_options.remote_previews
     });
-    assert!(stored().contains("\"remotePreviews\": true"), "stored when on: {}", stored());
+    assert!(
+        stored().contains("\"remotePreviews\": true"),
+        "stored when on: {}",
+        stored()
+    );
 
     switch.set_active(false);
     wait_until("the choice to be saved", || {
         !settings.saved_preferences().view_options.remote_previews
     });
-    assert!(!stored().contains("remotePreviews"), "the default is not stored: {}", stored());
+    assert!(
+        !stored().contains("remotePreviews"),
+        "the default is not stored: {}",
+        stored()
+    );
 }
 
 /// The clipboard's extras beyond Windows are on by default, as they were

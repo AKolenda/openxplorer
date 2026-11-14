@@ -34,9 +34,10 @@ pub(super) fn build_entry(
     fallback_name: impl FnOnce() -> Option<String>,
 ) -> Entry {
     let kind = file_kind(info);
-    let content_type = string_attribute(info, "standard::content-type");
-    let classification = classify_info(uri, info, kind, content_type.as_deref());
     let name = display_name(uri, info, fallback_name);
+    let content_type = string_attribute(info, "standard::content-type")
+        .or_else(|| network_file_type(uri, info, kind, &name));
+    let classification = classify_info(uri, info, kind, content_type.as_deref());
     let is_symlink = info.boolean("standard::is-symlink");
     let type_label = if is_shortcut(uri, &name, is_symlink, &classification) {
         shortcut_label()
@@ -77,6 +78,28 @@ pub(super) fn build_entry(
             ..EntryMeta::from_info(info)
         }),
     }
+}
+
+/// The type of a file of a server or a device whose backend reported no
+/// `standard::content-type`, as `GVfs`'s SMB backend leaves it whenever the
+/// name alone does not settle it (a PNG, whose extension two types share):
+/// its `standard::fast-content-type` when reported, else its name's best
+/// guess, which is what that backend's fast type is. A name that says
+/// nothing (`application/octet-stream`) leaves it untyped, and so does a
+/// file of this computer, whose backend reads its contents.
+fn network_file_type(uri: &str, info: &gio::FileInfo, kind: EntryKind, name: &str) -> Option<String> {
+    use crate::location::{location_kind, LocationKind};
+
+    let on_network = matches!(
+        location_kind(uri),
+        LocationKind::Smb | LocationKind::Remote | LocationKind::Device
+    );
+    if !on_network || kind != EntryKind::File {
+        return None;
+    }
+    let guessed = string_attribute(info, "standard::fast-content-type")
+        .unwrap_or_else(|| gio::content_type_guess(Some(name), None).0.to_string());
+    (guessed != "application/octet-stream").then_some(guessed)
 }
 
 /// Whether the item named `name` at `uri` is a shortcut to a file or a

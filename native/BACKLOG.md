@@ -34,6 +34,11 @@ is missing.
   Bin" in the address bar opens it (NAV-033). Search's `?` stands for
   exactly one character (SRCH-004); a Linux name holding a literal `?` is
   matched by it too, and there is no escape for it.
+- **Windows 11 network thumbnails (2026-11-14).** Network folders (SMB,
+  servers, phones, cameras and kernel network mounts) show type icons by
+  default, as Windows 11 File Explorer does; Settings → Files & folders →
+  Previews and thumbnails → Show thumbnails in network folders turns
+  thumbnails and Preview pane previews on (VIEW-058).
 - **Checks this environment cannot run.** LOOK-028 (fractional scales and a
   window moving between monitors of different scales need a Wayland
   compositor), ACC-003 (nobody has checked the file list with Orca; the icon

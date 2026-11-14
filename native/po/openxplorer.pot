@@ -3426,10 +3426,6 @@ msgstr ""
 msgid "Also copy paths as text"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Also in network folders"
-msgstr ""
-
 #: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/context_menu/entries.rs
 msgid "Calculate folder sizes"
 msgstr ""
@@ -3499,7 +3495,7 @@ msgid "Logical file bytes, the space on disk, what a scan skips, and its limits.
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Off: files on SMB shares, servers and phones keep their icons, so browsing them reads no file contents."
+msgid "Off by default, as in Windows: files on shares, servers, phones and cameras show their type icons. Turn on to show their thumbnails and previews too."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3556,6 +3552,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Show the number of items in folders"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Show thumbnails in network folders"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3627,7 +3627,7 @@ msgid "replace overwrite file conflict copy move paste drag restore recycle bin 
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "show previews in network folders thumbnails remote network smb nas sftp slow"
+msgid "show previews in network folders thumbnails remote network smb nas sftp phone camera also"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
