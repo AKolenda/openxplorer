@@ -673,6 +673,71 @@ fn home_is_spaced_as_windows_11_home() {
     );
 }
 
+/// Home is laid out evenly in the normal and the Compact view: the
+/// list's first row comes one row under the column titles, with no empty
+/// band between them, and a Quick access tile's pin never touches the
+/// name of the tile below it.
+///
+/// parity: HOME-013, HOME-015, HOME-016
+#[gtk::test]
+fn home_has_no_band_under_the_titles_and_its_tiles_do_not_touch() {
+    use super::geometry::bounds;
+
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/plan.txt"), b"Fictional plan\n").expect("fixture file");
+    add_to_desktop_history(&fixture.uri_of("Documents/plan.txt"), "text/plain");
+    let test = home_window(&fixture);
+    // Narrow enough for one tile a row, so the tiles stand one above the
+    // other.
+    test.window.set_default_size(700, 900);
+    for folder in ["Documents", "Music", "Pictures"] {
+        test.activate("pin-location", Some(&fixture.uri_of(folder)));
+    }
+    wait_until("the tiles and the recent file", || {
+        home_page::tile_names(body(&test)).len() >= 2 && !home_page::list_names(body(&test)).is_empty()
+    });
+    for (compact, pitch) in [(false, 36), (true, 26)] {
+        if compact {
+            test.activate("compact-density", None);
+            wait_until("Compact view", || test.window.shows_compact_density());
+            wait_until("the recent file again", || {
+                !home_page::list_names(body(&test)).is_empty()
+            });
+        }
+        let view = if compact { "Compact" } else { "normal" };
+        // Home is drawn again for the Compact view: the rows take their
+        // new pitch once it is laid out.
+        wait_until("Home laid out", || {
+            crate::test_support::harness::wait_for_frames(&test.window, 2);
+            let rows = home_page::metrics(body(&test)).rows;
+            rows.first()
+                .is_some_and(|row| (bounds(&test, row).height - pitch).abs() <= 1)
+        });
+        crate::test_support::harness::wait_for_frames(&test.window, 4);
+        let metrics = home_page::metrics(body(&test));
+        let middle = |widget: &gtk::Widget| {
+            let place = bounds(&test, widget);
+            place.y + place.height / 2
+        };
+        let below = middle(&metrics.rows[0]) - middle(&metrics.columns[0]);
+        assert!(
+            below <= pitch + 1,
+            "{view}: the first row is {below} px under the titles, want one row ({pitch})"
+        );
+        let tiles = &metrics.tiles;
+        let first = bounds(&test, &tiles[0]);
+        let next = tiles
+            .iter()
+            .find(|tile| bounds(&test, *tile).y > first.y)
+            .expect("a tile under the first");
+        let pin = home_page::tile_pin(&tiles[0]);
+        let name = home_page::tile_name_label(next);
+        let gap = bounds(&test, &name).y - bounds(&test, &pin).bottom();
+        assert!(gap >= 6, "{view}: the pin is {gap} px above the next tile's name");
+    }
+}
+
 /// Recent follows the desktop's privacy settings as the navigation
 /// pane's Recent locations does: with recent files turned off it lists
 /// nothing, though `GVfs` still lists the earlier files.

@@ -1764,6 +1764,24 @@ pub(crate) fn tile_names(page: &gtk::Box) -> Vec<String> {
         .collect()
 }
 
+/// The pin under a Quick access tile's name and location, for tests.
+#[cfg(test)]
+pub(crate) fn tile_pin(tile: &gtk::Widget) -> gtk::Widget {
+    descendants_with_class(tile, "home-pin")
+        .into_iter()
+        .next()
+        .expect("a tile's pin")
+}
+
+/// A Quick access tile's name, for tests.
+#[cfg(test)]
+pub(crate) fn tile_name_label(tile: &gtk::Widget) -> gtk::Widget {
+    descendants_with_class(tile, "tile-name")
+        .into_iter()
+        .next()
+        .expect("a tile's name")
+}
+
 /// The names of the rows of the list shown, for tests.
 #[cfg(test)]
 pub(crate) fn list_names(page: &gtk::Box) -> Vec<String> {
