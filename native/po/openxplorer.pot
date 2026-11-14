@@ -4336,12 +4336,17 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/update/state.rs
-msgid "Could not check for updates. {reason}"
+msgid "Could not restart. {reason}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/update/state.rs
-msgid "Could not restart. {reason}"
+msgid "Couldn't check for updates (HTTP {status}). Try again later."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "Couldn't check for updates. {reason}"
 msgstr ""
 
 #: crates/ox-app/src/update/state.rs
@@ -9860,12 +9865,12 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/update/error.rs
-msgid "GitHub could not check for updates (HTTP {status}). Try again later."
+msgid "GitHub could not provide the installer (HTTP {status}). Nothing was installed."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/update/error.rs
-msgid "GitHub could not provide the installer (HTTP {status}). Nothing was installed."
+msgid "GitHub refused the update check (HTTP {status}). Try again later."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
