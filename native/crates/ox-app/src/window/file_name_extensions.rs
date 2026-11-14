@@ -4,7 +4,8 @@
 //! file types" decides. Off by default, as in Windows. The choice is saved
 //! and every window follows it, as Folder Options' check box does; the
 //! file list, its tooltips and accessible names, the details pane and the
-//! crumb of an opened archive show names by it
+//! crumb of an opened archive and Home's Recent and Favorites show names
+//! by it
 //! ([`crate::folder_view::shown_name`]). The real names never change: a
 //! rename in place keeps the hidden extension ([`super::file_ops`]).
 
@@ -61,6 +62,8 @@ impl BrowserWindow {
         }
         // A Save dialog's File name shows its name the same way.
         self.show_picker_name_again();
+        // So do Home's Recent and Favorites.
+        self.render_landing();
     }
 
     /// Takes up a choice that Folder Options, Settings or another window

@@ -41,6 +41,7 @@ use ox_core::location::{LocationContext, RECENT_URI};
 use ox_core::places::Place;
 use ox_core::settings::{Preferences, SettingsError};
 
+use crate::folder_view::shown_name::{shown_name, Extensions};
 use crate::i18n::message_id;
 use crate::icons::{self, Art, ArtImage, Icon, Storage};
 use crate::places::Places;
@@ -503,17 +504,30 @@ struct Columns {
     location: gtk::SizeGroup,
     home: std::path::PathBuf,
     pitch: i32,
+    /// Whether names show the extensions of known types, as the file
+    /// list shows them (VIEW-069).
+    extensions: Extensions,
 }
 
 impl Columns {
+    /// Columns for the rows of `page`, named as its window names files.
+    fn for_page(page: &gtk::Box) -> Self {
+        let extensions = page
+            .root()
+            .and_downcast::<BrowserWindow>()
+            .map_or_else(Extensions::default, |window| window.file_name_extensions());
+        Self::new(glib::home_dir(), is_compact(page), extensions)
+    }
+
     /// Columns for rows `pitch` pixels apart.
-    fn new(home: std::path::PathBuf, compact: bool) -> Self {
+    fn new(home: std::path::PathBuf, compact: bool, extensions: Extensions) -> Self {
         Self {
             name: gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal),
             date: gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal),
             location: gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal),
             home,
             pitch: if compact { COMPACT_ROW_PITCH } else { ROW_PITCH },
+            extensions,
         }
     }
 
@@ -582,7 +596,10 @@ fn file_row(name: &str, uri: &str, accessed: Option<u64>, favorites: &[String], 
     let icon = ArtImage::new(Art::for_file_name(name), ROW_ICON);
     icon.set_margin_end(ICON_GAP);
     icon.set_valign(gtk::Align::Center);
-    let name_text = label(name, "home-row-name");
+    // Named as the file list names it: without a known type's extension
+    // while extensions are hidden.
+    let shown = shown_name(name, false, columns.extensions);
+    let name_text = label(shown, "home-row-name");
     // The icon and the name share the Name column, as in Windows 11.
     let name_cell = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     name_cell.append(&icon);
@@ -604,7 +621,7 @@ fn file_row(name: &str, uri: &str, accessed: Option<u64>, favorites: &[String], 
     row.append(&date);
     row.append(&location);
     let child = gtk::FlowBoxChild::builder().child(&row).name(uri).build();
-    child.update_property(&[gtk::accessible::Property::Label(name)]);
+    child.update_property(&[gtk::accessible::Property::Label(shown)]);
     // Compared by the canonical form Favorites keeps (HOME-014).
     let is_favorite = ox_core::settings::favorite_key(uri).is_some_and(|key| favorites.contains(&key));
     Item {
@@ -1520,7 +1537,7 @@ fn read_favorite_time(uri: &str, date: glib::WeakRef<gtk::Label>, cancellable: &
 /// one slow share delays only its own row, and no longer once Home is
 /// drawn again or left.
 fn list_favorites(page: &gtk::Box, list: &gtk::Box, favorites: &[String]) {
-    let columns = Columns::new(glib::home_dir(), is_compact(page));
+    let columns = Columns::for_page(page);
     let rows: Vec<Item> = favorites
         .iter()
         .map(|uri| file_row(&favorite_name(uri), uri, None, favorites, &columns))
@@ -1568,7 +1585,7 @@ fn list_recent(page: &gtk::Box, list: &gtk::Box, favorites: Vec<String>) {
             return;
         }
         let kept = KeptFocus::read(&page);
-        let columns = Columns::new(glib::home_dir(), is_compact(&page));
+        let columns = Columns::for_page(&page);
         let rows = files
             .iter()
             .map(|(entry, target, used)| file_row(&entry.name, target, *used, &favorites, &columns))

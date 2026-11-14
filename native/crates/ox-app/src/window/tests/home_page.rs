@@ -771,10 +771,10 @@ fn a_favorite_opens_as_a_double_click_in_its_folder_does() {
     );
     home_page::choose_tab(body(&test), "Favorites");
     wait_until("the favorite", || {
-        home_page::list_names(body(&test)) == ["Documents link.desktop"]
+        home_page::list_names(body(&test)) == ["Documents link"]
     });
 
-    home_page::open_item(body(&test), "Documents link.desktop");
+    home_page::open_item(body(&test), "Documents link");
 
     wait_until("the linked folder", || {
         test.window.current_uri() == Some(fixture.uri_of("Documents"))
