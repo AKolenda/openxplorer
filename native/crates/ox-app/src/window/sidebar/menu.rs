@@ -126,7 +126,7 @@ pub(in crate::window) fn pin_menu(uri: &str, caching: Option<Caching>, editable:
     entries
 }
 
-/// Compress to, for the folder at `uri`: ZIP File, TAR File and
+/// Compress to, for the folder at `uri`: ZIP File, 7z File, TAR File and
 /// Additional options, as Windows 11 offers them on a pinned folder.
 pub(in crate::window) fn compress_to_item(uri: &str) -> MenuItem {
     let target = |label: &str, glyph: Icon, action: WindowAction| -> MenuItem {
@@ -138,6 +138,7 @@ pub(in crate::window) fn compress_to_item(uri: &str) -> MenuItem {
         WindowAction::CompressToOf,
         vec![
             target("ZIP File", Icon::FolderZip, WindowAction::CompressToZipOf).into(),
+            target("7z File", Icon::FolderZip, WindowAction::CompressToSevenZipOf).into(),
             target("TAR File", Icon::FolderZip, WindowAction::CompressToTarOf).into(),
             target("Additional options", Icon::FolderZip, WindowAction::CompressToOf).into(),
         ],
@@ -368,7 +369,7 @@ impl Sidebar {
 
     /// A pinned folder's compact menu, in Windows 11's order: Open in new
     /// tab, Open in new window, Unpin from Quick access, Compress to (ZIP
-    /// File, TAR File, Additional options), Copy as path, New (the command bar's New
+    /// File, 7z File, TAR File, Additional options), Copy as path, New (the command bar's New
     /// menu, run in the folder), Properties, then Open in Terminal. Pin to
     /// Start is Windows' own. "Show more options" follows
     /// ([`finish_menu`]).

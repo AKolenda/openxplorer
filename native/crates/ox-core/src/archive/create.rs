@@ -24,13 +24,16 @@
 //!   ZIP, so nothing is written into a previous version (PROP-024).
 //!
 //! A name ending in `.tar.xz` gives an XZ-compressed TAR instead of a ZIP,
-//! with the same rules (Dolphin's "Compress to…" formats).
+//! with the same rules (Dolphin's "Compress to…" formats), and one ending
+//! in `.7z` a 7z archive, as Windows 11's Compress to › 7z File writes.
 //!
 //! | Module | Responsibility |
 //! |---|---|
 //! | `zip_writer` | The ZIP format: headers, deflated data, the central directory |
 //! | `tar_writer` | The `.tar.xz` format: ustar headers in an XZ stream |
+//! | `seven_zip_writer` | The `.7z` format: LZMA2 streams and the 7z headers (`sevenz-rust2`) |
 
+mod seven_zip_writer;
 mod tar_writer;
 mod zip_writer;
 
@@ -53,6 +56,7 @@ use crate::transfer::{
     already_removed, Cancellation, ItemIdentity, Node, NodeKind, Progress, ProgressScope, StagedName,
     TransferError, WriteGuard,
 };
+use seven_zip_writer::SevenZipWriter;
 use tar_writer::TarWriter;
 use zip_writer::{DosTime, ZipWriter, MAX_ENTRIES};
 
@@ -63,6 +67,8 @@ const TAR_XZ_ENDING: &str = ".tar.xz";
 const TAR_GZ_ENDINGS: [&str; 2] = [".tar.gz", ".tgz"];
 const TAR_BZ2_ENDINGS: [&str; 2] = [".tar.bz2", ".tbz2"];
 const TAR_ENDING: &str = ".tar";
+/// The ending that asks for a 7z archive.
+const SEVEN_ZIP_ENDING: &str = ".7z";
 
 /// Staging files are `.openxplorer-compress-<32 hex digits>.part`.
 const STAGING_PREFIX: &str = ".openxplorer-compress-";
@@ -357,6 +363,9 @@ impl ZipCompressor {
             ArchiveFormat::TarGz => EntryWriter::Tar(Box::new(TarWriter::gzip(stream, self.level))),
             ArchiveFormat::TarBz2 => EntryWriter::Tar(Box::new(TarWriter::bzip2(stream, self.level))),
             ArchiveFormat::Tar => EntryWriter::Tar(Box::new(TarWriter::plain(stream))),
+            ArchiveFormat::SevenZip => {
+                EntryWriter::SevenZip(Box::new(SevenZipWriter::new(output, self.level)?))
+            }
             ArchiveFormat::Zip => {
                 let writer = ZipWriter::new(stream);
                 EntryWriter::Zip(match self.level {
@@ -575,6 +584,8 @@ fn push_entry(
 enum EntryWriter<W: std::io::Write> {
     Zip(ZipWriter<W>),
     Tar(Box<TarWriter<W>>),
+    /// Writes to the output stream itself, as it seeks.
+    SevenZip(Box<SevenZipWriter>),
 }
 
 impl<W: std::io::Write> EntryWriter<W> {
@@ -585,6 +596,10 @@ impl<W: std::io::Write> EntryWriter<W> {
                 &entry.name,
                 entry.modified.unwrap_or(0),
                 entry.mode.unwrap_or(0o755),
+            ),
+            Self::SevenZip(writer) => writer.add_folder(
+                &entry.name,
+                (entry.modified.unwrap_or(0), entry.mode.unwrap_or(0o755)),
             ),
         }
     }
@@ -609,13 +624,21 @@ impl<W: std::io::Write> EntryWriter<W> {
                 cancel,
                 progress,
             ),
+            Self::SevenZip(writer) => writer.add_file(
+                &entry.name,
+                (entry.modified.unwrap_or(0), entry.mode.unwrap_or(0o644)),
+                content,
+                cancel,
+                progress,
+            ),
         }
     }
 
-    fn finish(self) -> Result<W, ArchiveError> {
+    fn finish(self) -> Result<(), ArchiveError> {
         match self {
-            Self::Zip(writer) => writer.finish(),
-            Self::Tar(writer) => writer.finish(),
+            Self::Zip(writer) => writer.finish().map(drop),
+            Self::Tar(writer) => writer.finish().map(drop),
+            Self::SevenZip(writer) => writer.finish(),
         }
     }
 }
@@ -628,11 +651,13 @@ enum ArchiveFormat {
     TarGz,
     TarBz2,
     TarXz,
+    SevenZip,
 }
 
 impl ArchiveFormat {
     /// `.tar.xz`, `.tar.gz` or `.tgz`, `.tar.bz2` or `.tbz2`, and `.tar`
-    /// (in any case) ask for a TAR; anything else is a ZIP.
+    /// (in any case) ask for a TAR, `.7z` for a 7z; anything else is a
+    /// ZIP.
     fn for_name(name: &str) -> Self {
         let ends_with = |ending: &str| {
             name.len() >= ending.len()
@@ -648,6 +673,8 @@ impl ArchiveFormat {
             Self::TarBz2
         } else if ends_with(TAR_ENDING) {
             Self::Tar
+        } else if ends_with(SEVEN_ZIP_ENDING) {
+            Self::SevenZip
         } else {
             Self::Zip
         }

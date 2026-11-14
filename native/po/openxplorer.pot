@@ -5055,6 +5055,10 @@ msgstr ""
 msgid "Recent locations cleared."
 msgstr ""
 
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "7z File"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs
 msgid "Add to Favorites"
 msgstr ""
@@ -7614,6 +7618,10 @@ msgstr ""
 
 #: crates/ox-core/src/archive/create.rs
 msgid "The new archive was moved or replaced while it was written. Nothing was removed."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
+msgid "A 7z archive cannot be written here. Create it in a local folder, then copy it here."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
