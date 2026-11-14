@@ -41,6 +41,7 @@ mod file_operations;
 mod file_ops_captures;
 pub(super) mod file_ops_support;
 mod focus;
+mod focus_ring;
 mod folder_location;
 mod folder_options;
 mod folder_tree;
