@@ -777,7 +777,6 @@ mod tests {
         let none = gdk::ModifierType::empty();
         let control = gdk::ModifierType::CONTROL_MASK;
         let shift = gdk::ModifierType::SHIFT_MASK;
-        let alt = gdk::ModifierType::ALT_MASK;
         let own = DragOrigin::ThisApp;
         let copy = DropAction::Copy;
 
@@ -792,7 +791,6 @@ mod tests {
             DropRun::Run(DropAction::Move),
             "Shift moves"
         );
-        assert_eq!(copy.with_keys(own, alt), DropRun::Run(DropAction::Copy));
         assert_eq!(
             copy.with_keys(own, gdk::ModifierType::BUTTON1_MASK),
             DropRun::MoveWithinDrive,
@@ -810,6 +808,45 @@ mod tests {
             DropRun::MoveWithinDrive.shown(),
             DropAction::Copy,
             "a hover shows a copy"
+        );
+    }
+
+    /// Alt held at the drop of this app's own items makes shortcuts to
+    /// them where they are dropped, as Windows 11 does ("Alt+mouse drag a
+    /// file: When you drop the file, create a shortcut to the original
+    /// file in that location", support.microsoft.com, keyboard shortcuts
+    /// in Windows), also where the desktop turned Alt into "ask" (GNOME
+    /// Shell on Wayland). The drag offered no link, so the window answers
+    /// it with Copy and makes the shortcuts itself. Another app's drop
+    /// keeps what it settled on.
+    ///
+    /// parity: DND-017
+    #[test]
+    fn alt_at_the_drop_makes_shortcuts_to_own_items() {
+        let alt = gdk::ModifierType::ALT_MASK;
+        let own = DragOrigin::ThisApp;
+        let link = DropRun::Run(DropAction::Link);
+        assert_eq!(DropAction::Copy.with_keys(own, alt), link);
+        assert_eq!(DropAction::Ask(own).with_keys(own, alt), link);
+        assert_eq!(
+            DropAction::Copy.with_keys(own, alt | gdk::ModifierType::BUTTON1_MASK),
+            link,
+            "a held button is no key"
+        );
+        assert_eq!(
+            DropAction::Copy.with_keys(DragOrigin::OtherApp, alt),
+            DropRun::Run(DropAction::Copy)
+        );
+        let plain_offer = gdk::DragAction::COPY | gdk::DragAction::ASK;
+        assert_eq!(link.protocol_action(plain_offer), gdk::DragAction::COPY);
+        assert_eq!(
+            DropAction::for_button_drop(DragButton::Primary, own, plain_offer, plain_offer, alt),
+            Some(link)
+        );
+        assert_eq!(
+            DropAction::for_button_drop(DragButton::Secondary, own, plain_offer, plain_offer, alt),
+            Some(DropRun::Run(DropAction::Ask(own))),
+            "a right-button drag still asks"
         );
     }
 

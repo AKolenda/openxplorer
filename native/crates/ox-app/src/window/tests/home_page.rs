@@ -904,3 +904,93 @@ fn compact_view_draws_quick_access_tiles_closer() {
     crate::test_support::harness::wait_for_frames(&test.window, 3);
     assert_eq!(tile(&test), 48, "a compact tile");
 }
+
+/// The shortcut text `menu`'s rows show, in order.
+fn shortcut_texts(menu: &crate::window::menu_popover::MenuPopover) -> Vec<String> {
+    menu.rows()
+        .iter()
+        .flat_map(crate::test_support::harness::descendants::<gtk::Label>)
+        .filter(|label| label.has_css_class("shortcut"))
+        .map(|label| label.text().to_string())
+        .collect()
+}
+
+/// A Quick access tile's menu is Windows 11's (checked on Windows 11 on
+/// 2026-11-14): Copy alone in the strip, then Open (Enter), Open in new
+/// tab, Open in new window, Unpin from Quick access, Compress to, Copy as
+/// path (Ctrl+Shift+C), Properties (Alt+Enter), Open in Terminal and Show
+/// more options, which opens the classic menu with the app's own items
+/// (Open folder with…, Previous versions). Pin to Start is Windows' own.
+/// The Menu key and Shift+F10 open the same menu, and Escape gives the
+/// keyboard back to the tile.
+///
+/// parity: HOME-013, SIDE-014
+#[gtk::test]
+fn a_quick_access_tiles_menu_is_windows_11s() {
+    use crate::test_support::harness::descendants;
+    use crate::window::context_menu::MENU_KEY;
+    use crate::window::menu_popover::{MenuPopover, MenuStyle};
+
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Projects")).expect("fixture subfolder");
+    let test = home_window(&fixture);
+    test.activate("pin-location", Some(&fixture.uri_of("Projects")));
+    wait_until("the Projects tile", || {
+        home_page::tile_names(body(&test)).contains(&"Projects".to_owned())
+    });
+
+    let mut seen = Vec::new();
+    for key in [MENU_KEY, "<Shift>F10"] {
+        let tile = home_page::tile_named(body(&test), "Projects");
+        tile.grab_focus();
+        let menu = home_page::item_menu(body(&test), "Projects", key);
+        let rows: Vec<String> = menu.row_labels().into_iter().filter(|row| row != "-").collect();
+        seen.push((
+            key,
+            menu.style(),
+            menu.strip_labels(),
+            rows,
+            shortcut_texts(&menu),
+        ));
+        // As Escape closes it.
+        menu.popdown();
+        wait_until("the menu to close", || !menu.is_visible());
+        wait_until("the keyboard back on the tile", || tile.has_focus());
+    }
+    let windows: Vec<String> = [
+        "Open",
+        "Open in new tab",
+        "Open in new window",
+        "Unpin from Quick access",
+        "Compress to",
+        "Copy as path",
+        "Properties",
+        "Open in Terminal",
+        "Show more options",
+    ]
+    .map(str::to_owned)
+    .to_vec();
+    let shortcuts: Vec<String> = ["Enter", "Ctrl+Shift+C", "Alt+Enter"].map(str::to_owned).to_vec();
+    for (key, style, strip, rows, keys) in seen {
+        assert_eq!(style, MenuStyle::Compact, "{key}");
+        assert_eq!(strip, ["Copy"], "{key}");
+        assert_eq!(rows, windows, "{key}");
+        assert_eq!(keys, shortcuts, "{key}");
+    }
+
+    let menu = home_page::item_menu(body(&test), "Projects", MENU_KEY);
+    menu.click_row("Show more options");
+    let open_classic = || {
+        descendants::<MenuPopover>(test.window.folder_pane())
+            .into_iter()
+            .find(|menu| menu.is_visible() && menu.style() == MenuStyle::Classic)
+    };
+    wait_until("the classic menu", || open_classic().is_some());
+    let classic = open_classic().expect("the classic menu is open");
+    let rows = classic.row_labels();
+    for extra in ["Open folder with…", "Previous versions", "Copy", "Unpin from Quick access"] {
+        assert!(rows.iter().any(|row| row == extra), "{extra} in {rows:?}");
+    }
+    assert!(classic.strip_labels().is_empty());
+    classic.popdown();
+}

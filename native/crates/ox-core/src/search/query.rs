@@ -473,6 +473,24 @@ mod tests {
         assert_eq!(share.found_names("[draft*"), ["[draft.txt"]);
     }
 
+    /// A cached search matches a wildcard word within the name, as the
+    /// folder's filter does and as Windows 11 File Explorer does.
+    ///
+    /// parity: SRCH-004
+    #[test]
+    fn a_wildcard_word_matches_within_the_cached_name() {
+        let share = ScannedShare::new();
+        share.store(&[
+            listed_file(SHARE, "a1b.txt"),
+            listed_file(SHARE, "acb.txt"),
+            listed_file(SHARE, "notes.txt"),
+        ]);
+
+        assert_eq!(share.found_names("a?b"), ["a1b.txt", "acb.txt"]);
+        assert_eq!(share.found_names("?cb"), ["acb.txt"]);
+        assert_eq!(share.found_names("a?b.txt"), ["a1b.txt", "acb.txt"]);
+    }
+
     /// parity: SRCH-008
     #[test]
     fn a_query_longer_than_512_characters_is_refused() {

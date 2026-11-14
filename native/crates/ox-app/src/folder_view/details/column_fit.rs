@@ -439,6 +439,36 @@ mod tests {
         );
     }
 
+    /// Windows 11 File Explorer shows no tooltip on its column titles;
+    /// neither do these, nor anything inside them but the item check
+    /// box's own "Select all".
+    ///
+    /// parity: VIEW-029
+    #[gtk::test]
+    fn column_titles_show_no_tooltip() {
+        let (view, _model) = view_of(&["a.txt"]);
+        let header = view.header().expect("column titles");
+        let titles = view.titles(&header);
+        let mut widgets: Vec<gtk::Widget> = titles.iter().map(|(_, title)| title.clone()).collect();
+        let mut tooltips = Vec::new();
+        while let Some(widget) = widgets.pop() {
+            // The item check box's "Select all" is no column title's.
+            if widget.has_css_class("select-all") {
+                continue;
+            }
+            if let Some(tooltip) = widget.tooltip_text() {
+                tooltips.push(tooltip.to_string());
+            }
+            let mut child = widget.first_child();
+            while let Some(next) = child {
+                child = next.next_sibling();
+                widgets.push(next);
+            }
+        }
+        assert_eq!(tooltips, Vec::<String>::new());
+        assert!(!titles.is_empty(), "the titles are there");
+    }
+
     /// A double-click on a title's end edge fits that column, and the
     /// fitted width is reported to be saved once it settles.
     ///

@@ -269,6 +269,32 @@ mod tests {
         );
     }
 
+    /// As in Windows 11 File Explorer, a wildcard word matches within the
+    /// name, as a plain word does: `a?b` finds `a1b.txt` and `acb.txt`,
+    /// where it used to have to match the whole name. It starts before
+    /// the extension or is the whole extension, as a plain word must.
+    ///
+    /// parity: SRCH-004
+    #[test]
+    fn a_wildcard_word_matches_within_the_name_as_a_plain_word_does() {
+        let names = ["a1b.txt", "acb.txt", "notes.txt", "Xa2b report.md", "plan.pdf", "ab"];
+        let found = |text: &str| -> Vec<&str> {
+            let pattern = NamePattern::new(text);
+            names.into_iter().filter(|name| pattern.matches(name)).collect()
+        };
+        assert_eq!(found("a?b"), ["a1b.txt", "acb.txt", "Xa2b report.md"]);
+        assert_eq!(found("?cb"), ["acb.txt"]);
+        assert_eq!(found("a*b"), ["a1b.txt", "acb.txt", "Xa2b report.md", "ab"]);
+        assert_eq!(found("a?b.txt"), ["a1b.txt", "acb.txt"]);
+        assert_eq!(found("*.txt"), ["a1b.txt", "acb.txt", "notes.txt"]);
+        assert_eq!(found("*"), names);
+        assert_eq!(found("a?b report"), ["Xa2b report.md"]);
+        // Inside the extension only as the whole extension, as `pdf` is.
+        assert_eq!(found("p?f"), ["plan.pdf"]);
+        assert_eq!(found("?df"), ["plan.pdf"]);
+        assert_eq!(found("d?"), Vec::<&str>::new());
+    }
+
     #[test]
     fn sets_negation_and_plain_brackets() {
         assert!(wildcard_matches("[!a-c]*", "draft"));
