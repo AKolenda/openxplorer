@@ -1,3 +1,43 @@
+# 2.0.17 — 2026-11-10
+
+TAR archives open like folders and can be made from Compress to, windows resize from just inside their edges and corners, and the resize cursors show on Wayland desktops whose cursor theme is missing. More of Windows 11's File Explorer comes across: its message boxes for renaming and saving, the column titles' menu and Choose Details, and its Shift+F10, Ctrl+T, Ctrl+W and Esc keys. Windows 11's Home page, tab menu and navigation pane are new settings to turn on, and the command bar's Update button can be hidden. Much of this release is the work of @addition-official.
+
+## Updating from 2.0.16
+* In the Debian package, **Check for updates** installs 2.0.17 without asking for a password when **Settings › About › Install updates without asking for a password** is on (the default), since 2.0.16 already has the helper. As before, that holds for an administrator in an active session at the computer; anyone else, and any remote or inactive session, is asked for an administrator's password.
+
+## Opt-in settings
+These Windows 11 behaviours each wait for a setting, so nothing changes for existing users until it is changed:
+* **Settings › General › Start up › Open Quick access on Home** shows Windows 11's Home page (see Home below). Off by default.
+* **Settings › Appearance › Layout › Show more items in the tab menu** and **Show more items in the navigation pane** are on by default and keep OpenXplorer's own tab menu and navigation pane. Turning them off gives Windows 11's.
+* **Settings › About › Show the Update button in the command bar** is on by default. Turning it off hides the command bar's Update button, as long as the status bar is shown.
+
+## What's Changed
+* **Archives:** .tar, .tar.gz, .tgz, .tar.bz2, .tar.xz and .tar.zst open in the tab like folders, as ZIPs do, following **Settings › ZIP & archives › Double-clicking a ZIP**. **Compress to** lists ZIP File, TAR File and Additional options. TAR File writes a .tar beside the selection, and after ZIP File or TAR File the new archive is renamed in place and Undo takes it away. Additional options opens a **Create archive** window laid out like Windows 11's, with the path, zip or tar, the compression method (GZip, BZip2 or XZ for tar) and a level. Extracting a TAR keeps a symbolic link whose target is relative and stays inside the extracted folder, and refuses any other link before anything is written. Replace or Skip now names the archive instead of a hidden folder.
+* **Windows:** an explorer window, the Open and Save dialogs and the File Conflicts window resize from a 4 px band just inside each edge and a 12 px square inside each corner, as well as from up to 16 px outside, and controls near the edges, such as the close button and scroll bars, keep working. On Wayland, when the desktop's cursor theme isn't installed, the window finds the theme it inherits from (or Adwaita), so resize, text and hand cursors show instead of the plain arrow.
+* **Home (opt-in):** with Open Quick access on Home on, Home, Alt+Home, a new tab and a new window open Windows 11's Home page: Quick access as folder tiles, then a Recent / Favorites switcher over a list with Name, Date accessed and File location. Recent shows the desktop's recent files; **Add to Favorites** on a file's right-click menu adds it to Favorites. Sections fold and stay folded, and the page works from the keyboard. Nothing is sent anywhere.
+* **Tabs and navigation pane:** the tab menu gains **Close tabs to the right**, and Ctrl+W in a tab's menu closes that tab, not the one in front. The This PC and Recycle Bin tabs have their own icons, and Recent files and Recent locations tabs show their navigation pane icons. With the opt-in switches off, the tab menu is Windows 11's four items and the navigation pane leaves out drive usage bars and the Recent files, Recent locations and Recycle Bin rows.
+* **Address bar:** typing Recycle Bin (or Trash), Recent or Recent locations and pressing Enter opens that place, as in Windows 11. A folder of that name in the current folder still comes first.
+* **Keyboard:** Shift+F10 opens the same menu as a right-click, as in Windows 11; **Settings › Appearance › Layout › Shift+F10 opens the classic menu** brings back the old one. Ctrl+T and Ctrl+W work while the address bar is edited and from the search box. Esc in Replace or Skip Files cancels that job, and Esc during a file drag cancels the drag.
+* **Message boxes:** changing an extension while renaming asks in Windows 11's small "Rename" box with Yes and No, and saving over a file asks in a compact "Confirm Save As" box with No focused. With known extensions hidden (the default), the Save dialog's File name leaves out the extension, and Save still adds it.
+* **Details:** right-clicking the column titles opens Windows 11's menu, with Size Column to Fit, Size All Columns to Fit, the columns and **More...**, which opens **Choose Details** to show, hide, order and size columns. Search results and the Recycle Bin list their own columns there.
+* **Properties:** Created and Modified always start with the weekday, also for today and yesterday.
+* **Split view:** Downloads stays grouped by date in the pane beside the active one.
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.17_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.17-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.17-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.17-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.17-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.16...v2.0.17
+
 # 2.0.16 — 2026-11-09
 
 Updates install without a password for administrators at the computer, search looks and works like Windows 11's, the Preview pane shows what's in a file, and more of Windows 11's File Explorer keyboard shortcuts work. A paste keeps going past an unreadable or missing item, Compact view and group headings match Windows 11, Recent files open as the real file, the Open and Save dialog keeps its size, and a tab's menu opens from the keyboard. Much of this release is the work of @addition-official.

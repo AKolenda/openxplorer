@@ -108,6 +108,96 @@ fn the_general_tab_opens_folders_in_their_own_window_and_clears_history() {
     }
 }
 
+/// Privacy's "Show recently used files" and "Show frequently used
+/// folders" choose whether the navigation pane lists Recent files and
+/// Recent locations, which it lists only while Settings' "Show more items
+/// in the navigation pane" is on (SIDE-034). While it is on, the default,
+/// they work as before. While it is off, both are grayed out and say where
+/// to turn the rows on; Folder Options does not turn that switch on.
+///
+/// parity: VIEW-020, SIDE-034
+#[gtk::test]
+fn privacy_check_boxes_follow_the_navigation_pane_switch() {
+    const LABELS: [&str; 2] = ["Show recently used files", "Show frequently used folders"];
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let options = open_folder_options(&test);
+    for label in LABELS {
+        let check = option_check(&options, "General", label);
+        assert!(check.is_sensitive(), "{label} works with the switch on");
+        assert_eq!(check.tooltip_text(), None, "{label}");
+    }
+    let recent_rows = || {
+        let labels = test.window.sidebar().labels();
+        ["Recent files", "Recent locations"].map(|row| labels.iter().any(|label| label == row))
+    };
+    wait_until("the Recent rows", || recent_rows() == [true, true]);
+    option_check(&options, "General", LABELS[0]).set_active(false);
+    close_folder_options(&test, &options, "OK");
+    wait_until("Recent files to leave the pane", || {
+        recent_rows() == [false, true]
+    });
+
+    test.set_more_navigation_pane_items(false);
+    let options = open_folder_options(&test);
+    for label in LABELS {
+        let check = option_check(&options, "General", label);
+        assert!(!check.is_sensitive(), "{label} is grayed out");
+        let tooltip = check.tooltip_text().map(String::from).unwrap_or_default();
+        assert!(
+            tooltip.contains("Show more items in the navigation pane")
+                && tooltip.contains("Settings > Appearance"),
+            "{label}: {tooltip:?}"
+        );
+    }
+    close_folder_options(&test, &options, "Cancel");
+    assert!(
+        !test
+            .context
+            .settings_data()
+            .preferences
+            .more_navigation_pane_items,
+        "Folder Options leaves the switch off"
+    );
+}
+
+/// Privacy's check boxes follow "Show more items in the navigation pane"
+/// while Folder Options is open, whichever window or process changes it:
+/// grayed out, saying why, as soon as it is turned off, and usable again,
+/// without the tooltip, as soon as it is turned back on (SIDE-034).
+///
+/// parity: SIDE-034
+#[gtk::test]
+fn privacy_check_boxes_follow_the_switch_while_folder_options_is_open() {
+    const LABELS: [&str; 2] = ["Show recently used files", "Show frequently used folders"];
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let options = open_folder_options(&test);
+    let checks = LABELS.map(|label| option_check(&options, "General", label));
+    assert!(checks.iter().all(gtk::prelude::WidgetExt::is_sensitive));
+
+    test.set_more_navigation_pane_items(false);
+    wait_until("Privacy to be grayed out", || {
+        checks.iter().all(|check| !check.is_sensitive())
+    });
+    for check in &checks {
+        let tooltip = check.tooltip_text().map(String::from).unwrap_or_default();
+        assert!(
+            tooltip.contains("Show more items in the navigation pane"),
+            "{tooltip:?}"
+        );
+    }
+
+    test.set_more_navigation_pane_items(true);
+    wait_until("Privacy to work again", || {
+        checks.iter().all(gtk::prelude::WidgetExt::is_sensitive)
+    });
+    for check in &checks {
+        assert_eq!(check.tooltip_text(), None);
+    }
+    close_folder_options(&test, &options, "Cancel");
+}
+
 /// View: "Show status bar" and "Show pop-up description for folder and
 /// desktop items" off hide the status bar and the items' infotips, and
 /// "Automatically type into the Search Box" sends text typed in the file

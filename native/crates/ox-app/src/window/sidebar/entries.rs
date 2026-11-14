@@ -17,7 +17,8 @@
 //! eject button (DEV-007).
 
 use ox_core::location::{
-    is_server_location, LocationContext, NETWORK_URI, PC_URI, RECENT_LOCATIONS_URI, RECENT_URI, TRASH_URI,
+    is_server_location, LocationContext, HOME_URI, NETWORK_URI, PC_URI, RECENT_LOCATIONS_URI, RECENT_URI,
+    TRASH_URI,
 };
 use ox_core::places::{NetworkLocation, Place};
 use ox_core::search::SavedSearch;
@@ -326,15 +327,28 @@ fn pin_drop_tail() -> SidebarEntry {
 
 /// The sidebar rows, in Windows 11's order, with the saved `searches`
 /// after Network, where the places Windows has no twin of start.
+///
+/// Home opens the home folder, or the Home page while `home_page` is set
+/// (HOME-012).
 pub(in crate::window) fn sidebar_entries(
     places: &Places,
     searches: &[SavedSearch],
     locations: &LocationContext,
+    home_page: bool,
 ) -> Vec<SidebarEntry> {
     let home_uri = locations.home_uri();
     let home_icon = Art::TintedGlyph(Icon::Home, Tint::Home);
-    let mut home = fixed_entry(Section::Home, message_id("Home"), home_icon, &home_uri);
-    home.tooltip = locations.display_location(&home_uri);
+    let home_target = if home_page {
+        HOME_URI.to_owned()
+    } else {
+        home_uri.clone()
+    };
+    let mut home = fixed_entry(Section::Home, message_id("Home"), home_icon, &home_target);
+    home.tooltip = if home_page {
+        ox_core::i18n::gettext("Home")
+    } else {
+        locations.display_location(&home_uri)
+    };
     let this_pc_icon = Art::TintedGlyph(Page::ThisPc.icon(), Tint::ThisPc);
     let this_pc = fixed_entry(Section::ThisPc, message_id("This PC"), this_pc_icon, PC_URI);
     let network_icon = Art::TintedGlyph(Page::Network.icon(), Tint::Network);
@@ -435,7 +449,7 @@ mod tests {
             home: Some(PathBuf::from("/home/demo")),
             ..LocationContext::default()
         };
-        sidebar_entries(&places, &[], &locations)
+        sidebar_entries(&places, &[], &locations, false)
     }
 
     fn labels(entries: &[SidebarEntry]) -> Vec<&str> {
@@ -513,7 +527,7 @@ mod tests {
             search_in: ox_core::search::SearchIn::default(),
             all_cached_folders: false,
         };
-        let mut entries = sidebar_entries(&places, &[search], &locations);
+        let mut entries = sidebar_entries(&places, &[search], &locations, false);
         entries.extend(recent_and_bin_entries(0));
         assert_eq!(
             labels(&entries),
@@ -747,7 +761,7 @@ mod tests {
             visited_network: &[],
         });
 
-        let entries = sidebar_entries(&places, &[], &LocationContext::default());
+        let entries = sidebar_entries(&places, &[], &LocationContext::default(), false);
 
         let documents = entries.iter().find(|entry| entry.label == "Documents");
         let documents = documents.expect("Documents is in Quick access");

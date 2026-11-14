@@ -106,6 +106,11 @@ struct LoadRun {
 impl BrowserWindow {
     /// Lists tab `id`'s location.
     pub(super) fn load_tab(&self, id: TabId, mode: LoadMode) {
+        let mode = if self.leave_home_page_while_off(id) {
+            LoadMode::Navigate
+        } else {
+            mode
+        };
         let is_active = self.imp().session.borrow().is_active(id);
         if is_active {
             self.reset_typeahead();
@@ -174,6 +179,32 @@ impl BrowserWindow {
     }
 
     /// Starts a load of tab `id`, or `None` once the tab has closed.
+    /// Has tab `id` show the home folder instead of the Home page while
+    /// "Open Quick access on Home" is off (NAV-038); whether it did. The
+    /// Home page is reached through history, a restored session or a
+    /// tab left on it when the setting was turned off, none of which
+    /// pass through `resolve_address`.
+    fn leave_home_page_while_off(&self, id: TabId) -> bool {
+        if self.context().settings_data().preferences.home_quick_access {
+            return false;
+        }
+        let home_folder = self.imp().locations.borrow().home_uri();
+        {
+            let mut session = self.imp().session.borrow_mut();
+            let Some(tab) = session.tab_mut(id) else {
+                return false;
+            };
+            if !crate::locations::is_home_alias(tab.uri()) {
+                return false;
+            }
+            tab.history.replace_current(&home_folder);
+        }
+        if self.imp().session.borrow().is_active(id) {
+            self.render_navigation();
+        }
+        true
+    }
+
     fn begin_load(&self, id: TabId, mode: LoadMode) -> Option<LoadStart> {
         let mut session = self.imp().session.borrow_mut();
         let tab = session.tab_mut(id)?;

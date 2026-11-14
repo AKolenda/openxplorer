@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Sizes, counts and dates as Windows 11's Properties window writes them:
 //! `314 KB (322,003 bytes)`, `64 Files, 40 Folders` and
-//! `Tuesday, October 20, 2026, 14:24:52`, with `Today` in place of the
-//! weekday for today's date.
+//! `Tuesday, October 20, 2026, 14:24:52`, always with the weekday for
+//! Created and Modified, and with `Today` in place of the weekday for
+//! today's date in Accessed.
 
 use glib::DateTime;
 
@@ -108,7 +109,7 @@ pub fn contents_text(files: u64, folders: u64) -> String {
 
 /// `Tuesday, October 20, 2026, 14:24:52` for `time` seen at `now`, with
 /// `Today` or `Yesterday` for the weekday of those days, and the clock time
-/// with seconds on `clock`.
+/// with seconds on `clock`: the Accessed row's text.
 pub(super) fn long_date_time_with(
     time: &DateTime,
     now: &DateTime,
@@ -123,11 +124,35 @@ pub(super) fn long_date_time_with(
     } else {
         time.format("%A").ok()?.to_string()
     };
+    day_date_time(&day, time, patterns, clock)
+}
+
+/// `Monday, November 9, 2026, 4:02:34 PM` for `time`, always with its
+/// weekday, even today and yesterday, and the clock time with seconds on
+/// `clock`: the Created and Modified rows' text, as Windows 11's
+/// Properties window writes them.
+pub(super) fn weekday_date_time_with(
+    time: &DateTime,
+    patterns: &LocalePatterns,
+    clock: ClockFormat,
+) -> Option<String> {
+    let day = time.format("%A").ok()?.to_string();
+    day_date_time(&day, time, patterns, clock)
+}
+
+/// `{day}, {date}, {clock}`: `day` before the long date of `time` and its
+/// clock time with seconds on `clock`.
+fn day_date_time(
+    day: &str,
+    time: &DateTime,
+    patterns: &LocalePatterns,
+    clock: ClockFormat,
+) -> Option<String> {
     let date = time.format(&crate::i18n::gettext(LONG_DATE)).ok()?;
     let clock = time.format(&patterns.time_on(clock)).ok()?;
     Some(crate::i18n::format_message(
         "{day}, {date}, {clock}",
-        &[("day", &day), ("date", &date), ("clock", &clock)],
+        &[("day", day), ("date", &date), ("clock", &clock)],
     ))
 }
 
@@ -220,6 +245,47 @@ mod tests {
         assert_eq!(
             text(&at(10, 30, 9)).as_deref(),
             Some("Yesterday, October 30, 2026, 09:24:52")
+        );
+    }
+
+    /// Created and Modified always name the weekday, even for today and
+    /// yesterday, as Windows 11's Properties window writes them, on a
+    /// 12-hour clock and on a 24-hour clock.
+    ///
+    /// parity: PROP-038
+    #[test]
+    fn created_and_modified_always_name_the_weekday() {
+        let twelve_hour = LocalePatterns {
+            date: "%-m/%-d/%Y".to_owned(),
+            time: "%-I:%M:%S %p".to_owned(),
+            has_day_period: true,
+        };
+        let at = |year, month, day, hour, minute, second: f64| {
+            DateTime::from_utc(year, month, day, hour, minute, second).expect("a date")
+        };
+        let text = |time: &DateTime, clock| weekday_date_time_with(time, &twelve_hour, clock);
+        let cases = [
+            (
+                at(2026, 11, 9, 16, 2, 34.0),
+                "Monday, November 9, 2026, 4:02:34 PM",
+            ),
+            (
+                at(2026, 11, 8, 16, 38, 11.0),
+                "Sunday, November 8, 2026, 4:38:11 PM",
+            ),
+            (
+                at(2026, 11, 4, 16, 38, 11.0),
+                "Wednesday, November 4, 2026, 4:38:11 PM",
+            ),
+            (at(2025, 3, 14, 9, 30, 0.0), "Friday, March 14, 2025, 9:30:00 AM"),
+        ];
+        for (time, expected) in &cases {
+            assert_eq!(text(time, ClockFormat::Locale).as_deref(), Some(*expected));
+        }
+        assert_eq!(
+            text(&cases[0].0, ClockFormat::TwentyFourHour).as_deref(),
+            Some("Monday, November 9, 2026, 16:02:34"),
+            "the 24-hour choice is kept"
         );
     }
 }

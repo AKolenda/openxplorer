@@ -33,7 +33,7 @@ mod search_cache;
 mod write_holds;
 
 pub(crate) use default_open::add_to_desktop_history;
-pub(crate) use recent_privacy::desktop_recent_policy;
+pub(crate) use recent_privacy::{desktop_recent_policy, RecentPolicy};
 pub(crate) use write_holds::WriteHold;
 
 use std::path::PathBuf;
@@ -438,6 +438,13 @@ impl AppContext {
     pub(crate) fn remember_preferences(&self, update: PreferencesUpdate) {
         let change: Change =
             Box::new(move |settings: &mut Settings| settings.update_preferences(&update).map(|_| ()));
+        self.settings().change(change, Box::new(|_| {}));
+    }
+
+    /// Queues `change` off the main thread, in turn with every other
+    /// change, without telling the windows: for a choice only the window
+    /// that made it shows, such as a section of Home folded.
+    pub(crate) fn remember_change(&self, change: Change) {
         self.settings().change(change, Box::new(|_| {}));
     }
 

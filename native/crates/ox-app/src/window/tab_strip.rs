@@ -38,7 +38,7 @@ use crate::icons::{self, Art, ArtImage, Icon};
 use super::gestures;
 use super::menu_popover::MenuEntry;
 use super::session::TabId;
-use super::tab_menu::tab_menu;
+use super::tab_menu::{tab_menu, TabMenuFacts};
 use super::window_action::WindowAction;
 
 pub(in crate::window) use carried_tab::MARGIN as CARRIED_MARGIN;
@@ -172,6 +172,7 @@ mod imp {
             let menu = MenuPopover::new(Vec::new());
             menu.set_offset(0, 0);
             menu.set_parent(&*self.obj());
+            menu.add_controller(super::close_the_menus_tab_on_ctrl_w());
             menu.connect_closed(glib::clone!(
                 #[weak(rename_to = strip)]
                 self.obj(),
@@ -506,28 +507,27 @@ fn tab_widget(tab: &TabView) -> gtk::Box {
     widget.add_controller(gestures::middle_click(move |gesture, _, _| {
         run_on(gesture.widget(), WindowAction::CloseTabById, &id);
     }));
-    widget.add_controller(menu_on_right_click(tab.id, tab.uri.clone()));
-    widget.add_controller(menu_on_keys(tab.id, &tab.uri));
+    widget.add_controller(menu_on_right_click(tab.id));
+    widget.add_controller(menu_on_keys(tab.id));
     widget
 }
 
-/// The Menu key and Shift+F10 on the focused tab `id`, which shows `uri`,
-/// open its menu under it with the keyboard on its first item, and the
-/// keyboard goes back where it was when the menu closes, as Shift+F10
-/// opens the selected item's menu in Windows 11 (support.microsoft.com,
-/// "Keyboard shortcuts in Windows").
-fn menu_on_keys(id: TabId, uri: &str) -> gtk::ShortcutController {
+/// The Menu key and Shift+F10 on the focused tab `id` open its menu under
+/// it with the keyboard on its first item, and the keyboard goes back
+/// where it was when the menu closes, as Shift+F10 opens the selected
+/// item's menu in Windows 11 (support.microsoft.com, "Keyboard shortcuts
+/// in Windows").
+fn menu_on_keys(id: TabId) -> gtk::ShortcutController {
     let shortcuts = gtk::ShortcutController::new();
     for key in [super::context_menu::MENU_KEY, super::context_menu::SHIFT_F10_KEY] {
-        let uri = uri.to_owned();
         let action = gtk::CallbackAction::new(move |tab, _| {
             let Some(strip) = tab.ancestor(TabStrip::static_type()).and_downcast::<TabStrip>() else {
                 return glib::Propagation::Proceed;
             };
-            let is_only_tab = strip.imp().shown.borrow().len() <= 1;
+            let facts = menu_facts(&strip, id);
             let focus = tab.root().and_then(|root| root.focus());
             strip.imp().menu_opener.set(focus.as_ref());
-            strip.show_menu_under_tab(id, tab_menu(id, &uri, is_only_tab));
+            strip.show_menu_under_tab(id, tab_menu(id, facts));
             glib::Propagation::Stop
         });
         let trigger = gtk::ShortcutTrigger::parse_string(key);
@@ -536,9 +536,55 @@ fn menu_on_keys(id: TabId, uri: &str) -> gtk::ShortcutController {
     shortcuts
 }
 
-/// A right-click on the tab `id`, which shows `uri`, opens its menu
-/// there.
-fn menu_on_right_click(id: TabId, uri: String) -> gtk::GestureClick {
+impl TabStrip {
+    /// Closes the tab menu that is open and returns its tab, the one its
+    /// Close tab row closes; `None`, leaving any other menu open, while no
+    /// tab menu is shown. A right-click leaves a background tab in the
+    /// background, so this is not always the tab in front.
+    pub(in crate::window) fn dismiss_tab_menu(&self) -> Option<TabId> {
+        let menu = self.imp().menu.get().filter(|menu| menu.is_visible())?;
+        let tab = menu
+            .items()
+            .into_iter()
+            .find(|item| item.action == WindowAction::CloseTabById.into())
+            .and_then(|item| item.target)
+            .and_then(|target| TabId::from_variant(&target))?;
+        menu.popdown();
+        Some(tab)
+    }
+
+    /// Opens the menu of the tab at `index`, counted from 0, under it;
+    /// false when there is no such tab.
+    pub(in crate::window) fn open_menu_of_tab(&self, index: usize) -> bool {
+        let tab = self.imp().shown.borrow().get(index).map(|(view, _)| view.id);
+        let Some(id) = tab else {
+            return false;
+        };
+        let facts = menu_facts(self, id);
+        self.imp().menu_opener.set(None);
+        self.show_menu_under_tab(id, tab_menu(id, facts));
+        true
+    }
+}
+
+/// What the menu of tab `id` in `strip` depends on: whether it is the
+/// only tab or the last one, and whether Settings adds the app's own
+/// items (TAB-060).
+fn menu_facts(strip: &TabStrip, id: TabId) -> TabMenuFacts {
+    let shown = strip.imp().shown.borrow();
+    let extra_items = strip
+        .root()
+        .and_downcast::<super::BrowserWindow>()
+        .is_some_and(|window| window.context().settings_data().preferences.more_tab_menu_items);
+    TabMenuFacts {
+        is_only_tab: shown.len() <= 1,
+        is_last_tab: shown.last().is_none_or(|(view, _)| view.id == id),
+        extra_items,
+    }
+}
+
+/// A right-click on the tab `id` opens its menu there.
+fn menu_on_right_click(id: TabId) -> gtk::GestureClick {
     let click = gtk::GestureClick::new();
     click.set_button(gdk::BUTTON_SECONDARY);
     click.connect_pressed(move |gesture, _, x, y| {
@@ -552,9 +598,9 @@ fn menu_on_right_click(id: TabId, uri: String) -> gtk::GestureClick {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let in_tab = graphene::Point::new(x as f32, y as f32);
         if let Some(point) = tab.compute_point(&strip, &in_tab) {
-            let is_only_tab = strip.imp().shown.borrow().len() <= 1;
+            let facts = menu_facts(&strip, id);
             strip.imp().menu_opener.set(None);
-            strip.show_menu(tab_menu(id, &uri, is_only_tab), point);
+            strip.show_menu(tab_menu(id, facts), point);
         }
     });
     click
@@ -586,6 +632,33 @@ fn mark_previous_version(widget: &gtk::Box, title: &str, snapshot: &str) {
     widget.update_property(&[gtk::accessible::Property::Label(&name)]);
 }
 
+/// Ctrl+W, which a tab's menu shows beside Close tab, closes the tab whose
+/// menu is open, as that row does, and the menu with it. The open menu
+/// takes the keyboard, so the window's own Ctrl+W, which closes the tab in
+/// front, never sees the key; and a right-click leaves a background tab in
+/// the background, so the tab in front is not always the menu's.
+fn close_the_menus_tab_on_ctrl_w() -> gtk::ShortcutController {
+    let shortcuts = gtk::ShortcutController::new();
+    shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
+    let close = gtk::CallbackAction::new(|menu, _| {
+        let Some(strip) = menu.parent().and_downcast::<TabStrip>() else {
+            return glib::Propagation::Proceed;
+        };
+        let Some(tab) = strip.dismiss_tab_menu() else {
+            return glib::Propagation::Proceed;
+        };
+        run_on(
+            Some(strip.upcast()),
+            WindowAction::CloseTabById,
+            &tab.to_variant(),
+        );
+        glib::Propagation::Stop
+    });
+    let trigger = gtk::ShortcutTrigger::parse_string("<Primary>w");
+    shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(close)));
+    shortcuts
+}
+
 /// Runs the tab action `action` on the tab `id` from `widget`, when the
 /// gesture still has one.
 fn run_on(widget: Option<gtk::Widget>, action: WindowAction, id: &glib::Variant) {
@@ -608,7 +681,7 @@ fn select_on_click(id: glib::Variant) -> gtk::GestureClick {
 }
 
 /// A double-click on a tab opens a copy of it in front, as in Dolphin
-/// (TAB-014). The strip counts the clicks itself: the first press shows
+/// (TAB-014), right after it, as Duplicate tab does. The strip counts the clicks itself: the first press shows
 /// the tab, and when that draws a tab anew under the pointer, GTK counts
 /// the second press as a first one. Claiming the second press keeps
 /// it from the title bar, whose double-click maximizes the window, and
@@ -637,7 +710,7 @@ fn copy_on_double_click() -> gtk::GestureClick {
             return;
         };
         gesture.set_state(gtk::EventSequenceState::Claimed);
-        WindowAction::OpenTab.activate_from(&strip, Some(&tab.uri.to_variant()));
+        WindowAction::DuplicateTab.activate_from(&strip, Some(&tab.id.to_variant()));
     });
     click
 }

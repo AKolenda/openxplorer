@@ -94,7 +94,7 @@ fn double_clicking_a_tab_opens_a_copy_in_front() {
     assert_eq!(
         test.active_tab(),
         tab_ids(&test).get(1).copied(),
-        "the copy is in front, next to its tab (TAB-017)"
+        "the copy is in front, right after its tab (TAB-013)"
     );
 }
 
@@ -109,6 +109,31 @@ fn close_other_tabs_keeps_only_the_chosen_tab() {
 
     assert_eq!(tab_ids(&test), [middle]);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
+}
+
+/// Close tabs to the right closes every tab after the chosen one and
+/// keeps the ones before it, as Windows 11 File Explorer's tab menu does;
+/// on the last tab there is nothing to its right and nothing closes.
+///
+/// parity: TAB-059
+#[gtk::test]
+fn close_tabs_to_the_right_keeps_the_chosen_tab_and_those_before_it() {
+    let fixture = Fixture::standard();
+    let test = three_tabs(&fixture);
+    let [first, middle, last] = tab_ids(&test)[..] else {
+        panic!("three tabs are open");
+    };
+
+    activate_with(&test, "close-tabs-to-the-right", &last.to_variant());
+    assert_eq!(
+        tab_ids(&test),
+        [first, middle, last],
+        "nothing is right of the last tab"
+    );
+    activate_with(&test, "close-tabs-to-the-right", &first.to_variant());
+
+    assert_eq!(tab_ids(&test), [first]);
+    assert_eq!(test.window.current_uri(), Some(fixture.uri()));
 }
 
 /// Ctrl+Shift+T puts the last closed tab back where it was, with its

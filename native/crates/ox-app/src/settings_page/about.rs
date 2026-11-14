@@ -13,7 +13,11 @@
 //! that lets an administrator at the machine update without a password;
 //! turning it on asks for an administrator's password (turning it off
 //! does not, for an administrator at the machine, whom the rule already
-//! lets through), and it shows whether the rule is there. "Read license & source
+//! lets through), and it shows whether the rule is there. "Show the Update
+//! button in the command bar", on by default, hides the command bar's
+//! Update when turned off; the status bar's Update available stays, and
+//! while Folder Options hides the status bar, the command bar shows
+//! Update whatever this setting says. "Read license & source
 //! information" runs `win.license`, the licence dialog. "Keyboard
 //! shortcuts" and "Help" run `win.keyboard-shortcuts` (Ctrl+?) and
 //! `win.help` (F1): they, the licence and the build left the command
@@ -80,6 +84,14 @@ const PASSWORDLESS_UPDATES: RowText = RowText {
                without password passwordless",
 };
 
+const UPDATE_BUTTON: RowText = RowText {
+    title: "Show the Update button in the command bar",
+    description: "While a newer release is available, show Update beside the Settings gear, as well as \
+                  Update available in the status bar. While the status bar is hidden, the command bar shows \
+                  Update anyway.",
+    keywords: "update button command bar toolbar accent restart show hide notify",
+};
+
 const LICENSE_AND_SOURCE: ActionGroup = ActionGroup {
     heading: crate::i18n::message_id("License & source"),
     text: RowText {
@@ -132,6 +144,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     if let Some(setting) = page.context().passwordless_updates() {
         updates.add_row(&passwordless_row(page, setting.clone()));
     }
+    updates.add_row(&update_button_row(page));
     about.append_group(&updates);
     follow_updates(page, &updates_row);
     about.append_group(&help_group());
@@ -171,6 +184,20 @@ fn automatic_checks_row(page: &SettingsPage) -> SettingRow {
         read: |preferences| preferences.update_checks,
         write: |on| PreferencesUpdate {
             update_checks: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    row
+}
+
+/// "Show the Update button in the command bar": on by default.
+fn update_button_row(page: &SettingsPage) -> SettingRow {
+    let row = SettingRow::new(UPDATE_BUTTON);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.show_update_button,
+        write: |on| PreferencesUpdate {
+            show_update_button: Some(on),
             ..PreferencesUpdate::default()
         },
     };

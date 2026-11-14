@@ -15,7 +15,6 @@
 //! As in Windows Explorer, the wheel over a crumb never switches folders.
 
 use gtk::prelude::*;
-use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::entry::{enumerate_folder, EntryKind};
 use ox_core::location::{same_location, ArchiveLocation, NETWORK_URI, PC_URI, TRASH_URI};
@@ -225,8 +224,21 @@ impl BrowserWindow {
         let first_uri = first
             .and_then(|crumb| crumb.action_target_value())
             .and_then(|target| target.get::<String>());
-        let home = self.imp().locations.borrow().home_uri();
+        // Home leads where the navigation pane's Home does (HOME-012).
+        let home = self.home_location();
         places_menu(&home, first_uri.as_deref())
+    }
+
+    /// Where the chevron's top-level places lead, in order, for tests.
+    #[cfg(test)]
+    pub(crate) fn top_level_places_targets(&self) -> Vec<String> {
+        self.top_level_places()
+            .into_iter()
+            .filter_map(|entry| match entry {
+                MenuEntry::Item(item) => item.target.and_then(|target| target.get::<String>()),
+                MenuEntry::Divider => None,
+            })
+            .collect()
     }
 
     /// Opens the top-level places under the chevron `anchor`.

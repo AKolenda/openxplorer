@@ -25,7 +25,7 @@
 mod collapsing;
 mod drop_spots;
 pub(super) mod entries;
-mod menu;
+pub(super) mod menu;
 mod row;
 
 use std::cell::RefCell;
@@ -90,6 +90,9 @@ mod imp {
         pub(super) menu_opener: glib::WeakRef<gtk::Widget>,
         /// The rows' icon size in pixels, 0 for automatic (SIDE-012).
         pub(super) icon_size: Cell<u32>,
+        /// Mounted drives show a capacity bar under their name (SIDE-018),
+        /// with Settings' "Show more items in the navigation pane".
+        pub(super) capacity_bars: Cell<bool>,
         /// Which rows show something hidden, in row order (SIDE-010).
         pub(super) hidden_rows: RefCell<Vec<HiddenRow>>,
         /// Whether anything is hidden, which "Show all entries" lists.
@@ -550,13 +553,7 @@ impl Sidebar {
         list.remove_all();
         let rows: Vec<gtk::ListBoxRow> = entries
             .iter()
-            .map(|entry| {
-                row::sidebar_row(
-                    entry,
-                    self.imp().icon_size.get(),
-                    self.is_collapsed(entry.section),
-                )
-            })
+            .map(|entry| row::sidebar_row(entry, self.row_look(), self.is_collapsed(entry.section)))
             .collect();
         // The header function reads the entries as the rows are added.
         self.imp().entries.replace(entries);
@@ -598,7 +595,7 @@ impl Sidebar {
         let row = {
             let entries = imp.entries.borrow();
             let entry = &entries[index];
-            row::sidebar_row(entry, imp.icon_size.get(), self.is_collapsed(entry.section))
+            row::sidebar_row(entry, self.row_look(), self.is_collapsed(entry.section))
         };
         let hidden = imp.hidden_rows.borrow().get(index).copied().unwrap_or_default();
         if hidden != HiddenRow::Shown {
@@ -628,6 +625,21 @@ impl Sidebar {
             }
         }
         self.imp().hidden_rows.replace(hidden);
+    }
+
+    /// How the rows are drawn now: their icon size and whether drives show
+    /// a capacity bar.
+    fn row_look(&self) -> row::RowLook {
+        row::RowLook {
+            icon_size: self.imp().icon_size.get(),
+            capacity_bars: self.imp().capacity_bars.get(),
+        }
+    }
+
+    /// Draws a capacity bar under each mounted drive from the next time
+    /// the rows are drawn, when `shown` (SIDE-018, SIDE-034).
+    pub(super) fn set_capacity_bars(&self, shown: bool) {
+        self.imp().capacity_bars.set(shown);
     }
 
     /// Draws the rows' icons `size` pixels big, or at the automatic size

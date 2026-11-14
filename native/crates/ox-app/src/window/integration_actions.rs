@@ -497,8 +497,9 @@ impl BrowserWindow {
     }
 
     /// Shows the application's updates in this window: the command bar's
-    /// Update, the status bar's notice, the notice the daily check pops
-    /// up, and the lock while an update installs (UPD-005).
+    /// Update (unless Settings › About turns it off), the status bar's
+    /// notice, the notice the daily check pops up, and the lock while an
+    /// update installs (UPD-005).
     fn follow_updates(&self) {
         let updates = self.context().updates();
         let handler = updates.connect_state_changed(glib::clone!(
@@ -527,14 +528,26 @@ impl BrowserWindow {
 
     fn show_update_state(&self, updates: &Updates) {
         let state = updates.state();
-        let notice = state.status_bar_notice();
-        self.command_bar()
-            .show_update(state.command_bar_label(), notice.as_deref());
+        self.show_command_bar_update();
         self.status_bar().show_update_notice(&state);
         self.imp().update_notice.show_update(updates.notice());
         // Nothing in any window works while the package manager runs;
         // the Software updates dialog stays usable.
         self.set_sensitive(!state.is_installing());
+    }
+
+    /// The command bar's Update, "Update" or "Restart", while Settings ›
+    /// About › "Show the Update button in the command bar" is on, as it is
+    /// by default; the status bar's Update available shows either way.
+    /// While Folder Options hides the status bar, the command bar shows it
+    /// whatever the setting, so the window keeps a way to the update.
+    pub(super) fn show_command_bar_update(&self) {
+        let state = self.context().updates().state();
+        let preferences = self.context().settings_data().preferences;
+        let shown = preferences.show_update_button || preferences.hide_status_bar;
+        let label = state.command_bar_label().filter(|_| shown);
+        let notice = state.status_bar_notice();
+        self.command_bar().show_update(label, notice.as_deref());
     }
 
     /// Later on the update notice: closes it in every window and keeps

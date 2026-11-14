@@ -12,7 +12,9 @@
 //! only Double-click can be chosen, as the app has no single-click mode
 //! (SEL-018); Privacy, whether the navigation pane shows Recent files
 //! ("Show recently used files") and Recent locations ("Show frequently
-//! used folders"), and Clear `OpenXplorer` history (Windows' "Clear File
+//! used folders"), grayed out while Settings' "Show more items in the
+//! navigation pane" is off, as the pane then lists neither (SIDE-034),
+//! and Clear `OpenXplorer` history (Windows' "Clear File
 //! Explorer history", named for the app), which forgets them and the
 //! typed addresses at once. The rest of the app's options are in Settings,
 //! which the command bar's gear and Ctrl+, open (CMD-007).
@@ -37,7 +39,7 @@
 //! ([`PropertiesWindow`]). [`super::explorer_options`] does what the options that only Folder
 //! Options sets mean in a window.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gtk::prelude::*;
@@ -58,6 +60,11 @@ const APPLY_QUESTION: &str = message_id("Do you want all folders to match this f
 
 /// The question Reset Folders asks.
 const RESET_QUESTION: &str = message_id("Do you want to reset all folders to their default view settings?");
+
+/// Why Privacy's check boxes are grayed out while the navigation pane
+/// leaves out Recent files and Recent locations (SIDE-034).
+const PRIVACY_NEEDS_MORE_ITEMS: &str =
+    message_id("These apply when “Show more items in the navigation pane” is on in Settings > Appearance.");
 
 /// Why Click items as follows offers only Double-click.
 const NO_SINGLE_CLICK: &str = message_id("OpenXplorer opens items with a double-click.");
@@ -303,6 +310,20 @@ impl ShownSetting {
         shown
     }
 
+    /// Grays the option out, with `reason` in its tooltip and accessible
+    /// description, or makes it usable again, without either, for `None`;
+    /// its value still shows and Restore Defaults still sets it.
+    fn gray_out(&self, reason: Option<&str>) {
+        for button in std::iter::once(&self.on).chain(self.off.as_ref()) {
+            button.set_sensitive(reason.is_none());
+            button.set_tooltip_text(reason);
+            match reason {
+                Some(reason) => button.update_property(&[gtk::accessible::Property::Description(reason)]),
+                None => button.reset_property(gtk::AccessibleProperty::Description),
+            }
+        }
+    }
+
     /// The value chosen.
     fn value(&self) -> bool {
         self.on.is_active()
@@ -434,6 +455,8 @@ struct OptionsForm {
     saved_start: Cell<u32>,
     /// Privacy's Clear, which clears File Explorer's history at once.
     clear_history: gtk::Button,
+    /// Where Privacy's two check boxes are in `settings`.
+    privacy: std::ops::Range<usize>,
 }
 
 impl OptionsForm {
@@ -453,9 +476,11 @@ impl OptionsForm {
         general.append(&browse);
         general.append(&click_items_group());
         let (privacy, column) = icon_group(&gettext("Privacy"), Icon::ShieldLock);
+        let privacy_start = settings.len();
         for setting in privacy_settings() {
             settings.push(ShownSetting::add(setting, Tab::General, &column, preferences));
         }
+        let privacy_rows = privacy_start..settings.len();
         let clear_history = push_button(&gettext("Clear"));
         column.append(&clear_row(&clear_history));
         general.append(&privacy);
@@ -504,7 +529,9 @@ impl OptionsForm {
             start,
             places,
             clear_history,
+            privacy: privacy_rows,
         });
+        form.follow_navigation_pane(preferences.more_navigation_pane_items);
         for (button, tab) in [
             (restore_general, Tab::General),
             (restore_view, Tab::View),
@@ -517,6 +544,17 @@ impl OptionsForm {
             ));
         }
         form
+    }
+
+    /// Lets Privacy's check boxes be used while the navigation pane lists
+    /// the Recent rows they choose, `more_items` (Settings' "Show more
+    /// items in the navigation pane"), and grays them out, saying why,
+    /// while it does not (SIDE-034).
+    fn follow_navigation_pane(&self, more_items: bool) {
+        let reason = (!more_items).then(|| gettext_static(PRIVACY_NEEDS_MORE_ITEMS));
+        for shown in &self.settings[self.privacy.clone()] {
+            shown.gray_out(reason);
+        }
     }
 
     /// Sets every choice of `tab` to the app's default, to be saved with
@@ -743,6 +781,25 @@ impl BrowserWindow {
             form: Rc::clone(&form),
         }));
         form.follow_with(&options);
+        // Settings may turn the navigation pane's extra rows on or off in
+        // any window while Folder Options is open; Privacy follows.
+        let preferences_changed = self.context().connect_places_changed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[weak]
+            form,
+            move || {
+                let preferences = window.context().settings_data().preferences;
+                form.follow_navigation_pane(preferences.more_navigation_pane_items);
+            }
+        ));
+        let preferences_changed = RefCell::new(Some(preferences_changed));
+        let context = self.context().clone();
+        options.connect_destroy(move |_| {
+            if let Some(handler) = preferences_changed.take() {
+                context.disconnect(handler);
+            }
+        });
         form.clear_history.connect_clicked(glib::clone!(
             #[weak(rename_to = window)]
             self,

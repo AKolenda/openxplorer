@@ -20,7 +20,7 @@ use crate::test_support::harness::{descendants, wait_until};
 /// then, and the row that offers it now, then the rows added since and the
 /// rows of the commands that came from the command bar's "…" menu
 /// (CMD-007), by their menu labels.
-const MOVED_ROWS: [(&str, &str); 74] = [
+const MOVED_ROWS: [(&str, &str); 77] = [
     ("Theme", "Theme"),
     ("Text size", "Text size"),
     ("Use the desktop font", "Use the desktop font"),
@@ -146,9 +146,21 @@ const MOVED_ROWS: [(&str, &str); 74] = [
         "Check for updates automatically",
         "Check for updates automatically",
     ),
+    (
+        "Show the Update button in the command bar",
+        "Show the Update button in the command bar",
+    ),
     ("OpenXplorer · License & source", "OpenXplorer · License & source"),
     ("Cache this folder for search", "Cache this folder for search"),
     ("Show the search filter bar", "Show the search filter bar"),
+    (
+        "Show more items in the navigation pane",
+        "Show more items in the navigation pane",
+    ),
+    (
+        "Show more items in the tab menu",
+        "Show more items in the tab menu",
+    ),
     ("Keyboard shortcuts", "Keyboard shortcuts"),
     ("Help", "Help"),
     (
@@ -188,7 +200,11 @@ fn fold_button(group: &SettingsGroup) -> gtk::Button {
 /// The pages are the mockup's, and every setting row of the earlier
 /// layout is on one of them, found by its earlier name too: none was
 /// left out, and the only rows added are those of the commands that left
-/// the "…" menu, and Search's "Show the search filter bar" (SRCH-046).
+/// the "…" menu, Search's "Show the search filter bar" (SRCH-046),
+/// "Shift+F10 opens the classic menu" (CMD-013), About's "Show the Update
+/// button in the command bar" (UPD-001), Home's "Open Quick access on
+/// Home" (HOME-012), and Layout's two switches that keep the app's own
+/// items in the navigation pane and tab menu (SIDE-034, TAB-060).
 ///
 /// parity: SET-019
 #[gtk::test]
@@ -209,7 +225,16 @@ fn every_setting_of_the_earlier_layout_is_on_one_of_the_new_pages() {
         ]
     );
     let rows = every_row(&settings);
-    assert_eq!(rows.len(), MOVED_ROWS.len(), "as many rows as before");
+    // "Open Quick access on Home" came later.
+    let added_since = ["Open Quick access on Home"];
+    for title in added_since {
+        settings.row(title);
+    }
+    assert_eq!(
+        rows.len(),
+        MOVED_ROWS.len() + added_since.len(),
+        "as many rows as before, and the ones added since"
+    );
     for (earlier, now) in MOVED_ROWS {
         let row = settings.row(now);
         settings.page.search(earlier);
@@ -588,6 +613,8 @@ fn the_search_finds_settings_by_the_words_people_use() {
         (
             "wastebasket",
             &[
+                // It brings the Recycle Bin back to the navigation pane.
+                "Show more items in the navigation pane",
                 "When replacing a file, move the old one to the Recycle Bin",
                 "Moving items to the Recycle Bin",
                 "Emptying the Recycle Bin",

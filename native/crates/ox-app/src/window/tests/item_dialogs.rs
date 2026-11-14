@@ -274,7 +274,7 @@ fn show_item_properties_gives_the_callers_token_to_the_properties_window() {
 /// window of its own with General, Security and Previous Versions, OK,
 /// Cancel and a greyed Apply, every byte of the size and the long dates.
 ///
-/// parity: PROP-001, PROP-003, PROP-006, PROP-033
+/// parity: PROP-001, PROP-003, PROP-006, PROP-033, PROP-038
 #[gtk::test]
 fn alt_enter_opens_a_files_properties_in_a_window_of_its_own() {
     let fixture = Fixture::standard();
@@ -308,9 +308,16 @@ fn alt_enter_opens_a_files_properties_in_a_window_of_its_own() {
         Some(on_disk_text(&[fixture.path("Notes 2.txt")])),
         "the blocks the file takes, as Windows Explorer's Size on disk"
     );
+    // Created and Modified name the weekday even today, as Windows 11's
+    // Properties window does (PROP-038); Accessed keeps "Today".
+    let weekday = glib::DateTime::now_local()
+        .and_then(|now| now.format("%A"))
+        .expect("today's weekday")
+        .to_string();
     let modified = value_after(&general, "Modified:").expect("a Modified row");
-    assert!(modified.starts_with("Today, "), "{modified}");
-    assert!(value_after(&general, "Accessed:").is_some());
+    assert!(modified.starts_with(&format!("{weekday}, ")), "{modified}");
+    let accessed = value_after(&general, "Accessed:").expect("an Accessed row");
+    assert!(accessed.starts_with("Today, "), "{accessed}");
     assert!(value_after(&general, "Created:").is_some());
     assert_eq!(value_after(&general, "Full path:"), None, "no Full path row");
     assert!(!check(&general, "Read-only").is_active());
@@ -629,8 +636,10 @@ fn a_rename_reaches_every_tab() {
     );
 }
 
-/// Closing Properties while OK applies waits for the change: a refused
-/// change keeps the window open with its message, and a made one closes it.
+/// Closing Properties while OK applies waits for the change: No to the
+/// extension question keeps the old name, with no message, and the window
+/// then closes, as it does once a change is made. (A refused change keeps
+/// it open with its message: `the_name_in_properties_renames_the_item`.)
 ///
 /// parity: PROP-001
 #[gtk::test]
@@ -648,11 +657,16 @@ fn closing_during_ok_waits_for_the_change() {
     let question = message_over(&window);
     window.close();
     assert!(!window.is_closed(), "the window waits for the change");
+    // No keeps the old name without a message, so the close goes ahead.
     question.press("No");
-    refusal_over(&window).press("OK");
-    assert!(!window.is_closed(), "a refused change keeps the window");
+    wait_until("the window to close after No", || window.is_closed());
+    assert!(fixture.path("Notes 2.txt").is_file(), "No keeps the old name");
+    assert!(!fixture.path("Notes 2.md").exists());
 
-    wait_until("no message", || dialog_over_properties(&window).is_none());
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt Properties");
+    name_field(&window).set_text("Notes 2.md");
     window.ok_button().emit_clicked();
     wait_until("the question again", || extension_questions(&window) == 1);
     let question = message_over(&window);
@@ -1048,7 +1062,9 @@ fn an_invalid_name_in_properties_is_refused_before_the_extension_question() {
 }
 
 /// The name asks before it changes a file's extension, as Windows
-/// Explorer does, and renames only once the user confirms.
+/// Explorer does, and renames only once the user confirms. No keeps the
+/// old name, which the field shows again, with no message, as No ends a
+/// rename in place.
 ///
 /// parity: PROP-005, OPS-049
 #[gtk::test]
@@ -1066,11 +1082,26 @@ fn the_name_in_properties_asks_before_changing_the_extension() {
     assert_eq!(question.title_text(), "Rename", "the question is over Properties");
     super::file_ops_support::assert_windows_extension_question(&question);
     question.press("No");
-    let refusal = refusal_over(&window);
-    assert_eq!(refusal.message_text(), "The name was not changed.");
-    refusal.press("OK");
+    wait_until("no question", || extension_questions(&window) == 0);
+    wait_until("the old name back in the field", || name.text() == "Notes 2.txt");
     assert!(fixture.path("Notes 2.txt").is_file());
+    assert!(!fixture.path("Notes 2.md").exists());
+    assert!(
+        super::file_ops_support::dialog_over(&test).is_none(),
+        "no message after No"
+    );
+    assert!(
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|toplevel| toplevel.downcast::<Dialog>().ok())
+            .all(
+                |dialog| !dialog.is_visible() || dialog.transient_for().as_ref() != Some(window.upcast_ref())
+            ),
+        "no message over Properties after No"
+    );
+    assert!(!window.is_closed(), "Apply keeps the window open");
 
+    name.set_text("Notes 2.md");
     press(&window, "Apply");
     wait_until("the question again", || extension_questions(&window) == 1);
     message_over(&window).press("Yes");
@@ -1092,7 +1123,9 @@ fn extension_questions(window: &PropertiesWindow) -> usize {
         .count()
 }
 
-/// Pressing OK twice quickly asks about the extension once, not twice.
+/// Pressing OK twice quickly asks about the extension once, not twice;
+/// No keeps the old name without a message, and OK then closes the
+/// window, with nothing left to apply.
 ///
 /// parity: PROP-005, OPS-049
 #[gtk::test]
@@ -1112,8 +1145,9 @@ fn ok_twice_in_properties_asks_about_the_extension_once() {
     assert_eq!(extension_questions(&window), 1, "one question");
     message_over(&window).press("No");
     wait_until("no question", || extension_questions(&window) == 0);
-    refusal_over(&window).press("OK");
+    wait_until("the window to close", || window.is_closed());
     assert!(fixture.path("Notes 2.txt").is_file());
+    assert!(!fixture.path("Notes 2.md").exists());
 }
 
 /// A link to a folder is renamed without the extension question, as

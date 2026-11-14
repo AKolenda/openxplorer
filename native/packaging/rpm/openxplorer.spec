@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.16
+Version:        2.0.17
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -142,6 +142,14 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Tue Nov 10 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.17-1
+- OpenXplorer 2.0.17: TAR archives browsed like folders and made from
+  Compress to, resizing from inside a window's edges, resize cursors on
+  Wayland without the desktop's cursor theme, Windows 11's message boxes,
+  column menu and Choose Details, and its Shift+F10, Ctrl+T, Ctrl+W and
+  Esc keys. Windows 11's Home page, tab menu and navigation pane are
+  opt-in settings.
+
 * Mon Nov 09 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.16-1
 - OpenXplorer 2.0.16: Windows 11's search layout, file contents in the
   Preview pane, pastes that keep going past an unreadable item, Windows

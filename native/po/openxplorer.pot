@@ -54,7 +54,7 @@ msgid "- View switches between Details, Compact list and icon sizes; its slider 
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- … > Options opens Folder Options, as in Windows 11. General: where new windows open, whether each folder you open from the file list opens in its own window, whether the navigation pane shows Recent files and Recent locations, and Clear OpenXplorer history. View: Apply to Folders, Reset Folders and the Advanced settings, such as hidden files, file name extensions, the status bar, pop-up descriptions and typing into the search box. Search: Always search file names and contents. OK or Apply saves the choices; Clear acts at once.\n- Ctrl+, or the gear in the command bar opens Settings, which has its own search box. Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the license and About this build.\n- OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.\n- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Later closes the notice for that release; nothing installs until you choose Install update.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
+msgid "- … > Options opens Folder Options, as in Windows 11. General: where new windows open, whether each folder you open from the file list opens in its own window, whether the navigation pane shows Recent files and Recent locations, and Clear OpenXplorer history. View: Apply to Folders, Reset Folders and the Advanced settings, such as hidden files, file name extensions, the status bar, pop-up descriptions and typing into the search box. Search: Always search file names and contents. OK or Apply saves the choices; Clear acts at once.\n- Ctrl+, or the gear in the command bar opens Settings, which has its own search box. Settings > Appearance chooses Light, Dark or the system appearance, Settings > Default apps makes OpenXplorer the default file explorer when you ask it to, and Settings > About has the keyboard shortcuts, this manual, the license and About this build.\n- OpenXplorer uses the network only for locations you open, server discovery you start and update checks: the one you ask for in Settings › About, and one a day when the app starts, which Check for updates automatically turns off. It has no telemetry.\n- When a newer release is out, a notice pops up at the top right, Update shows in the command bar and Update available at the bottom right. Settings › About › Show the Update button in the command bar turns the command bar's Update off, though it still shows while the status bar is hidden. Later closes the notice for that release; nothing installs until you choose Install update.\n- Recent files and Recent locations follow your desktop’s history privacy settings. Clear recent locations on its sidebar menu removes folder history while keeping recent files."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -910,7 +910,7 @@ msgstr ""
 msgid "Small icons"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sort_roles.rs
+#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/window/home_page.rs
 msgid "Date accessed"
 msgstr ""
 
@@ -950,7 +950,7 @@ msgstr ""
 msgid "Folder path"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/name_dialog.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/file_ops/name_dialog.rs crates/ox-app/src/window/home_page.rs crates/ox-core/src/grouping.rs
 msgid "Name"
 msgstr ""
 
@@ -2003,7 +2003,7 @@ msgstr ""
 msgid "Opens with"
 msgstr ""
 
-#: crates/ox-app/resources/manual.md crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
+#: crates/ox-app/resources/manual.md crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Properties"
 msgstr ""
 
@@ -2610,7 +2610,7 @@ msgstr ""
 msgid "Folder versions:"
 msgstr ""
 
-#: crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/open_several.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/run_on_open.rs crates/ox-app/src/window/saved_search.rs crates/ox-app/src/window/sidebar/menu.rs
+#: crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/open_several.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/run_on_open.rs crates/ox-app/src/window/saved_search.rs crates/ox-app/src/window/sidebar/menu.rs
 msgid "Open"
 msgstr ""
 
@@ -2825,11 +2825,19 @@ msgid "Show keyboard shortcuts"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
+msgid "Show the Update button in the command bar"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
 msgid "The OpenXplorer manual, which needs no network connection. F1 opens it too."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
 msgid "Updates"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
+msgid "While a newer release is available, show Update beside the Settings gear, as well as Update available in the status bar. While the status bar is hidden, the command bar shows Update anyway."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
@@ -2853,7 +2861,19 @@ msgid "password prompt administrator admin sudo polkit pkexec authentication ins
 msgstr ""
 
 #: crates/ox-app/src/settings_page/about.rs
+msgid "update button command bar toolbar accent restart show hide notify"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/about.rs
 msgid "update version release upgrade software updates install restart flatpak"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Adds Move tab to new window, Move tab to window… and Open windows… to the menu you get when you right-click a tab. Off, the tab menu looks like Windows 11's."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Adds Recent files, Recent locations, the Recycle Bin and a bar under each drive that shows how full it is. Off, the navigation pane looks like Windows 11's."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -2910,6 +2930,14 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "Shift+F10 opens the classic menu"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Show more items in the navigation pane"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Show more items in the tab menu"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -2981,11 +3009,19 @@ msgid "hide expand arrows chevron expander triangle sidebar navigation pane tree
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "navigation pane sidebar recent files locations recycle bin trash drive space capacity usage bar extra more rows windows"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "reset layout widths sidebar resize columns"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "shift f10 keyboard key context menu right-click classic windows 10 11 compact show more options"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "tab menu right-click move tab new window open windows extra more items windows"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -3846,7 +3882,7 @@ msgstr ""
 msgid "Network drive"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/indexed_folders/candidates.rs crates/ox-app/src/settings_page/indexed_folders/root_row.rs
+#: crates/ox-app/src/settings_page/indexed_folders/candidates.rs crates/ox-app/src/settings_page/indexed_folders/root_row.rs crates/ox-app/src/window/home_page.rs
 msgid "Pinned"
 msgstr ""
 
@@ -4155,12 +4191,20 @@ msgid_plural "{count} matching settings"
 msgstr[0] ""
 msgstr[1] ""
 
-#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/crumb_menus.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+#: crates/ox-app/src/settings_page/startup.rs crates/ox-app/src/window/crumb_menus.rs crates/ox-app/src/window/folder_options.rs crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
 msgid "Home"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
+msgid "Home shows your Quick access folders, the files you opened lately and your favorite files, as in Windows 11, instead of the home folder's contents. Off by default."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
 msgid "New windows open at"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "Open Quick access on Home"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
@@ -4189,6 +4233,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
 msgid "Use current location"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/startup.rs
+msgid "home page quick access recent files favorites favourites pinned folders windows 11 start page landing"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
@@ -5011,6 +5059,10 @@ msgstr ""
 msgid "Recent locations cleared."
 msgstr ""
 
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs
+msgid "Add to Favorites"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Additional options"
 msgstr ""
@@ -5047,7 +5099,7 @@ msgstr ""
 msgid "Compressed (zipped) folder"
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Copy as path"
 msgstr ""
 
@@ -5133,6 +5185,10 @@ msgstr ""
 msgid "Refresh"
 msgstr ""
 
+#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs
+msgid "Remove from Favorites"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Rename items…"
 msgstr ""
@@ -5201,7 +5257,7 @@ msgstr ""
 msgid "This link points to an address OpenXplorer cannot open."
 msgstr ""
 
-#: crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs
+#: crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-app/src/window/home_page.rs
 msgid "File location"
 msgstr ""
 
@@ -6101,6 +6157,10 @@ msgid "Single-click to open an item (point to select)"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
+msgid "These apply when “Show more items in the navigation pane” is on in Settings > Appearance."
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
 msgid "Underline icon titles consistent with my browser"
 msgstr ""
 
@@ -6190,6 +6250,43 @@ msgstr ""
 
 #: crates/ox-app/src/window/help.rs
 msgid "Topic"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/home_page.rs
+msgid "Could not save Favorites: {error}"
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Favorites"
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Files you add to Favorites show here."
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Files you open recently show here."
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Folders you pin to Quick access show here."
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Open file location"
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/sidebar/entries.rs
+msgid "Quick access"
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs crates/ox-core/src/location/virtual_place.rs
+msgid "Recent"
+msgstr ""
+
+#: crates/ox-app/src/window/home_page.rs
+msgid "Recent and Favorites"
 msgstr ""
 
 #: crates/ox-app/src/window/imp.rs
@@ -6820,10 +6917,6 @@ msgid "Opened this session"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs
-msgid "Quick access"
-msgstr ""
-
-#: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Quick access — drop folders here to pin"
 msgstr ""
 
@@ -6961,6 +7054,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/tab_menu.rs
 msgid "Close other tabs"
+msgstr ""
+
+#: crates/ox-app/src/window/tab_menu.rs
+msgid "Close tabs to the right"
 msgstr ""
 
 #: crates/ox-app/src/window/tab_menu.rs
@@ -8572,10 +8669,6 @@ msgstr ""
 msgid "Percent-encoded text in the address must be valid UTF-8."
 msgstr ""
 
-#: crates/ox-core/src/location/virtual_place.rs
-msgid "Recent"
-msgstr ""
-
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/location/virtual_place.rs
 msgid "Use {location} without a server name."
@@ -10050,6 +10143,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "Search results no longer refresh every few seconds while folders are being indexed, so a result you select stays selected. A search of a folder nobody indexed no longer starts over, and a cached search updates in place instead of showing Searching again."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "TAR archives open like folders, Compress to makes TAR files, and Additional options opens a Create archive window laid out like Windows 11's. Windows resize from just inside their edges and corners, and resize cursors show on Wayland when the desktop's cursor theme is missing. Renaming an extension and saving over a file ask in Windows 11's compact message boxes, the Save dialog hides known extensions, the column titles' menu offers Choose Details, Shift+F10 opens the right-click menu, and Ctrl+T, Ctrl+W and Esc work as in Windows 11. Settings can turn on Windows 11's Home page with Quick access, Recent and Favorites, switch to its tab menu and navigation pane, and hide the command bar's Update button. Typing Recycle Bin or Recent in the address bar opens it, the tab menu can close tabs to the right, Properties dates name the weekday, and Downloads stays grouped in a split tab's other pane."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml

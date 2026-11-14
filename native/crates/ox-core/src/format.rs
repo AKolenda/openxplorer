@@ -333,16 +333,28 @@ pub fn column_date_text(unix_seconds: Option<u64>, style: DateStyle) -> String {
     text.unwrap_or_else(|| date_short_time_text(unix_seconds))
 }
 
-/// The Properties window's Created, Modified and Accessed text, as
-/// Windows 11 writes it: `Tuesday, October 20, 2026, 14:24:52`, with
-/// `Today` or `Yesterday` for the weekday of those days; `Not provided`
-/// when the time is unknown.
+/// The Properties window's Accessed text: `Tuesday, October 20, 2026,
+/// 14:24:52`, with `Today` or `Yesterday` for the weekday of those days;
+/// `Not provided` when the time is unknown.
 pub fn long_date_time_text(unix_seconds: Option<u64>) -> String {
     unix_seconds
         .and_then(local_time)
         .and_then(|time| {
             let now = DateTime::now_local().ok()?;
             explorer_text::long_date_time_with(&time, &now, locale_pattern::current(), clock_format())
+        })
+        .unwrap_or_else(|| crate::i18n::gettext(UNKNOWN_TIMESTAMP))
+}
+
+/// The Properties window's Created and Modified text, as Windows 11 writes
+/// it: `Monday, November 9, 2026, 4:02:34 PM`, always with the weekday,
+/// even for today and yesterday, on the locale's or the chosen clock;
+/// `Not provided` when the time is unknown.
+pub fn weekday_date_time_text(unix_seconds: Option<u64>) -> String {
+    unix_seconds
+        .and_then(local_time)
+        .and_then(|time| {
+            explorer_text::weekday_date_time_with(&time, locale_pattern::current(), clock_format())
         })
         .unwrap_or_else(|| crate::i18n::gettext(UNKNOWN_TIMESTAMP))
 }

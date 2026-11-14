@@ -253,7 +253,7 @@ impl Tile {
 ///
 /// The tile is named `key`, the location or volume it opens, which finds
 /// it again after a redraw ([`Kept`]).
-fn tile_frame(
+pub(super) fn tile_frame(
     icon: &impl IsA<gtk::Widget>,
     name: &str,
     key: &str,
@@ -1127,7 +1127,8 @@ pub(super) fn render(
         // Network is listed like a folder; the Settings page replaces the
         // whole browsing area, landing pages included
         // (`super::settings_tab`). Neither draws anything here.
-        Page::Network | Page::Settings => body.remove_css_class(THIS_PC_CLASS),
+        // Home draws itself (`super::home_page`).
+        Page::Home | Page::Network | Page::Settings => body.remove_css_class(THIS_PC_CLASS),
     }
 }
 

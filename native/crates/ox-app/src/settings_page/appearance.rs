@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Appearance: the theme, the text size and font, the compact view, the
-//! navigation pane's arrows, the right-click menu and the pane widths.
+//! navigation pane's arrows, the app's extra navigation pane rows and tab
+//! menu items, the right-click menu and the pane widths.
 //!
 //! Ports the "Appearance & layout" section of `renderSettingsPage`,
 //! `textSizeControls` and `menuPreferenceControls` in
@@ -77,6 +78,21 @@ const HIDE_EXPAND_ARROWS: RowText = RowText {
                   show only while you point at the pane or move through it with the keyboard.",
     keywords: "hide expand arrows chevron expander triangle sidebar navigation pane tree folders \
                windows",
+};
+
+const MORE_NAVIGATION_PANE_ITEMS: RowText = RowText {
+    title: "Show more items in the navigation pane",
+    description: "Adds Recent files, Recent locations, the Recycle Bin and a bar under each drive that \
+                  shows how full it is. Off, the navigation pane looks like Windows 11's.",
+    keywords: "navigation pane sidebar recent files locations recycle bin trash drive space capacity \
+               usage bar extra more rows windows",
+};
+
+const MORE_TAB_MENU_ITEMS: RowText = RowText {
+    title: "Show more items in the tab menu",
+    description: "Adds Move tab to new window, Move tab to window… and Open windows… to the menu you \
+                  get when you right-click a tab. Off, the tab menu looks like Windows 11's.",
+    keywords: "tab menu right-click move tab new window open windows extra more items windows",
 };
 
 const PANE_WIDTHS: RowText = RowText {
@@ -392,7 +408,8 @@ fn choose_text_size(page: &SettingsPage, size: TextSize) {
     });
 }
 
-/// The compact view, the navigation pane's arrows, the right-click menu,
+/// The compact view, the navigation pane's arrows, the app's extra
+/// navigation pane rows and tab menu items, the right-click menu,
 /// Shift+F10's menu and the pane widths.
 fn layout_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Layout"));
@@ -407,6 +424,26 @@ fn layout_group(page: &SettingsPage) -> SettingsGroup {
     };
     arrows.add_control(&page.preference_switch(binding), ControlName::RowTitle);
     group.add_row(&arrows);
+    let pane_items = SettingRow::new(MORE_NAVIGATION_PANE_ITEMS);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.more_navigation_pane_items,
+        write: |on| PreferencesUpdate {
+            more_navigation_pane_items: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    pane_items.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    group.add_row(&pane_items);
+    let tab_menu_items = SettingRow::new(MORE_TAB_MENU_ITEMS);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.more_tab_menu_items,
+        write: |on| PreferencesUpdate {
+            more_tab_menu_items: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    tab_menu_items.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    group.add_row(&tab_menu_items);
     group.add_row(&right_click_menu_row(page));
     group.add_row(&menu_buttons_row(page));
     group.add_row(&shift_f10_row(page));

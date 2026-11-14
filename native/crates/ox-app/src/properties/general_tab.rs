@@ -148,12 +148,12 @@ pub(super) fn general_tab(
     let dates = Rows::new();
     dates.add(
         &ox_core::i18n::gettext("Created"),
-        &format::long_date_time_text(properties.created),
+        &format::weekday_date_time_text(properties.created),
     );
     if !is_folder {
         dates.add(
             &ox_core::i18n::gettext("Modified"),
-            &format::long_date_time_text(entry.modified),
+            &format::weekday_date_time_text(entry.modified),
         );
         dates.add(
             &ox_core::i18n::gettext("Accessed"),
@@ -559,7 +559,16 @@ impl GeneralEdits {
                 .await;
             self.name.set_editable(editable);
             self.hidden.set_sensitive(can_hide);
-            renaming?;
+            if !renaming? {
+                // No to the extension question keeps the old name, which
+                // the field and Hidden show again, as No ends a rename in
+                // place; the other changes still apply.
+                self.is_updating.set(true);
+                self.name.set_text(&original);
+                self.hidden.set_active(original.starts_with('.'));
+                self.is_updating.set(false);
+                return Ok(());
+            }
             let renamed = gtk::gio::File::for_uri(&uri)
                 .parent()
                 .map(|parent| parent.child(&wanted).uri().to_string());

@@ -2,6 +2,8 @@
 
 A Windows File Explorer-inspired file manager for Linux, **developed for Zorin OS first and foremost**. Browse local folders, SMB shares and SFTP, FTP, WebDAV and NFS locations with tabs, split panes, a folder tree, Details, Compact, List and icon views with thumbnails, clickable paths, pinned folders, search, undoable file operations and light/dark themes.
 
+<a href="https://github.com/AKolenda/openxplorer/releases/latest"><img src="https://img.shields.io/github/v/release/AKolenda/openxplorer?style=for-the-badge&label=Download&labelColor=0067c0&color=004e8c&logo=linux&logoColor=white" alt="Download OpenXplorer" height="40"></a>
+
 **[Releases](https://github.com/AKolenda/openxplorer/releases)** · **[Website](https://openxplorer.app)** · **[Installation](docs/installation.md)** · **[Documentation](docs/introduction.md)**
 
 ![OpenXplorer browsing fictional sample files](apps/web/public/assets/screenshots/explorer-light.png)
@@ -14,9 +16,9 @@ A Windows File Explorer-inspired file manager for Linux, **developed for Zorin O
 
 Zorin OS is the primary target for its desktop experience and integration; Ubuntu and Debian are secondary compatibility targets and require compatible system packages.
 
-Version **2.0.16** is a native GTK 4 application written in Rust (`native/`). It keeps the same look, settings, pins and saved passwords as 1.x; see the [changelog](CHANGELOG.md) for what 2.0.16 adds. Get it from [GitHub Releases](https://github.com/AKolenda/openxplorer/releases):
+Version **2.0.17** is a native GTK 4 application written in Rust (`native/`). It keeps the same look, settings, pins and saved passwords as 1.x; see the [changelog](CHANGELOG.md) for what 2.0.17 adds. Get it from [GitHub Releases](https://github.com/AKolenda/openxplorer/releases):
 
-- **Zorin OS 18, Ubuntu 24.04 and newer, Debian 13:** `openxplorer_2.0.16_all.deb` (x86-64). OpenXplorer 1.1.x offers it in **Check for updates**.
+- **Zorin OS 18, Ubuntu 24.04 and newer, Debian 13:** `openxplorer_2.0.17_all.deb` (x86-64). OpenXplorer 1.1.x offers it in **Check for updates**.
 - **Fedora, openSUSE Tumbleweed, Arch Linux:** the `.rpm` or `.pkg.tar.zst` of the release, when the release lists one.
 - **Any distribution with Flatpak**, including Debian 12 and others with GTK older than 4.14: `io.winspace.Development.flatpak`.
 

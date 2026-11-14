@@ -37,7 +37,7 @@ use super::{HiddenRow, Sidebar};
 /// The menu of the pin that opens `uri`; `caching` says whether it is
 /// cached for search, `None` where it cannot be. A pin of the user's own
 /// is `editable` (SIDE-011); a standard folder is not.
-pub(super) fn pin_menu(uri: &str, caching: Option<Caching>, editable: bool) -> Vec<MenuEntry> {
+pub(in crate::window) fn pin_menu(uri: &str, caching: Option<Caching>, editable: bool) -> Vec<MenuEntry> {
     let mut entries: Vec<MenuEntry> = vec![
         MenuItem::with_text_target(
             &ox_core::i18n::gettext("Open"),
