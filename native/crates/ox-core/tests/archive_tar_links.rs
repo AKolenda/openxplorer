@@ -208,6 +208,46 @@ fn the_browser_lists_safe_links_and_hides_the_rest() {
     assert!(!link.can_open, "a link is not opened as a copy of its own");
 }
 
+/// A TAR member whose time is 0, as tools that strip times write it, has
+/// no Date modified: a TAR counts from 1970, and 1/1/1980 (the earliest
+/// date a ZIP can hold) is no date it ever recorded. A real time shows.
+///
+/// parity: ARC-004
+#[test]
+fn a_zero_tar_time_has_no_date() {
+    let temporary = tempfile::tempdir().expect("a temporary folder");
+    let archive = temporary.path().join("Epoch.tar.gz");
+    // The writer leaves every member's time at 0.
+    write_tar(&archive, &["f:readme.txt:read me", "d:docs"]);
+    let browser = ArchiveBrowser::new(opener(), temporary.path().join("previews"));
+
+    let listing = browser
+        .list(&file_uri(&archive), "", &Cancellation::new())
+        .expect("lists");
+
+    for entry in &listing.entries {
+        assert_eq!(entry.modified, None, "{}", entry.name);
+    }
+
+    let dated = temporary.path().join("Dated.tar.gz");
+    let script = "import io, sys, tarfile\n\
+                  with tarfile.open(sys.argv[1], 'w:gz') as archive:\n\
+                  \x20   member = tarfile.TarInfo('notes.txt'); member.size = 5\n\
+                  \x20   member.mtime = 1789378200\n\
+                  \x20   archive.addfile(member, io.BytesIO(b'notes'))\n";
+    let output = Command::new("python3")
+        .args(["-c", script])
+        .arg(&dated)
+        .output()
+        .expect("Python 3 writes the reference archive");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let listing = browser
+        .list(&file_uri(&dated), "", &Cancellation::new())
+        .expect("lists");
+    let modified = listing.entries[0].modified.expect("a real time shows");
+    assert!(modified.abs_diff(1_789_378_200) <= 2, "{modified}");
+}
+
 /// Compressing into a name ending `.tar` writes a plain TAR, which the
 /// browser lists and the extractor unpacks.
 ///
