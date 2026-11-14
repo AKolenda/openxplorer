@@ -264,25 +264,7 @@ impl SceneStep {
                 Ok(Duration::ZERO)
             }
             Self::ScrollToEnd => scroll_dialog_to_end(window).map(|()| Duration::ZERO),
-            Self::Type(text) => {
-                let parent: &gtk::Window = window.upcast_ref();
-                let dialog = gtk::Window::list_toplevels()
-                    .into_iter()
-                    .filter_map(|toplevel| toplevel.downcast::<gtk::Window>().ok())
-                    .filter(|other| other.is_visible() && other.transient_for().as_ref() == Some(parent))
-                    .last();
-                let field = GtkWindowExt::focus(dialog.as_ref().unwrap_or(parent))
-                    .and_then(|focus| {
-                        focus
-                            .ancestor(gtk::Entry::static_type())
-                            .and_downcast::<gtk::Editable>()
-                            .or_else(|| focus.downcast::<gtk::Editable>().ok())
-                    })
-                    .ok_or_else(|| "no text field has keyboard focus".to_owned())?;
-                field.set_text(text);
-                field.set_position(-1);
-                Ok(Duration::ZERO)
-            }
+            Self::Type(text) => type_into_focus(window, text).map(|()| Duration::ZERO),
             Self::Search(text) => {
                 window.search_folder(text);
                 Ok(Duration::ZERO)
@@ -297,6 +279,28 @@ impl SceneStep {
                 .ok_or_else(|| format!("the search list “{list}” has no option “{label}”")),
         }
     }
+}
+
+/// Puts `text` in the text field that has keyboard focus, in the dialog
+/// the scene opened last or else in `window`, as typing it does.
+fn type_into_focus(window: &BrowserWindow, text: &str) -> Result<(), String> {
+    let parent: &gtk::Window = window.upcast_ref();
+    let dialog = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|toplevel| toplevel.downcast::<gtk::Window>().ok())
+        .filter(|other| other.is_visible() && other.transient_for().as_ref() == Some(parent))
+        .last();
+    let field = GtkWindowExt::focus(dialog.as_ref().unwrap_or(parent))
+        .and_then(|focus| {
+            focus
+                .ancestor(gtk::Entry::static_type())
+                .and_downcast::<gtk::Editable>()
+                .or_else(|| focus.downcast::<gtk::Editable>().ok())
+        })
+        .ok_or_else(|| "no text field has keyboard focus".to_owned())?;
+    field.set_text(text);
+    field.set_position(-1);
+    Ok(())
 }
 
 /// Scrolls the body of the dialog the scene opened last to its end, as
