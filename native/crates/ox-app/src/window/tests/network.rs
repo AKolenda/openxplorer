@@ -337,6 +337,70 @@ fn an_unmounted_share_is_mounted_once_then_listed_again() {
     });
 }
 
+/// A share the server refuses, or that dropped off the network, says so
+/// in plain words that name it, as Windows Explorer does, with the
+/// system's own message only under Details. Nothing on the page is
+/// selected when it shows or takes the keyboard, and Try again stays.
+/// The share is on a host that does not exist, and the mount is the
+/// test's.
+///
+/// parity: NET-003, OPS-037
+#[gtk::test]
+fn an_offline_share_says_so_plainly_and_names_it() {
+    const RAW: &str = "Failed to mount Windows share: Connection refused";
+    let test = TestWindow::open(Page::Network.uri());
+    test.window.network().answer_mounts_with(|| {
+        Err(NetworkError::Gio(gtk::glib::Error::new(
+            gtk::gio::IOErrorEnum::Failed,
+            RAW,
+        )))
+    });
+
+    test.window
+        .navigate("smb://example.invalid/Studio/Photos")
+        .expect("an SMB share");
+    wait_until("the failed mount", || {
+        test.window.load_error().as_deref() == Some(RAW)
+    });
+    test.wait_for_listing("the failed listing");
+
+    let pane = test.window.folder_pane();
+    assert_eq!(pane.page(), Some(PanePage::Empty));
+    let page = pane.empty_page();
+    assert_eq!(page.title(), "This location is unavailable");
+    let message = page.message();
+    assert!(
+        message.contains("\\\\example.invalid\\Studio\\Photos"),
+        "the message names the share: {message:?}"
+    );
+    assert!(!message.contains(RAW), "the raw error is not the message: {message:?}");
+    assert!(page.offers_try_again(), "Try again stays");
+    let details = descendants::<gtk::Expander>(&page.root)
+        .into_iter()
+        .find(|expander| expander.is_visible() && expander.label().as_deref() == Some("Details"))
+        .expect("the system's error is under Details");
+    let detail = details.child().and_downcast::<gtk::Label>();
+    assert!(
+        detail.is_some_and(|label| label.text().contains(RAW)),
+        "the raw error stays under Details"
+    );
+    details.set_expanded(true);
+    let labels = descendants::<gtk::Label>(&page.root);
+    // The message keeps its place in Tab's order, but taking the keyboard
+    // selects none of its text.
+    for label in labels.iter().filter(|label| label.is_focusable()) {
+        label.child_focus(gtk::DirectionType::TabForward);
+        wait_for(Duration::from_millis(50));
+    }
+    for label in &labels {
+        assert!(
+            label.selection_bounds().is_none(),
+            "{:?} is not selected",
+            label.text()
+        );
+    }
+}
+
 /// Any program on the session bus may ask to show a location
 /// (`FileManager1`), so a share it names is not mounted for it: the tab
 /// says the share is not mounted, and the share is mounted, signing in
