@@ -416,9 +416,8 @@ impl BrowserWindow {
     fn change_view(&self, view: FolderView) {
         let pane = self.folder_pane();
         let had_keyboard = pane.view_has_focus();
-        let current = pane
-            .focused_position()
-            .or_else(|| pane.model().selected_positions().first().copied());
+        let selected = pane.model().selected_positions();
+        let current = pane.focused_position().or_else(|| selected.first().copied());
         self.show_view(view);
         let Some(position) = current else {
             pane.restore_scroll_position(0.0);
@@ -431,7 +430,13 @@ impl BrowserWindow {
             self,
             move || {
                 let pane = window.folder_pane();
-                if position >= pane.model().n_items() {
+                // Something else came first: another selection, or a text
+                // field such as a rename in place took the keyboard.
+                let typing = GtkWindowExt::focus(&window).is_some_and(|focus| focus.is::<gtk::Text>());
+                if position >= pane.model().n_items()
+                    || pane.model().selected_positions() != selected
+                    || typing
+                {
                     return;
                 }
                 if had_keyboard {
