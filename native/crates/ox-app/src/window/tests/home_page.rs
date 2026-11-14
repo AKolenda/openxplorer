@@ -1001,3 +1001,105 @@ fn a_quick_access_tiles_menu_is_windows_11s() {
     assert!(classic.strip_labels().is_empty());
     classic.popdown();
 }
+
+/// The open menu in the folder pane, once it has the keyboard.
+fn open_tile_menu(test: &TestWindow) -> crate::window::menu_popover::MenuPopover {
+    use crate::test_support::harness::descendants;
+    use crate::window::menu_popover::MenuPopover;
+
+    let open = || {
+        descendants::<MenuPopover>(test.window.folder_pane())
+            .into_iter()
+            .find(gtk::prelude::WidgetExt::is_mapped)
+    };
+    wait_until("the tile's menu", || open().is_some());
+    let menu = open().expect("the menu is open");
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    menu
+}
+
+/// Where the keyboard is in `menu`, as `(on a row, on the list of rows
+/// or the scroller around it)`: a list or a scroller with the keyboard
+/// draws its ring around every row, as GTK draws a focused widget's.
+fn keyboard_in_menu(test: &TestWindow, menu: &crate::window::menu_popover::MenuPopover) -> (bool, bool) {
+    let list = menu.row_list();
+    let focus = gtk::prelude::GtkWindowExt::focus(&test.window);
+    let on_a_row = focus
+        .as_ref()
+        .is_some_and(|focus| focus.is::<gtk::ListBoxRow>() && focus.is_ancestor(&list));
+    let around_the_rows = focus.is_some_and(|focus| {
+        focus == *list.upcast_ref::<gtk::Widget>()
+            || (focus.is::<gtk::ScrolledWindow>() && list.is_ancestor(&focus))
+    });
+    (on_a_row, around_the_rows)
+}
+
+/// A Quick access tile's menu draws no ring around its list of rows, as
+/// Windows 11's menus and the file list's own menu do not, however it was
+/// opened: by a right-click, by Shift+F10, or by Tab and then the Menu
+/// key. The keyboard is on its first row, which shows it with the row's
+/// own highlight. Real keys and clicks, with XTEST.
+///
+/// parity: HOME-013, ACC-009
+#[gtk::test]
+fn a_quick_access_tiles_menu_draws_no_ring_around_its_rows() {
+    use crate::test_support::pointer::{screen_point, Button, Pointer};
+
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Projects")).expect("fixture subfolder");
+    let test = home_window(&fixture);
+    test.activate("pin-location", Some(&fixture.uri_of("Projects")));
+    wait_until("the Projects tile", || {
+        home_page::tile_names(body(&test)).contains(&"Projects".to_owned())
+    });
+    test.window.present();
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let mut pointer = Pointer::connect();
+    let tile = home_page::tile_named(body(&test), "Projects");
+    let middle = (f64::from(tile.width()) / 2.0, f64::from(tile.height()) / 2.0);
+    let (x, y) = screen_point(&mut pointer, &tile, middle, (720, 500));
+    let settle = || {
+        crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+        crate::test_support::harness::wait_for_frames(&test.window, 2);
+    };
+    let close = |menu: &crate::window::menu_popover::MenuPopover| {
+        menu.popdown();
+        wait_until("the menu to close", || !menu.is_mapped());
+    };
+    let mut seen = Vec::new();
+
+    pointer.move_to(x, y);
+    pointer.press(Button::Secondary);
+    pointer.release(Button::Secondary);
+    let menu = open_tile_menu(&test);
+    seen.push(("right-click", keyboard_in_menu(&test, &menu)));
+    close(&menu);
+    settle();
+
+    pointer.hold_key(gtk::gdk::Key::Shift_L);
+    pointer.tap_key(gtk::gdk::Key::F10);
+    pointer.let_go_key(gtk::gdk::Key::Shift_L);
+    let menu = open_tile_menu(&test);
+    seen.push(("Shift+F10", keyboard_in_menu(&test, &menu)));
+    close(&menu);
+    settle();
+
+    home_page::tile_named(body(&test), "Desktop").grab_focus();
+    pointer.tap_key(gtk::gdk::Key::Tab);
+    settle();
+    pointer.tap_key(gtk::gdk::Key::Menu);
+    let menu = open_tile_menu(&test);
+    seen.push(("Tab, then Menu", keyboard_in_menu(&test, &menu)));
+    close(&menu);
+    // Back to where Xvfb starts the pointer (see tests/focus.rs).
+    pointer.move_to(720, 500);
+
+    assert_eq!(
+        seen,
+        [
+            ("right-click", (true, false)),
+            ("Shift+F10", (true, false)),
+            ("Tab, then Menu", (true, false)),
+        ]
+    );
+}
