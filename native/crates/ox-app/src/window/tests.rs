@@ -47,6 +47,7 @@ mod folder_tree;
 mod geometry;
 mod group_by;
 mod group_heading_look;
+mod hidden_selection;
 mod history;
 mod home_page;
 mod icons;
