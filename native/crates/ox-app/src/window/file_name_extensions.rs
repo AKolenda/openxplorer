@@ -3,9 +3,9 @@
 //! extension of a known file type, as Windows' "Hide extensions for known
 //! file types" decides. Off by default, as in Windows. The choice is saved
 //! and every window follows it, as Folder Options' check box does; the
-//! file list, its tooltips and accessible names, the details pane and the
-//! crumb of an opened archive and Home's Recent and Favorites show names
-//! by it
+//! file list, its tooltips and accessible names, the details pane and
+//! Home's Recent and Favorites show names by it; an opened archive keeps
+//! its real name in its tab, the window's title and the address bar
 //! ([`crate::folder_view::shown_name`]). The real names never change: a
 //! rename in place keeps the hidden extension ([`super::file_ops`]).
 
