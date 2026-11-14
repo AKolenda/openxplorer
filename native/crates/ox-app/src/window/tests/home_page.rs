@@ -959,6 +959,8 @@ fn searching_from_home_searches_the_home_folder_and_its_subfolders() {
     });
     assert_eq!(test.active_tab_title(), "zebra - Search Results in Home");
     assert!(!shows_home_page(&test), "the results show, not Home");
+    let count = test.status_count();
+    assert!(count.starts_with("1 result"), "the status bar counts the results: {count}");
 
     test.activate("back", None);
     wait_until("Back to Home", || shows_home_page(&test));
