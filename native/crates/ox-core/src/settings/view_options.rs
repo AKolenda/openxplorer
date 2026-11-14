@@ -144,4 +144,19 @@ mod tests {
         assert_eq!(odd, ViewOptions::default());
         assert_eq!(ViewOptions::from_json(&json!([])), None);
     }
+
+    /// Network folders show icons, not thumbnails, until the user turns
+    /// their previews on, as Windows 11 File Explorer "displays only icons
+    /// and never displays thumbnail images on network folders by default";
+    /// a file that stored no choice reads the same.
+    ///
+    /// parity: VIEW-058
+    #[test]
+    fn network_previews_are_off_by_default_as_in_windows() {
+        assert!(!ViewOptions::default().remote_previews);
+        let unchosen = ViewOptions::from_json(&json!({"showPreviews": true})).expect("an object");
+        assert!(!unchosen.remote_previews);
+        let chosen = ViewOptions::from_json(&json!({"remotePreviews": true})).expect("an object");
+        assert!(chosen.remote_previews, "a choice to show them stays");
+    }
 }

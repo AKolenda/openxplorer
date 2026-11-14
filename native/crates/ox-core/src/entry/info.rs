@@ -250,6 +250,42 @@ mod tests {
         assert_eq!(date_text(file.modified), "—");
     }
 
+    /// `GVfs`'s SMB backend names a file's content type only when its
+    /// name settles it, reporting `standard::fast-content-type` alone for
+    /// a PNG (whose extension two types share): a file of a server or a
+    /// device without a content type is typed by its name, as its fast type
+    /// is, so its preview qualifies when network previews are on. A name
+    /// that says nothing leaves it untyped, and a file of this computer, a
+    /// folder, keep what the backend reported.
+    ///
+    /// parity: VIEW-058
+    #[test]
+    fn a_network_file_without_a_content_type_is_typed_by_its_name() {
+        for uri in [
+            "smb://fileserver.example/team/Photos/Garden.png",
+            "sftp://demo@server.example/home/demo/Garden.png",
+            "mtp://Example_Phone/DCIM/Garden.png",
+        ] {
+            let info = file_info(gio::FileType::Regular, "Garden.png", None);
+            info.set_attribute_string("standard::fast-content-type", "image/png");
+            let file = entry_for_uri(uri, &info);
+            assert_eq!(file.content_type.as_deref(), Some("image/png"), "{uri}");
+        }
+        let guessed = file_info(gio::FileType::Regular, "Garden.png", None);
+        let file = entry_for_uri("smb://fileserver.example/team/Photos/Garden.png", &guessed);
+        assert_eq!(file.content_type.as_deref(), Some("image/png"), "by its name");
+
+        let unknown = file_info(gio::FileType::Regular, "notes", None);
+        let file = entry_for_uri("smb://fileserver.example/team/notes", &unknown);
+        assert_eq!(file.content_type, None, "a name that says nothing");
+        let local = file_info(gio::FileType::Regular, "Garden.png", None);
+        let file = entry_for_uri("file:///home/demo/Pictures/Garden.png", &local);
+        assert_eq!(file.content_type, None, "a file of this computer");
+        let folder = file_info(gio::FileType::Directory, "Photos.png", None);
+        let folder = entry_for_uri("smb://fileserver.example/team/Photos.png", &folder);
+        assert_eq!(folder.content_type, None, "a folder");
+    }
+
     /// A symbolic link named with no known type's extension is the app's
     /// shortcut, and its Type is "Shortcut", as Windows Explorer's is,
     /// whether it points to a file or a folder; one named for a type is

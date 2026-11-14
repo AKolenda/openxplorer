@@ -30,7 +30,10 @@ const MOVED_ROWS: [(&str, &str); 77] = [
         "Buttons in the right-click menu",
     ),
     ("Show previews", "Show previews"),
-    ("Show previews in network folders", "Also in network folders"),
+    (
+        "Show previews in network folders",
+        "Show thumbnails in network folders",
+    ),
     ("Skip previews of large files", "Skip very large files"),
     ("Preview pictures", "Pictures"),
     ("Preview videos", "Videos"),
