@@ -418,7 +418,7 @@ impl BrowserWindow {
         let had_keyboard = pane.view_has_focus();
         let current = pane
             .focused_position()
-            .or_else(|| self.folder_model().selected_positions().first().copied());
+            .or_else(|| pane.model().selected_positions().first().copied());
         self.show_view(view);
         let Some(position) = current else {
             pane.restore_scroll_position(0.0);
