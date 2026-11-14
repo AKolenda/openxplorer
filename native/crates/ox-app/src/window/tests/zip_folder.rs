@@ -764,6 +764,34 @@ pub(super) fn write_tar_named(fixture: &Fixture, name: &str) {
     }
 }
 
+/// An opened archive has one name: the tab, the window's title and the
+/// address bar's crumb all read its real file name, "Bundle.tar.gz",
+/// while known extensions are hidden (the default) too.
+///
+/// parity: ARC-026, VIEW-069
+#[gtk::test]
+fn an_opened_archive_is_named_the_same_in_the_tab_and_the_address_bar() {
+    let fixture = Fixture::standard();
+    write_tar_named(&fixture, "Bundle.tar.gz");
+    let test = opening_zips_as_folders(&fixture);
+    test.wait_for_listing("the folder");
+    let root = ArchiveLocation::root(&fixture.uri_of("Bundle.tar.gz"));
+    test.window.navigate(&root.uri()).expect("the archive");
+    test.wait_for_listing("the archive's listing");
+
+    let crumbs: Vec<String> = test
+        .window
+        .address_bar()
+        .crumb_buttons()
+        .iter()
+        .filter_map(ButtonExt::label)
+        .map(|label| label.to_string())
+        .collect();
+    assert_eq!(crumbs.last().map(String::as_str), Some("Bundle.tar.gz"), "{crumbs:?}");
+    let title = test.window.title().map(String::from).unwrap_or_default();
+    assert!(title.starts_with("Bundle.tar.gz "), "the window's title: {title:?}");
+}
+
 /// Every kind of TAR the app reads opens in the tab like a ZIP, as
 /// Windows 11 reads .tar, .tar.gz, .tgz, .tar.bz2, .tar.xz and .tar.zst
 /// itself: no pop-up window, folders open in the tab, and Up leaves it.
