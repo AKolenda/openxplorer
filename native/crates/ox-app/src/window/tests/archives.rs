@@ -718,11 +718,14 @@ fn additional_options_lay_out_the_create_archive_dialog() {
     assert_eq!(frame.button_labels(), ["Create", "Cancel"]);
     let notes = fixture.root().join("Notes 2");
     assert_eq!(field.text(), format!("{}.zip", notes.display()));
-    assert_eq!(dropdown_labels(&format), ["zip", "tar"]);
+    assert_eq!(dropdown_labels(&format), ["zip", "7z", "tar"]);
     assert_eq!(dropdown_labels(&method), ["Deflate"]);
     assert_eq!(descendants::<gtk::Scale>(&frame).len(), 1);
 
     format.set_selected(1);
+    assert_eq!(dropdown_labels(&method), ["LZMA2"]);
+    assert_eq!(field.text(), format!("{}.7z", notes.display()));
+    format.set_selected(2);
     assert_eq!(dropdown_labels(&method), ["None", "GZip", "BZip2", "XZ"]);
     assert_eq!(field.text(), format!("{}.tar", notes.display()));
     let endings = [(1, ".tar.gz"), (2, ".tar.bz2"), (3, ".tar.xz"), (0, ".tar")];
@@ -753,10 +756,11 @@ fn create_writes_the_chosen_format_and_undo_takes_it_away() {
     let test = TestWindow::open(&fixture.uri());
     let cases = [
         (0, 0, "Notes 2.zip", b"PK".as_slice()),
-        (1, 1, "Notes 2.tar.gz", &[0x1f, 0x8b]),
-        (1, 2, "Notes 2.tar.bz2", b"BZh"),
-        (1, 3, "Notes 2.tar.xz", &[0xfd, b'7']),
-        (1, 0, "Notes 2.tar", b"Note"),
+        (1, 0, "Notes 2.7z", b"7z\xBC\xAF\x27\x1C"),
+        (2, 1, "Notes 2.tar.gz", &[0x1f, 0x8b]),
+        (2, 2, "Notes 2.tar.bz2", b"BZh"),
+        (2, 3, "Notes 2.tar.xz", &[0xfd, b'7']),
+        (2, 0, "Notes 2.tar", b"Note"),
     ];
     for (format_index, method_index, archive, magic) in cases {
         let (frame, _field, format, method) = create_archive_dialog(&test, "Notes 2.txt");
@@ -941,7 +945,7 @@ fn compress_to_tar_puts_the_selection_into_a_new_tar_beside_it() {
     }
 }
 
-/// Compress to › TAR File and ZIP File work as in Windows 11: the new
+/// Compress to › TAR File, ZIP File and 7z File work as in Windows 11: the new
 /// archive appears beside the item under the next free name ("(2)" when
 /// the name is taken), selected and renamed in place, and Undo takes it
 /// away again, to the Recycle Bin.
@@ -956,6 +960,7 @@ fn a_new_archive_is_renamed_in_place_and_undo_takes_it_away() {
     for (action, archive) in [
         ("compress-to-tar", "Notes 2 (2).tar"),
         ("compress-to-zip", "Notes 2.zip"),
+        ("compress-to-7z", "Notes 2.7z"),
     ] {
         test.wait_for_listing("the folder");
         test.select_named("Notes 2.txt");
@@ -971,6 +976,10 @@ fn a_new_archive_is_renamed_in_place_and_undo_takes_it_away() {
             !super::file_ops_support::is_renaming_in_place(&test)
         });
         assert!(fixture.path(archive).exists(), "{action}");
+        if action == "compress-to-7z" {
+            let bytes = fs::read(fixture.path(archive)).expect("written");
+            assert_eq!(bytes.get(..6), Some(&b"7z\xBC\xAF\x27\x1C"[..]), "a 7z archive");
+        }
 
         test.activate("undo", None);
 

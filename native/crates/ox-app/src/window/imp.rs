@@ -298,6 +298,8 @@ pub(crate) struct BrowserWindow {
     pub(super) first_offer: RefCell<Option<FirstOffer>>,
     /// What the label on the drag icon says over the window (DND-028).
     pub(super) drop_labels: RefCell<DropLabels>,
+    /// The drag the window last said it refuses, so it says so once.
+    pub(super) explained_drop: RefCell<Option<glib::WeakRef<glib::Object>>>,
     /// The drop menu, built when first needed.
     pub(super) drop_menu: OnceCell<MenuPopover>,
     /// Why tooltips are off now: a drag of this window's items, and the

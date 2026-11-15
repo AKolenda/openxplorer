@@ -1215,7 +1215,7 @@ fn a_pinned_folder_menu_is_windows_11_and_keeps_its_strip_nearest_the_pointer() 
             MenuEntry::Divider => None,
         })
         .collect();
-    assert_eq!(labels, ["ZIP File", "TAR File", "Additional options"]);
+    assert_eq!(labels, ["ZIP File", "7z File", "TAR File", "Additional options"]);
     menu.popdown();
     wait_until("the menu to close", || !menu.is_mapped());
 
@@ -1263,9 +1263,9 @@ fn a_pinned_folder_menu_is_windows_11_and_keeps_its_strip_nearest_the_pointer() 
     }
 }
 
-/// A pinned folder's Copy as path, Compress to › ZIP File and TAR File
+/// A pinned folder's Copy as path, Compress to › ZIP File, TAR File and 7z File
 /// and New › Folder act on that folder, not on the file list's selection:
-/// the path is copied in quotes, the ZIP and TAR are made beside the
+/// the path is copied in quotes, the ZIP, TAR and 7z are made beside the
 /// folder, and New opens
 /// the folder and makes the new folder there.
 ///
@@ -1296,6 +1296,11 @@ fn a_pinned_folder_menu_copies_compresses_and_creates_in_that_folder() {
     wait_until("the TAR beside the folder", || {
         fs::read(fixture.path("Pinned work.tar"))
             .is_ok_and(|bytes| bytes.get(257..262) == Some(b"ustar".as_slice()))
+    });
+    test.wait_for_listing("the folder listed again");
+    test.activate("compress-to-7z-of", Some(&pinned));
+    wait_until("the 7z beside the folder", || {
+        fs::read(fixture.path("Pinned work.7z")).is_ok_and(|bytes| bytes.starts_with(b"7z\xBC\xAF\x27\x1C"))
     });
     test.wait_for_listing("the folder listed again");
 

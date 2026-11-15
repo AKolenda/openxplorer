@@ -32,6 +32,8 @@ pub(super) enum DropSpot {
     Sidebar(SidebarDropSpot),
     /// A crumb's folder.
     Crumb(String),
+    /// A folder of the folder tree, at `row`.
+    TreeFolder { row: u32, folder: String },
     /// A tab's folder.
     Tab { id: TabId, folder: String },
     /// The tab strip beside the tabs: dropped folders open as new tabs.
@@ -50,7 +52,7 @@ impl DropSpot {
             DropSpot::Sidebar(SidebarDropSpot::Pin { before, .. }) => DropDestination::QuickAccess {
                 before: before.clone(),
             },
-            DropSpot::Crumb(folder) | DropSpot::Tab { folder, .. } => {
+            DropSpot::Crumb(folder) | DropSpot::Tab { folder, .. } | DropSpot::TreeFolder { folder, .. } => {
                 DropDestination::for_folder(folder.clone())
             }
             DropSpot::NewTabs => DropDestination::NewTabs,
@@ -79,6 +81,11 @@ impl BrowserWindow {
             DropZone::CrumbMenu => {
                 let folder = self.drag_crumb_menu_folder_at(y)?;
                 self.takes_drops(&folder).then_some(DropSpot::Crumb(folder))
+            }
+            DropZone::FolderTree => {
+                let (row, folder) = self.folder_tree().folder_at(y)?;
+                self.takes_drops(&folder)
+                    .then_some(DropSpot::TreeFolder { row, folder })
             }
             DropZone::Tabs => {
                 let Some(tab) = self.tab_strip().tab_at(x, y) else {

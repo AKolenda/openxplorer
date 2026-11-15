@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What a name must hold to match a search: every word, ignoring case,
-//! where a word with wildcards matches the whole name.
+//! where a word with wildcards is a pattern found within the name.
 //!
 //! Ports the filter of `filtered()` in `v2.0.0:desktop/ui/app.js` (every
 //! whitespace-separated word occurs in the name) and adds the wildcards of
 //! Dolphin's filter bar (`KFileItemModelFilter::setPattern`, SRCH-004): a
-//! word holding `*`, `?` or `[` is a pattern for the whole name, so
-//! `*.pdf` finds PDF files and `report-202?` the reports of a decade. `*`
-//! stands for any text, `?` for one character, and `[a-c]` or `[!a-c]`
-//! for one character in or outside a set; a `[` without its `]` is a
-//! plain character.
+//! word holding `*`, `?` or `[` is a pattern. `*` stands for any text,
+//! `?` for one character, and `[a-c]` or `[!a-c]` for one character in
+//! or outside a set; a `[` without its `]` is a plain character.
 //!
-//! A plain word must be found starting before the name's extension, or be
-//! the whole extension: `pd - m5753` finds `PD - M5753RA.pdf` but not
-//! `WO - M5753.pdf`, whose only `pd` is in `.pdf`, while `pdf`, `.pdf`
-//! and `66873.pdf` still find PDF files.
+//! As in Windows 11 File Explorer (checked on Windows 11 on 2026-11-14), a
+//! pattern is found within the name, as a plain word is, rather than
+//! having to match the whole name: `a?b` finds `a1b.txt` and `acb.txt`,
+//! `*.pdf` finds PDF files and `report-202?` the reports of a decade.
+//!
+//! A plain word or a pattern must be found starting before the name's
+//! extension, or be the whole extension: `pd - m5753` finds `PD -
+//! M5753RA.pdf` but not `WO - M5753.pdf`, whose only `pd` is in `.pdf`,
+//! while `pdf`, `.pdf`, `p?f` and `66873.pdf` still find PDF files.
 
 /// The characters that make a word a wildcard pattern.
 const WILDCARDS: [char; 3] = ['*', '?', '['];
@@ -54,13 +57,13 @@ impl NamePattern {
     }
 
     /// Whether `lowercase_name`, a lower-cased name, matches: each
-    /// wildcard word matches the whole name, and each other word occurs
-    /// in the name or in `lowercase_context`, such as the folder that holds
-    /// the item (SRCH-008), which may be empty.
+    /// wildcard word is found within the name ([`wildcard_in_name`]), and
+    /// each other word occurs in the name or in `lowercase_context`, such
+    /// as the folder that holds the item (SRCH-008), which may be empty.
     pub fn matches_lowercase(&self, lowercase_name: &str, lowercase_context: &str) -> bool {
         self.words.iter().all(|word| {
             if is_wildcard(word) {
-                wildcard_matches(word, lowercase_name)
+                wildcard_in_name(word, lowercase_name)
             } else {
                 word_in_name(word, lowercase_name) || lowercase_context.contains(word.as_str())
             }
@@ -94,6 +97,27 @@ pub(crate) fn word_in_name(word: &str, lowercase_name: &str) -> bool {
         Some(extension) => first < extension || lowercase_name[extension..] == *word,
         None => true,
     }
+}
+
+/// Whether the wildcard `pattern` is found within `lowercase_name`, as a
+/// plain word is ([`word_in_name`]): the text it matches starts before
+/// the name's extension, or is the whole extension.
+pub(crate) fn wildcard_in_name(pattern: &str, lowercase_name: &str) -> bool {
+    // The pattern followed by `*` matches any text that starts with what
+    // the pattern matches.
+    let open_end = format!("{pattern}*");
+    let extension = extension_start(lowercase_name);
+    let mut starts = lowercase_name
+        .char_indices()
+        .map(|(start, _)| start)
+        .chain(std::iter::once(lowercase_name.len()));
+    starts.any(|start| {
+        let rest = &lowercase_name[start..];
+        match extension {
+            Some(extension) if start >= extension => start == extension && wildcard_matches(pattern, rest),
+            _ => wildcard_matches(&open_end, rest),
+        }
+    })
 }
 
 /// Whether the whole of `name` matches the wildcard `pattern`.
@@ -195,10 +219,14 @@ mod tests {
 
     /// parity: SRCH-004
     #[test]
-    fn wildcard_words_match_the_whole_name_and_other_words_anywhere() {
+    fn wildcard_words_and_other_words_match_within_the_name() {
         let pdfs = NamePattern::new("*.PDF");
         assert!(pdfs.matches("Bank statement.pdf"));
-        assert!(!pdfs.matches("statement.pdf.txt"));
+        assert!(
+            pdfs.matches("statement.pdf.txt"),
+            "found within the name, as the plain word .pdf is"
+        );
+        assert!(!pdfs.matches("statement.txt"));
         let decade = NamePattern::new("report-202?.pdf");
         assert!(decade.matches("Report-2024.pdf"));
         assert!(!decade.matches("report-2030.pdf"));
@@ -234,7 +262,8 @@ mod tests {
 
     /// As in Windows 11 File Explorer, `?` stands for exactly one
     /// character: `extra_??.txt` finds `extra_30.txt` and `extra_31.txt`
-    /// but neither `extra_2.txt` nor `extra_3.txt`. A Linux name may hold
+    /// but neither `extra_2.txt` nor `extra_3.txt`, as `.txt` must follow
+    /// the two characters. A Linux name may hold
     /// a literal `?`; it is still a wildcard, which also matches that `?`.
     ///
     /// parity: SRCH-004
@@ -259,7 +288,7 @@ mod tests {
             ["extra_2.txt", "extra_3.txt", "extra_30.txt", "extra_31.txt"]
         );
         assert_eq!(found("*_3?.txt"), ["extra_30.txt", "extra_31.txt"]);
-        assert_eq!(found("??"), ["ab"]);
+        assert_eq!(found("??"), names, "every name holds two characters");
         assert_eq!(found("extra_???.txt"), Vec::<&str>::new());
         assert_eq!(found("what?.txt"), ["what?.txt"]);
         assert_eq!(found("wha??.txt"), ["what?.txt"]);
@@ -267,6 +296,39 @@ mod tests {
             NamePattern::new("what?.txt").matches("whatX.txt"),
             "? is a wildcard"
         );
+    }
+
+    /// As in Windows 11 File Explorer, a wildcard word matches within the
+    /// name, as a plain word does: `a?b` finds `a1b.txt` and `acb.txt`,
+    /// where it used to have to match the whole name. It starts before
+    /// the extension or is the whole extension, as a plain word must.
+    ///
+    /// parity: SRCH-004
+    #[test]
+    fn a_wildcard_word_matches_within_the_name_as_a_plain_word_does() {
+        let names = [
+            "a1b.txt",
+            "acb.txt",
+            "notes.txt",
+            "Xa2b report.md",
+            "plan.pdf",
+            "ab",
+        ];
+        let found = |text: &str| -> Vec<&str> {
+            let pattern = NamePattern::new(text);
+            names.into_iter().filter(|name| pattern.matches(name)).collect()
+        };
+        assert_eq!(found("a?b"), ["a1b.txt", "acb.txt", "Xa2b report.md"]);
+        assert_eq!(found("?cb"), ["acb.txt"]);
+        assert_eq!(found("a*b"), ["a1b.txt", "acb.txt", "Xa2b report.md", "ab"]);
+        assert_eq!(found("a?b.txt"), ["a1b.txt", "acb.txt"]);
+        assert_eq!(found("*.txt"), ["a1b.txt", "acb.txt", "notes.txt"]);
+        assert_eq!(found("*"), names);
+        assert_eq!(found("a?b report"), ["Xa2b report.md"]);
+        // Inside the extension only as the whole extension, as `pdf` is.
+        assert_eq!(found("p?f"), ["plan.pdf"]);
+        assert_eq!(found("?df"), ["plan.pdf"]);
+        assert_eq!(found("d?"), Vec::<&str>::new());
     }
 
     #[test]
