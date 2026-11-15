@@ -94,7 +94,7 @@ fn double_clicking_a_tab_opens_a_copy_in_front() {
     assert_eq!(
         test.active_tab(),
         tab_ids(&test).get(1).copied(),
-        "the copy is in front, next to its tab (TAB-017)"
+        "the copy is in front, right after its tab (TAB-013)"
     );
 }
 

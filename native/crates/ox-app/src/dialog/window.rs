@@ -395,6 +395,14 @@ impl Dialog {
         }
     }
 
+    /// Lets each button's letters press it without Alt too, as a Windows
+    /// message box takes Y and N for Yes and No: the keys
+    /// [`Self::also_press_with`] and the labels give it. Call it once the
+    /// buttons are added; for a message box with no text field.
+    pub(crate) fn press_with_letters_alone(&self) {
+        self.imp().frame.press_with_letters_alone();
+    }
+
     /// A button appended to the actions and remembered.
     fn new_button(&self, label: &str, style: ButtonStyle) -> gtk::Button {
         let button = self.imp().frame.add_button(label, style);
