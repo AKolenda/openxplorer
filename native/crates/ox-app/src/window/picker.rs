@@ -5620,6 +5620,88 @@ mod tests {
         assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
     }
 
+    /// The caller's check boxes sit side by side on one row, wrapping
+    /// only when the dialog is too narrow, so a caller with several of
+    /// them (an office suite's "Automatic file name extension", "Save with
+    /// password", "Edit filter settings") leaves the file list its room;
+    /// one row each took most of it. A list keeps a row of its own, and
+    /// every choice still answers.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn the_callers_check_boxes_share_one_row() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let choices = vec![
+            ("ext", "Automatic file name extension", Vec::new(), "true"),
+            ("password", "Save with password", Vec::new(), "false"),
+            ("filter", "Edit filter settings", Vec::new(), "false"),
+            (
+                "version",
+                "Version",
+                vec![("v12", "ODF 1.2"), ("v13", "ODF 1.3")],
+                "v13",
+            ),
+        ];
+        let choices: Vec<(String, String, Vec<(String, String)>, String)> = choices
+            .into_iter()
+            .map(|(id, label, options, initial)| {
+                (
+                    id.to_owned(),
+                    label.to_owned(),
+                    options
+                        .into_iter()
+                        .map(|(id, label)| (id.to_owned(), label.to_owned()))
+                        .collect(),
+                    initial.to_owned(),
+                )
+            })
+            .collect();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "Letter.odt".to_variant()),
+                ("choices", choices.to_variant()),
+            ],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        crate::test_support::harness::wait_for_frames(window, 3);
+        let checks: Vec<gtk::CheckButton> = crate::test_support::harness::descendants(window)
+            .into_iter()
+            .filter(|check: &gtk::CheckButton| check.label().is_some())
+            .collect();
+        assert_eq!(checks.len(), 3, "the three check boxes");
+        let tops: Vec<f32> = checks
+            .iter()
+            .map(|check| check.compute_bounds(window).expect("shown").y())
+            .collect();
+        assert!(
+            tops.iter().all(|top| (top - tops[0]).abs() < 1.0),
+            "on one row: {tops:?}"
+        );
+        crate::test_support::harness::capture_in_both_themes(window, "save-dialog-choices");
+
+        checks[1].set_active(true);
+        let name = name_box(window);
+        enter(&name);
+        wait_until("the answer", || answer.borrow().is_some());
+        let (response, results) = answer.borrow_mut().take().expect("answered");
+        assert_eq!(response, RESPONSE_SUCCESS);
+        let chosen: Vec<(String, String)> = results.lookup("choices").ok().flatten().expect("the choices");
+        assert_eq!(
+            chosen,
+            [
+                ("ext".to_owned(), "true".to_owned()),
+                ("password".to_owned(), "true".to_owned()),
+                ("filter".to_owned(), "false".to_owned()),
+                ("version".to_owned(), "v13".to_owned()),
+            ]
+        );
+    }
+
     /// The Properties window of the item called `name`, opened from the
     /// dialog `test` shows, as its Details pane's Properties button and
     /// its context menu open it.
