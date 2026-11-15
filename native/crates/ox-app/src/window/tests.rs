@@ -10,6 +10,7 @@
 mod accessibility;
 mod address_bar;
 mod address_input;
+mod archive_passwords;
 mod archives;
 mod captures;
 mod choose_details;

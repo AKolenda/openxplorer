@@ -468,7 +468,7 @@ msgid "Select a destination"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "Show extracted files when finished"
+msgid "Show extracted files when complete"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
@@ -477,10 +477,6 @@ msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
 msgid "The archive is kept unchanged. A folder that does not exist yet is created; in an existing folder you are asked before any file is replaced."
-msgstr ""
-
-#: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "This ZIP has a password, so OpenXplorer cannot extract it. Open it in the archive manager instead."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -543,7 +539,7 @@ msgstr ""
 msgid "Not provided"
 msgstr ""
 
-#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/choose_details.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/gallery_locations.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
+#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/archive_password.rs crates/ox-app/src/window/choose_details.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/gallery_locations.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
 msgid "OK"
 msgstr ""
 
@@ -4669,6 +4665,23 @@ msgstr ""
 msgid "Preparing extraction…"
 msgstr ""
 
+#: crates/ox-app/src/window/archive_password.rs
+msgid "Password needed"
+msgstr ""
+
+#: crates/ox-app/src/window/archive_password.rs
+msgid "Password:"
+msgstr ""
+
+#: crates/ox-app/src/window/archive_password.rs crates/ox-core/src/archive/error.rs
+msgid "The password is incorrect. Try again."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/archive_password.rs
+msgid "“{name}” is password protected. Enter the password below."
+msgstr ""
+
 #: crates/ox-app/src/window/cache_folder.rs
 msgid "Cache disabled; this root’s indexed names were removed."
 msgstr ""
@@ -7816,10 +7829,6 @@ msgid "Decompression safety limit reached."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
-msgid "Encrypted ZIP members require an archive manager."
-msgstr ""
-
-#: crates/ox-core/src/archive/error.rs
 msgid "Invalid archive folder."
 msgstr ""
 
@@ -7828,7 +7837,7 @@ msgid "Open a network share before choosing it as an extraction destination."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
-msgid "Password-protected ZIPs need an external archive manager in this release."
+msgid "OpenXplorer cannot compress more than 1,000,000 items or a file that grows while it is compressed. Use an archive manager."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
@@ -7912,7 +7921,15 @@ msgid "This ZIP compression method needs an external archive manager."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
+msgid "This ZIP uses an encryption method OpenXplorer cannot open. Use an archive manager."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
 msgid "This archive is damaged or is not a TAR archive. Use an archive manager."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
+msgid "This archive is password protected. Enter its password to open it."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
@@ -7945,10 +7962,6 @@ msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
 msgid "ZIP directory is too large for the built-in viewer. Use an archive manager."
-msgstr ""
-
-#: crates/ox-core/src/archive/error.rs
-msgid "ZIP files over 4 GiB or with more than 65,535 items need an archive manager."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -8038,11 +8051,6 @@ msgstr ""
 
 #: crates/ox-core/src/archive/zip/error.rs
 msgid "File size"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/archive/zip/error.rs
-msgid "File {name} is encrypted, password required for extraction"
 msgstr ""
 
 #: crates/ox-core/src/archive/zip/error.rs

@@ -5,9 +5,13 @@
 //! The layout is the one of PKWARE's APPNOTE 6.3, as Python's `zipfile`
 //! and every archive manager read it. File names are UTF-8 (flag bit 11),
 //! files are deflated and followed by a data descriptor (flag bit 3), so
-//! each file is read once, and folders are stored empty. ZIP64 is not
-//! written: an archive over 4 GiB or with more than 65,535 entries is
-//! refused before its end is written.
+//! each file is read once, and folders are stored empty. ZIP64 records
+//! (APPNOTE 4.3.14 to 4.3.16 and 4.5.3) are written only where a value
+//! needs them, as Python's `zipfile` writes them: a file of 4 GiB or more
+//! gets the ZIP64 extra field in its local header and 8-byte sizes in its
+//! data descriptor, a size or offset past 4 GiB goes into the central
+//! directory's ZIP64 extra field, and an archive with 65,535 entries or
+//! more, or a directory past 4 GiB, ends with the ZIP64 end records.
 
 use std::io::{self, Read, Write};
 
@@ -25,8 +29,20 @@ const CENTRAL_HEADER_SIGNATURE: u32 = 0x0201_4b50;
 const DATA_DESCRIPTOR_SIGNATURE: u32 = 0x0807_4b50;
 /// `PK\x05\x06`: the end of the central directory.
 const END_SIGNATURE: u32 = 0x0605_4b50;
+/// `PK\x06\x06`: the ZIP64 end of the central directory.
+const ZIP64_END_SIGNATURE: u32 = 0x0606_4b50;
+/// `PK\x06\x07`: the locator of the ZIP64 end record.
+const ZIP64_LOCATOR_SIGNATURE: u32 = 0x0706_4b50;
+/// The header id of the ZIP64 extended information extra field.
+const ZIP64_EXTRA_ID: u16 = 0x0001;
 /// Version 2.0: deflate and folders.
 const VERSION_NEEDED: u16 = 20;
+/// Version 4.5: ZIP64.
+const ZIP64_VERSION_NEEDED: u16 = 45;
+/// A 32-bit field holding this value is found in the ZIP64 extra field.
+const MARKER_32: u32 = u32::MAX;
+/// An entry count holding this value is found in the ZIP64 end record.
+const MARKER_16: u16 = u16::MAX;
 /// Made on Unix (3) with version 2.0 (0x14), so readers apply the Unix
 /// modes below.
 const VERSION_MADE_BY: u16 = (3 << 8) | 0x14;
@@ -42,8 +58,6 @@ const DEFLATED: u16 = 8;
 const FOLDER_ATTRIBUTES: u32 = (0o040_755 << 16) | 0x10;
 /// A file's external attributes: `-rw-r--r--`, never executable.
 const FILE_ATTRIBUTES: u32 = 0o100_644 << 16;
-/// The most entries an archive without ZIP64 can list.
-pub(super) const MAX_ENTRIES: usize = u16::MAX as usize;
 /// The chunk size for reading a file.
 const CHUNK_BYTES: usize = 64 * 1024;
 
@@ -95,10 +109,10 @@ struct CentralRecord {
     method: u16,
     modified: DosTime,
     crc: u32,
-    compressed_size: u32,
-    size: u32,
+    compressed_size: u64,
+    size: u64,
     external_attributes: u32,
-    local_header_offset: u32,
+    local_header_offset: u64,
 }
 
 /// Writes one ZIP archive to `W`, entry by entry.
@@ -107,6 +121,9 @@ pub(super) struct ZipWriter<W: Write> {
     central: Vec<CentralRecord>,
     /// The deflate level, 1 (faster) to 9 (smaller).
     level: Compression,
+    /// Sizes and offsets from this value on are written as ZIP64 values:
+    /// `0xFFFF_FFFF`, the largest 32-bit field being the ZIP64 marker.
+    zip64_threshold: u64,
 }
 
 impl<W: Write> ZipWriter<W> {
@@ -119,7 +136,21 @@ impl<W: Write> ZipWriter<W> {
             },
             central: Vec::new(),
             level: Compression::default(),
+            zip64_threshold: u64::from(MARKER_32),
         }
+    }
+
+    /// The same writer, writing ZIP64 values from `threshold` bytes on,
+    /// so tests can check archives past 4 GiB with a few bytes.
+    #[cfg(test)]
+    fn with_zip64_threshold(mut self, threshold: u64) -> Self {
+        self.zip64_threshold = threshold;
+        self
+    }
+
+    /// True when `value` must be written as a ZIP64 value.
+    fn needs_zip64(&self, value: u64) -> bool {
+        value >= self.zip64_threshold
     }
 
     /// The same writer deflating at `level`, 1 (faster) to 9 (smaller).
@@ -132,8 +163,8 @@ impl<W: Write> ZipWriter<W> {
     ///
     /// # Errors
     ///
-    /// [`ArchiveError::TooLargeToCompress`] past the limits of a ZIP
-    /// without ZIP64, or the output's error.
+    /// [`ArchiveError::TooLargeToCompress`] for a name over 65,535 bytes,
+    /// or the output's error.
     pub(super) fn add_folder(&mut self, name: &str, modified: DosTime) -> Result<(), ArchiveError> {
         let record = CentralRecord {
             name: name.to_owned(),
@@ -144,26 +175,28 @@ impl<W: Write> ZipWriter<W> {
             compressed_size: 0,
             size: 0,
             external_attributes: FOLDER_ATTRIBUTES,
-            local_header_offset: self.offset()?,
+            local_header_offset: self.output.written,
         };
-        self.write_local_header(&record)?;
+        self.write_local_header(&record, false)?;
         self.central.push(record);
         Ok(())
     }
 
-    /// Adds the file `name`, deflating what `content` yields. `progress`
-    /// hears the bytes read after each chunk.
+    /// Adds the file `name`, deflating what `content` yields; `expected_size`
+    /// is its size when planned, which decides whether its local header
+    /// announces ZIP64 sizes. `progress` hears the bytes read after each
+    /// chunk.
     ///
     /// # Errors
     ///
     /// [`ArchiveError::Cancelled`] once `cancel` is cancelled,
-    /// [`ArchiveError::TooLargeToCompress`] past the limits of a ZIP
-    /// without ZIP64, or the error of reading `content` or writing the
-    /// output.
+    /// [`ArchiveError::TooLargeToCompress`] for a name over 65,535 bytes or
+    /// a file that grew past 4 GiB after it was planned smaller, or the
+    /// error of reading `content` or writing the output.
     pub(super) fn add_file(
         &mut self,
         name: &str,
-        modified: DosTime,
+        (modified, expected_size): (DosTime, u64),
         content: &mut dyn Read,
         cancel: &Cancellation,
         progress: &mut dyn FnMut(u64),
@@ -177,51 +210,100 @@ impl<W: Write> ZipWriter<W> {
             compressed_size: 0,
             size: 0,
             external_attributes: FILE_ATTRIBUTES,
-            local_header_offset: self.offset()?,
+            local_header_offset: self.output.written,
         };
-        self.write_local_header(&record)?;
+        // Deflate can make incompressible data a little larger.
+        let is_zip64 = self.needs_zip64(expected_size.saturating_add(expected_size / 64 + 1024));
+        self.write_local_header(&record, is_zip64)?;
         let data_start = self.output.written;
         let deflated = self.deflate(content, cancel, progress)?;
         record.crc = deflated.crc;
-        record.size = fits_in_u32(deflated.size)?;
-        record.compressed_size = fits_in_u32(self.output.written - data_start)?;
-        self.write_data_descriptor(&record)?;
+        record.size = deflated.size;
+        record.compressed_size = self.output.written - data_start;
+        let grew_past_4_gib = self.needs_zip64(record.size) || self.needs_zip64(record.compressed_size);
+        if grew_past_4_gib && !is_zip64 {
+            return Err(ArchiveError::TooLargeToCompress);
+        }
+        self.write_data_descriptor(&record, is_zip64)?;
         self.central.push(record);
         Ok(())
     }
 
-    /// Writes the central directory and its end record, and returns the
+    /// Writes the central directory and its end records, and returns the
     /// output.
     ///
     /// # Errors
     ///
-    /// [`ArchiveError::TooLargeToCompress`] past the limits of a ZIP
-    /// without ZIP64, or the output's error.
+    /// [`ArchiveError::TooLargeToCompress`] for a name over 65,535 bytes,
+    /// or the output's error.
     pub(super) fn finish(mut self) -> Result<W, ArchiveError> {
-        let entry_count = u16::try_from(self.central.len()).map_err(|_| ArchiveError::TooLargeToCompress)?;
-        let directory_offset = self.offset()?;
+        let entry_count = self.central.len() as u64;
+        let directory_offset = self.output.written;
         let records = std::mem::take(&mut self.central);
         for record in &records {
             self.write_central_header(record)?;
         }
-        let directory_size = fits_in_u32(u64::from(self.offset()?) - u64::from(directory_offset))?;
+        let directory_size = self.output.written - directory_offset;
+        let needs_zip64_end = entry_count >= u64::from(MARKER_16)
+            || self.needs_zip64(directory_offset)
+            || self.needs_zip64(directory_size);
+        if needs_zip64_end {
+            self.write_zip64_end(entry_count, directory_size, directory_offset)?;
+        }
+        let count_field = u16::try_from(entry_count)
+            .ok()
+            .filter(|_| !needs_zip64_end)
+            .unwrap_or(MARKER_16);
         let mut end = Vec::with_capacity(22);
         push_u32(&mut end, END_SIGNATURE);
         push_u16(&mut end, 0);
         push_u16(&mut end, 0);
-        push_u16(&mut end, entry_count);
-        push_u16(&mut end, entry_count);
-        push_u32(&mut end, directory_size);
-        push_u32(&mut end, directory_offset);
+        push_u16(&mut end, count_field);
+        push_u16(&mut end, count_field);
+        push_u32(&mut end, self.field_32(directory_size));
+        push_u32(&mut end, self.field_32(directory_offset));
         push_u16(&mut end, 0);
         self.output.write_all(&end)?;
         self.output.flush()?;
         Ok(self.output.inner)
     }
 
-    /// Where the next byte goes, which must fit a 32-bit offset.
-    fn offset(&self) -> Result<u32, ArchiveError> {
-        fits_in_u32(self.output.written)
+    /// The ZIP64 end of central directory record and its locator.
+    fn write_zip64_end(
+        &mut self,
+        entry_count: u64,
+        directory_size: u64,
+        directory_offset: u64,
+    ) -> Result<(), ArchiveError> {
+        let record_offset = self.output.written;
+        let mut records = Vec::with_capacity(76);
+        push_u32(&mut records, ZIP64_END_SIGNATURE);
+        // The record's size without its signature and this field.
+        push_u64(&mut records, 44);
+        push_u16(&mut records, VERSION_MADE_BY);
+        push_u16(&mut records, ZIP64_VERSION_NEEDED);
+        push_u32(&mut records, 0);
+        push_u32(&mut records, 0);
+        push_u64(&mut records, entry_count);
+        push_u64(&mut records, entry_count);
+        push_u64(&mut records, directory_size);
+        push_u64(&mut records, directory_offset);
+        push_u32(&mut records, ZIP64_LOCATOR_SIGNATURE);
+        push_u32(&mut records, 0);
+        push_u64(&mut records, record_offset);
+        push_u32(&mut records, 1);
+        self.output.write_all(&records)?;
+        Ok(())
+    }
+
+    /// `value` as a 32-bit field: itself, or the ZIP64 marker when the
+    /// ZIP64 records hold it.
+    fn field_32(&self, value: u64) -> u32 {
+        if self.needs_zip64(value) {
+            MARKER_32
+        } else {
+            u32::try_from(value).unwrap_or(MARKER_32)
+        }
     }
 
     /// Deflates `content` into the output, returning its CRC and size.
@@ -254,58 +336,103 @@ impl<W: Write> ZipWriter<W> {
         })
     }
 
-    fn write_local_header(&mut self, record: &CentralRecord) -> Result<(), ArchiveError> {
+    /// Writes the local header; `is_zip64` announces 8-byte sizes in the
+    /// data descriptor with a ZIP64 extra field whose sizes, like the
+    /// header's, follow in the descriptor.
+    fn write_local_header(&mut self, record: &CentralRecord, is_zip64: bool) -> Result<(), ArchiveError> {
         let name_length = name_length(&record.name)?;
-        let mut header = Vec::with_capacity(30 + record.name.len());
+        let mut header = Vec::with_capacity(50 + record.name.len());
         push_u32(&mut header, LOCAL_HEADER_SIGNATURE);
-        push_u16(&mut header, VERSION_NEEDED);
+        push_u16(
+            &mut header,
+            if is_zip64 {
+                ZIP64_VERSION_NEEDED
+            } else {
+                VERSION_NEEDED
+            },
+        );
         push_u16(&mut header, record.flags);
         push_u16(&mut header, record.method);
         push_u16(&mut header, record.modified.time);
         push_u16(&mut header, record.modified.date);
-        // With a data descriptor, the CRC and sizes here stay 0.
+        // With a data descriptor, the CRC and sizes here stay 0; ZIP64
+        // marks the sizes as found in its field.
+        let size_field = if is_zip64 { MARKER_32 } else { 0 };
         push_u32(&mut header, 0);
-        push_u32(&mut header, 0);
-        push_u32(&mut header, 0);
+        push_u32(&mut header, size_field);
+        push_u32(&mut header, size_field);
         push_u16(&mut header, name_length);
-        push_u16(&mut header, 0);
+        push_u16(&mut header, if is_zip64 { 20 } else { 0 });
         header.extend_from_slice(record.name.as_bytes());
+        if is_zip64 {
+            push_u16(&mut header, ZIP64_EXTRA_ID);
+            push_u16(&mut header, 16);
+            push_u64(&mut header, 0);
+            push_u64(&mut header, 0);
+        }
         self.output.write_all(&header)?;
         Ok(())
     }
 
-    fn write_data_descriptor(&mut self, record: &CentralRecord) -> Result<(), ArchiveError> {
-        let mut descriptor = Vec::with_capacity(16);
+    /// Writes the CRC and sizes after the data, 8-byte sizes for ZIP64.
+    fn write_data_descriptor(&mut self, record: &CentralRecord, is_zip64: bool) -> Result<(), ArchiveError> {
+        let mut descriptor = Vec::with_capacity(24);
         push_u32(&mut descriptor, DATA_DESCRIPTOR_SIGNATURE);
         push_u32(&mut descriptor, record.crc);
-        push_u32(&mut descriptor, record.compressed_size);
-        push_u32(&mut descriptor, record.size);
+        if is_zip64 {
+            push_u64(&mut descriptor, record.compressed_size);
+            push_u64(&mut descriptor, record.size);
+        } else {
+            push_u32(&mut descriptor, fits_in_u32(record.compressed_size)?);
+            push_u32(&mut descriptor, fits_in_u32(record.size)?);
+        }
         self.output.write_all(&descriptor)?;
         Ok(())
     }
 
+    /// Writes the central directory header; a size or offset past the
+    /// ZIP64 threshold goes into a ZIP64 extra field, in the order the
+    /// specification gives, behind a marker in its 32-bit field.
     fn write_central_header(&mut self, record: &CentralRecord) -> Result<(), ArchiveError> {
         let name_length = name_length(&record.name)?;
-        let mut header = Vec::with_capacity(46 + record.name.len());
+        let mut extra = Vec::new();
+        for value in [record.size, record.compressed_size, record.local_header_offset] {
+            if self.needs_zip64(value) {
+                push_u64(&mut extra, value);
+            }
+        }
+        let mut zip64_extra = Vec::with_capacity(4 + extra.len());
+        if !extra.is_empty() {
+            push_u16(&mut zip64_extra, ZIP64_EXTRA_ID);
+            push_u16(&mut zip64_extra, u16::try_from(extra.len()).unwrap_or(24));
+            zip64_extra.extend_from_slice(&extra);
+        }
+        let version_needed = if zip64_extra.is_empty() {
+            VERSION_NEEDED
+        } else {
+            ZIP64_VERSION_NEEDED
+        };
+        let mut header = Vec::with_capacity(46 + record.name.len() + zip64_extra.len());
         push_u32(&mut header, CENTRAL_HEADER_SIGNATURE);
         push_u16(&mut header, VERSION_MADE_BY);
-        push_u16(&mut header, VERSION_NEEDED);
+        push_u16(&mut header, version_needed);
         push_u16(&mut header, record.flags);
         push_u16(&mut header, record.method);
         push_u16(&mut header, record.modified.time);
         push_u16(&mut header, record.modified.date);
         push_u32(&mut header, record.crc);
-        push_u32(&mut header, record.compressed_size);
-        push_u32(&mut header, record.size);
+        push_u32(&mut header, self.field_32(record.compressed_size));
+        push_u32(&mut header, self.field_32(record.size));
         push_u16(&mut header, name_length);
-        // No extra field, no comment, disk 0, no internal attributes.
-        push_u16(&mut header, 0);
+        push_u16(&mut header, u16::try_from(zip64_extra.len()).unwrap_or(28));
+        // No comment, disk 0, no internal attributes.
         push_u16(&mut header, 0);
         push_u16(&mut header, 0);
         push_u16(&mut header, 0);
         push_u32(&mut header, record.external_attributes);
-        push_u32(&mut header, record.local_header_offset);
+        push_u32(&mut header, self.field_32(record.local_header_offset));
         header.extend_from_slice(record.name.as_bytes());
+        header.extend_from_slice(&zip64_extra);
         self.output.write_all(&header)?;
         Ok(())
     }
@@ -365,6 +492,10 @@ fn push_u32(buffer: &mut Vec<u8>, value: u32) {
     buffer.extend_from_slice(&value.to_le_bytes());
 }
 
+fn push_u64(buffer: &mut Vec<u8>, value: u64) {
+    buffer.extend_from_slice(&value.to_le_bytes());
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
@@ -383,7 +514,7 @@ mod tests {
         writer
             .add_file(
                 "Docs/notes é.txt",
-                DosTime::EARLIEST,
+                (DosTime::EARLIEST, data.len() as u64),
                 &mut data.as_slice(),
                 &cancel,
                 &mut |_| {},
@@ -399,7 +530,7 @@ mod tests {
             .collect();
         assert_eq!(names, ["Docs/", "Docs/notes é.txt"]);
         assert_eq!(archive.members()[1].size, data.len() as u64);
-        let mut member = archive.open_member(1).unwrap();
+        let mut member = archive.open_member(1, None).unwrap();
         let mut read_back = Vec::new();
         let mut chunk = vec![0u8; 4096];
         loop {
@@ -410,6 +541,91 @@ mod tests {
             read_back.extend_from_slice(&chunk[..count]);
         }
         assert_eq!(read_back, data);
+    }
+
+    /// Reads back every member of `bytes` with the app's reader and
+    /// returns each name, size and data.
+    fn read_back(bytes: Vec<u8>) -> Vec<(String, u64, Vec<u8>)> {
+        let cancel = Cancellation::new();
+        let mut archive = ZipArchive::open(Cursor::new(bytes), &cancel).unwrap();
+        let mut members = Vec::new();
+        for index in 0..archive.members().len() {
+            let (name, size) = {
+                let member = &archive.members()[index];
+                (member.name.clone(), member.size)
+            };
+            let mut reader = archive.open_member(index, None).unwrap();
+            let mut data = Vec::new();
+            let mut chunk = vec![0u8; 4096];
+            loop {
+                let count = reader.read_chunk(&mut chunk).unwrap();
+                if count == 0 {
+                    break;
+                }
+                data.extend_from_slice(&chunk[..count]);
+            }
+            members.push((name, size, data));
+        }
+        members
+    }
+
+    /// With the ZIP64 threshold lowered to a few bytes, every size, offset
+    /// and the directory are written as ZIP64 values, and the archive
+    /// reads back with the app's reader and with Python's `zipfile`, as an
+    /// archive over 4 GiB would.
+    ///
+    /// parity: ARC-023
+    #[test]
+    fn sizes_and_offsets_past_the_threshold_are_written_as_zip64() {
+        let mut writer = ZipWriter::new(Cursor::new(Vec::new())).with_zip64_threshold(16);
+        let cancel = Cancellation::new();
+        let data = b"Tidewater soundings\n".repeat(50);
+        writer.add_folder("Charts/", DosTime::EARLIEST).unwrap();
+        for name in ["Charts/north.txt", "Charts/south.txt", "east.txt"] {
+            writer
+                .add_file(
+                    name,
+                    (DosTime::EARLIEST, data.len() as u64),
+                    &mut data.as_slice(),
+                    &cancel,
+                    &mut |_| {},
+                )
+                .unwrap();
+        }
+        let bytes = writer.finish().unwrap().into_inner();
+
+        assert!(
+            bytes.windows(4).any(|window| window == [0x50, 0x4b, 0x06, 0x06]),
+            "a ZIP64 end record"
+        );
+        let members = read_back(bytes.clone());
+        let names: Vec<&str> = members.iter().map(|(name, _, _)| name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["Charts/", "Charts/north.txt", "Charts/south.txt", "east.txt"]
+        );
+        for (_, size, read) in &members[1..] {
+            assert_eq!((*size, read), (data.len() as u64, &data));
+        }
+        let path = std::env::temp_dir().join(format!("zip64-{}.zip", std::process::id()));
+        std::fs::write(&path, bytes).unwrap();
+        let checked = std::process::Command::new("python3")
+            .args([
+                "-I",
+                "-c",
+                "import sys, zipfile; z = zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; \
+                 assert all(i.file_size == 1000 for i in z.infolist()[1:]); print(len(z.infolist()))",
+            ])
+            .arg(&path)
+            .output()
+            .unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert!(
+            checked.status.success(),
+            "{}",
+            String::from_utf8_lossy(&checked.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&checked.stdout).trim(), "4");
     }
 
     #[test]

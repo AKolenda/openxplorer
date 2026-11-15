@@ -46,9 +46,9 @@ pub use output::{ExtractionOutput, GioExtractionOutput, OutputFile};
 pub use plan::ExtractionSummary;
 
 use super::progress::JobProgress;
-use super::source::{open_archive, ArchiveOpener};
+use super::source::{open_archive, ArchiveOpener, OpenedArchive};
 use super::worker::on_worker;
-use super::ArchiveError;
+use super::{ArchiveError, ArchivePassword};
 use crate::location::{is_smb_server, normalise, validate_name};
 use crate::transfer::{
     Cancellation, Node, NodeFactory, NodeKind, Progress, ProgressScope, TransferError, WriteGuard,
@@ -105,6 +105,8 @@ pub struct ZipExtractor {
     /// The new folder is a private step of an extraction into the existing
     /// destination folder.
     into_existing: bool,
+    /// The password encrypted members are decrypted with.
+    password: Option<ArchivePassword>,
 }
 
 impl fmt::Debug for ZipExtractor {
@@ -143,6 +145,7 @@ impl ZipExtractor {
             limits: ExtractionLimits::default(),
             selection: None,
             into_existing: false,
+            password: None,
         }
     }
 
@@ -177,6 +180,15 @@ impl ZipExtractor {
     #[must_use]
     pub fn into_existing_folder(mut self) -> Self {
         self.into_existing = true;
+        self
+    }
+
+    /// Decrypts encrypted members with `password` (ARC-016). Without it,
+    /// an archive with an encrypted member to extract is refused with
+    /// [`ArchiveError::PasswordRequired`] before anything is written.
+    #[must_use]
+    pub fn with_password(mut self, password: ArchivePassword) -> Self {
+        self.password = Some(password);
         self
     }
 
@@ -279,6 +291,8 @@ impl ZipExtractor {
                 return Err(ArchiveError::LinkIntoExistingFolder(link.segments.join("/")));
             }
         }
+        self.check_password(&mut archive, &plan)
+            .map_err(|error| error.unless_cancelled(cancel))?;
         self.check_member_destinations(destination.new_folder.as_ref(), &plan, cancel)
             .map_err(|error| error.unless_cancelled(cancel))?;
         cancel.check()?;
@@ -351,6 +365,20 @@ impl ZipExtractor {
             return Err(ArchiveError::DestinationExists);
         }
         Ok(Destination { folder, new_folder })
+    }
+
+    /// ARC-016: before anything is written, an encrypted file to extract
+    /// needs the password, and the password must open each one's
+    /// encryption header. One wrong password in 256 passes that check; the
+    /// file's CRC-32 then stops the extraction, which removes everything.
+    fn check_password(&self, archive: &mut OpenedArchive, plan: &ExtractionPlan) -> Result<(), ArchiveError> {
+        for member in &plan.members {
+            let is_encrypted = archive.members()[member.index].is_encrypted();
+            if member.kind == PathKind::File && is_encrypted {
+                archive.open_member(member.index, self.password.as_ref())?;
+            }
+        }
+        Ok(())
     }
 
     /// ARC-020: asks the write guard about every path the extraction would

@@ -6,8 +6,9 @@
 //! - Only the one member the user chose is decompressed; nothing else of
 //!   the archive reaches the disk, and archive paths are never used.
 //! - Only documents, images and media are opened, never scripts,
-//!   executables or templates. Encrypted members, links, special files and
-//!   members with altered names are refused.
+//!   executables or templates. Links, special files and members with
+//!   altered names are refused; an encrypted member needs the browser's
+//!   password, which is checked before anything is written.
 //! - A member over 256 MiB, or compressed more than 1,000 times, is
 //!   refused before anything is written, and decompression stops at
 //!   256 MiB whatever the member declares.
@@ -25,9 +26,9 @@ use gio::prelude::*;
 
 use super::browse::ArchiveBrowser;
 use super::member_names::{is_previewable, is_safe_member};
-use super::source::{open_archive, OpenedArchive};
+use super::source::{open_archive, MemberData};
 use super::worker::on_worker;
-use super::zip::{MemberFileType, ZipMember};
+use super::zip::{Encryption, MemberFileType, ZipMember};
 use super::ArchiveError;
 use crate::private_storage::private_directory;
 use crate::random::{random_hex, NAME_BYTES};
@@ -99,10 +100,12 @@ impl ArchiveBrowser {
         let mut archive = open_archive(self.opener.as_ref(), uri, cancel)?;
         let index = unique_member(archive.members(), member)?;
         check_previewable(&archive.members()[index])?;
+        // A missing or wrong password stops here, before any folder exists.
+        let mut source = archive.open_member(index, self.password.as_ref())?;
         remove_old_previews(&self.preview_root, PREVIEW_LIFETIME);
         let folder = create_preview_folder(&self.preview_root)?;
         let copy_path = folder.join(file_name);
-        match write_copy(&mut archive, index, &copy_path, cancel) {
+        match write_copy(&mut source, &copy_path, cancel) {
             Ok(()) => Ok(PreviewCopy {
                 path: copy_path,
                 member: member.to_owned(),
@@ -145,11 +148,12 @@ fn unique_member(members: &[ZipMember], member: &str) -> Result<usize, ArchiveEr
     }
 }
 
-/// Refuses encrypted members, altered names, links, special files, and
-/// members too large or too highly compressed to decompress safely.
+/// Refuses encryption the reader cannot decrypt, altered names, links,
+/// special files, and members too large or too highly compressed to
+/// decompress safely.
 fn check_previewable(member: &ZipMember) -> Result<(), ArchiveError> {
-    if member.is_encrypted() {
-        return Err(ArchiveError::EncryptedMember);
+    if member.encryption() == Encryption::Unsupported {
+        return Err(ArchiveError::UnsupportedEncryption);
     }
     let is_regular = matches!(
         member.file_type(),
@@ -175,16 +179,14 @@ fn create_preview_folder(root: &Path) -> Result<PathBuf, ArchiveError> {
     Ok(folder)
 }
 
-/// Decompresses the member at `index` into a new file at `copy_path` and
-/// makes it read-only.
+/// Decompresses `member` into a new file at `copy_path` and makes it
+/// read-only.
 fn write_copy(
-    archive: &mut OpenedArchive,
-    index: usize,
+    member: &mut MemberData<'_>,
     copy_path: &Path,
     cancel: &Cancellation,
 ) -> Result<(), ArchiveError> {
     let mut copy = create_copy_file(copy_path)?;
-    let mut member = archive.open_member(index)?;
     let mut buffer = vec![0u8; CHUNK_BYTES];
     let mut total = 0u64;
     loop {

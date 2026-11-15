@@ -111,11 +111,6 @@ pub enum ZipFormatError {
     /// Strong encryption (general purpose flag bit 6).
     #[error("{}", crate::i18n::gettext("strong encryption (flag bit 6)"))]
     StrongEncryption,
-    /// The member is encrypted and no password is ever supplied. The
-    /// archive services refuse encrypted members before they open one, so
-    /// this only guards the reader itself.
-    #[error("{}", crate::i18n::format_message("File {name} is encrypted, password required for extraction", &[("name", &PythonRepr(.0).to_string())]))]
-    PasswordRequired(String),
     /// The compression method is not stored, deflate, bzip2 or LZMA.
     #[error("{}", crate::i18n::gettext("That compression method is not supported"))]
     UnsupportedMethod,

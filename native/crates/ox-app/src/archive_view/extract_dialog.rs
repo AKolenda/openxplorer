@@ -5,7 +5,7 @@
 //! and as short: the title names the archive ("Extract tidewater.zip"),
 //! then one field, "Files will be extracted to this folder", filled in
 //! with the archive's folder and its name (`Downloads/tidewater`), with
-//! Browse…, the "Show extracted files when finished" check box, and
+//! Browse…, the "Show extracted files when complete" check box, and
 //! Cancel and Extract. A folder that does not exist yet is created;
 //! deleting the last part extracts straight into an existing folder,
 //! where the usual name-conflict question decides about files already
@@ -56,11 +56,6 @@ const EXTRACT_HINT: &str = crate::i18n::message_id(
 );
 /// Extract before the check finished.
 const WAIT_FOR_CHECK: &str = crate::i18n::message_id("Still checking the archive. Try again in a moment.");
-/// A ZIP the check refused because a member is encrypted.
-const HAS_PASSWORD: &str = crate::i18n::message_id(
-    "This ZIP has a password, so OpenXplorer cannot extract it. \
-                            Open it in the archive manager instead.",
-);
 /// The information button's name for screen readers and its tooltip.
 const INFO_LABEL: &str = crate::i18n::message_id("More about extracting");
 /// How many characters wide the information bubble's notes wrap.
@@ -110,7 +105,7 @@ pub(crate) fn extract_dialog(
     let suggested = suggested_folder_name(&archive.name).unwrap_or_default();
     let target = target_field(&body, &suggested_target(&setup.shown_destination, &suggested));
     let show = check_row(
-        &ox_core::i18n::gettext("Show extracted files when finished"),
+        &ox_core::i18n::gettext("Show extracted files when complete"),
         true,
     );
     body.append(&show);
@@ -334,10 +329,7 @@ impl ArchiveCheck {
 
 /// Why the check refused the archive, in plain words.
 fn refusal_text(error: &ArchiveError) -> String {
-    match error {
-        ArchiveError::PasswordProtected => ox_core::i18n::gettext_static(HAS_PASSWORD).to_owned(),
-        other => other.to_string(),
-    }
+    error.to_string()
 }
 
 /// `3 files · 1 folder · 1.2 MB unpacked`.
