@@ -62,6 +62,13 @@ pub(crate) fn nearest_named(size: IconSize) -> IconSize {
         .unwrap_or(IconSize::MEDIUM)
 }
 
+/// The aspect ratio (width over height) of `item`'s photo as shown, if
+/// its size was read.
+fn aspect_of(item: Option<&FileItem>) -> Option<f64> {
+    let (width, height) = item?.entry().meta.pixel_size?;
+    (height > 0).then(|| f64::from(width) / f64::from(height))
+}
+
 /// A month's name and year, as Gallery's heading and scrubber name it
 /// ("November 2026").
 pub(crate) fn month_text(seconds: Option<u64>) -> Option<String> {
@@ -341,6 +348,8 @@ mod imp {
         pub(super) tooltip_text: RefCell<Option<TooltipText>>,
         /// Runs when what is on screen changed: the heading follows.
         pub(super) on_shown: RefCell<Vec<Box<dyn Fn()>>>,
+        /// The view is told of a change once GTK is idle again.
+        pub(super) shown_pending: Cell<bool>,
         pub(super) _item: std::marker::PhantomData<FileItem>,
     }
 
@@ -401,6 +410,11 @@ mod imp {
         fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
             self.parent_size_allocate(width, height, baseline);
             self.obj().place_tiles(width);
+            // A menu attached to the canvas (the right-click menu) is laid
+            // out by its parent.
+            for popover in self.obj().popovers() {
+                popover.present();
+            }
         }
 
         fn grab_focus(&self) -> bool {
@@ -513,30 +527,46 @@ impl GalleryCanvas {
         };
         imp.focus.set(moved(imp.focus.get()));
         imp.anchor.set(moved(imp.anchor.get()));
-        self.read_aspects();
+        // Only the items that changed are read: a listing arrives in many
+        // small changes, and every one of them reading all 10,000 photos
+        // would hold the window up.
+        let Some(model) = self.model() else {
+            return;
+        };
+        let new: Vec<Option<f64>> = (position..position + added)
+            .map(|position| aspect_of(model.item(position).and_downcast::<FileItem>().as_ref()))
+            .collect();
+        {
+            let mut aspects = imp.aspects.borrow_mut();
+            let start = (position as usize).min(aspects.len());
+            let end = (start + removed as usize).min(aspects.len());
+            aspects.splice(start..end, new);
+        }
+        self.relayout();
+    }
+
+    /// Lays the tiles out again once GTK lays the canvas out, every tile
+    /// bound anew, as positions moved.
+    fn relayout(&self) {
+        let imp = self.imp();
+        imp.laid_for.set((0, 0));
+        for tile in imp.tiles.borrow().iter() {
+            tile.slot().show(None);
+        }
+        self.queue_resize();
+        self.notify_shown();
     }
 
     /// Reads each item's aspect ratio and lays the tiles out again.
     fn read_aspects(&self) {
         let aspects: Vec<Option<f64>> = match self.model() {
             Some(model) => (0..model.n_items())
-                .map(|position| {
-                    let item = model.item(position).and_downcast::<FileItem>()?;
-                    let (width, height) = item.entry().meta.pixel_size?;
-                    (height > 0).then(|| f64::from(width) / f64::from(height))
-                })
+                .map(|position| aspect_of(model.item(position).and_downcast::<FileItem>().as_ref()))
                 .collect(),
             None => Vec::new(),
         };
-        let imp = self.imp();
-        imp.aspects.replace(aspects);
-        imp.laid_for.set((0, 0));
-        for tile in imp.tiles.borrow().iter() {
-            // Every tile is bound again: positions moved.
-            tile.slot().show(None);
-        }
-        self.queue_resize();
-        self.notify_shown();
+        self.imp().aspects.replace(aspects);
+        self.relayout();
     }
 
     /// Sets the rows' height for `size`.
@@ -545,12 +575,7 @@ impl GalleryCanvas {
         imp.icon_size.set(Some(nearest_named(size)));
         let height = row_height(size);
         if imp.row_height.replace(height) != height {
-            imp.laid_for.set((0, 0));
-            for tile in imp.tiles.borrow().iter() {
-                tile.slot().show(None);
-            }
-            self.queue_resize();
-            self.notify_shown();
+            self.relayout();
         }
     }
 
@@ -667,6 +692,10 @@ impl GalleryCanvas {
             #[upgrade_or]
             false,
             move |tile, _, _, _, tooltip| {
+                // No tooltip over a menu, as in Windows.
+                if canvas.popovers().iter().any(WidgetExt::is_visible) {
+                    return false;
+                }
                 let Some(item) = tile.slot().item() else {
                     return false;
                 };
@@ -762,6 +791,13 @@ impl GalleryCanvas {
             .is_some_and(|window| window.gets_focus_visible());
         let focused = self.has_focus() && visible && self.imp().focus.get() == Some(position);
         crate::window::widget_tree::toggle_class(tile, "keyboard-focus", focused);
+    }
+
+    /// The menus attached to the canvas.
+    fn popovers(&self) -> Vec<gtk::Popover> {
+        std::iter::successors(self.first_child(), WidgetExt::next_sibling)
+            .filter_map(|child| child.downcast::<gtk::Popover>().ok())
+            .collect()
     }
 
     /// The tiles bound to items now.
@@ -897,11 +933,16 @@ impl GalleryCanvas {
     }
 
     fn notify_shown(&self) {
-        // Once GTK has laid the canvas out at its new size.
+        // Once GTK has laid the canvas out at its new size, and once for
+        // many changes.
+        if self.imp().shown_pending.replace(true) {
+            return;
+        }
         glib::idle_add_local_once(glib::clone!(
             #[weak(rename_to = canvas)]
             self,
             move || {
+                canvas.imp().shown_pending.set(false);
                 for shown in canvas.imp().on_shown.borrow().iter() {
                     shown();
                 }
@@ -1345,7 +1386,9 @@ impl GalleryView {
         if heading.text() != text {
             heading.set_text(&text);
         }
-        heading.set_visible(!text.is_empty());
+        // The heading keeps its row while photos show, even when none on
+        // screen has a date, so the photos never jump up and down.
+        heading.set_visible(canvas.n_items() > 0);
         let timeline = canvas.timeline();
         let adjustment = self.vadjustment();
         let span = adjustment.upper() - adjustment.page_size();

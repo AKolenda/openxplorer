@@ -99,7 +99,8 @@ is missing.
   supported build targets and Flatpak configuration.
 - **Archives.** Browsing and extraction support ZIP and compressed TAR, and
   ZIPs with the traditional ZIP password, which ask for it. 7z, RAR and
-  AES-encrypted ZIPs still need additional codecs.
+  AES-encrypted ZIPs still need additional codecs for browsing and
+  extraction.
   A TAR's relative links that stay inside the archive are listed and
   extracted; ZIP links stay hidden and refused. Search inside an opened
   archive is still unavailable.
