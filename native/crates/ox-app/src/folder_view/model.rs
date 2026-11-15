@@ -69,6 +69,52 @@ struct SelectedItems {
     summary: SelectionSummary,
 }
 
+/// The selected items in display order, shared with the model rather than
+/// copied: with 100,000 items selected, a copy for each reader took more
+/// time than reading them.
+#[derive(Debug, Clone)]
+pub(crate) struct SelectedItemsRef(Rc<SelectedItems>);
+
+impl std::ops::Deref for SelectedItemsRef {
+    type Target = [FileItem];
+
+    fn deref(&self) -> &[FileItem] {
+        &self.0.items
+    }
+}
+
+impl PartialEq for SelectedItemsRef {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
+impl SelectedItemsRef {
+    /// The items as a slice.
+    pub(crate) fn as_slice(&self) -> &[FileItem] {
+        &self.0.items
+    }
+}
+
+/// Copies of the items, for the few readers that keep them.
+impl IntoIterator for SelectedItemsRef {
+    type Item = FileItem;
+    type IntoIter = std::vec::IntoIter<FileItem>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.items.clone().into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a SelectedItemsRef {
+    type Item = &'a FileItem;
+    type IntoIter = std::slice::Iter<'a, FileItem>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.items.iter()
+    }
+}
+
 /// The positions in `bitset`, ascending.
 fn positions_in(bitset: &gtk::Bitset) -> Vec<u32> {
     let Some((rest, first)) = gtk::BitsetIter::init_first(bitset) else {
@@ -548,8 +594,8 @@ impl FolderModel {
     /// Many parts of the window ask after each change of the selection
     /// (the status bar, the details pane, the commands), so the items are
     /// looked up once and kept until the selection or the items change.
-    pub(crate) fn selected_items(&self) -> Vec<FileItem> {
-        self.selected().items.clone()
+    pub(crate) fn selected_items(&self) -> SelectedItemsRef {
+        SelectedItemsRef(self.selected())
     }
 
     /// The selected items and their summary, looked up again only after
@@ -813,6 +859,10 @@ mod tests {
             assert_eq!(model.selected_uris().len(), 3000);
         }
         assert_eq!(lookups() - before, 1);
+        assert!(
+            std::ptr::eq(model.selected_items().as_ptr(), model.selected_items().as_ptr()),
+            "readers share the items rather than copy them"
+        );
 
         model.select_only(1);
         assert_eq!(model.summary().count, 1, "a new selection is looked up again");
