@@ -15,9 +15,9 @@ use std::time::{Duration, Instant};
 
 use ox_core::location::ItemKind;
 use ox_core::ops::{
-    changed_copies, create_item, create_links, duplicate_items, list_recycle_bin, rename_batch,
-    rename_numbered_items, reverse, run_transfer, undo, BatchItem, BatchRename, LinkRequest, NumberedRename,
-    OperationContext, TransferRequest, UndoJournal, UndoRecord,
+    changed_copies, create_item, create_links, duplicate_items, list_recycle_bin, removed_by_undo,
+    rename_batch, rename_numbered_items, reverse, reverse_deleting, run_transfer, undo, BatchItem,
+    BatchRename, LinkRequest, NumberedRename, OperationContext, TransferRequest, UndoJournal, UndoRecord,
 };
 use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
@@ -100,6 +100,54 @@ fn undoing_a_copy_moves_the_copies_to_the_trash_and_keeps_the_sources() {
     assert!(!destination.join("a.txt").exists());
     assert_eq!(fs::read(source.join("a.txt")).unwrap(), b"a");
     assert_in_recycle_bin(&destination.join("a.txt"), true);
+}
+
+/// Copies on a share have no Recycle Bin to go to. Once the user agreed,
+/// as to Delete there, Undo deletes those copies permanently and still
+/// moves the others to the Recycle Bin; Redo can bring back only those.
+/// The sources are never touched.
+///
+/// parity: OPS-029, OPS-030
+#[test]
+fn undoing_a_copy_deletes_the_agreed_copies_that_have_no_recycle_bin() {
+    require_private_trash();
+    let temp = tempfile::tempdir().unwrap();
+    let (source, destination) = (temp.path().join("src"), temp.path().join("dst"));
+    fs::create_dir(&source).unwrap();
+    fs::create_dir(&destination).unwrap();
+    fs::write(source.join("a.txt"), b"a").unwrap();
+    fs::write(source.join("b.txt"), b"b").unwrap();
+    let record = undo_record_of(&request(
+        TransferMode::Copy,
+        &[&source.join("a.txt"), &source.join("b.txt")],
+        Some(&destination),
+    ));
+    let copy_of_b = file_uri(&destination.join("b.txt"));
+    let mut removed = removed_by_undo(&record);
+    removed.sort();
+    assert_eq!(removed, [file_uri(&destination.join("a.txt")), copy_of_b.clone()]);
+
+    let reversal = block_on(reverse_deleting(
+        &record,
+        std::slice::from_ref(&copy_of_b),
+        &OperationContext::default(),
+        |_| {},
+    ))
+    .expect("an undo");
+
+    assert!(reversal.result.errors.is_empty(), "{:?}", reversal.result.errors);
+    assert!(!destination.join("a.txt").exists());
+    assert!(!destination.join("b.txt").exists());
+    assert_in_recycle_bin(&destination.join("a.txt"), true);
+    assert_in_recycle_bin(&destination.join("b.txt"), false);
+    assert_eq!(fs::read(source.join("b.txt")).unwrap(), b"b");
+    let Some(UndoRecord::Trash { original_paths, .. }) = reversal.inverse else {
+        panic!(
+            "Redo restores what went to the Recycle Bin: {:?}",
+            reversal.inverse
+        );
+    };
+    assert_eq!(original_paths, [destination.join("a.txt")]);
 }
 
 /// A file edited inside a copied folder leaves the folder's own time

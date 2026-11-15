@@ -140,7 +140,9 @@ impl PasswordDialog {
         let flags = request.flags;
         let fields = PasswordChallenge {
             uri: record.uri.clone(),
-            username: request.username.clone(),
+            username: record
+                .rejected_username(&request.domain)
+                .unwrap_or_else(|| request.username.clone()),
             needs_username: flags.contains(gio::AskPasswordFlags::NEED_USERNAME),
             needs_password: flags.contains(gio::AskPasswordFlags::NEED_PASSWORD),
             can_save: flags.contains(gio::AskPasswordFlags::SAVING_SUPPORTED),
