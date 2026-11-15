@@ -3837,7 +3837,7 @@ mod tests {
     /// After Confirm Save As closes without saving (No, Escape or its
     /// close button), the keyboard is back in File name with the name
     /// selected, as a Windows dialog gives focus back to the control that
-    /// had it ("Dialog Box Programming Considerations", WM_ACTIVATE), so
+    /// had it ("Dialog Box Programming Considerations", `WM_ACTIVATE`), so
     /// a new name can be typed at once. Before, the file list took it, and
     /// the next Enter opened the first folder there or the file under the
     /// keyboard instead of asking again. Y and N alone answer the question,
@@ -3939,7 +3939,7 @@ mod tests {
     /// Enter that nothing in the dialog takes presses its accept button,
     /// as Windows' common dialogs make Open, Save or Select Folder the
     /// default push button, which Enter chooses ("Dialog Box Programming
-    /// Considerations", DM_GETDEFID). In a folder dialog with the file list
+    /// Considerations", `DM_GETDEFID`). In a folder dialog with the file list
     /// focused and no item under the keyboard, as in an empty folder, Enter
     /// chose nothing before; now it answers with the folder shown. A Save
     /// dialog saves its name.
@@ -5062,7 +5062,12 @@ mod tests {
         let (width, height) = (widget.width(), widget.height());
         paintable.snapshot(&snapshot, f64::from(width), f64::from(height));
         let node = snapshot.to_node().expect("it paints");
-        let area = gtk::graphene::Rect::new(0.0, 0.0, width as f32, height as f32);
+        let area = gtk::graphene::Rect::new(
+            0.0,
+            0.0,
+            f32::from(u16::try_from(width).expect("a width")),
+            f32::from(u16::try_from(height).expect("a height")),
+        );
         let texture = renderer.render_texture(&node, Some(&area));
         let mut downloader = gdk::TextureDownloader::new(&texture);
         downloader.set_format(gdk::MemoryFormat::R8g8b8);
@@ -5727,6 +5732,10 @@ mod tests {
         assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
     }
 
+    /// A caller's choice as the portal sends it: ID, label, options and
+    /// the option chosen at first.
+    type ChoiceParts = (String, String, Vec<(String, String)>, String);
+
     /// The caller's check boxes sit side by side on one row, wrapping
     /// only when the dialog is too narrow, so a caller with several of
     /// them (an office suite's "Automatic file name extension", "Save with
@@ -5750,7 +5759,7 @@ mod tests {
                 "v13",
             ),
         ];
-        let choices: Vec<(String, String, Vec<(String, String)>, String)> = choices
+        let choices: Vec<ChoiceParts> = choices
             .into_iter()
             .map(|(id, label, options, initial)| {
                 (
