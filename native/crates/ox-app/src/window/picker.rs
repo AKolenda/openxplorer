@@ -4859,6 +4859,106 @@ mod tests {
         }
     }
 
+    /// The keyboard's ring on the accept button shows, light and dark. The
+    /// ring is drawn in the accent colour (C29), which on the accent-filled
+    /// Open or Save button was the button's own fill, so Tab to it showed
+    /// nothing. It is drawn just outside that button now, as Windows draws
+    /// its focus visual around a control, so it shows against the bar; the
+    /// Cancel button keeps the ring inside.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn the_keyboard_ring_on_the_accept_button_shows() {
+        let _theme = crate::test_support::harness::ThemeGuard::keep();
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "ring.txt".to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let accept = window.picker().expect("a picker").accept.clone();
+        let bar = accept
+            .parent()
+            .and_then(|row| row.parent())
+            .expect("the dialog's bar");
+        // The bar's pixels with the keyboard's ring on the accept button
+        // shown or not.
+        let painted = |visible: bool| {
+            for _ in 0..3 {
+                gtk::prelude::GtkWindowExt::set_focus(window, Some(&accept));
+                window.set_focus_visible(visible);
+                wait_until("the button to have the keyboard", || accept.has_focus());
+                crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+                crate::test_support::harness::wait_for_frames(window, 3);
+            }
+            assert!(accept.has_focus(), "the accept button has the keyboard");
+            painted_pixels(&bar)
+        };
+        for theme in ["light", "dark"] {
+            test.activate("theme", Some(theme));
+            crate::test_support::harness::wait_for(std::time::Duration::from_millis(600));
+            let without = painted(false);
+            let with = painted(true);
+            // The button's fill, the colour most of the bar's saturated
+            // pixels have, which is the ring's colour too (C29).
+            let fill = most_common_saturated(&without);
+            let near = |pixel: &[u8; 3]| pixel.iter().zip(fill).all(|(a, b)| a.abs_diff(b) <= 12);
+            let count = |pixels: &[[u8; 3]]| pixels.iter().filter(|pixel| near(pixel)).count();
+            let (before, after) = (count(&without), count(&with));
+            assert!(
+                after > before + 80,
+                "{theme}: the ring adds its colour around the button: {before} pixels without it, {after} with"
+            );
+        }
+    }
+
+    /// The RGB colours of the pixels `widget` paints, outlines of its
+    /// children included.
+    fn painted_pixels(widget: &gtk::Widget) -> Vec<[u8; 3]> {
+        let renderer = widget
+            .native()
+            .and_then(|native| native.renderer())
+            .expect("a drawn window");
+        let paintable = gtk::WidgetPaintable::new(Some(widget));
+        let snapshot = gtk::Snapshot::new();
+        let (width, height) = (widget.width(), widget.height());
+        paintable.snapshot(&snapshot, f64::from(width), f64::from(height));
+        let node = snapshot.to_node().expect("it paints");
+        let area = gtk::graphene::Rect::new(0.0, 0.0, width as f32, height as f32);
+        let texture = renderer.render_texture(&node, Some(&area));
+        let mut downloader = gdk::TextureDownloader::new(&texture);
+        downloader.set_format(gdk::MemoryFormat::R8g8b8);
+        let (bytes, stride) = downloader.download_bytes();
+        let row_bytes = usize::try_from(width).expect("a width") * 3;
+        bytes
+            .chunks(stride)
+            .flat_map(|row| row[..row_bytes].chunks_exact(3).map(|p| [p[0], p[1], p[2]]))
+            .collect()
+    }
+
+    /// The colour most of the strongly coloured `pixels` have.
+    fn most_common_saturated(pixels: &[[u8; 3]]) -> [u8; 3] {
+        let mut counts: std::collections::HashMap<[u8; 3], usize> = std::collections::HashMap::new();
+        for pixel in pixels {
+            let (low, high) = (pixel.iter().min().copied(), pixel.iter().max().copied());
+            if let (Some(low), Some(high)) = (low, high) {
+                if high - low > 80 {
+                    *counts.entry(*pixel).or_default() += 1;
+                }
+            }
+        }
+        counts
+            .into_iter()
+            .max_by_key(|(_, count)| *count)
+            .map(|(colour, _)| colour)
+            .expect("the accept button's fill")
+    }
+
     /// Two types, as an image viewer's Open and Save dialogs offer them.
     fn image_types() -> glib::Variant {
         let types = [
