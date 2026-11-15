@@ -32,6 +32,7 @@ mod dialog_keys;
 mod disconnected;
 mod drag_and_drop;
 mod drag_escape;
+mod drop_frames;
 mod drop_on_zip;
 mod duplicate_tab;
 pub(super) mod empty_folder;
