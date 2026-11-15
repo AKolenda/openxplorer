@@ -390,8 +390,9 @@ mod tests {
     }
 
     /// In search results and the Recycle Bin the titles' menu lists the
-    /// columns they show: their own after Name, checked and grayed, and
-    /// no Date modified, which neither shows.
+    /// columns they show: their own after Name, checked and grayed; search
+    /// results list no Date modified, and the Recycle Bin lists it after
+    /// its own, as Windows 11 does.
     ///
     /// parity: VIEW-033, VIEW-042, VIEW-062
     #[test]
@@ -417,6 +418,7 @@ mod tests {
             item("Name", true, true),
             item("Original location", true, true),
             item("Date deleted", true, true),
+            item("Date modified", true, false),
         ];
         expected.extend(rest);
         assert_eq!(bin, expected);

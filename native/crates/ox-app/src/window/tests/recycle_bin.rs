@@ -215,7 +215,10 @@ fn the_recycle_bin_shows_and_sorts_by_original_location_and_date_deleted() {
     });
 
     assert!(shown(SortColumn::OriginalLocation) && shown(SortColumn::Deleted));
-    assert!(!shown(SortColumn::Modified), "Date deleted takes its place");
+    assert!(
+        shown(SortColumn::Modified),
+        "Date modified shows too, as in Windows 11"
+    );
     assert_eq!(ours(), ["Budget.txt", "Agenda.txt"], "Alpha before Zeta");
     let model = test.window.folder_model();
     let budget = (0..model.n_items())
