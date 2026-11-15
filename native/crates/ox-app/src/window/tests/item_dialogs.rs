@@ -1308,6 +1308,39 @@ fn the_security_tab_reads_and_changes_the_linux_permissions() {
     wait_until("the special bit", || mode_of(&path) == 0o2674);
 }
 
+/// With several items selected, a link to a folder is a file, as one
+/// link's Properties show it and Windows counts a shortcut: it is not
+/// measured as the folder it points to, so the totals are exact (no "≥")
+/// and Read-only applies to it as to any file.
+///
+/// parity: PROP-002
+#[gtk::test]
+fn several_items_count_a_link_to_a_folder_as_a_file() {
+    let fixture = Fixture::standard();
+    fixture.write("Documents/inside.txt");
+    std::os::unix::fs::symlink(fixture.path("Documents"), fixture.path("Docs link"))
+        .expect("the link is made");
+    let link_size = fs::symlink_metadata(fixture.path("Docs link"))
+        .expect("the link")
+        .len();
+    let note_size = fs::metadata(fixture.path("Notes 2.txt")).expect("the file").len();
+    let test = TestWindow::open(&fixture.uri());
+    super::file_ops_support::select_names(&test, &["Docs link", "Notes 2.txt"]);
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Docs link, Notes 2.txt Properties");
+    let expected = ox_core::format::exact_size_text(link_size + note_size);
+
+    wait_until("the totals", || {
+        value_after(&window, "Size:") == Some(expected.clone())
+    });
+    assert_eq!(
+        value_after(&window, "Contains:").as_deref(),
+        Some(ox_core::format::contents_text(2, 0).as_str())
+    );
+    assert!(texts(&window).contains(&ox_core::format::contents_text(2, 0)));
+    check(&window, "Read-only");
+}
+
 /// With several items selected, Size on disk counts a link to a file as
 /// the file it points to, as Size does.
 ///
