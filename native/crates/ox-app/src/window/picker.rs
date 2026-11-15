@@ -3691,11 +3691,15 @@ mod tests {
         enter(&name);
         let question = replace_question(&portal.test);
         press_in(&question, "No");
-        wait_until("the question to close", || window.dialog_layer().shown().is_none());
+        wait_until("the question to close", || {
+            window.dialog_layer().shown().is_none()
+        });
         crate::test_support::harness::wait_for_frames(window, 3);
         let focus = gtk::prelude::GtkWindowExt::focus(window);
         assert!(
-            focus.is_some_and(|focus| focus == name.clone().upcast::<gtk::Widget>() || focus.is_ancestor(&name)),
+            focus.is_some_and(
+                |focus| focus == name.clone().upcast::<gtk::Widget>() || focus.is_ancestor(&name)
+            ),
             "File name has the keyboard again"
         );
     }

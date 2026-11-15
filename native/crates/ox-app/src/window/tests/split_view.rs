@@ -260,8 +260,14 @@ fn f6_visits_both_panes_of_a_split_tab() {
             }
         }
     }
-    assert!(visited.contains(&PaneSide::Start), "F6 reaches the left pane: {visited:?}");
-    assert!(visited.contains(&PaneSide::End), "F6 reaches the right pane: {visited:?}");
+    assert!(
+        visited.contains(&PaneSide::Start),
+        "F6 reaches the left pane: {visited:?}"
+    );
+    assert!(
+        visited.contains(&PaneSide::End),
+        "F6 reaches the right pane: {visited:?}"
+    );
     let mut back = Vec::new();
     for _ in 0..16 {
         test.window.focus_next_region(true);

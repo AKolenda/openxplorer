@@ -116,7 +116,10 @@ fn left_and_right_on_a_section_head_collapse_and_expand_it() {
     assert!(press(&test, gdk::Key::Left), "Left collapses This PC");
     assert!(sidebar.section_is_collapsed("thisPc"));
     assert!(!shows(&test, "Local Disk"));
-    assert!(press(&test, gdk::Key::Left), "already collapsed: taken, nothing changes");
+    assert!(
+        press(&test, gdk::Key::Left),
+        "already collapsed: taken, nothing changes"
+    );
     assert!(sidebar.section_is_collapsed("thisPc"));
     assert!(press(&test, gdk::Key::Right), "Right expands it");
     assert!(!sidebar.section_is_collapsed("thisPc"));
@@ -141,7 +144,10 @@ fn left_and_right_on_a_section_head_collapse_and_expand_it() {
 
     row_named(&test, "Home").grab_focus();
     let home = row_named(&test, "Home");
-    assert!(press(&test, gdk::Key::Left), "Home has nowhere to go: the key is taken");
+    assert!(
+        press(&test, gdk::Key::Left),
+        "Home has nowhere to go: the key is taken"
+    );
     assert!(press(&test, gdk::Key::Right));
     assert_eq!(focused(), Some(home), "and the keyboard stays on Home");
 }

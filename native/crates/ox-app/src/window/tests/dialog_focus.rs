@@ -65,10 +65,20 @@ fn tab_goes_round_a_questions_buttons_and_never_into_its_text() {
     let first = GtkWindowExt::focus(&dialog);
     assert_eq!(describe(first.as_ref()), "Yes", "the question opens on Yes");
 
-    let forward: Vec<String> = tab_through(dialog.upcast_ref(), 4, false).iter().map(|stop| describe(stop.as_ref())).collect();
+    let forward: Vec<String> = tab_through(dialog.upcast_ref(), 4, false)
+        .iter()
+        .map(|stop| describe(stop.as_ref()))
+        .collect();
     assert_eq!(forward, ["No", "Yes", "No", "Yes"], "Tab goes round Yes and No");
-    let backward: Vec<String> = tab_through(dialog.upcast_ref(), 4, true).iter().map(|stop| describe(stop.as_ref())).collect();
-    assert_eq!(backward, ["No", "Yes", "No", "Yes"], "Shift+Tab goes round them too");
+    let backward: Vec<String> = tab_through(dialog.upcast_ref(), 4, true)
+        .iter()
+        .map(|stop| describe(stop.as_ref()))
+        .collect();
+    assert_eq!(
+        backward,
+        ["No", "Yes", "No", "Yes"],
+        "Shift+Tab goes round them too"
+    );
 
     dialog.close();
     wait_for_no_dialog(&test);
@@ -89,14 +99,20 @@ fn press_f4(window: &gtk::Window) -> bool {
         })
         .any(|shortcut| {
             shortcut.action().is_some_and(|action| {
-                action.activate(gtk::ShortcutActionFlags::empty(), window, shortcut.arguments().as_ref())
+                action.activate(
+                    gtk::ShortcutActionFlags::empty(),
+                    window,
+                    shortcut.arguments().as_ref(),
+                )
             })
         })
 }
 
 /// Whether the list of `drop_down` shows.
 fn shows_its_list(drop_down: &gtk::DropDown) -> bool {
-    descendants::<gtk::Popover>(drop_down).iter().any(gtk::Popover::is_visible)
+    descendants::<gtk::Popover>(drop_down)
+        .iter()
+        .any(gtk::Popover::is_visible)
 }
 
 /// F4 on a drop-down list shows its items, as Microsoft lists for dialog
@@ -175,6 +191,9 @@ fn tab_stays_in_a_dialog_shown_inside_the_window() {
                 outside.push(describe(focus.as_ref()));
             }
         }
-        assert!(outside.is_empty(), "{direction:?} left the dialog for {outside:?}");
+        assert!(
+            outside.is_empty(),
+            "{direction:?} left the dialog for {outside:?}"
+        );
     }
 }

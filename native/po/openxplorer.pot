@@ -6771,11 +6771,27 @@ msgid "Address history"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Alt"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Backspace"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Change the view"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Clear the selection"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs crates/ox-app/src/window/tab_menu.rs crates/ox-app/src/window/tab_strip.rs
 msgid "Close tab"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Collapse the folder, or go to the folder it is in (navigation pane)"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
@@ -6791,11 +6807,31 @@ msgid "Ctrl+Plus (numeric keypad)"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Ctrl+arrow keys"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Ctrl+scroll wheel"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Enter"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Expand every folder under the selected one"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Expand the folder, or go to its first subfolder (navigation pane)"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Expand the selected folder in the navigation pane"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "First item"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
@@ -6813,6 +6849,18 @@ msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Home folder"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Last item"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Move to an item without selecting it"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Move to the command bar"
 msgstr ""
 
 #: crates/ox-app/resources/ui/window.ui crates/ox-app/src/window/shortcuts_window.rs
@@ -6869,7 +6917,19 @@ msgid "Search tool"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Select or clear the item the keyboard is on"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Select several items"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Selection"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Shift+arrow keys"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs

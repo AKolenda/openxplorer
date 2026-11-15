@@ -519,13 +519,19 @@ fn tab_stops(dialog: &SignInDialog, count: usize, backward: bool) -> Vec<Option<
 fn tab_goes_round_the_sign_in_dialog() {
     let fixture = PromptsFixture::new();
     let (operation, _) = fixture.mount();
-    let dialog = fixture.ask_password(&operation, SIGN_IN_FLAGS | gio::AskPasswordFlags::ANONYMOUS_SUPPORTED);
+    let dialog = fixture.ask_password(
+        &operation,
+        SIGN_IN_FLAGS | gio::AskPasswordFlags::ANONYMOUS_SUPPORTED,
+    );
     for backward in [false, true] {
         let stops = tab_stops(&dialog, 24, backward);
         assert!(
             stops.iter().all(Option::is_some),
             "every Tab (backward: {backward}) leaves a control with the keyboard: {:?}",
-            stops.iter().map(|stop| stop.as_ref().map(|widget| widget.type_().name())).collect::<Vec<_>>()
+            stops
+                .iter()
+                .map(|stop| stop.as_ref().map(|widget| widget.type_().name()))
+                .collect::<Vec<_>>()
         );
         let first = stops[0].clone();
         assert!(

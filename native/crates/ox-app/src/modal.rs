@@ -109,7 +109,10 @@ pub(crate) fn tab_goes_round(window: &impl IsA<gtk::Window>) {
 
 /// Whether `direction` is Tab's or Shift+Tab's.
 fn is_tab(direction: gtk::DirectionType) -> bool {
-    matches!(direction, gtk::DirectionType::TabForward | gtk::DirectionType::TabBackward)
+    matches!(
+        direction,
+        gtk::DirectionType::TabForward | gtk::DirectionType::TabBackward
+    )
 }
 
 /// The CSS class of a dialog's scrolled body (`dialog-frame.ui`).
