@@ -873,3 +873,63 @@ fn deciding_a_drop_reads_nothing_from_the_dragged_items() {
         "a hover shows a copy"
     );
 }
+
+/// A folder of the folder tree takes drops for itself, with the outline
+/// the navigation pane's places get, and leaving the tree takes the
+/// outline away; a collapsed folder held under a drag opens its
+/// subfolders, as the navigation pane's This PC does.
+///
+/// parity: DND-011, SIDE-028
+#[gtk::test]
+fn a_folder_of_the_folder_tree_takes_drops_and_opens_under_a_held_drag() {
+    use ox_core::location::{file_uri, same_location};
+
+    let fixture = Fixture::standard();
+    let reports = fixture.path("Documents").join("Reports");
+    std::fs::create_dir_all(reports.join("2026")).expect("fixture subfolders");
+    std::fs::create_dir(fixture.path("Shelf")).expect("fixture subfolder");
+    std::fs::create_dir(fixture.path("Shelf").join("Inner")).expect("fixture subfolder");
+    let test = TestWindow::open(&file_uri(&reports));
+    test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
+    test.activate("folder-tree", None);
+    let tree = test.window.folder_tree();
+    let shown = file_uri(&reports);
+    wait_until("the tree selects the folder shown", || {
+        tree.selected_uri().is_some_and(|uri| same_location(&uri, &shown))
+    });
+    wait_until("the tree lists Shelf", || {
+        tree.outline().contains(&"    Shelf".to_owned())
+    });
+    wait_for_frames(&test.window, 3);
+    let list = tree.rows_list();
+    let shelf_row = u32::try_from(
+        tree.outline()
+            .iter()
+            .position(|line| line == "    Shelf")
+            .expect("Shelf is listed"),
+    )
+    .expect("a small tree");
+    let (_, shelf_y) = (0..list.height())
+        .map(f64::from)
+        .filter_map(|y| tree.folder_at(y).map(|(row, _)| (row, y)))
+        .find(|(row, _)| *row == shelf_row)
+        .expect("Shelf's row is shown");
+
+    let spot = test
+        .window
+        .drop_spot(DropZone::FolderTree, list.upcast_ref(), 20.0, shelf_y);
+    test.window.show_drop_spot(DropZone::FolderTree, spot.as_ref());
+    let outlined = tree.is_drop_row(shelf_row);
+    tree.expand_after_drag_hover(Some(shelf_row));
+    wait_until("Shelf opens under the held drag", || {
+        tree.outline().contains(&"      Inner".to_owned())
+    });
+    test.window.leave_drop_zone(DropZone::FolderTree);
+
+    assert_eq!(
+        spot.map(|spot| spot.destination()),
+        Some(DropDestination::Folder(fixture.uri_of("Shelf")))
+    );
+    assert!(outlined, "the folder under the drag is outlined");
+    assert!(!tree.is_drop_row(shelf_row), "no outline stays once the drag leaves");
+}

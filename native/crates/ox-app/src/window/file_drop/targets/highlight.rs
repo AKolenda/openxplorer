@@ -59,6 +59,13 @@ impl BrowserWindow {
                 };
                 self.highlight_drag_crumb_menu(folder);
             }
+            DropZone::FolderTree => {
+                let row = match spot {
+                    Some(DropSpot::TreeFolder { row, .. }) => Some(*row),
+                    _ => None,
+                };
+                self.folder_tree().show_drop_row(row);
+            }
             DropZone::Tabs => {
                 let tab = match spot {
                     Some(DropSpot::Tab { id, .. }) => Some(*id),

@@ -45,6 +45,8 @@ pub(crate) enum DropZone {
     Tabs,
     /// A crumb's subfolder menu a drag opened (NAV-021).
     CrumbMenu,
+    /// The navigation pane's folder tree (SIDE-028).
+    FolderTree,
 }
 
 /// The formats a file drop target takes: this process's own dragged
@@ -123,6 +125,11 @@ impl BrowserWindow {
                 self.close_drag_crumb_menu();
                 self.hover_sidebar_during_drag(Some(y));
             }
+            DropZone::FolderTree => {
+                self.close_drag_crumb_menu();
+                let position = self.folder_tree().folder_at(y).map(|(position, _)| position);
+                self.folder_tree().expand_after_drag_hover(position);
+            }
             DropZone::FolderView | DropZone::Tabs => self.close_drag_crumb_menu(),
         }
         // Asked at every motion, even where nothing takes the drop, so the
@@ -138,7 +145,7 @@ impl BrowserWindow {
     /// A drag is at (`x`, `y`) of `widget`, the window's `zone`: scrolls
     /// the zone near its edge, and highlights where a drop would go.
     fn hover_drop_at(&self, zone: DropZone, widget: &gtk::Widget, x: f64, y: f64) -> Option<DropSpot> {
-        if matches!(zone, DropZone::FolderView | DropZone::Sidebar) {
+        if matches!(zone, DropZone::FolderView | DropZone::Sidebar | DropZone::FolderTree) {
             self.scroll_drag_near_edge(widget, y);
         }
         let spot = self.drop_spot(zone, widget, x, y);
@@ -158,6 +165,7 @@ impl BrowserWindow {
             DropZone::Breadcrumbs => self.leave_crumbs_during_drag(),
             DropZone::CrumbMenu => self.close_drag_crumb_menu(),
             DropZone::Sidebar => self.hover_sidebar_during_drag(None),
+            DropZone::FolderTree => self.folder_tree().expand_after_drag_hover(None),
             // GTK can leave its own drop outline on the strip after a drop,
             // a thin line behind every tab but the one in front. The tab
             // under the drag has the strip's own highlight instead.
