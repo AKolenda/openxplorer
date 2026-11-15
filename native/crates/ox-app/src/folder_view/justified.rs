@@ -155,7 +155,8 @@ fn row_end(aspects: &[f64], width: i32, target: i32, gap: i32) -> (usize, Option
     for (index, aspect) in aspects.iter().enumerate() {
         let count = index + 1;
         sum += aspect;
-        let room = f64::from(width) - f64::from(gap) * (count as f64 - 1.0);
+        let gaps = f64::from(u32::try_from(index).unwrap_or(u32::MAX));
+        let room = f64::from(width) - f64::from(gap) * gaps;
         if sum * target >= room {
             let with = room / sum;
             if index > 0 {

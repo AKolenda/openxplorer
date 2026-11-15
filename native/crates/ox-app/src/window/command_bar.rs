@@ -335,36 +335,8 @@ impl CommandBar {
         imp.collection
             .set((collection, collection_menu))
             .expect("constructed runs once per object");
-        let photo_separator = separator();
-        let (background, _) = text_button(
-            &ox_core::i18n::gettext("Set as background"),
-            Icon::Image,
-            WindowAction::SetAsBackground,
-            "set-background-command",
-        );
-        background.set_tooltip_text(Some(&ox_core::i18n::gettext(
-            "Setting the desktop background is not available yet.",
-        )));
-        let (rotate_left, _) = text_button(
-            &ox_core::i18n::gettext("Rotate left"),
-            Icon::ArrowCounterclockwise,
-            WindowAction::RotateLeft,
-            "rotate-left-command",
-        );
-        let (rotate_right, _) = text_button(
-            &ox_core::i18n::gettext("Rotate right"),
-            Icon::ArrowClockwise,
-            WindowAction::RotateRight,
-            "rotate-right-command",
-        );
-        let photo_commands: Vec<gtk::Widget> = vec![
-            photo_separator.upcast(),
-            background.upcast(),
-            rotate_left.upcast(),
-            rotate_right.upcast(),
-        ];
+        let photo_commands = photo_commands();
         for command in &photo_commands {
-            command.set_visible(false);
             group.append(command);
         }
         imp.photo_commands
@@ -804,6 +776,44 @@ impl SearchCommands {
         close.set_visible(false);
         Self { options, close }
     }
+}
+
+/// Set as background (grayed: not done), Rotate left and Rotate right
+/// after a separator, as Windows 11's Gallery shows them while photos are
+/// selected; hidden until then (HOME-030).
+fn photo_commands() -> Vec<gtk::Widget> {
+    let photo_separator = separator();
+    let (background, _) = text_button(
+        &ox_core::i18n::gettext("Set as background"),
+        Icon::Image,
+        WindowAction::SetAsBackground,
+        "set-background-command",
+    );
+    background.set_tooltip_text(Some(&ox_core::i18n::gettext(
+        "Setting the desktop background is not available yet.",
+    )));
+    let (rotate_left, _) = text_button(
+        &ox_core::i18n::gettext("Rotate left"),
+        Icon::ArrowCounterclockwise,
+        WindowAction::RotateLeft,
+        "rotate-left-command",
+    );
+    let (rotate_right, _) = text_button(
+        &ox_core::i18n::gettext("Rotate right"),
+        Icon::ArrowClockwise,
+        WindowAction::RotateRight,
+        "rotate-right-command",
+    );
+    let photo_commands: Vec<gtk::Widget> = vec![
+        photo_separator.upcast(),
+        background.upcast(),
+        rotate_left.upcast(),
+        rotate_right.upcast(),
+    ];
+    for command in &photo_commands {
+        command.set_visible(false);
+    }
+    photo_commands
 }
 
 fn separator() -> gtk::Separator {

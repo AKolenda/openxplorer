@@ -15,9 +15,9 @@ use ox_core::location::file_uri;
 
 use super::gallery::{gallery_window, set_modified, PicturesHome};
 use super::support::menu_button_with_class;
+use crate::folder_view::icon_size::IconSize;
 use crate::test_support::harness::{wait_until, TestWindow};
 use crate::test_support::pictures::{jpeg_bytes, png_sized};
-use crate::folder_view::icon_size::IconSize;
 use crate::window::folder_pane::FolderView;
 use crate::window::gallery_locations::GalleryLocations;
 use crate::window::menu_popover::MenuPopover;
@@ -59,7 +59,7 @@ fn one_photo() -> (PicturesHome, TestWindow) {
 /// parity: HOME-030
 #[gtk::test]
 fn the_command_bar_grays_sort_and_offers_photo_commands_for_a_photo() {
-    let (_home, test) = one_photo();
+    let (home, test) = one_photo();
     let names =
         |test: &TestWindow| -> Vec<String> { commands(test).into_iter().map(|(name, _)| name).collect() };
     let shown = commands(&test);
@@ -126,7 +126,7 @@ fn the_command_bar_grays_sort_and_offers_photo_commands_for_a_photo() {
         "{labels:?}"
     );
 
-    test.window.navigate(&file_uri(&_home.home)).expect("home");
+    test.window.navigate(&file_uri(&home.home)).expect("home");
     test.wait_for_listing("the home folder");
     assert!(commands(&test)
         .iter()
@@ -215,7 +215,7 @@ fn gallery_locations_adds_and_removes_folders_and_ok_keeps_them() {
     .expect("a photo");
 
     let dialog = locations_dialog(&test);
-    assert_eq!(dialog.title().as_deref(), Some("Gallery Locations"));
+    assert_eq!(dialog.title(), "Gallery Locations");
     assert_eq!(dialog.heading_text(), "Choose which folders to see in Gallery");
     assert!(dialog
         .body_text()

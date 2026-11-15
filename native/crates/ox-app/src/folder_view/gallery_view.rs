@@ -85,7 +85,7 @@ pub(crate) fn range_text(newest: Option<u64>, oldest: Option<u64>) -> Option<Str
 /// A photo's tooltip, as Windows 11's Gallery words it: "Path: <name>
 /// (<folder>)", "Item type: PNG File", "Date: …" (taken, else modified)
 /// and "Size: …".
-fn photo_tooltip(owners: &CellOwners, item: &FileItem) -> Option<String> {
+fn photo_tooltip(owners: &CellOwners, item: &FileItem) -> String {
     use ox_core::format;
     use ox_core::i18n::format_message;
     let entry = item.entry();
@@ -113,7 +113,7 @@ fn photo_tooltip(owners: &CellOwners, item: &FileItem) -> Option<String> {
         let size = format::short_size(size);
         lines.push(format_message("Size: {size}", &[("size", &size)]));
     }
-    Some(lines.join("\n"))
+    lines.join("\n")
 }
 
 mod tile {
@@ -612,17 +612,16 @@ impl GalleryCanvas {
         }
         let rtl = self.direction() == gtk::TextDirection::Rtl;
         for (position, place) in &places {
-            let tile = match bound.iter().position(|(shown, _)| shown == position) {
-                Some(index) => bound.swap_remove(index).1,
-                None => {
-                    let tile = free.pop().unwrap_or_else(|| self.new_tile());
-                    #[expect(
-                        clippy::cast_possible_truncation,
-                        reason = "a listing has fewer than u32::MAX items"
-                    )]
-                    self.bind_tile(&tile, *position as u32);
-                    tile
-                }
+            let tile = if let Some(index) = bound.iter().position(|(shown, _)| shown == position) {
+                bound.swap_remove(index).1
+            } else {
+                let tile = free.pop().unwrap_or_else(|| self.new_tile());
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "a listing has fewer than u32::MAX items"
+                )]
+                self.bind_tile(&tile, *position as u32);
+                tile
             };
             let x = if rtl {
                 width - place.x - place.width
@@ -638,7 +637,7 @@ impl GalleryCanvas {
         }
         for tile in free {
             if tile.slot().position().is_some() {
-                self.unbind_tile(&tile);
+                Self::unbind_tile(&tile);
             }
             tile.set_child_visible(false);
             tiles.push(tile);
@@ -689,7 +688,7 @@ impl GalleryCanvas {
     /// Makes `tile` show the item at `position`.
     fn bind_tile(&self, tile: &GalleryTile, position: u32) {
         let Some(item) = self.item(position) else {
-            self.unbind_tile(tile);
+            Self::unbind_tile(tile);
             return;
         };
         tile.slot().show(Some((position, item.clone())));
@@ -701,7 +700,7 @@ impl GalleryCanvas {
         self.ask_preview(tile, &item);
     }
 
-    fn unbind_tile(&self, tile: &GalleryTile) {
+    fn unbind_tile(tile: &GalleryTile) {
         tile.slot().show(None);
         tile.set_preview(None);
         tile.asked().replace(None);
@@ -766,6 +765,7 @@ impl GalleryCanvas {
     }
 
     /// The tiles bound to items now.
+    #[cfg(test)]
     pub(crate) fn tiles(&self) -> Vec<GalleryTile> {
         self.imp()
             .tiles
@@ -920,6 +920,7 @@ impl GalleryCanvas {
     }
 
     /// The tooltip of the item at `position`.
+    #[cfg(test)]
     pub(crate) fn tooltip_for(&self, position: u32) -> Option<String> {
         let item = self.item(position)?;
         self.imp()
@@ -1118,10 +1119,10 @@ impl GalleryCanvas {
         let layout = self.layout();
         let index = current as usize;
         let forward = |forward: bool| {
-            if forward != rtl {
-                current + 1
-            } else {
+            if forward == rtl {
                 current.saturating_sub(1)
+            } else {
+                current + 1
             }
         };
         let moved = match key {
@@ -1215,7 +1216,7 @@ impl GalleryView {
         view.append(&heading);
         let canvas = GalleryCanvas::new(owners);
         let tooltip_owners = Rc::downgrade(owners);
-        canvas.set_tooltip_text_for(move |item| photo_tooltip(&*tooltip_owners.upgrade()?, item));
+        canvas.set_tooltip_text_for(move |item| Some(photo_tooltip(&*tooltip_owners.upgrade()?, item)));
         let viewport = gtk::Viewport::builder()
             .child(&canvas)
             .scroll_to_focus(false)
@@ -1320,12 +1321,14 @@ impl GalleryView {
     }
 
     /// The month the scrubber shows under the pointer, while it shows.
+    #[cfg(test)]
     pub(crate) fn hovered_month(&self) -> Option<String> {
         let label = self.imp().hovered_month.get()?;
         label.is_visible().then(|| label.text().to_string())
     }
 
     /// The heading over the photos, while it shows.
+    #[cfg(test)]
     pub(crate) fn heading_text(&self) -> Option<String> {
         let heading = self.imp().heading.get()?;
         let text = heading.text();

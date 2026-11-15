@@ -428,8 +428,8 @@ fn location_row(location: &Location) -> gtk::ListBoxRow {
 
 #[cfg(test)]
 impl GalleryLocations {
-    pub(crate) fn title(&self) -> Option<String> {
-        Some(self.frame.title().to_string())
+    pub(crate) fn title(&self) -> String {
+        self.frame.title().to_string()
     }
     pub(crate) fn is_visible(&self) -> bool {
         self.frame.is_mapped()

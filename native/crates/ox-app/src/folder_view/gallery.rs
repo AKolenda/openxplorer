@@ -280,6 +280,7 @@ pub(crate) fn exif_facts_in(head: &[u8]) -> ExifFacts {
 
 /// The EXIF date taken in `head`, the start of a picture, as seconds
 /// since the Unix epoch, read as the local time it names.
+#[cfg(test)]
 pub(crate) fn date_taken_in(head: &[u8]) -> Option<u64> {
     exif_facts_in(head).taken
 }

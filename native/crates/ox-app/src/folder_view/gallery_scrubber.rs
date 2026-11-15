@@ -23,6 +23,13 @@ use crate::icons::{self, Icon};
 /// sit closer to the one above is left out.
 const YEAR_SPACING: f64 = 18.0;
 
+/// Runs with the fraction of the scroll a click or a drag points at.
+type Jump = Box<dyn Fn(f64)>;
+/// Runs with `true` for the up arrow, `false` for the down one.
+type Step = Box<dyn Fn(bool)>;
+/// Runs with the month under the pointer and its height, or `None`.
+type Hover = Box<dyn Fn(Option<(String, f64)>)>;
+
 /// A point of the timeline: a fraction of the scroll and the month there.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Mark {
@@ -49,11 +56,11 @@ mod imp {
         pub(super) marks: RefCell<Vec<Mark>>,
         /// Where the view is, as a fraction of its scroll.
         pub(super) position: Cell<f64>,
-        pub(super) on_jump: RefCell<Option<Box<dyn Fn(f64)>>>,
-        pub(super) on_step: RefCell<Option<Box<dyn Fn(bool)>>>,
+        pub(super) on_jump: RefCell<Option<super::Jump>>,
+        pub(super) on_step: RefCell<Option<super::Step>>,
         /// Runs with the month under the pointer and where it is down the
         /// scrubber, or `None` once the pointer leaves.
-        pub(super) on_hover: RefCell<Option<Box<dyn Fn(Option<(String, f64)>)>>>,
+        pub(super) on_hover: RefCell<Option<super::Hover>>,
         /// Where a drag on the track started, in the track's coordinates.
         pub(super) drag_start: Cell<f64>,
     }
@@ -309,11 +316,10 @@ impl GalleryScrubber {
             self.queue_allocate();
         }
         let month = self.month_at_fraction(position).unwrap_or_default();
-        #[expect(clippy::cast_precision_loss, reason = "a percentage")]
         self.update_property(&[
             gtk::accessible::Property::ValueMin(0.0),
             gtk::accessible::Property::ValueMax(100.0),
-            gtk::accessible::Property::ValueNow((position.clamp(0.0, 1.0) * 100.0).round() as f64 * 1.0),
+            gtk::accessible::Property::ValueNow((position.clamp(0.0, 1.0) * 100.0).round()),
             gtk::accessible::Property::ValueText(&month),
         ]);
     }
