@@ -64,6 +64,7 @@ mod more_explorer_keys;
 pub(super) mod name_conflicts;
 mod narrow_windows;
 mod network;
+mod network_captures;
 mod network_shares;
 mod new_folder;
 mod new_text_document;

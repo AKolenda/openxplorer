@@ -3015,6 +3015,14 @@ mod tests {
         picker.accept.emit_clicked();
         wait_until("the dialog to say so", || !window.shown_message().is_empty());
         let message = window.shown_message().to_string();
+        // With OX_NATIVE_CAPTURE_DIR set, the dialog with its message, for
+        // review in both themes.
+        let _theme = crate::test_support::harness::ThemeGuard::keep();
+        for theme in ["light", "dark"] {
+            portal.test.activate("theme", Some(theme));
+            window.show_message(&message);
+            capture(window, &format!("network-save-unavailable-{theme}.png"));
+        }
 
         assert!(message.contains("is unavailable"), "{message}");
         assert!(!message.contains("does not exist"), "{message}");
