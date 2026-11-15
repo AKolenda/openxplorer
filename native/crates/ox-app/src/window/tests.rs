@@ -101,6 +101,7 @@ mod tab_dragging;
 mod tabs;
 mod text_field_tab_keys;
 mod tiles_and_content;
+mod undo_without_recycle_bin;
 pub(super) mod view_styles;
 mod views;
 mod worker_questions;
