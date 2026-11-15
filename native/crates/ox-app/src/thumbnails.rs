@@ -203,6 +203,9 @@ thread_local! {
     static MAKING: Rc<Slots> = Rc::new(Slots::new(MAKING_AT_ONCE));
     /// Decoded previews by item, version and size.
     static KEPT: RefCell<HashMap<PreviewKey, gdk::Texture>> = RefCell::new(HashMap::new());
+    /// Sharp pictures decoded at a tile's size (Gallery), by item, version
+    /// and edge; only the last few, as they are large.
+    static SHARP_KEPT: RefCell<Vec<(PreviewKey, gdk::Texture)>> = const { RefCell::new(Vec::new()) };
     /// Item versions no thumbnail could be made of in this run.
     static FAILED: RefCell<HashSet<(String, Option<u64>)>> = RefCell::new(HashSet::new());
     /// The types gdk-pixbuf's loaders declare they read.
@@ -253,6 +256,50 @@ pub(crate) async fn preview(request: PreviewRequest) -> Option<gdk::Texture> {
             kept.clear();
         }
         kept.insert(key, texture.clone());
+    });
+    Some(texture)
+}
+
+/// How many sharp pictures are kept for a tile scrolled back into view.
+const SHARP_KEPT_COUNT: usize = 48;
+
+/// The photo at `request`'s item, a file on this computer's own disks,
+/// decoded to fit `request.pixels` square and turned upright: Gallery's
+/// sharp picture of a tile on screen, which the 128- and 256-pixel
+/// thumbnails of the cache would draw blurred (HOME-033). `None` for an
+/// item on a network or not a local file, or one the picture limits
+/// refuse; it keeps its thumbnail. Dropping the future cancels the decode.
+pub(crate) async fn sharp_picture(request: PreviewRequest) -> Option<gdk::Texture> {
+    let key = request.key();
+    let kept = SHARP_KEPT.with_borrow(|kept| {
+        kept.iter()
+            .find(|(seen, _)| *seen == key)
+            .map(|(_, texture)| texture.clone())
+    });
+    if let Some(texture) = kept {
+        return Some(texture);
+    }
+    gio::File::for_uri(&request.uri).path()?;
+    if is_on_network(&request.uri, None).await {
+        return None;
+    }
+    let uri = request.uri.clone();
+    let pixels = request.pixels;
+    let texture = DECODING
+        .with(Rc::clone)
+        .blocking(move |cancel| {
+            let file = gio::File::for_uri(&uri);
+            picture_guard::decode_to_fit(&file, pixels, pixels, Limits::DISPLAY, Some(cancel))
+                .ok()
+                .map(|decoded| gdk::Texture::for_pixbuf(&decoded.pixbuf))
+        })
+        .await
+        .flatten()?;
+    SHARP_KEPT.with_borrow_mut(|kept| {
+        if kept.len() >= SHARP_KEPT_COUNT {
+            kept.remove(0);
+        }
+        kept.push((key, texture.clone()));
     });
     Some(texture)
 }

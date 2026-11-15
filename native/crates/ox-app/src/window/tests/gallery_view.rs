@@ -348,7 +348,7 @@ fn photos_are_drawn_sharp_at_the_size_of_their_tiles() {
     let scale = f64::from(test.window.gallery_scale());
     for size in ["medium", "extra-large", "small", "large"] {
         test.activate("view", Some(size));
-        wait_until(&format!("sharp pictures at {size}"), || {
+        let sharp = || {
             let shown = test.window.gallery_tiles();
             shown.len() == 3
                 && shown.iter().all(|tile| {
@@ -364,7 +364,14 @@ fn photos_are_drawn_sharp_at_the_size_of_their_tiles() {
                         .is_some_and(|(w, h)| w >= needed.0 - 1 && h >= needed.1 - 1);
                     asked && drawn
                 })
-        });
+        };
+        for _ in 0..200 {
+            if sharp() {
+                break;
+            }
+            crate::test_support::harness::wait_for(std::time::Duration::from_millis(50));
+        }
+        assert!(sharp(), "{size} at {scale}x: {:?}", test.window.gallery_tiles());
     }
 }
 

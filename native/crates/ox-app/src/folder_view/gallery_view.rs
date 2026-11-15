@@ -62,6 +62,20 @@ pub(crate) fn nearest_named(size: IconSize) -> IconSize {
         .unwrap_or(IconSize::MEDIUM)
 }
 
+/// The edge of the square a photo of `aspect` (width over height, when
+/// known) is decoded to fit, so it covers a tile `width` by `height`
+/// pixels at `scale` device pixels each: the longest edge it needs.
+pub(crate) fn sharp_edge(width: i32, height: i32, aspect: Option<f64>, scale: i32) -> i32 {
+    let (width, height) = (f64::from(width * scale.max(1)), f64::from(height * scale.max(1)));
+    let aspect = aspect
+        .filter(|aspect| aspect.is_finite() && *aspect > 0.0)
+        .unwrap_or(width / height.max(1.0));
+    let needed = width.max(height * aspect).max(height).max(width / aspect);
+    #[expect(clippy::cast_possible_truncation, reason = "edges are small")]
+    let edge = needed.ceil() as i32;
+    edge.max(1)
+}
+
 /// What a tile on screen shows, for tests.
 #[cfg(test)]
 #[derive(Debug, Clone, Copy)]
@@ -208,6 +222,11 @@ mod tile {
             pub(super) preview: RefCell<Option<glib::JoinHandle<()>>>,
             /// The item, version and size the preview was asked for.
             pub(super) asked: RefCell<Option<(String, Option<u64>, i32)>>,
+            /// The sharp picture being decoded for the tile on screen.
+            pub(super) sharp: RefCell<Option<glib::JoinHandle<()>>>,
+            /// The item and edge the sharp picture was asked for, decoded
+            /// or still being decoded.
+            pub(super) sharp_asked: RefCell<Option<(String, i32)>>,
             pub(super) selected: Cell<bool>,
         }
 
@@ -241,6 +260,9 @@ mod tile {
                 if let Some(preview) = self.preview.take() {
                     preview.abort();
                 }
+                if let Some(sharp) = self.sharp.take() {
+                    sharp.abort();
+                }
                 if let Some(picture) = self.picture.get() {
                     picture.unparent();
                 }
@@ -262,6 +284,21 @@ mod tile {
         pub(crate) fn show(&self, texture: Option<gdk::Texture>) {
             self.imp().texture.replace(texture);
             self.queue_draw();
+        }
+
+        /// Draws `texture` unless the picture drawn has more pixels: a
+        /// cached thumbnail that comes late never replaces the sharp one.
+        pub(crate) fn offer(&self, texture: gdk::Texture) {
+            let area = |texture: &gdk::Texture| i64::from(texture.width()) * i64::from(texture.height());
+            let sharper = self
+                .imp()
+                .texture
+                .borrow()
+                .as_ref()
+                .is_some_and(|drawn| area(drawn) > area(&texture));
+            if !sharper {
+                self.show(Some(texture));
+            }
         }
 
         /// Whether a thumbnail is drawn, for tests.
@@ -312,10 +349,43 @@ mod tile {
             &self.imp().asked
         }
 
-        /// The device pixels the sharp picture was asked at, for tests.
+        /// The device pixels the sharp picture was asked at, for tests: a
+        /// square of the edge the photo is decoded to fit.
         #[cfg(test)]
         pub(crate) fn requested_pixels(&self) -> Option<(i32, i32)> {
-            None
+            self.imp()
+                .sharp_asked
+                .borrow()
+                .as_ref()
+                .map(|(_, edge)| (*edge, *edge))
+        }
+
+        /// The item and edge of the sharp picture asked for.
+        pub(crate) fn sharp_asked(&self) -> &RefCell<Option<(String, i32)>> {
+            &self.imp().sharp_asked
+        }
+
+        /// The sharp picture's decode, which a new one or `None` cancels.
+        pub(crate) fn set_sharp(&self, task: Option<glib::JoinHandle<()>>) {
+            if let Some(previous) = self.imp().sharp.replace(task) {
+                previous.abort();
+            }
+        }
+
+        /// Forgets the sharp picture's decode, which has finished.
+        pub(crate) fn finish_sharp(&self) {
+            drop(self.imp().sharp.take());
+        }
+
+        /// Cancels a sharp picture still being decoded; one decoded stays.
+        pub(crate) fn cancel_pending_sharp(&self) {
+            let pending = self.imp().sharp.take();
+            if let Some(pending) = pending {
+                // A finished task is gone already; an unfinished one is
+                // asked again once the tile is back on screen.
+                pending.abort();
+                self.imp().sharp_asked.replace(None);
+            }
         }
 
         /// Shows the tile selected or not.
@@ -685,6 +755,14 @@ impl GalleryCanvas {
             let transform =
                 gtk::gsk::Transform::new().translate(&graphene::Point::new(x as f32, place.y as f32));
             tile.allocate(place.width, place.height, -1, Some(transform));
+            // Only tiles on screen get sharp pictures; those beside it
+            // stop decoding (HOME-033).
+            let on_screen = f64::from(place.y + place.height) > top && f64::from(place.y) < top + page;
+            if on_screen {
+                self.ask_sharp(&tile, place.width, place.height);
+            } else {
+                tile.cancel_pending_sharp();
+            }
             tiles.push(tile);
         }
         for tile in free {
@@ -759,6 +837,8 @@ impl GalleryCanvas {
     fn unbind_tile(tile: &GalleryTile) {
         tile.slot().show(None);
         tile.set_preview(None);
+        tile.set_sharp(None);
+        tile.sharp_asked().replace(None);
         tile.asked().replace(None);
         tile.picture().show(None);
         CellOwners::unstyle_cell(tile.picture());
@@ -773,8 +853,20 @@ impl GalleryCanvas {
         if tile.asked().borrow().as_ref() == Some(&key) {
             return;
         }
+        let same_photo = tile
+            .asked()
+            .borrow()
+            .as_ref()
+            .is_some_and(|(uri, modified, _)| *uri == entry.uri && *modified == entry.modified);
         tile.asked().replace(Some(key));
-        tile.picture().show(None);
+        if !same_photo {
+            // Another photo: its own pictures, small and sharp, from the
+            // start. The same photo at another size keeps what it draws,
+            // so a View change never blanks or blurs it.
+            tile.picture().show(None);
+            tile.set_sharp(None);
+            tile.sharp_asked().replace(None);
+        }
         let Some(request) = self.owners().previews().request(entry, pixels) else {
             tile.set_preview(None);
             return;
@@ -782,11 +874,48 @@ impl GalleryCanvas {
         let picture = tile.picture().downgrade();
         let task = glib::spawn_future_local(async move {
             let texture = crate::thumbnails::preview(request).await;
-            if let Some(picture) = picture.upgrade() {
-                picture.show(texture);
+            if let (Some(picture), Some(texture)) = (picture.upgrade(), texture) {
+                picture.offer(texture);
             }
         });
         tile.set_preview(Some(task));
+    }
+
+    /// Asks for `tile`'s photo decoded at least as large as the tile,
+    /// `width` by `height` pixels, is drawn on this display (HOME-033):
+    /// the cache's thumbnails are 128 or 256 pixels, which a tile of
+    /// Medium icons and up draws blurred. A tile that grew asks again.
+    fn ask_sharp(&self, tile: &GalleryTile, width: i32, height: i32) {
+        let Some(item) = tile.slot().item() else {
+            return;
+        };
+        let entry = item.entry();
+        let edge = sharp_edge(width, height, aspect_of(Some(&item)), self.scale_factor());
+        let asked_enough = tile
+            .sharp_asked()
+            .borrow()
+            .as_ref()
+            .is_some_and(|(uri, asked)| *uri == entry.uri && *asked >= edge);
+        if asked_enough {
+            return;
+        }
+        let Some(request) = self.owners().previews().request(entry, edge) else {
+            return;
+        };
+        tile.sharp_asked().replace(Some((entry.uri.clone(), edge)));
+        let weak = tile.downgrade();
+        let task = glib::spawn_future_local(async move {
+            let texture = crate::thumbnails::sharp_picture(request).await;
+            let Some(tile) = weak.upgrade() else {
+                return;
+            };
+            // Done: nothing is left to cancel.
+            tile.finish_sharp();
+            if let Some(texture) = texture {
+                tile.picture().offer(texture);
+            }
+        });
+        tile.set_sharp(Some(task));
     }
 
     /// Shows the selection on every tile on screen.
@@ -1491,5 +1620,23 @@ mod tests {
         assert_eq!(row_height(IconSize::MEDIUM), 160);
         let heights: Vec<i32> = IconSize::NAMED.into_iter().map(row_height).collect();
         assert!(heights.windows(2).all(|pair| pair[0] > pair[1]), "{heights:?}");
+    }
+
+    /// The decoded square covers the tile in device pixels, whatever the
+    /// photo's shape, at 1x and 2x.
+    ///
+    /// parity: HOME-033
+    #[test]
+    fn the_sharp_picture_covers_its_tile_in_device_pixels() {
+        // A 2:1 photo in a 320 by 160 tile: 320 across at 1x, 640 at 2x.
+        assert_eq!(sharp_edge(320, 160, Some(2.0), 1), 320);
+        assert_eq!(sharp_edge(320, 160, Some(2.0), 2), 640);
+        // A phone screenshot, cropped to a wider tile: its height decides.
+        let edge = sharp_edge(100, 160, Some(0.2), 1);
+        assert!(f64::from(edge) * 0.2 >= 100.0, "{edge}");
+        // A panorama cropped to a narrower tile: its width decides.
+        let edge = sharp_edge(800, 160, Some(10.0), 2);
+        assert!(f64::from(edge) / 10.0 >= 320.0, "{edge}");
+        assert_eq!(sharp_edge(160, 160, None, 1), 160);
     }
 }
