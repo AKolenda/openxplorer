@@ -10,6 +10,7 @@
 //! ([`super::split_view`]).
 
 use gtk::subclass::prelude::*;
+use ox_core::entry::EntryError;
 
 use crate::locations::Page;
 
@@ -46,7 +47,7 @@ pub(super) struct PaneState {
     /// Its location has taken longer than the delay to open and list.
     slow: bool,
     /// Why its last listing failed.
-    error: Option<String>,
+    error: Option<EntryError>,
 }
 
 impl PaneState {
@@ -62,7 +63,7 @@ impl PaneState {
             },
             opening: tab.opening.is_some(),
             slow: tab.is_slow(),
-            error: tab.error.as_ref().map(ToString::to_string),
+            error: tab.error.clone(),
         }
     }
 }
@@ -109,10 +110,10 @@ pub(super) fn show_pane_state(
         // titles, until items come: no "Loading" text, no page swap.
         pane.show_empty_note(false);
         pane.show_page(PanePage::Listing);
-        return error;
+        return error.as_ref().map(ToString::to_string);
     } else {
-        let state = match error {
-            Some(error) => EmptyState::Unavailable(error),
+        let state = match &error {
+            Some(error) => EmptyState::unavailable(&uri, error),
             None => empty_state().unwrap_or_else(|| EmptyState::empty_listing(&uri)),
         };
         if state == EmptyState::EmptyFolder {
