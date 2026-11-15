@@ -209,12 +209,11 @@ impl BrowserWindow {
         let pane = self.details_pane();
         let hovered = pane.hovered();
         let selected;
-        let selection: &[FileItem] = match &hovered {
-            Some(hovered) => std::slice::from_ref(hovered),
-            None => {
-                selected = self.folder_pane().model().selected_items();
-                &selected
-            }
+        let selection: &[FileItem] = if let Some(hovered) = &hovered {
+            std::slice::from_ref(hovered)
+        } else {
+            selected = self.folder_pane().model().selected_items();
+            &selected
         };
         let Some(folder_uri) = self.current_uri() else {
             return;
