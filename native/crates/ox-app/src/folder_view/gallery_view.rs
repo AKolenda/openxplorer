@@ -1386,7 +1386,9 @@ impl GalleryView {
         if heading.text() != text {
             heading.set_text(&text);
         }
-        heading.set_visible(!text.is_empty());
+        // The heading keeps its row while photos show, even when none on
+        // screen has a date, so the photos never jump up and down.
+        heading.set_visible(canvas.n_items() > 0);
         let timeline = canvas.timeline();
         let adjustment = self.vadjustment();
         let span = adjustment.upper() - adjustment.page_size();

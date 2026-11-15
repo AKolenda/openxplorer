@@ -661,6 +661,7 @@ window.ox button.info-bar:hover { background-color: mix(@ox_caution_bg, @ox_caut
 .gallery-view { background-color: @ox_bg; color: @ox_text; }
 .gallery-view .gallery-heading {
   font-weight: 600;
+  min-height: 20px;
   padding: 10px 16px 8px 16px;
 }
 .gallery-view gallery.files { background-color: @ox_bg; margin: 0 56px 12px 16px; }
