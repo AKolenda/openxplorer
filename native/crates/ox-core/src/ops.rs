@@ -90,6 +90,7 @@ mod pasted_file;
 mod progress;
 mod recycle_bin;
 mod recycle_bin_drag;
+mod recycle_bin_storage;
 mod rename;
 mod report;
 mod resolved_transfer;
@@ -124,8 +125,8 @@ pub use numbered_rename::{rename_numbered_items, NumberedRename};
 pub use pasted_file::create_pasted_file;
 pub use progress::{starting_label, PROGRESS_INTERVAL};
 pub use recycle_bin::{
-    delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, recycle_bin_item_count,
-    restore_from_recycle_bin, RecycledItem,
+    delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, list_recycle_bin_names,
+    recycle_bin_item_count, restore_from_recycle_bin, RecycledItem, RecycledName,
 };
 pub use recycle_bin_drag::{is_recycle_bin_item, move_out_of_recycle_bin};
 pub use rename::{rename_item, RenamedItem};

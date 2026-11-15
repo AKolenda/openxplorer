@@ -22,6 +22,7 @@
 //!   deleted: the backend treats the insides of a trashed folder as part of
 //!   that item.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
@@ -30,6 +31,7 @@ use gio::prelude::*;
 
 use super::context::{on_worker, unless_cancelled, OperationContext};
 use super::error::OpsError;
+use super::recycle_bin_storage::{listed_targets, StoreDeleter, LISTED_FROM};
 use super::results::{AskedItem, ItemQuestions};
 use super::run_transfer::TransferOutcome;
 use super::undo::UndoRecord;
@@ -44,6 +46,13 @@ use crate::transfer::{Cancellation, Node, SourceChange, TransferMode, TransferRe
 /// after the Move to Trash finished.
 const RELISTS: u32 = 4;
 const RELIST_WAIT: Duration = Duration::from_millis(250);
+
+/// How long the listing that makes the backend forget removed items may
+/// take ([`forget_removed_items`]).
+const FORGET_WAIT: Duration = Duration::from_secs(3);
+
+/// What a listing by name reads of each item.
+const NAME_ATTRIBUTES: &str = "standard::name,standard::display-name";
 
 /// One item in the Recycle Bin.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,6 +94,34 @@ pub async fn recycle_bin_item_count(cancel: &Cancellation) -> Result<u32, OpsErr
             Some(cancel.cancellable()),
         )?;
         Ok(info.attribute_uint32("trash::item-count"))
+    })
+    .await
+}
+
+/// One item in the Recycle Bin, as a quick listing names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecycledName {
+    /// The item's `trash:///` URI.
+    pub uri: String,
+    /// The name it is shown with.
+    pub name: String,
+}
+
+/// Lists the items in the Recycle Bin by name only, which the backend
+/// answers many times faster than [`list_recycle_bin`], since it need not
+/// read each item's description: what counting and emptying the Recycle
+/// Bin need.
+///
+/// # Errors
+///
+/// Cancellation, or the backend's failure.
+pub async fn list_recycle_bin_names(cancel: &Cancellation) -> Result<Vec<RecycledName>, OpsError> {
+    let cancel = cancel.clone();
+    on_worker(move || {
+        listed_blocking(NAME_ATTRIBUTES, &cancel, |listing, info| RecycledName {
+            uri: listing.child(info).uri().to_string(),
+            name: info.display_name().to_string(),
+        })
     })
     .await
 }
@@ -132,16 +169,34 @@ pub async fn delete_from_recycle_bin(
 pub async fn empty_recycle_bin(context: &OperationContext) -> Result<TransferResult, OpsError> {
     let context = context.clone();
     on_worker(move || {
-        let items = list_recycle_bin_blocking(&context.cancel)?;
-        let uris: Vec<String> = items.into_iter().map(|item| item.uri).collect();
+        let listing =
+            |listing: &gio::FileEnumerator, info: &gio::FileInfo| listing.child(info).uri().to_string();
+        let uris = listed_blocking(NAME_ATTRIBUTES, &context.cancel, listing)?;
         Ok(delete_items_blocking(&uris, &context))
     })
     .await
 }
 
-/// [`list_recycle_bin`] on the calling thread. The listing is closed on
-/// success, cancellation and error alike.
+/// [`list_recycle_bin`] on the calling thread.
 fn list_recycle_bin_blocking(cancel: &Cancellation) -> Result<Vec<RecycledItem>, OpsError> {
+    listed_blocking(ATTRIBUTES, cancel, |listing, info| {
+        let entry = entry_from_info(&listing.child(info), info);
+        RecycledItem {
+            uri: entry.uri,
+            name: entry.name,
+            original_path: entry.trash_orig_path,
+            deleted_at: entry.trash_deletion_date,
+        }
+    })
+}
+
+/// Each item of the Recycle Bin, read with `attributes` and made by
+/// `item`. The listing is closed on success, cancellation and error alike.
+fn listed_blocking<T>(
+    attributes: &str,
+    cancel: &Cancellation,
+    item: impl FnMut(&gio::FileEnumerator, &gio::FileInfo) -> T,
+) -> Result<Vec<T>, OpsError> {
     cancel.check()?;
     let bin = gio::File::for_uri(TRASH_URI);
     // Without a watcher, GVfs skips rescanning when the Trash folder's
@@ -156,7 +211,7 @@ fn list_recycle_bin_blocking(cancel: &Cancellation) -> Result<Vec<RecycledItem>,
             let monitor = bin
                 .monitor_directory(gio::FileMonitorFlags::NONE, Some(cancel.cancellable()))
                 .ok();
-            let result = enumerate_recycle_bin(&bin, cancel);
+            let result = enumerate_recycle_bin(&bin, attributes, cancel, item);
             release_trash_monitor(monitor, &context);
             result
         })
@@ -182,34 +237,38 @@ fn release_trash_monitor(monitor: Option<gio::FileMonitor>, context: &glib::Main
     }
 }
 
-/// Reads a listing while its caller holds the Trash monitor.
-fn enumerate_recycle_bin(bin: &gio::File, cancel: &Cancellation) -> Result<Vec<RecycledItem>, OpsError> {
+/// Reads a listing with `attributes` while its caller holds the Trash
+/// monitor, making each item with `item`.
+fn enumerate_recycle_bin<T>(
+    bin: &gio::File,
+    attributes: &str,
+    cancel: &Cancellation,
+    item: impl FnMut(&gio::FileEnumerator, &gio::FileInfo) -> T,
+) -> Result<Vec<T>, OpsError> {
     let listing = bin.enumerate_children(
-        ATTRIBUTES,
+        attributes,
         gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
         Some(cancel.cancellable()),
     )?;
-    let items = read_items(&listing, cancel);
+    let items = read_items(&listing, cancel, item);
     // Closing only releases the listing; what was read stays valid.
     let _ = listing.close(gio::Cancellable::NONE);
     items
 }
 
 /// Reads every item of an open Recycle Bin listing.
-fn read_items(listing: &gio::FileEnumerator, cancel: &Cancellation) -> Result<Vec<RecycledItem>, OpsError> {
+fn read_items<T>(
+    listing: &gio::FileEnumerator,
+    cancel: &Cancellation,
+    mut item: impl FnMut(&gio::FileEnumerator, &gio::FileInfo) -> T,
+) -> Result<Vec<T>, OpsError> {
     let mut items = Vec::new();
     loop {
         cancel.check()?;
         let Some(info) = listing.next_file(Some(cancel.cancellable()))? else {
             return Ok(items);
         };
-        let entry = entry_from_info(&listing.child(&info), &info);
-        items.push(RecycledItem {
-            uri: entry.uri,
-            name: entry.name,
-            original_path: entry.trash_orig_path,
-            deleted_at: entry.trash_deletion_date,
-        });
+        items.push(item(listing, &info));
     }
 }
 
@@ -249,8 +308,23 @@ fn restore_items_blocking(uris: &[String], context: &OperationContext) -> Transf
 /// under the same name would then never be listed, although it is in the
 /// Trash. A failed listing only leaves this work to the next one; it runs
 /// even after a cancellation, because the removals already happened.
+///
+/// The operation waits for it at most [`FORGET_WAIT`], and it finishes
+/// on its own thread after that: a backend that takes longer is busy
+/// following the changes for a program that watches `trash:///`, which
+/// updates its record anyway, and after thousands of removals it could
+/// hold the operation for a minute.
 pub(super) fn forget_removed_items() {
-    let _ = list_recycle_bin_blocking(&Cancellation::new());
+    let (done, finished) = std::sync::mpsc::channel::<()>();
+    let listing = thread::Builder::new()
+        .name(String::from("recycle-bin-forget"))
+        .spawn(move || {
+            let _ = listed_blocking(NAME_ATTRIBUTES, &Cancellation::new(), |_, _| ());
+            let _ = done.send(());
+        });
+    if listing.is_ok() {
+        let _ = finished.recv_timeout(FORGET_WAIT);
+    }
 }
 
 /// Restores the Recycle Bin item `uri` to its original location and
@@ -341,9 +415,21 @@ fn name_taken_in_original_folder(original_path: &Path) -> OpsError {
 /// Deletes each item of `uris` permanently, asking about each failure as
 /// Windows does: an item that is gone asks "Item Not Found", one the user
 /// may not delete "File Access Denied", anything else "Interrupted
-/// Action".
+/// Action". From [`LISTED_FROM`] items on, where they are kept is read
+/// from one listing first ([`recycle_bin_storage`](super::recycle_bin_storage)).
 fn delete_items_blocking(uris: &[String], context: &OperationContext) -> TransferResult {
     let mut result = TransferResult::default();
+    // Only a cancellation fails the listing.
+    let targets = if uris.len() >= LISTED_FROM {
+        let Ok(targets) = listed_targets(&context.cancel) else {
+            result.cancelled = true;
+            return result;
+        };
+        targets
+    } else {
+        HashMap::new()
+    };
+    let mut store = StoreDeleter::with_targets(targets);
     let mut questions = ItemQuestions::new(context, TransferMode::Delete);
     for (index, uri) in uris.iter().enumerate() {
         let name = GioNode::new(uri).display_name();
@@ -353,7 +439,9 @@ fn delete_items_blocking(uris: &[String], context: &OperationContext) -> Transfe
             more_items: index + 1 < uris.len(),
         };
         if questions
-            .run(&mut result, item, || delete_item(uri, &context.cancel))
+            .run(&mut result, item, || {
+                delete_item(uri, &mut store, &context.cancel)
+            })
             .is_some()
         {
             result.done.push(uri.clone());
@@ -368,11 +456,17 @@ fn delete_items_blocking(uris: &[String], context: &OperationContext) -> Transfe
     result
 }
 
-/// Deletes the Recycle Bin item `uri` permanently. The backend removes a
-/// trashed folder with everything in it.
-fn delete_item(uri: &str, cancel: &Cancellation) -> Result<(), OpsError> {
+/// Deletes the Recycle Bin item `uri` permanently, with everything in a
+/// trashed folder: from its Trash folder on disk where `store` finds it
+/// kept in one, which spares a large Recycle Bin the backend's work per
+/// item, otherwise through the backend.
+fn delete_item(uri: &str, store: &mut StoreDeleter, cancel: &Cancellation) -> Result<(), OpsError> {
     cancel.check()?;
     let item = top_level_item(uri)?;
+    if let Some(deleted) = store.delete(uri, &item, cancel) {
+        return deleted;
+    }
+    cancel.check()?;
     item.delete(Some(cancel.cancellable()))?;
     Ok(())
 }
@@ -422,9 +516,10 @@ pub(crate) fn find_trashed_since(
     cancel: &Cancellation,
 ) -> Result<Vec<Option<String>>, OpsError> {
     let items = listing_holding(original_paths, since, cancel)?;
+    let newest = newest_trashed_by_path(&items, since);
     Ok(original_paths
         .iter()
-        .map(|path| newest_trashed_from(&items, path, since).map(|item| item.uri.clone()))
+        .map(|path| newest.get(path.as_path()).map(|item| item.uri.clone()))
         .collect())
 }
 
@@ -474,11 +569,12 @@ fn listing_holding(
 ) -> Result<Vec<RecycledItem>, OpsError> {
     let mut items = list_recycle_bin_blocking(cancel)?;
     let mut relists = 0;
-    while relists < RELISTS
-        && original_paths
+    while relists < RELISTS && {
+        let newest = newest_trashed_by_path(&items, since);
+        original_paths
             .iter()
-            .any(|path| newest_trashed_from(&items, path, since).is_none())
-    {
+            .any(|path| !newest.contains_key(path.as_path()))
+    } {
         thread::sleep(RELIST_WAIT);
         items = list_recycle_bin_blocking(cancel)?;
         relists += 1;
@@ -486,17 +582,29 @@ fn listing_holding(
     Ok(items)
 }
 
-/// The newest of `items` deleted from `original_path` since `since`.
-fn newest_trashed_from<'a>(
-    items: &'a [RecycledItem],
-    original_path: &Path,
-    since: u64,
-) -> Option<&'a RecycledItem> {
-    items
-        .iter()
-        .filter(|item| item.original_path.as_deref() == Some(original_path))
-        .filter(|item| item.deleted_at.is_some_and(|deleted_at| deleted_at >= since))
-        .max_by_key(|item| item.deleted_at)
+/// The newest of `items` deleted from each original path since `since`,
+/// by that path: one pass over the Recycle Bin, so an Undo of thousands
+/// of items does not read the whole listing once per item. Of items
+/// deleted in the same second, the one listed last counts.
+fn newest_trashed_by_path(items: &[RecycledItem], since: u64) -> HashMap<&Path, &RecycledItem> {
+    let mut newest: HashMap<&Path, &RecycledItem> = HashMap::new();
+    for item in items {
+        let (Some(path), Some(deleted_at)) = (item.original_path.as_deref(), item.deleted_at) else {
+            continue;
+        };
+        if deleted_at < since {
+            continue;
+        }
+        newest
+            .entry(path)
+            .and_modify(|known| {
+                if known.deleted_at <= Some(deleted_at) {
+                    *known = item;
+                }
+            })
+            .or_insert(item);
+    }
+    newest
 }
 
 /// The last component of `path`, for messages.
@@ -532,7 +640,7 @@ mod tests {
                     let released = monitor.downgrade();
                     cancel.cancel();
 
-                    let result = enumerate_recycle_bin(&bin, &cancel);
+                    let result = enumerate_recycle_bin(&bin, ATTRIBUTES, &cancel, |_, _| ());
                     release_trash_monitor(Some(monitor), &context);
 
                     assert_eq!(result, Err(OpsError::Cancelled));
@@ -563,11 +671,15 @@ mod tests {
             recycled("trash:///b.txt", "/home/user/b.txt", 300),
         ];
 
-        let found = newest_trashed_from(&items, Path::new("/home/user/a.txt"), 200);
-        let too_old = newest_trashed_from(&items, Path::new("/home/user/a.txt"), 206);
+        let found = newest_trashed_by_path(&items, 200);
+        let too_old = newest_trashed_by_path(&items, 206);
 
-        assert_eq!(found.map(|item| item.uri.as_str()), Some("trash:///a.2.txt"));
-        assert_eq!(too_old, None);
+        let path = Path::new("/home/user/a.txt");
+        assert_eq!(
+            found.get(path).map(|item| item.uri.as_str()),
+            Some("trash:///a.2.txt")
+        );
+        assert_eq!(too_old.get(path), None);
     }
 
     #[test]

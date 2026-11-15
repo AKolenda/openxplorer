@@ -70,6 +70,109 @@ pub(super) fn delete_tree(
     deletion.delete_path(path)
 }
 
+/// The items directly in one local folder, deleted one at a time by the
+/// rules of [`delete_tree`], with the folder opened and the mount table
+/// read once for all of them: emptying a Recycle Bin of thousands of items
+/// otherwise reads the mount table once per item.
+///
+/// The mount table is only the first check: the walk still compares each
+/// item's drive with the folder's, so a mount made since is refused too.
+///
+/// Meant for items that leave the Trash for good: as the Trash backend of
+/// `GVfs` does when it empties a trashed folder, each folder inside an
+/// item is made owner-only before it is emptied, so a read-only folder
+/// the user owns does not keep the rest. A folder the user may not change
+/// still stops the deletion.
+pub(crate) struct FolderDeletion {
+    /// The folder, as given.
+    folder: PathBuf,
+    /// The folder with its links resolved, as the mount table names it.
+    resolved: Option<PathBuf>,
+    /// The pinned folder.
+    pinned: OwnedFd,
+    /// Its drive; nothing on another one is deleted.
+    drive: Mount,
+    /// The mount points when the folder was opened, if they could be read.
+    mount_points: Option<std::collections::HashSet<PathBuf>>,
+}
+
+impl FolderDeletion {
+    /// Opens the folder at the absolute `folder`.
+    ///
+    /// # Errors
+    ///
+    /// A path that is not absolute or holds `..`, and a folder that cannot
+    /// be opened.
+    pub(crate) fn open(folder: &Path) -> Result<Self, TransferError> {
+        let pinned = open_parent(folder)?;
+        let drive = mount_of(pinned.as_fd(), c"", AtFlags::EMPTY_PATH)?;
+        Ok(Self {
+            folder: folder.to_path_buf(),
+            resolved: std::fs::canonicalize(folder).ok(),
+            pinned,
+            drive,
+            mount_points: crate::sizes::mounts::read_mount_points().ok(),
+        })
+    }
+
+    /// Permanently deletes `name`, one component directly in the folder,
+    /// and everything inside it, as [`delete_tree`] deletes an item whose
+    /// kind the caller did not find.
+    ///
+    /// # Errors
+    ///
+    /// As [`delete_tree`]; a `name` that is not one component is refused.
+    pub(crate) fn delete(&self, name: &OsStr, cancel: &Cancellation) -> Result<(), TransferError> {
+        cancel.check()?;
+        let is_one_component =
+            !name.is_empty() && name != "." && name != ".." && !name.as_bytes().contains(&b'/');
+        if !is_one_component {
+            return Err(TransferError::failed(crate::i18n::gettext(
+                "Choose a file or folder to delete.",
+            )));
+        }
+        let path = self.folder.join(name);
+        if let (Some(mount_points), Some(resolved)) = (&self.mount_points, &self.resolved) {
+            let item = resolved.join(name);
+            match first_mount_in(&item, mount_points) {
+                Some(mount_point) if *mount_point == item => return Err(mount_point_refusal(&path)),
+                Some(mount_point) => {
+                    let inside = mount_point.strip_prefix(&item).unwrap_or(mount_point);
+                    return Err(mount_inside_refusal(&path.join(inside)));
+                }
+                None => {}
+            }
+        }
+        let deletion = Deletion {
+            cancel: Some(cancel),
+            guard: None,
+            max_depth: MAX_DEPTH,
+            folders: FolderAccess::MadePrivate,
+            enter_root: true,
+            root_identity: None,
+            drive: Some(self.drive),
+        };
+        deletion.delete_at(self.pinned.as_fd(), name, &path, 0)
+    }
+
+    /// Removes the file or link `name`, one component directly in the
+    /// folder; a folder of that name is refused, never entered.
+    ///
+    /// # Errors
+    ///
+    /// The system's error, also for a folder, and for a `name` that is
+    /// not one component.
+    pub(crate) fn remove_file(&self, name: &OsStr) -> Result<(), TransferError> {
+        if name.is_empty() || name.as_bytes().contains(&b'/') {
+            return Err(TransferError::failed(crate::i18n::gettext(
+                "Choose a file or folder to delete.",
+            )));
+        }
+        fs::unlinkat(self.pinned.as_fd(), name, AtFlags::empty())?;
+        Ok(())
+    }
+}
+
 /// Removes the staging tree at `path`, which the engine created. With
 /// `created`, the tree is removed only while its name still leads to that
 /// folder.
