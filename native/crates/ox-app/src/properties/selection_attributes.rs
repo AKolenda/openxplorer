@@ -181,6 +181,8 @@ impl SelectionAttributes {
             versions,
             renamed: RefCell::new(Vec::new()),
         });
+        super::window::give_access_key(&attributes.read_only.check, 'r');
+        super::window::give_access_key(&attributes.hidden.check, 'h');
         for check in [&attributes.read_only.check, &attributes.hidden.check] {
             let window = window.downgrade();
             check.connect_toggled(move |_| {

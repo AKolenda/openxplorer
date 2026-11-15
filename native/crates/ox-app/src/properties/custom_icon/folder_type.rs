@@ -98,6 +98,10 @@ pub(super) fn folder_type_group(window: &PropertiesWindow, uri: &Rc<RefCell<Stri
     let subfolders = gtk::CheckButton::with_mnemonic(&ox_core::i18n::gettext(
         "Also apply this template to all subfolders",
     ));
+    super::super::window::give_access_key(&subfolders, 's');
+    // Alt+O moves to the list, as the caption's underlined letter says.
+    caption.set_text_with_mnemonic(&super::super::window::with_access_key(&caption.text(), 'o'));
+    caption.set_mnemonic_widget(Some(&list));
     content.append(&caption);
     content.append(&list);
     content.append(&subfolders);

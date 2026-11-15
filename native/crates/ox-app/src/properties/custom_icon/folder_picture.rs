@@ -113,6 +113,8 @@ pub(super) fn folder_picture_group(window: &PropertiesWindow, uri: &Rc<RefCell<S
         .build();
     let choose = push_button(&ox_core::i18n::gettext("Choose File..."));
     let restore = push_button(&ox_core::i18n::gettext("Restore Default"));
+    super::super::window::give_access_key(&choose, 'f');
+    super::super::window::give_access_key(&restore, 'r');
     for button in [&choose, &restore] {
         button.set_halign(gtk::Align::Fill);
         buttons.append(button);

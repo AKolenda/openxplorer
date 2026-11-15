@@ -236,6 +236,7 @@ fn opens_with_row(
         .build();
     row.append(&value);
     let change = push_button(&ox_core::i18n::gettext("Change..."));
+    super::window::give_access_key(&change, 'c');
     change.set_valign(gtk::Align::Center);
     change.set_sensitive(can_change);
     change.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
@@ -278,6 +279,7 @@ fn volume_row(mount: &MountFacts, uri: &Rc<RefCell<String>>) -> gtk::Box {
             .build(),
     );
     let properties = push_button(&ox_core::i18n::gettext("Properties"));
+    super::window::give_access_key(&properties, 'p');
     properties.set_valign(gtk::Align::Center);
     properties.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
         "Properties of the mounted volume",
@@ -375,6 +377,8 @@ impl GeneralEdits {
         read_only.set_inconsistent(entry.is_dir);
         read_only.set_sensitive(rights.can_change_permissions);
         let hidden = gtk::CheckButton::with_mnemonic(&ox_core::i18n::gettext("Hidden"));
+        super::window::give_access_key(&read_only, 'r');
+        super::window::give_access_key(&hidden, 'h');
         super::window::wrap_check_label(&read_only);
         super::window::wrap_check_label(&hidden);
         hidden.set_active(entry.name.starts_with('.'));

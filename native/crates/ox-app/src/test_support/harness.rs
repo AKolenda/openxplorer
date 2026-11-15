@@ -681,3 +681,20 @@ mod tests {
         );
     }
 }
+
+/// `label` as it reads, without the underscore that marks a control's
+/// access key (`_Read-only` reads "Read-only"; `__` is one underscore).
+pub(crate) fn without_mnemonic(label: &str) -> String {
+    let mut text = String::with_capacity(label.len());
+    let mut characters = label.chars();
+    while let Some(character) = characters.next() {
+        if character == '_' {
+            if let Some(next) = characters.next() {
+                text.push(next);
+            }
+        } else {
+            text.push(character);
+        }
+    }
+    text
+}

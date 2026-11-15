@@ -111,14 +111,18 @@ pub(super) fn press(widget: &impl IsA<gtk::Widget>, label: &str) {
 pub(super) fn check(widget: &impl IsA<gtk::Widget>, label: &str) -> gtk::CheckButton {
     descendants::<gtk::CheckButton>(widget)
         .into_iter()
-        .find(|check| check.label().as_deref() == Some(label))
+        .find(|check| {
+            check
+                .label()
+                .is_some_and(|text| crate::test_support::harness::without_mnemonic(&text) == label)
+        })
         .unwrap_or_else(|| panic!("a {label} check box"))
 }
 
 /// A button's text: its label, or the label inside it.
 fn button_label(button: &gtk::Button) -> Option<String> {
     if let Some(label) = button.label() {
-        return Some(label.to_string());
+        return Some(crate::test_support::harness::without_mnemonic(&label));
     }
     let inner = descendants::<gtk::Label>(button).into_iter().next()?;
     Some(inner.text().to_string())
@@ -965,6 +969,65 @@ fn read_only_refuses_a_location_made_a_previous_version_meanwhile() {
 
     refusal_over(&window).press("OK");
     assert_eq!(mode_of(&path), 0o644, "the previous version is unchanged");
+}
+
+/// Holds Alt and taps `key` on the private display's keyboard, as a user
+/// presses a control's access key.
+fn press_alt(pointer: &mut crate::test_support::pointer::Pointer, key: gtk::gdk::Key) {
+    pointer.hold_key(gtk::gdk::Key::Alt_L);
+    pointer.tap_key(key);
+    pointer.let_go_key(gtk::gdk::Key::Alt_L);
+}
+
+/// As in Windows' Properties, Alt and a control's underlined letter press
+/// it: Alt+R ticks Read-only, Alt+H Hidden, Alt+A applies, and on the
+/// Security tab Alt+E opens Edit.... The letters are underlined, and the
+/// labels read without the underscore.
+///
+/// parity: PROP-003
+#[gtk::test]
+fn alt_and_an_underlined_letter_press_the_properties_controls() {
+    let fixture = Fixture::standard();
+    let path = fixture.path("Notes 2.txt");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("a known mode");
+    let test = TestWindow::open(&fixture.uri());
+    // Before the window opens, which a new pointer would put away.
+    let mut pointer = crate::test_support::pointer::Pointer::connect();
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let page = general(&window);
+    let read_only = check(&page, "Read-only");
+    let hidden = check(&page, "Hidden");
+    wait_until("Read-only to be enabled", || read_only.is_sensitive());
+    assert!(read_only.uses_underline() && hidden.uses_underline());
+    let (x, y) = crate::test_support::pointer::screen_point(&mut pointer, &page, (20.0, 20.0), (40, 40));
+    // The keyboard follows the pointer on the private display.
+    pointer.move_to(x, y);
+
+    press_alt(&mut pointer, gtk::gdk::Key::r);
+    wait_until("Alt+R ticks Read-only", || read_only.is_active());
+    press_alt(&mut pointer, gtk::gdk::Key::h);
+    wait_until("Alt+H ticks Hidden", || hidden.is_active());
+    press_alt(&mut pointer, gtk::gdk::Key::a);
+    let hidden_path = fixture.path(".Notes 2.txt");
+    wait_until("Alt+A applies", || hidden_path.exists());
+    wait_until("Read-only applied", || mode_of(&hidden_path) & 0o222 == 0);
+
+    window.select_tab("security");
+    wait_until("the Security tab to be read", || {
+        descendants::<gtk::Button>(&tab(&window, "security"))
+            .iter()
+            .any(|button| button.is_sensitive() && button_label(button).as_deref() == Some("Edit..."))
+    });
+    press_alt(&mut pointer, gtk::gdk::Key::e);
+    wait_until("Alt+E opens Edit", || {
+        gtk::Window::list_toplevels()
+            .iter()
+            .filter_map(|widget| widget.downcast_ref::<PropertiesWindow>())
+            .any(|dialog| dialog.title_text().starts_with("Permissions for"))
+    });
+    window.close();
 }
 
 /// An item in a folder the user may not change cannot be renamed, so its

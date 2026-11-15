@@ -119,6 +119,7 @@ fn name_row(uri: &str, mount: &MountFacts, locations: &LocationContext) -> gtk::
     ));
     if crate::window::is_disk_tool_installed(DiskTool::AnalyseUsage) {
         let details = push_button(&ox_core::i18n::gettext("Details"));
+        super::window::give_access_key(&details, 'd');
         details.set_valign(gtk::Align::Center);
         details.update_property(&[gtk::accessible::Property::Description(&ox_core::i18n::gettext(
             "Opens the disk usage analyser on this drive",
