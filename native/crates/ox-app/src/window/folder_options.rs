@@ -43,7 +43,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use gtk::prelude::*;
-use gtk::{gio, glib};
+use gtk::{gdk, gio, glib};
 use ox_core::i18n::{gettext, gettext_static};
 use ox_core::location::{is_virtual_location, same_location, RECENT_LOCATIONS_URI, RECENT_URI};
 use ox_core::settings::{Preferences, PreferencesUpdate};
@@ -850,6 +850,7 @@ impl BrowserWindow {
             self,
             move |_| window.clear_explorer_history()
         ));
+        press_ok_on_enter(&options);
         self.quiet_for_dialog();
         options.present();
     }
@@ -924,6 +925,52 @@ impl BrowserWindow {
             self.context().reset_folder_views(self.preference_failure_reply());
         }
     }
+}
+
+/// The class of a Properties window's tab, a toggle button.
+const TAB_CLASS: &str = "properties-tab";
+
+/// Enter in `options` presses OK, its default button, as in Windows,
+/// wherever the keyboard is but on a push button, which Enter presses
+/// itself: GTK's tabs, check buttons and drop-down lists take Enter for
+/// themselves, so the keyboard alone could not close Folder Options with
+/// its choices saved after Alt and a letter chose one. Space still checks
+/// a check box, and Space or Alt+Down opens the list of start places.
+fn press_ok_on_enter(options: &PropertiesWindow) {
+    let keys = gtk::EventControllerKey::new();
+    keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+    keys.connect_key_pressed(glib::clone!(
+        #[weak]
+        options,
+        #[upgrade_or]
+        glib::Propagation::Proceed,
+        move |_, key, _, modifiers| {
+            let enter = matches!(key, gdk::Key::Return | gdk::Key::KP_Enter | gdk::Key::ISO_Enter);
+            let held = modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK);
+            let on_button = gtk::prelude::GtkWindowExt::focus(&options).is_some_and(|focus| {
+                let button =
+                    focus.is::<gtk::Button>() || focus.ancestor(gtk::Button::static_type()).is_some();
+                // A tab is a toggle button here, and the list of start
+                // places has one; neither is a push button.
+                let tab = focus.has_css_class(TAB_CLASS);
+                button && !tab && focus.ancestor(gtk::DropDown::static_type()).is_none()
+            });
+            if !enter || held || on_button {
+                return glib::Propagation::Proceed;
+            }
+            // The window's own activate-default would press the focused
+            // control instead when that control takes the default itself,
+            // as the list's button does.
+            match options.default_widget().filter(WidgetExt::is_sensitive) {
+                Some(ok) => {
+                    ok.activate();
+                    glib::Propagation::Stop
+                }
+                None => glib::Propagation::Proceed,
+            }
+        }
+    ));
+    options.add_controller(keys);
 }
 
 /// Asks `question` over `options` as Windows' Folder Views message box
