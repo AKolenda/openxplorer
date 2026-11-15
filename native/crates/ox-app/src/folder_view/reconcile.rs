@@ -74,7 +74,7 @@ fn replace_run(store: &gio::ListStore, start: u32, replacements: &mut Vec<FileIt
 /// entries that did not change.
 ///
 /// Every change of the store costs the sorted list and the views over it
-/// a pass over all items, so neighbouring removals and neighbouring
+/// a pass over all items, so neighboring removals and neighboring
 /// changed items are each made in one change, and the new items are added
 /// together.
 ///
@@ -171,13 +171,13 @@ mod tests {
 
     /// Every change of the store costs the sorted list a pass over all its
     /// items, which for a folder of 100,000 items reloaded after another
-    /// program changed it froze the window for seconds. Neighbouring
+    /// program changed it froze the window for seconds. Neighboring
     /// changes are made together, and a reload with nothing changed makes
     /// no change at all.
     ///
     /// parity: PERF-006
     #[test]
-    fn neighbouring_changes_are_made_in_one_change() {
+    fn neighboring_changes_are_made_in_one_change() {
         let names: Vec<String> = (0..10).map(|number| format!("{number}.txt")).collect();
         let names: Vec<&str> = names.iter().map(String::as_str).collect();
         let store = store_of_files(&names);
