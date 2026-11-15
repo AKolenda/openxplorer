@@ -88,6 +88,31 @@ fn rename_step(key: gdk::Key, modifiers: gdk::ModifierType, in_details: bool) ->
     }
 }
 
+/// Ctrl+A in `editor` selects its whole text and goes no further, as in
+/// Windows: the list or grid around it would otherwise take the key for
+/// its own Select all and select every item in the folder, which Escape
+/// then left selected (SEL-004).
+fn keep_select_all_in_field(editor: &gtk::Entry) {
+    let keys = gtk::EventControllerKey::new();
+    keys.connect_key_pressed(glib::clone!(
+        #[weak]
+        editor,
+        #[upgrade_or]
+        glib::Propagation::Proceed,
+        move |_, key, _, modifiers| {
+            let modifiers = modifiers & gtk::accelerator_get_default_mod_mask();
+            let is_select_all =
+                matches!(key.to_lower(), gdk::Key::a) && modifiers == gdk::ModifierType::CONTROL_MASK;
+            if !is_select_all {
+                return glib::Propagation::Proceed;
+            }
+            editor.select_region(0, -1);
+            glib::Propagation::Stop
+        }
+    ));
+    editor.add_controller(keys);
+}
+
 impl BrowserWindow {
     /// Starts editing `entry`'s name in `cell`; with `several`, the
     /// selected items in the order shown, the typed name goes to them all.
@@ -112,6 +137,7 @@ impl BrowserWindow {
             hidden_extension: hidden_extension.clone(),
         };
         self.connect_name_editor(cell, &editor, &target);
+        keep_select_all_in_field(&editor);
         // Added last, its key handler runs before the field's other ones.
         refuse_forbidden_characters(&editor);
         cell.show_name_editor(&editor);

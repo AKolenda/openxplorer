@@ -102,10 +102,15 @@ impl BrowserWindow {
     }
 
     /// Changes the selection of what the active pane shows: This PC's
-    /// tiles, in both its groups, else the folder's items.
+    /// tiles, in both its groups, nothing on another page, else the
+    /// folder's items.
     pub(super) fn change_selection(&self, change: SelectionChange) {
         let pane = self.folder_pane();
-        if pane.page() == Some(PanePage::Landing) && landing::change_tile_selection(pane.landing(), change) {
+        if pane.page() == Some(PanePage::Landing) {
+            // Only This PC's tiles can be selected together; Home's tiles
+            // and rows one at a time. The list behind a page is never
+            // touched (SEL-004).
+            landing::change_tile_selection(pane.landing(), change);
             return;
         }
         let model = pane.model();

@@ -36,8 +36,8 @@ enum Listing {
 pub(super) struct PaneState {
     /// The tab's location.
     uri: String,
-    /// The landing page at that location, if it is one; Network is
-    /// listed instead.
+    /// The landing page at that location, if it is one and shows no
+    /// search results; Network is listed instead.
     page: Option<Page>,
     /// Whether, and how, its listing runs.
     listing: Listing,
@@ -54,7 +54,8 @@ impl PaneState {
     pub(super) fn of(tab: &Tab) -> Self {
         Self {
             uri: tab.uri().to_owned(),
-            page: Page::drawn_at(tab.uri()),
+            // Search results from Home are listed in its place (HOME-017).
+            page: Page::drawn_at(tab.uri()).filter(|_| tab.history.current_search().is_none()),
             listing: match (tab.listing_state.is_listing(), tab.reloading) {
                 (false, _) => Listing::Idle,
                 (true, false) => Listing::First,

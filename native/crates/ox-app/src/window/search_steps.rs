@@ -60,7 +60,9 @@ impl BrowserWindow {
 
     /// Records the search the window runs in the active tab's history,
     /// as `change` says, and redraws the tab, the title and the address
-    /// once the step shows results.
+    /// once the step shows results. A step that showed a search already
+    /// redraws the tab and the title when its words changed, as they name
+    /// them ("notes - Search Results in Documents", SRCH-046).
     pub(super) fn record_search_step(&self, change: StepChange) {
         let step = {
             let search = self.imp().search.borrow();
@@ -75,21 +77,26 @@ impl BrowserWindow {
                 current_folder_only: search.is_current_folder_only(),
             }
         };
-        let shows_results_now = {
+        let (shows_results_now, renames) = {
             let mut session = self.imp().session.borrow_mut();
             let Some(tab) = session.active_mut() else {
                 return;
             };
             if change == StepChange::InPlace || tab.history.current_search().is_some() {
-                tab.history.set_current_search(Some(step))
+                let shown = tab.history.current_search().map(|shown| shown.query.clone());
+                let renames = shown.as_deref() != Some(step.query.as_str());
+                (tab.history.set_current_search(Some(step)), renames)
             } else {
                 tab.history.push_search(step);
                 tab.left_views.forget_from(tab.history.position());
-                true
+                (true, true)
             }
         };
         if shows_results_now {
             self.render_location();
+        } else if renames {
+            self.render_title();
+            self.render_tabs();
         }
     }
 
