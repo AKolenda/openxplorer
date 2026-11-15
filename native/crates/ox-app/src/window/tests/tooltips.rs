@@ -10,7 +10,7 @@ use gtk::prelude::*;
 
 use super::file_ops_support::{is_renaming_in_place, name_editor, select_names};
 use crate::folder_view::cells::FileCell;
-use crate::test_support::harness::{wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow};
 use crate::test_support::pointer::{screen_point, Button, Pointer};
 use crate::window::widget_tree::descendants;
 
@@ -57,6 +57,22 @@ fn move_and_wait(test: &TestWindow, pointer: &mut Pointer, screen: (i32, i32), i
     });
 }
 
+/// How many times GTK is asked to look under the pointer for a tooltip.
+const TOOLTIP_TRIES: u32 = 6;
+
+/// Runs the main loop until `condition` holds, for at most two seconds,
+/// which covers GTK's tooltip delay; whether it held.
+fn wait_briefly(condition: impl Fn() -> bool) -> bool {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    while std::time::Instant::now() < deadline {
+        if condition() {
+            return true;
+        }
+        wait_for(std::time::Duration::from_millis(20));
+    }
+    condition()
+}
+
 /// Moves the pointer onto the middle of `widget` and waits for its
 /// tooltip. The pointer first rests on the empty part of the file list,
 /// where nothing has a tooltip, until no tooltip shows and tooltips may
@@ -73,9 +89,19 @@ fn hover(test: &TestWindow, pointer: &mut Pointer, widget: &impl IsA<gtk::Widget
     let middle = (f64::from(widget.width()) / 2.0, f64::from(widget.height()) / 2.0);
     let (screen, in_window) = points_of(test, pointer, widget, middle);
     move_and_wait(test, pointer, screen, in_window);
-    wait_until(&format!("the tooltip of {what}"), || {
-        shown_tooltip(test).is_some()
-    });
+    // A second move inside the widget, as a hand that comes to rest.
+    let (screen, in_window) = points_of(test, pointer, widget, (middle.0 + 2.0, middle.1 + 1.0));
+    move_and_wait(test, pointer, screen, in_window);
+    // GTK starts a tooltip's wait on a motion it handles, and a busy
+    // display can merge or drop it: ask GTK to look under the resting
+    // pointer again, as another motion would, until the tooltip shows.
+    for _ in 0..TOOLTIP_TRIES {
+        widget.trigger_tooltip_query();
+        if wait_briefly(|| shown_tooltip(test).is_some()) {
+            return;
+        }
+    }
+    panic!("the tooltip of {what} did not show");
 }
 
 /// Whether no menu or other popover of the window is open.
