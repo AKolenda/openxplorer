@@ -456,6 +456,9 @@ impl DetailsView {
             column_view.append_column(&new_view_column(column, &cells));
         }
         view.imp().chosen.replace(column_choice::default_chosen());
+        // The listings' own columns follow Name from the start, before the
+        // first change of the chosen columns arranges them.
+        view.arrange_columns();
         view.imp()
             .cells
             .set(cells)
