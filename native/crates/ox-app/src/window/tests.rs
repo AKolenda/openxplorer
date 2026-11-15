@@ -28,6 +28,7 @@ mod details_pane;
 mod details_preview;
 mod details_tab;
 mod devices;
+mod dialog_focus;
 mod dialog_keys;
 mod disconnected;
 mod drag_and_drop;
