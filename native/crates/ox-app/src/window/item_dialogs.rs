@@ -414,9 +414,11 @@ impl BrowserWindow {
         self.dialog_layer().present(frame);
     }
 
-    /// After a window dialog closed, the folder takes focus again.
+    /// After a window dialog closed, the folder takes focus again, or in
+    /// an Open or Save dialog File name, where the choice asked about was
+    /// typed.
     fn dialog_closed(&self) {
-        if self.dialog_layer().shown().is_none() {
+        if self.dialog_layer().shown().is_none() && !self.give_keyboard_back_to_name() {
             self.folder_pane().focus_view();
         }
     }
