@@ -426,7 +426,7 @@ msgstr ""
 msgid "Browse…"
 msgstr ""
 
-#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs crates/ox-app/src/window/picker.rs crates/ox-app/src/window/transfer_panel/failure.rs
+#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs crates/ox-app/src/window/gallery_locations.rs crates/ox-app/src/window/picker.rs crates/ox-app/src/window/transfer_panel/failure.rs
 msgid "Cancel"
 msgstr ""
 
@@ -543,7 +543,7 @@ msgstr ""
 msgid "Not provided"
 msgstr ""
 
-#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/choose_details.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
+#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/choose_details.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/gallery_locations.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
 msgid "OK"
 msgstr ""
 
@@ -774,7 +774,7 @@ msgid "Date modified: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/folder_view/gallery_view.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
 msgid "Size: {size}"
 msgstr ""
 
@@ -808,6 +808,33 @@ msgstr ""
 
 #: crates/ox-app/src/folder_view/details/select_all.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Select all"
+msgstr ""
+
+#: crates/ox-app/src/folder_view/gallery.rs
+msgid "Gallery could not start reading your photos."
+msgstr ""
+
+#: crates/ox-app/src/folder_view/gallery_scrubber.rs
+msgid "Scroll down"
+msgstr ""
+
+#: crates/ox-app/src/folder_view/gallery_scrubber.rs
+msgid "Scroll up"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/gallery_view.rs
+msgid "Date: {date}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/gallery_view.rs
+msgid "Item type: {type}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/gallery_view.rs
+msgid "Path: {name} ({folder})"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/grouping.rs
@@ -916,6 +943,10 @@ msgstr ""
 
 #: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-core/src/grouping.rs
 msgid "Date created"
+msgstr ""
+
+#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/properties/details_rows.rs
+msgid "Date taken"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs
@@ -1575,10 +1606,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/details_rows.rs
 msgid "Data rate"
-msgstr ""
-
-#: crates/ox-app/src/properties/details_rows.rs
-msgid "Date taken"
 msgstr ""
 
 #: crates/ox-app/src/properties/details_rows.rs
@@ -4757,6 +4784,10 @@ msgstr ""
 msgid "Close search"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/folder_search.rs
+msgid "Collection"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Copy"
 msgstr ""
@@ -4821,12 +4852,28 @@ msgstr ""
 msgid "Restore the selected items"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs
+msgid "Rotate left"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs
+msgid "Rotate right"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/folder_search.rs
 msgid "Search options"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
 msgid "See more"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Set as background"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Setting the desktop background is not available yet."
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
@@ -5255,6 +5302,10 @@ msgid "Send to"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Set as desktop background"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Share with"
 msgstr ""
 
@@ -5435,7 +5486,15 @@ msgid "No matching items"
 msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
+msgid "No photos to show"
+msgstr ""
+
+#: crates/ox-app/src/window/empty_page.rs
 msgid "No shared folders found"
+msgstr ""
+
+#: crates/ox-app/src/window/empty_page.rs
+msgid "Photos in your Pictures folder show here."
 msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
@@ -6269,6 +6328,60 @@ msgstr ""
 msgid "Show hidden folders"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/gallery.rs
+msgid "Could not rotate {name}: {error}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/gallery.rs
+msgid "Could not save Gallery's folders: {error}"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery.rs
+msgid "Manage collection"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery.rs
+msgid "Show all"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "Add a folder to Gallery"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "Choose which folders to see in Gallery"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "Default save location"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "Gallery Locations"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "Gallery locations"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "Manage your Gallery by adding or removing folders from locations across your PC. Folders added here will still be stored in their original locations."
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "Only folders on this computer can be added."
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "_Add…"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "_Remove"
+msgstr ""
+
 #: crates/ox-app/src/window/group_headings.rs
 msgid "Collapse all groups"
 msgstr ""
@@ -6964,6 +7077,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Empty"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+msgid "Gallery"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs

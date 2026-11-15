@@ -288,6 +288,9 @@ impl BrowserWindow {
         if name == ox_core::i18n::gettext_static("Search options") || name == "Search options" {
             return self.open_search_options();
         }
+        if name == ox_core::i18n::gettext_static("Collection") || name == "Collection" {
+            return self.open_gallery_collection();
+        }
         self.search_strip().is_visible() && self.search_strip().open_option(name)
     }
 

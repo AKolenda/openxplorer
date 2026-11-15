@@ -429,6 +429,11 @@ pub struct Preferences {
     /// is folded.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub home_folded: Vec<String>,
+    /// The folders added to Gallery's collection beside the Pictures
+    /// folder, by location, in the order they were added (HOME-025).
+    /// Stored only when there is one.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub gallery_folders: Vec<String>,
     /// A start without locations reopens the tabs of the last window
     /// closed (Dolphin's `RememberOpenedTabs`, Explorer's "Restore
     /// previous folder windows at logon"); off, as in Explorer.
@@ -650,6 +655,7 @@ impl Default for Preferences {
             home_quick_access: false,
             favorites: Vec::new(),
             home_folded: Vec::new(),
+            gallery_folders: Vec::new(),
             restore_session: false,
             startup_folder: None,
             begin_in_split_view: false,
@@ -774,6 +780,9 @@ impl Preferences {
         });
         if let Some(folded) = folded {
             self.home_folded.clone_from(folded);
+        }
+        if let Some(folders) = &update.gallery_folders {
+            self.gallery_folders = canonical_gallery_folders(folders);
         }
     }
 
@@ -1069,6 +1078,9 @@ pub struct PreferencesUpdate {
     /// Replaces Home's folded sections; up to 16 short ASCII keys, else
     /// ignored.
     pub home_folded: Option<Vec<String>>,
+    /// Replaces the folders added to Gallery; local folders only, up to
+    /// 64, each once.
+    pub gallery_folders: Option<Vec<String>>,
     /// Reopen the last window's tabs on a start without locations.
     pub restore_session: Option<bool>,
     /// Where new windows open; empty for Home. A location the location
@@ -1198,6 +1210,7 @@ impl PreferencesUpdate {
             home_quick_access: flag("homeQuickAccess"),
             favorites: values.get("favorites").and_then(read_keys),
             home_folded: values.get("homeFolded").and_then(read_keys),
+            gallery_folders: values.get("galleryFolders").and_then(read_keys),
             restore_session: flag("restoreSession"),
             startup_folder: text("startupFolder").map(str::to_owned),
             begin_in_split_view: flag("beginInSplitView"),
@@ -1261,6 +1274,31 @@ fn canonical_favorites(favorites: &[String]) -> Vec<String> {
         }
     }
     kept
+}
+
+/// The most folders Gallery's collection keeps beside Pictures.
+const MAX_GALLERY_FOLDERS: usize = 64;
+
+/// The folders of `folders` Gallery may list: local folders (`file://`)
+/// in their canonical form, each once, at most [`MAX_GALLERY_FOLDERS`].
+/// The file may have been edited by hand, and Gallery walks each one.
+fn canonical_gallery_folders(folders: &[String]) -> Vec<String> {
+    let mut kept: Vec<String> = Vec::new();
+    for location in folders.iter().filter_map(|uri| gallery_folder_key(uri)) {
+        if !kept.contains(&location) {
+            kept.push(location);
+        }
+        if kept.len() == MAX_GALLERY_FOLDERS {
+            break;
+        }
+    }
+    kept
+}
+
+/// The form Gallery's collection keeps the folder `uri` in: a local
+/// folder's canonical `file://` address; `None` for anything else.
+pub fn gallery_folder_key(uri: &str) -> Option<String> {
+    favorite_key(uri).filter(|location| location.starts_with("file:///"))
 }
 
 /// The form Favorites keeps `uri` in, and compares it by: an address with
@@ -1348,6 +1386,33 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    /// Gallery's added folders keep only local folders, in canonical
+    /// form, each once: a share, another scheme, a virtual place or a
+    /// relative path is left out (HOME-025).
+    ///
+    /// parity: HOME-025
+    #[test]
+    fn gallery_folders_keep_only_local_folders_once() {
+        let update = PreferencesUpdate::from_json(&json!({
+            "galleryFolders": [
+                "file:///home/demo/Camera%20imports",
+                "file:///home/demo/Camera imports",
+                "smb://nas/photos",
+                "ox:gallery",
+                "Pictures/Trips",
+                "https://example.com/photos",
+            ],
+        }))
+        .expect("an update");
+        let mut preferences = Preferences::default();
+        preferences.apply(&update);
+        assert_eq!(
+            preferences.gallery_folders,
+            ["file:///home/demo/Camera%20imports"]
+        );
+        assert_eq!(gallery_folder_key("smb://nas/photos"), None);
+    }
 
     /// Favorites from a damaged or hand-edited file keep only locations
     /// the app can open, in their canonical form, each once: a name with
