@@ -1717,14 +1717,37 @@ impl BrowserWindow {
 }
 
 /// The controls of the caller's extra choices, from row `row` of
-/// `fields` on; `row` moves past them.
+/// `fields` on; `row` moves past them. The check boxes sit side by side on
+/// one row, where the first of them comes, wrapping only when the dialog
+/// is too narrow, as GTK's own dialog lines them up, so several of them
+/// leave the file list its room; a list keeps a row of its own.
 fn choice_controls(fields: &gtk::Grid, row: &mut i32, request: &ChooserRequest) -> Vec<ChoiceControl> {
     let mut choices = Vec::new();
+    let mut check_row: Option<gtk::FlowBox> = None;
     for choice in &request.choices {
         if choice.is_check_box() {
             let check = gtk::CheckButton::with_label(&choice.label);
             check.set_active(choice.initial == "true");
-            fields.attach(&check, 1, *row, 1, 1);
+            let boxes = check_row.get_or_insert_with(|| {
+                let boxes = gtk::FlowBox::builder()
+                    .selection_mode(gtk::SelectionMode::None)
+                    .orientation(gtk::Orientation::Horizontal)
+                    .column_spacing(16)
+                    .row_spacing(4)
+                    .homogeneous(false)
+                    .max_children_per_line(u32::try_from(request.choices.len()).unwrap_or(1).max(1))
+                    .hexpand(true)
+                    .build();
+                boxes.add_css_class("picker-check-boxes");
+                fields.attach(&boxes, 1, *row, 1, 1);
+                *row += 1;
+                boxes
+            });
+            boxes.append(&check);
+            // The check box takes the keyboard, not the cell around it.
+            if let Some(cell) = check.parent() {
+                cell.set_focusable(false);
+            }
             choices.push(ChoiceControl::Check(choice.id.clone(), check));
         } else {
             let labels: Vec<&str> = choice.options.iter().map(|(_, label)| label.as_str()).collect();
@@ -1734,8 +1757,8 @@ fn choice_controls(fields: &gtk::Grid, row: &mut i32, request: &ChooserRequest) 
             list.set_selected(u32::try_from(initial).unwrap_or(0));
             attach_field(fields, *row, &format!("{}:", choice.label), &list);
             choices.push(ChoiceControl::List(choice.id.clone(), ids, list));
+            *row += 1;
         }
-        *row += 1;
     }
     choices
 }
