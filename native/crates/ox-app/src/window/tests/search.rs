@@ -137,6 +137,32 @@ fn a_question_mark_finds_names_with_one_character_there() {
     assert!(test.names().is_empty());
 }
 
+/// A wildcard word matches within a name, as a plain word does and as in
+/// Windows 11 File Explorer: `a?b` finds `a1b.txt` and `acb.txt`, in the
+/// folder and in its subfolders, and `a?b.txt` and `*` work as before.
+///
+/// parity: SRCH-004, SRCH-035
+#[gtk::test]
+fn a_wildcard_word_finds_names_that_hold_it() {
+    let fixture = Fixture::empty();
+    fs::create_dir_all(fixture.path("Deep")).expect("fixture subfolder");
+    for name in ["a1b.txt", "acb.txt", "notes.txt", "Deep/xa3b.md"] {
+        fs::write(fixture.path(name), b"x").expect("fixture file");
+    }
+    let test = TestWindow::open(&fixture.uri());
+
+    test.search_for("a?b");
+    assert_eq!(test.names(), ["a1b.txt", "acb.txt", "xa3b.md"]);
+    test.search_for("?cb");
+    assert_eq!(test.names(), ["acb.txt"]);
+    test.search_for("a*b");
+    assert_eq!(test.names(), ["a1b.txt", "acb.txt", "xa3b.md"]);
+    test.search_for("a?b.txt");
+    assert_eq!(test.names(), ["a1b.txt", "acb.txt"]);
+    test.search_for("*.txt");
+    assert_eq!(test.names(), ["a1b.txt", "acb.txt", "notes.txt"]);
+}
+
 /// parity: SRCH-035, PERF-005
 #[gtk::test]
 fn a_live_search_caps_the_initial_listing_and_reports_truncation() {

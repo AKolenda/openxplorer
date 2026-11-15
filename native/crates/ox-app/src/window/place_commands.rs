@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Commands a navigation-pane menu runs on its row's folder rather than on
 //! the file list's selection, as Windows 11's menu of a pinned folder
-//! offers them: Copy as path, Compress to (ZIP File, TAR File, Additional options)
+//! offers them: Copy as path, Compress to (ZIP File, 7z File, TAR File, Additional options)
 //! and New. New opens the folder, then creates the item there, so its name
 //! can be typed where it shows.
 
@@ -84,6 +84,16 @@ impl BrowserWindow {
                         folder,
                         name,
                         crate::archive_view::TAR_ENDING,
+                    );
+                }
+            }),
+            text_action(WindowAction::CompressToSevenZipOf, |window, uri| {
+                if let Some((folder, name)) = parent_and_name(uri) {
+                    window.compress_items(
+                        vec![uri.to_owned()],
+                        folder,
+                        name,
+                        crate::archive_view::SEVEN_ZIP_ENDING,
                     );
                 }
             }),
