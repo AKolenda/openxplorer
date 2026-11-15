@@ -293,7 +293,7 @@ fn a_password_zip_says_so_and_offers_the_archive_manager() {
     crate::test_support::harness::capture_in_both_themes(&test.window, "native-zip-aes-refused");
     assert_eq!(
         frame.error_text(),
-        "This ZIP uses an encryption method OpenXplorer cannot open. Use an archive manager."
+        "This ZIP uses an encryption method that isn't supported. To open it, use a different archive app."
     );
     let fallback = descendants::<gtk::Button>(&frame)
         .into_iter()
