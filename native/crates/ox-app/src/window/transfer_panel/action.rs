@@ -295,7 +295,7 @@ mod tests {
 
     /// The top folder of a share or a server is named as its tab is,
     /// never by its address: "from media to Documents", not "from
-    /// smb://nas/media/ to Documents".
+    /// `smb://nas/media/` to Documents".
     ///
     /// parity: OPS-019
     #[test]

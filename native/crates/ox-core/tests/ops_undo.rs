@@ -15,9 +15,9 @@ use std::time::{Duration, Instant};
 
 use ox_core::location::ItemKind;
 use ox_core::ops::{
-    changed_copies, create_item, create_links, duplicate_items, list_recycle_bin, rename_batch,
-    removed_by_undo, rename_numbered_items, reverse, reverse_deleting, run_transfer, undo, BatchItem, BatchRename, LinkRequest, NumberedRename,
-    OperationContext, TransferRequest, UndoJournal, UndoRecord,
+    changed_copies, create_item, create_links, duplicate_items, list_recycle_bin, removed_by_undo,
+    rename_batch, rename_numbered_items, reverse, reverse_deleting, run_transfer, undo, BatchItem,
+    BatchRename, LinkRequest, NumberedRename, OperationContext, TransferRequest, UndoJournal, UndoRecord,
 };
 use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 
@@ -125,10 +125,7 @@ fn undoing_a_copy_deletes_the_agreed_copies_that_have_no_recycle_bin() {
     let copy_of_b = file_uri(&destination.join("b.txt"));
     let mut removed = removed_by_undo(&record);
     removed.sort();
-    assert_eq!(
-        removed,
-        [file_uri(&destination.join("a.txt")), copy_of_b.clone()]
-    );
+    assert_eq!(removed, [file_uri(&destination.join("a.txt")), copy_of_b.clone()]);
 
     let reversal = block_on(reverse_deleting(
         &record,
@@ -145,7 +142,10 @@ fn undoing_a_copy_deletes_the_agreed_copies_that_have_no_recycle_bin() {
     assert_in_recycle_bin(&destination.join("b.txt"), false);
     assert_eq!(fs::read(source.join("b.txt")).unwrap(), b"b");
     let Some(UndoRecord::Trash { original_paths, .. }) = reversal.inverse else {
-        panic!("Redo restores what went to the Recycle Bin: {:?}", reversal.inverse);
+        panic!(
+            "Redo restores what went to the Recycle Bin: {:?}",
+            reversal.inverse
+        );
     };
     assert_eq!(original_paths, [destination.join("a.txt")]);
 }
