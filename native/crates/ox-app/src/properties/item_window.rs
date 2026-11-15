@@ -120,6 +120,10 @@ pub(crate) fn open_item_properties(
     );
     // An item in the Recycle Bin has only its General tab, as in Windows.
     let in_bin = is_recycle_bin_item(&target.uri);
+    if in_bin {
+        // Its one tab shows, as a property sheet's always does.
+        window.show_single_tab();
+    }
     let hardware = is_drive.then(|| add_hardware_tab(&window));
     let shortcut = add_shortcut_tab(&window, &target);
     let usershares = context.usershares.as_ref().filter(|_| !in_bin);

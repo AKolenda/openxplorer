@@ -1397,6 +1397,11 @@ fn an_item_in_the_recycle_bin_shows_where_it_came_from_and_when_it_was_deleted()
     wait_until("the item to be read", || value_after(&page, "Origin:").is_some());
 
     assert_eq!(window.tab_labels(), ["General"]);
+    let strip = window.tab_buttons()[0].parent().expect("the row of tabs");
+    assert!(
+        strip.is_visible(),
+        "its one tab shows, as a property sheet's does"
+    );
     assert_eq!(
         value_after(&page, "Origin:").as_deref(),
         Some(fixture.root().to_str().expect("a UTF-8 path"))
