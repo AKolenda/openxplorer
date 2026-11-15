@@ -7872,7 +7872,7 @@ msgid "This ZIP compression method needs an external archive manager."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
-msgid "This ZIP uses an encryption method OpenXplorer cannot open. Use an archive manager."
+msgid "This ZIP uses an encryption method that isn't supported. To open it, use a different archive app."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs

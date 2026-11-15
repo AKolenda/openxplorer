@@ -194,7 +194,7 @@ pub enum ArchiveError {
     #[error(
         "{}",
         crate::i18n::gettext(
-            "This ZIP uses an encryption method OpenXplorer cannot open. Use an archive manager."
+            "This ZIP uses an encryption method that isn't supported. To open it, use a different archive app."
         )
     )]
     UnsupportedEncryption,
