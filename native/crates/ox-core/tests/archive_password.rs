@@ -258,7 +258,7 @@ fn an_info_zip_archive_extracts_with_its_password() {
 }
 
 /// AES encryption (method 99 of the `WinZip` specification) is listed, but
-/// opening or extracting it says it needs an archive manager instead of
+/// opening or extracting it says plainly that this encryption is not supported, instead of
 /// asking for a password the app cannot use.
 ///
 /// parity: ARC-016
@@ -281,7 +281,8 @@ fn aes_encrypted_files_are_listed_and_left_to_an_archive_manager() {
     assert_eq!(opened.unwrap_err(), ArchiveError::UnsupportedEncryption);
     let checked = fixture.extractor().inspect(&uri, &fixture.cancel);
     assert_eq!(checked.unwrap_err(), ArchiveError::UnsupportedEncryption);
-    assert!(ArchiveError::UnsupportedEncryption
-        .to_string()
-        .contains("archive manager"));
+    assert_eq!(
+        ArchiveError::UnsupportedEncryption.to_string(),
+        "This ZIP uses an encryption method that isn't supported. To open it, use a different archive app."
+    );
 }
