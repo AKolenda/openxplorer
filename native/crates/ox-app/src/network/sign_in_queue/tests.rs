@@ -488,3 +488,50 @@ fn text_size_keys_reach_the_window_under_the_dialog() {
     fixture.prompts.finish(&operation, MountOutcome::Failed);
     map.close();
 }
+
+/// The widgets Tab (Shift+Tab `backward`) moves the keyboard to in
+/// `dialog`, `count` presses: GTK runs the key as the window's
+/// `move-focus` once no widget took it. `None` where nothing had it.
+fn tab_stops(dialog: &SignInDialog, count: usize, backward: bool) -> Vec<Option<gtk::Widget>> {
+    let direction = if backward {
+        gtk::DirectionType::TabBackward
+    } else {
+        gtk::DirectionType::TabForward
+    };
+    (0..count)
+        .map(|_| {
+            dialog.emit_move_focus(direction);
+            settle();
+            gtk::prelude::GtkWindowExt::focus(dialog)
+        })
+        .collect()
+}
+
+/// Tab and Shift+Tab go round the sign-in dialog's controls, as
+/// Microsoft lists them for dialog boxes ("Tab: Move forward through
+/// options", "Shift+Tab: Move back through options",
+/// <https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows>):
+/// past the last control the keyboard goes back to the first, never to
+/// nothing.
+///
+/// parity: ACC-004
+#[gtk::test]
+fn tab_goes_round_the_sign_in_dialog() {
+    let fixture = PromptsFixture::new();
+    let (operation, _) = fixture.mount();
+    let dialog = fixture.ask_password(&operation, SIGN_IN_FLAGS | gio::AskPasswordFlags::ANONYMOUS_SUPPORTED);
+    for backward in [false, true] {
+        let stops = tab_stops(&dialog, 24, backward);
+        assert!(
+            stops.iter().all(Option::is_some),
+            "every Tab (backward: {backward}) leaves a control with the keyboard: {:?}",
+            stops.iter().map(|stop| stop.as_ref().map(|widget| widget.type_().name())).collect::<Vec<_>>()
+        );
+        let first = stops[0].clone();
+        assert!(
+            stops[1..].contains(&first),
+            "the keys come round to where they started (backward: {backward})"
+        );
+    }
+    fixture.prompts.finish(&operation, MountOutcome::Failed);
+}
