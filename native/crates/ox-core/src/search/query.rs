@@ -13,7 +13,7 @@ use rusqlite::{Connection, Row};
 
 use super::error::{check_cancelled, SearchError};
 use super::index::SearchIndex;
-use super::pattern::{is_wildcard, wildcard_matches, word_in_name};
+use super::pattern::{is_wildcard, wildcard_in_name, word_in_name};
 use super::root::{HiddenItems, RootStatus, SearchEngine};
 use super::text::{display_path, fold, folder_prefix, whole_seconds};
 use crate::entry::EntryKind;
@@ -210,8 +210,8 @@ impl QueryPlan {
             conditions.extend(plan.trigram_condition(words));
         }
         for word in words {
-            // A wildcard word matches the whole folded name (SRCH-004), by
-            // the rules the folder's filter uses.
+            // A wildcard word is found within the folded name (SRCH-004),
+            // by the rules the folder's filter uses.
             if is_wildcard(word) {
                 conditions.push(format!("{NAME_PATTERN_FUNCTION}(?, e.name)"));
                 plan.values.push(Value::Text(word.clone()));
@@ -277,11 +277,12 @@ impl QueryPlan {
     }
 }
 
-/// The SQL function that tells whether a name matches a wildcard word.
+/// The SQL function that tells whether a wildcard word is in a name.
 const NAME_PATTERN_FUNCTION: &str = "ox_name_matches";
 
 /// Adds [`NAME_PATTERN_FUNCTION`] to `connection`: whether the folded
-/// name matches the folded wildcard word, as the folder's filter decides.
+/// wildcard word is found within the folded name, as the folder's filter
+/// decides.
 /// `SQLite`'s own `lower()` and `GLOB` fold ASCII only and read an unclosed
 /// `[` differently, so `über*` would miss `Überblick.pdf`.
 fn add_name_pattern_function(connection: &Connection) -> rusqlite::Result<()> {
@@ -289,7 +290,7 @@ fn add_name_pattern_function(connection: &Connection) -> rusqlite::Result<()> {
     connection.create_scalar_function(NAME_PATTERN_FUNCTION, 2, flags, |context| {
         let word = context.get_raw(0).as_str().unwrap_or_default();
         let name = context.get_raw(1).as_str().unwrap_or_default();
-        Ok(wildcard_matches(word, &fold(name)))
+        Ok(wildcard_in_name(word, &fold(name)))
     })
 }
 
@@ -451,7 +452,7 @@ mod tests {
 
     /// parity: SRCH-004
     #[test]
-    fn a_wildcard_word_matches_the_whole_cached_name() {
+    fn wildcard_words_follow_the_folders_rules_in_the_cache() {
         let share = ScannedShare::new();
         let reports = format!("{SHARE}/Reports");
         share.store(&[
@@ -465,12 +466,30 @@ mod tests {
 
         assert_eq!(
             share.found_names("*.pdf"),
-            ["draft.pdf", "Q3-bank.PDF", "Überblick.pdf"]
+            ["bank.pdf.txt", "draft.pdf", "Q3-bank.PDF", "Überblick.pdf"]
         );
         assert_eq!(share.found_names("reports [!d]*.pdf"), ["Q3-bank.PDF"]);
         assert_eq!(share.found_names("über*"), ["Überblick.pdf"]);
         assert_eq!(share.found_names("straße*"), ["straße.txt"]);
         assert_eq!(share.found_names("[draft*"), ["[draft.txt"]);
+    }
+
+    /// A cached search matches a wildcard word within the name, as the
+    /// folder's filter does and as Windows 11 File Explorer does.
+    ///
+    /// parity: SRCH-004
+    #[test]
+    fn a_wildcard_word_matches_within_the_cached_name() {
+        let share = ScannedShare::new();
+        share.store(&[
+            listed_file(SHARE, "a1b.txt"),
+            listed_file(SHARE, "acb.txt"),
+            listed_file(SHARE, "notes.txt"),
+        ]);
+
+        assert_eq!(share.found_names("a?b"), ["a1b.txt", "acb.txt"]);
+        assert_eq!(share.found_names("?cb"), ["acb.txt"]);
+        assert_eq!(share.found_names("a?b.txt"), ["a1b.txt", "acb.txt"]);
     }
 
     /// parity: SRCH-008

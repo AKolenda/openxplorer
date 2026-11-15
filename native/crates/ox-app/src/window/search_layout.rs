@@ -196,7 +196,7 @@ impl BrowserWindow {
 }
 
 /// The words of `text` a result's name is marked at: each word once,
-/// lower-cased, without wildcard patterns, which match whole names.
+/// lower-cased, without wildcard patterns, which stand for no one text.
 fn marked_words(text: &str) -> Vec<String> {
     let mut words: Vec<String> = Vec::new();
     for word in text.to_lowercase().split_whitespace() {

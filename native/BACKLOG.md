@@ -39,6 +39,18 @@ is missing.
   default, as Windows 11 File Explorer does; Settings → Files & folders →
   Previews and thumbnails → Show thumbnails in network folders turns
   thumbnails and Preview pane previews on (VIEW-058).
+- **Windows 11 differences (2026-11-14).** Changed to Windows 11's behavior,
+  replacing earlier choices: a Home Quick access tile has Windows 11's menu
+  with "Show more options" (HOME-013); a wildcard search word is found
+  within a name as a plain word is, so `*.pdf` also finds `bank.pdf.txt`
+  (SRCH-004); tabs of the standard folders and of the home folder show
+  their navigation pane glyphs (TAB-010); column titles have no tooltip
+  (VIEW-029); the Rename File question names the file being renamed
+  (OPS-010); Backspace in an Open or Save dialog goes up (NAV-004); Alt at
+  a drop makes shortcuts (DND-017); Compress to offers 7z File (ARC-023);
+  focus rings show only after keyboard navigation (ACC-009). Windows 11
+  opens Home with Quick access by default; "Open Quick access on Home"
+  stays off here, the owner's choice.
 - **Checks this environment cannot run.** LOOK-028 (fractional scales and a
   window moving between monitors of different scales need a Wayland
   compositor), ACC-003 (nobody has checked the file list with Orca; the icon
@@ -66,6 +78,8 @@ is missing.
   A TAR's relative links that stay inside the archive are listed and
   extracted; ZIP links stay hidden and refused. Search inside an opened
   archive is still unavailable.
+  Compress to › 7z File writes 7z archives (sevenz-rust2); browsing and
+  extracting 7z is not supported yet.
 - **Flatpak:** "Show in folder" answers only while OpenXplorer runs unless the
   desktop's Background portal starts it at login (native/packaging/README.md,
   "Differences inside the Flatpak"). Flathub publication needs the owner.

@@ -20,6 +20,8 @@ const MAX_NAME_TRIES: u32 = 100;
 pub(crate) const ZIP_ENDING: &str = ".zip";
 /// The ending of the archive Compress to › TAR File writes: a plain TAR.
 pub(crate) const TAR_ENDING: &str = ".tar";
+/// The ending of the archive Compress to › 7z File writes.
+pub(crate) const SEVEN_ZIP_ENDING: &str = ".7z";
 
 /// The archive names tried for a selection whose first item is
 /// `first_name`, with `ending` (`.zip` or `.tar`), in order:

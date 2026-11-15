@@ -2,38 +2,32 @@
 //! The "Rename File" question when a file renamed in place takes the name
 //! of another file in its folder (OPS-008, OPS-010).
 //!
-//! Windows File Explorer says "There is already a file with the same name
-//! in this location.", shows both files with their size and date, and asks
-//! "Would you like to rename "x.txt" to "x (2).txt"?". Yes renames the file
-//! to that numbered name, the first one free; No goes back to editing the
-//! typed name. Nothing is overwritten: the numbered rename never replaces
-//! anything either, and a numbered name taken meanwhile is refused with the
-//! toast. A folder renamed to a taken name, or a file renamed to a
-//! folder's name, is refused with the toast as before: Windows offers to
-//! merge two folders there, which a rename here does not do.
+//! Windows 11 File Explorer (checked on Windows 11 on 2026-11-14) asks in
+//! a small message box titled "Rename File": "Do you want to rename
+//! "Notes 2.md" to "Notes 1 (2).md"?", naming the file being renamed and
+//! the name it is offered, and on the next line "There is already a file
+//! with the same name in this location.", with Yes and No. Yes renames the
+//! file to that numbered name, the first one free; No goes back to editing
+//! the typed name. Nothing is overwritten: the numbered rename never
+//! replaces anything either, and a numbered name taken meanwhile is
+//! refused with the toast. A folder renamed to a taken name, or a file
+//! renamed to a folder's name, is refused with the toast as before:
+//! Windows offers to merge two folders there, which a rename here does not
+//! do.
 
 use gtk::gio::prelude::*;
-use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::{entry_from_info, Entry, ATTRIBUTES};
-use ox_core::format::{date_short_time_text, size_text};
 use ox_core::location::{name_with_copy_marker, ItemKind};
 
 use crate::dialog::Dialog;
-use crate::icons::{Art, ArtImage};
 use crate::window::{BrowserWindow, ButtonStyle};
 
 /// The question's title, as Windows titles it.
 const TITLE: &str = crate::i18n::message_id("Rename File");
 
-/// The question's message, in Windows' words.
-const MESSAGE: &str = crate::i18n::message_id("There is already a file with the same name in this location.");
-
 /// How many numbered names are tried before none is offered.
 const MAX_NUMBERED_NAMES: u32 = 10_000;
-
-/// The size of the files' icons in the question.
-const ITEM_ART_SIZE: i32 = 32;
 
 /// What the "Rename File" question answered.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,44 +95,14 @@ async fn first_free_numbered_name(
     None
 }
 
-/// The question's line, in Windows' words.
+/// The question, in Windows 11's words and on its two lines: the file
+/// being renamed, `name`, and the name it is offered, `numbered`.
 fn question(name: &str, numbered: &str) -> String {
     ox_core::i18n::format_message(
-        "Would you like to rename \"{name}\" to \"{numbered}\"?",
+        "Do you want to rename \"{name}\" to \"{numbered}\"?\nThere is already a file with the same name \
+         in this location.",
         &[("name", name), ("numbered", numbered)],
     )
-}
-
-/// One file as the question shows it: its icon, name, size and date.
-fn item_row(entry: &Entry) -> gtk::Box {
-    let row = gtk::Box::builder()
-        .orientation(gtk::Orientation::Horizontal)
-        .spacing(12)
-        .css_classes(["rename-file-item"])
-        .build();
-    row.append(&ArtImage::new(Art::for_entry(entry), ITEM_ART_SIZE));
-    let lines = gtk::Box::new(gtk::Orientation::Vertical, 2);
-    let size = ox_core::i18n::format_message("Size: {size}", &[("size", &size_text(entry.size))]);
-    let date = ox_core::i18n::format_message(
-        "Date modified: {date}",
-        &[("date", &date_short_time_text(entry.modified))],
-    );
-    for (text, class) in [
-        (entry.name.as_str(), "rename-file-name"),
-        (&size, "rename-file-detail"),
-        (&date, "rename-file-detail"),
-    ] {
-        let label = gtk::Label::builder()
-            .label(text)
-            .xalign(0.0)
-            .ellipsize(gtk::pango::EllipsizeMode::Middle)
-            .max_width_chars(48)
-            .css_classes([class])
-            .build();
-        lines.append(&label);
-    }
-    row.append(&lines);
-    row
 }
 
 impl BrowserWindow {
@@ -161,22 +125,18 @@ impl BrowserWindow {
         else {
             return TakenNameAnswer::NotAsked;
         };
-        let dialog = Dialog::new(
+        // A message box as Windows 11 draws it: Yes is focused, so Enter
+        // renames; No, Escape and the close button go back to editing.
+        let dialog = Dialog::message_box(
             self,
             ox_core::i18n::gettext_static(TITLE),
-            ox_core::i18n::gettext_static(MESSAGE),
+            &question(&renamed.name, &numbered),
         );
-        let line = gtk::Label::builder()
-            .label(question(name, &numbered))
-            .xalign(0.0)
-            .wrap(true)
-            .max_width_chars(60)
-            .build();
-        dialog.add_field(&line);
-        dialog.add_field(&item_row(&existing));
-        dialog.add_field(&item_row(&renamed));
         let yes = dialog.add_button(ox_core::i18n::gettext_static("Yes"), ButtonStyle::Accent);
-        dialog.add_button(ox_core::i18n::gettext_static("No"), ButtonStyle::Bordered);
+        let no = dialog.add_button(ox_core::i18n::gettext_static("No"), ButtonStyle::Bordered);
+        // Alt+Y and Alt+N in every language, as Windows keeps them.
+        dialog.also_press_with(yes, 'y');
+        dialog.also_press_with(no, 'n');
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();
@@ -212,8 +172,9 @@ mod tests {
         );
         assert_eq!(numbered_name("Q3.v1", 2, true).as_deref(), Some("Q3.v1 (2)"));
         assert_eq!(
-            question("x.txt", "x (2).txt"),
-            "Would you like to rename \"x.txt\" to \"x (2).txt\"?"
+            question("Notes 2.md", "Notes 1 (2).md"),
+            "Do you want to rename \"Notes 2.md\" to \"Notes 1 (2).md\"?\nThere is already a file with \
+             the same name in this location."
         );
     }
 }
