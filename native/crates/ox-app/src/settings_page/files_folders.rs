@@ -102,10 +102,11 @@ const SHOW_PREVIEWS: RowText = RowText {
 };
 
 const REMOTE_PREVIEWS: RowText = RowText {
-    title: "Also in network folders",
-    description: "Off: files on SMB shares, servers and phones keep their icons, so browsing \
-                  them reads no file contents.",
-    keywords: "show previews in network folders thumbnails remote network smb nas sftp slow",
+    title: "Show thumbnails in network folders",
+    description: "Off by default, as in Windows: files on shares, servers, phones and cameras \
+                  show their type icons. Turn on to show their thumbnails and previews too.",
+    keywords: "show previews in network folders thumbnails remote network smb nas sftp phone camera \
+               also",
 };
 
 const LARGE_PREVIEWS: RowText = RowText {

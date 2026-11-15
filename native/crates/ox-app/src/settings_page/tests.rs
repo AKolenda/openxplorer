@@ -889,6 +889,50 @@ fn the_replaced_files_switch_is_on_by_default_and_saves_only_its_turning_off() {
     );
 }
 
+/// "Show thumbnails in network folders" is off by default, as Windows 11
+/// File Explorer shows only icons in network folders, says so in its ⓘ,
+/// and is stored only once turned on: turning it off again leaves the
+/// settings file as a new installation's.
+///
+/// parity: VIEW-058
+#[gtk::test]
+fn the_network_thumbnails_switch_is_off_by_default_and_saved_only_when_changed() {
+    let settings = SettingsTest::open();
+    let row = settings.row("Show thumbnails in network folders");
+    let details = row.info().expect("the row explains itself").details();
+    assert!(details.contains("as in Windows"), "{details}");
+    assert!(details.contains("type icons"), "{details}");
+    let switch = switch_of(&row);
+    assert!(!switch.is_active(), "off by default");
+    let settings_file = settings.test.settings_directory().join("settings.json");
+    let stored = || std::fs::read_to_string(&settings_file).unwrap_or_default();
+    assert!(
+        !stored().contains("remotePreviews"),
+        "nothing stored: {}",
+        stored()
+    );
+
+    switch.set_active(true);
+    wait_until("the choice to be saved", || {
+        settings.saved_preferences().view_options.remote_previews
+    });
+    assert!(
+        stored().contains("\"remotePreviews\": true"),
+        "stored when on: {}",
+        stored()
+    );
+
+    switch.set_active(false);
+    wait_until("the choice to be saved", || {
+        !settings.saved_preferences().view_options.remote_previews
+    });
+    assert!(
+        !stored().contains("remotePreviews"),
+        "the default is not stored: {}",
+        stored()
+    );
+}
+
 /// The clipboard's extras beyond Windows are on by default, as they were
 /// before they could be turned off; each switch saves the choice to turn
 /// it off, as Windows 11 File Explorer behaves, which the open window then
