@@ -478,6 +478,17 @@ mod tests {
         assert_eq!(share.found_names("reports NOT ext:docx"), ["Report draft.txt"]);
         assert_eq!(share.found_names("\"\" OR *; DROP TABLE"), Vec::<String>::new());
         assert_eq!(share.found_names("NOT"), Vec::<String>::new());
+
+        let invoices = format!("{SHARE}/Invoices");
+        share.store(&[
+            listed_folder(SHARE, "Invoices"),
+            listed_file(&invoices, "Invoice 2026-014.pdf"),
+            listed_file(&invoices, "Invoice 2026-015.pdf"),
+        ]);
+        assert_eq!(
+            share.found_names("invoice OR budget NOT 015"),
+            ["Invoices", "annual budget.xlsx", "Invoice 1042.pdf", "Invoice 2026-014.pdf"]
+        );
     }
 
     /// parity: SRCH-004
