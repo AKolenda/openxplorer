@@ -213,13 +213,22 @@ fn read_folder(uri: &str, cancellable: &gio::Cancellable, mailbox: &Mutex<Mailbo
     }
 }
 
+/// How many times as long as delivering a batch took the listing waits
+/// before the next one: the main loop then spends at most about a quarter
+/// of its time taking in rows.
+const DELIVERY_SPACING: u32 = 3;
+
 /// Delivers the first rows at once and merges later ones for
-/// [`MERGE_WINDOW`], so a large folder shows quickly but is not re-sorted
-/// for every read.
+/// [`MERGE_WINDOW`], or for [`DELIVERY_SPACING`] times as long as the last
+/// delivery took when that is longer, so a large folder shows quickly but
+/// is not re-sorted for every read. Taking in a batch costs the views a
+/// pass over every item listed so far, so with 100,000 items the spacing
+/// keeps the window answering between batches.
 struct BatchCoalescer<F> {
     deliver: F,
     pending: Vec<Entry>,
     last_delivery: Option<Instant>,
+    window: Duration,
 }
 
 impl<F: FnMut(Vec<Entry>)> BatchCoalescer<F> {
@@ -228,6 +237,7 @@ impl<F: FnMut(Vec<Entry>)> BatchCoalescer<F> {
             deliver,
             pending: Vec::new(),
             last_delivery: None,
+            window: MERGE_WINDOW,
         }
     }
 
@@ -238,9 +248,11 @@ impl<F: FnMut(Vec<Entry>)> BatchCoalescer<F> {
         self.pending.extend(rows);
         let window_has_passed = self
             .last_delivery
-            .is_none_or(|last| now.duration_since(last) >= MERGE_WINDOW);
+            .is_none_or(|last| now.duration_since(last) >= self.window);
         if window_has_passed {
+            let started = Instant::now();
             (self.deliver)(std::mem::take(&mut self.pending));
+            self.window = MERGE_WINDOW.max(started.elapsed() * DELIVERY_SPACING);
             self.last_delivery = Some(now);
         }
         window_has_passed
@@ -361,6 +373,34 @@ mod tests {
         batches.push(placeholder_rows(1), start + MERGE_WINDOW);
         batches.finish();
         assert_eq!(delivered, [3, 6, 1]);
+    }
+
+    /// A batch the views took long to take in spaces the next one out,
+    /// so the main loop is mostly free while a large folder is listed.
+    ///
+    /// parity: PERF-002
+    #[test]
+    fn a_slow_delivery_spaces_out_the_next_one() {
+        let start = Instant::now();
+        let mut delivered = Vec::new();
+        let mut batches = BatchCoalescer::new(|batch: Vec<Entry>| {
+            if delivered.is_empty() {
+                std::thread::sleep(Duration::from_millis(150));
+            }
+            delivered.push(batch.len());
+        });
+        batches.push(placeholder_rows(3), start);
+        batches.push(
+            placeholder_rows(2),
+            start + MERGE_WINDOW + Duration::from_millis(10),
+        );
+        batches.push(placeholder_rows(4), start + Duration::from_millis(460));
+        batches.finish();
+        assert_eq!(
+            delivered,
+            [3, 6],
+            "the second batch waited 450 ms, three times the first's 150 ms"
+        );
     }
 
     #[test]

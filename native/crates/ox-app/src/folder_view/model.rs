@@ -573,9 +573,15 @@ impl FolderModel {
         // filter's callback, which borrows the state too.
         let changed = update(&mut self.filter_state.borrow_mut());
         if changed {
+            let was_filtering = self.filter_model.filter().is_some();
             self.apply_filter_need();
-            // Expanded folders' contents are filtered by the same filter.
-            self.filter.changed(gtk::FilterChange::Different);
+            // A filter just given has filtered the items; expanded
+            // folders' contents are filtered by the same filter, so it is
+            // still told when folders are expanded.
+            let is_filtering = self.filter_model.filter().is_some();
+            if (was_filtering && is_filtering) || self.tree.model().is_some() {
+                self.filter.changed(gtk::FilterChange::Different);
+            }
         }
         changed
     }
