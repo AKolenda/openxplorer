@@ -39,9 +39,9 @@ mod removed_folder;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gio, glib};
 use ox_core::entry::{Entry, EntryError};
 use ox_core::integration::FOLDER_CONTENT_TYPE;
 use ox_core::location::{
@@ -426,6 +426,9 @@ impl BrowserWindow {
         }
         let items: Vec<FileItem> = entries.into_iter().map(FileItem::new).collect();
         if let Some(store) = self.tab_store(run.tab) {
+            if items.iter().any(|item| item.entry().is_hidden) {
+                self.expect_hidden_items(&store);
+            }
             store.splice(store.n_items(), 0, &items);
         }
         self.redraw_pane(run.tab);
@@ -539,7 +542,18 @@ impl BrowserWindow {
     /// Merges a completed reload into the rows, keeping unchanged items.
     fn merge_rows(&self, id: TabId, entries: Vec<Entry>) {
         let Some(store) = self.tab_store(id) else { return };
+        if entries.iter().any(|entry| entry.is_hidden) {
+            self.expect_hidden_items(&store);
+        }
         self.change_model(|| reconcile::update_in_place(&store, entries));
+    }
+
+    /// Readies the folder panes that show `store` for hidden items, before
+    /// they are added to it.
+    fn expect_hidden_items(&self, store: &gio::ListStore) {
+        for pane in self.folder_panes() {
+            pane.model().expect_hidden_items(store);
+        }
     }
 
     /// Records why a listing failed and stops watching a folder that cannot
