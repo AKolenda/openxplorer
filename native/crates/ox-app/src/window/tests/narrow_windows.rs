@@ -99,7 +99,7 @@ fn the_columns_fit_beside_the_details_pane_and_name_gives_way_first() {
     resize(&test, 1000);
     let pane = test.window.details_pane();
     assert!(pane.is_visible(), "the pane is open");
-    let room = column_room(&test, &test.window.folder_pane());
+    let room = column_room(&test, test.window.folder_pane());
     assert!(
         room.columns <= room.shown + 1.0,
         "every column shows beside the pane: {} of {} pixels",
@@ -119,7 +119,7 @@ fn the_columns_fit_beside_the_details_pane_and_name_gives_way_first() {
         .expect("a Name column");
     assert!(name.expands(), "Name still takes any room left");
     resize(&test, 1320);
-    let room = column_room(&test, &test.window.folder_pane());
+    let room = column_room(&test, test.window.folder_pane());
     assert!(room.name > 260 + 14, "a wide window gives Name its room back");
 }
 
@@ -176,8 +176,8 @@ fn in_a_900_pixel_window_name_gives_way_before_the_list_scrolls() {
             );
         }
     };
-    check("one pane", &test.window.folder_pane());
-    let alone = column_room(&test, &test.window.folder_pane());
+    check("one pane", test.window.folder_pane());
+    let alone = column_room(&test, test.window.folder_pane());
     assert!(
         alone.columns <= alone.shown + 1.0,
         "a 900-pixel window shows every column"
@@ -185,6 +185,6 @@ fn in_a_900_pixel_window_name_gives_way_before_the_list_scrolls() {
     test.activate("split-view", None);
     wait_for_frames(&test.window, 3);
     for (index, pane) in test.window.folder_panes().iter().enumerate() {
-        check(&format!("split pane {index}"), *pane);
+        check(&format!("split pane {index}"), pane);
     }
 }
