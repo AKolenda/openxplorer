@@ -42,6 +42,9 @@
 //!   application's accelerators first, then the key handlers and shortcut
 //!   controllers from the window down to the focused widget and back up,
 //!   as GTK hands a key event round (GTK cannot make a key event itself);
+//! - `tab-key=<count>`: presses Tab that many times in the dialog the scene
+//!   opened last, or else in the browser window, as GTK moves the keyboard
+//!   for a Tab no control took, with the focus rings shown;
 //! - `zoom=<steps>`: the layout that many steps bigger, or smaller when
 //!   negative, as Ctrl+wheel notches over the file list give it;
 //! - `type=<text>`: puts the text in the text field with keyboard focus,
@@ -107,6 +110,9 @@ pub(crate) enum SceneStep {
     Wait(Duration),
     /// Press this key, as GTK parses it, where keyboard focus is.
     Key(String),
+    /// Press Tab this many times in the dialog the scene opened last, or
+    /// else in the window, so the picture shows where the keyboard went.
+    TabKey(u32),
     /// Zoom the layout this many Ctrl+wheel steps.
     Zoom(i32),
     /// Put this text in the focused text field.
@@ -179,6 +185,7 @@ impl SceneStep {
             }
             // GTK reads the key when the step runs: it is not started yet.
             "key" => Some(Self::Key(argument.to_owned())),
+            "tab-key" => argument.parse().ok().filter(|count| *count > 0).map(Self::TabKey),
             "zoom" => argument.parse().ok().map(Self::Zoom),
             "type" => Some(Self::Type(argument.to_owned())),
             "scroll" => (argument == "end").then_some(Self::ScrollToEnd),
@@ -259,6 +266,10 @@ impl SceneStep {
                     .then_some(crate::window::MENU_OPENING_MOTION)
                     .ok_or_else(|| format!("{accelerator} is not a key, or nothing in the window took it"))
             }
+            Self::TabKey(count) => {
+                tab_in_front(window, *count);
+                Ok(crate::window::MENU_OPENING_MOTION)
+            }
             Self::Zoom(steps) => {
                 window.zoom_view(*steps);
                 Ok(Duration::ZERO)
@@ -278,6 +289,23 @@ impl SceneStep {
                 .then_some(Duration::ZERO)
                 .ok_or_else(|| format!("the search list “{list}” has no option “{label}”")),
         }
+    }
+}
+
+/// Presses Tab `count` times in the dialog the scene opened last, or else
+/// in `window`, as GTK runs the key once no control took it, with the
+/// rings shown as after any key.
+fn tab_in_front(window: &BrowserWindow, count: u32) {
+    let parent: &gtk::Window = window.upcast_ref();
+    let front = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|toplevel| toplevel.downcast::<gtk::Window>().ok())
+        .filter(|other| other.is_visible() && other.transient_for().as_ref() == Some(parent))
+        .last()
+        .unwrap_or_else(|| parent.clone());
+    front.set_focus_visible(true);
+    for _ in 0..count {
+        front.emit_move_focus(gtk::DirectionType::TabForward);
     }
 }
 
@@ -513,14 +541,18 @@ mod tests {
     #[test]
     fn a_scene_takes_keys_and_zoom_steps() {
         assert_eq!(
-            SceneStep::parse_scene("key=<Primary><Shift>e; key=KP_Multiply; zoom=-2; type=tab; scroll=end"),
+            SceneStep::parse_scene(
+                "key=<Primary><Shift>e; key=KP_Multiply; zoom=-2; type=tab; scroll=end; tab-key=2"
+            ),
             Some(vec![
                 SceneStep::Key("<Primary><Shift>e".to_owned()),
                 SceneStep::Key("KP_Multiply".to_owned()),
                 SceneStep::Zoom(-2),
                 SceneStep::Type("tab".to_owned()),
                 SceneStep::ScrollToEnd,
+                SceneStep::TabKey(2),
             ])
         );
+        assert_eq!(SceneStep::parse_scene("tab-key=0"), None);
     }
 }
