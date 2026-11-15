@@ -48,7 +48,10 @@
                   <!-- The message keeps its line breaks, as `white-space:
                        pre-wrap` did, and can be selected and copied with the
                        pointer. It takes no keyboard focus, which would select
-                       all of it when the dialog opens. -->
+                       all of it when the dialog opens, and no Tab: GTK 4.14
+                       offers Tab to a selectable label even when it is not
+                       focusable, and the label claims it without taking the
+                       keyboard, so Tab went nowhere after the last button. -->
                   <object class="GtkLabel" id="message_label">
                     <property name="xalign">0</property>
                     <property name="wrap">true</property>
@@ -56,6 +59,7 @@
                     <property name="max-width-chars">60</property>
                     <property name="selectable">true</property>
                     <property name="focusable">false</property>
+                    <property name="can-focus">false</property>
                     <property name="visible">false</property>
                     <style>
                       <class name="dialog-message"/>
@@ -79,6 +83,11 @@
                    in view when the dialog would be taller than its window
                    (src/modal.rs, src/dialog/layer.rs). -->
               <object class="GtkScrolledWindow" id="scroller">
+                <!-- Takes Tab only for what it has for the keyboard
+                     (src/modal.rs, update_body_tab_stop). -->
+                <style>
+                  <class name="dialog-body-scroller"/>
+                </style>
                 <property name="hscrollbar-policy">never</property>
                 <property name="propagate-natural-height">true</property>
                 <property name="vexpand">true</property>
@@ -100,6 +109,7 @@
                 <property name="max-width-chars">60</property>
                 <property name="selectable">true</property>
                 <property name="focusable">false</property>
+                <property name="can-focus">false</property>
                 <property name="visible">false</property>
                 <property name="accessible-role">alert</property>
                 <style>

@@ -143,6 +143,11 @@ impl BrowserWindow {
                 gtk::DirectionType::TabBackward => true,
                 _ => return,
             };
+            // A dialog shown inside the window takes Tab in its body only
+            // for what it has for the keyboard (src/modal.rs).
+            if let Some(frame) = window.dialog_layer().shown() {
+                crate::modal::update_body_tab_stop(&frame.scroller());
+            }
             if window.keeps_gtk_tab_order() {
                 return;
             }

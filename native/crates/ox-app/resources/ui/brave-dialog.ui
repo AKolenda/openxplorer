@@ -74,6 +74,7 @@
                         <property name="ellipsize">middle</property>
                         <property name="selectable">true</property>
                         <property name="focusable">false</property>
+                        <property name="can-focus">false</property>
                         <style>
                           <class name="dialog-note"/>
                         </style>
