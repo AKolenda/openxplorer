@@ -470,6 +470,39 @@ fn typing_on_the_page_starts_a_settings_search() {
     assert_eq!(capture, Some(settings.page.clone().upcast()));
 }
 
+/// Typing on the page while the category list has the keyboard starts a
+/// search and moves the keyboard into the search box, with nothing
+/// selected and the cursor after the typed text, so the rest of a phrase
+/// such as "hidden files", its space too, goes on into the search instead
+/// of choosing a category, which would end the search.
+///
+/// parity: SET-019, SET-004, ACC-006
+#[gtk::test]
+fn typing_on_the_category_list_moves_the_keyboard_into_the_search() {
+    let settings = SettingsTest::open();
+    let entry = settings.page.imp().search_entry.get();
+    settings.page.focus_chosen_category();
+    wait_until("the category list to have the keyboard", || {
+        settings
+            .page
+            .imp()
+            .category_list
+            .state_flags()
+            .contains(gtk::StateFlags::FOCUS_WITHIN)
+    });
+    // What the search box's key capture does with the first key typed.
+    entry.set_text("hidden");
+    wait_until("the search box to have the keyboard", || {
+        entry.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN)
+    });
+    assert_eq!(entry.selection_bounds(), None, "nothing typed is selected");
+    assert_eq!(entry.position(), 6, "the cursor is after the typed text");
+    assert!(
+        !settings.result_categories().is_empty(),
+        "the search shows its results"
+    );
+}
+
 /// parity: SET-019, SET-004
 #[gtk::test]
 fn enter_in_the_search_jumps_to_the_first_match() {
