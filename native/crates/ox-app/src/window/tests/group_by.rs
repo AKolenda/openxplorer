@@ -875,7 +875,7 @@ fn groups_turn_off_in_a_long_details_list_with_a_folder_expanded() {
     let fixture = Fixture::empty();
     let test = long_folder_scrolled_to_the_middle(&fixture);
     let model = test.window.folder_pane().model();
-    model.tree().set_expandable(true);
+    model.set_expandable(true);
     let archive = model.tree().row(0).expect("Archive comes first");
     model.tree().set_expanded(&archive, true);
     wait_until("the subfolder to list", || test.names().len() > 401);
