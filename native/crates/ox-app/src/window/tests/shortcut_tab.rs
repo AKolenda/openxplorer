@@ -166,5 +166,23 @@ fn a_launchers_shortcut_tab_edits_its_command_folder_and_comment() {
         fs::metadata(&path).expect("the launcher").permissions().mode() & 0o777,
         0o755
     );
+
+    // Enter in a field presses OK, the window's default, as in Windows'
+    // dialogs (checked with real keys too).
+    wait_until("the tab read again", || {
+        field(&page_of(&window), "Comment:").text() == "Edits fictional notes"
+    });
+    for name in ["Target:", "Start in:", "Comment:"] {
+        assert!(field(&page_of(&window), name).activates_default(), "{name}");
+    }
+    assert_eq!(
+        window.default_widget(),
+        Some(window.ok_button().upcast::<gtk::Widget>())
+    );
     window.close();
+}
+
+/// The Shortcut tab of `window`.
+fn page_of(window: &PropertiesWindow) -> gtk::Widget {
+    tab(window, "shortcut")
 }

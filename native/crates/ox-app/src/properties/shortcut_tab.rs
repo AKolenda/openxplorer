@@ -227,6 +227,8 @@ fn field(rows: &Rows, name: &str, key: char, text: &str, editable: bool) -> gtk:
         .hexpand(true)
         .editable(editable)
         .can_focus(true)
+        // Enter presses OK, as in the name field and Windows' dialogs.
+        .activates_default(true)
         .css_classes(["properties-field"])
         .build();
     let label = rows.add_control(name, &entry);
