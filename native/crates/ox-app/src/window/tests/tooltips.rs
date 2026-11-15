@@ -53,22 +53,6 @@ fn cell_of(test: &TestWindow, name: &str) -> FileCell {
         .unwrap_or_else(|| panic!("the view shows {name}"))
 }
 
-/// The Details view's column title that names `column`.
-fn column_title(test: &TestWindow, column: &str) -> gtk::Widget {
-    descendants::<gtk::Widget>(&test.window.folder_pane().view_widget())
-        .into_iter()
-        .find(|widget| {
-            widget.is_drawable()
-                && widget
-                    .tooltip_text()
-                    .is_some_and(|text| text.starts_with("Drag to resize"))
-                && descendants::<gtk::Label>(widget)
-                    .iter()
-                    .any(|label| label.text() == column)
-        })
-        .unwrap_or_else(|| panic!("the Details view has a {column} column"))
-}
-
 /// Presses `key` with Shift held.
 fn shift_tap(pointer: &mut Pointer, key: gdk::Key) {
     pointer.hold_key(gdk::Key::Shift_L);
@@ -127,18 +111,9 @@ fn no_tooltip_stays_over_a_menu_the_rename_box_or_the_next_folder() {
         wait_until("the menu to close", || !menu_shows(&test));
     }
 
-    hover(
-        &test,
-        &mut pointer,
-        &column_title(&test, "Name"),
-        "the Name column",
-    );
-    pointer.press(Button::Secondary);
-    pointer.release(Button::Secondary);
-    wait_until("no tooltip over the column menu", || {
-        shown_tooltip(&test).is_none()
-    });
-    pointer.tap_key(gdk::Key::Escape);
+    // Column titles show no tooltip, as in Windows (VIEW-029; the
+    // details view's column_titles_show_no_tooltip), so none can stay
+    // over the column menu.
 
     select_names(&test, &["Notes 2.txt"]);
     test.window.folder_pane().focus_view();
