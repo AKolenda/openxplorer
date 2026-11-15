@@ -111,11 +111,39 @@ fn decoded_path(uri: &str) -> Option<String> {
 /// or `uri` is inside `.zfs/snapshot`. A path that does not decode has no
 /// components, as in the web UI.
 fn has_snapshot_component(uri: &str) -> bool {
+    if !may_name_a_snapshot(uri) {
+        return false;
+    }
+    decoded_has_snapshot_component(uri)
+}
+
+/// [`has_snapshot_component`] by splitting and decoding `uri`, which costs
+/// a few microseconds: enough to matter when the file commands judge
+/// 100,000 selected items.
+fn decoded_has_snapshot_component(uri: &str) -> bool {
     let decoded = decoded_path(uri).unwrap_or_default();
     let components: Vec<&str> = decoded.split('/').collect();
     let has_marked_directory = components.iter().copied().any(is_snapshot_directory);
     let is_in_zfs_snapshot = components.windows(2).any(|pair| pair == [".zfs", "snapshot"]);
     has_marked_directory || is_in_zfs_snapshot
+}
+
+/// Whether the decoded path of `uri` could hold a snapshot component.
+///
+/// Every marker holds `snapshot` or `@GMT-`. Decoding only replaces `%XX`
+/// escapes, and the characters of a marker that were not escaped stay
+/// next to each other, so a decoded marker is in `uri` as it is unless
+/// one of its characters was escaped.
+fn may_name_a_snapshot(uri: &str) -> bool {
+    const MARKER_CHARACTERS: &[u8] = b"snapshot@GMT-";
+    let escapes_a_marker_character = uri.as_bytes().windows(3).any(|escape| {
+        escape[0] == b'%'
+            && std::str::from_utf8(&escape[1..])
+                .ok()
+                .and_then(|hex| u8::from_str_radix(hex, 16).ok())
+                .is_some_and(|byte| MARKER_CHARACTERS.contains(&byte))
+    });
+    escapes_a_marker_character || uri.contains("snapshot") || uri.contains(PREVIOUS_VERSION_PREFIX)
 }
 
 /// `.snapshot`, `.snapshots`, `#snapshot` or a Windows `@GMT-…` previous
@@ -148,6 +176,48 @@ mod tests {
 
     use super::*;
     use crate::location::{HOME_URI, NETWORK_URI, PC_URI, RECENT_URI, SETTINGS_URI, TRASH_URI};
+
+    /// The quick answer for an address that cannot name a snapshot agrees
+    /// with decoding it, escaped markers included.
+    ///
+    /// parity: PERF-004
+    #[test]
+    fn the_quick_snapshot_test_agrees_with_decoding() {
+        let uris = [
+            "file:///home/test/Documents/Report%20final.pdf",
+            "file:///srv/data/.snapshot/daily/a.txt",
+            "file:///srv/data/.snapshots/a.txt",
+            "file:///srv/data/%23snapshot/a.txt",
+            "file:///srv/data/%2Esnapshot/a.txt",
+            "file:///srv/data/.%73napshot/a.txt",
+            "file:///srv/data/.snap%73hot/a.txt",
+            "file:///srv/data/%40GMT-2026.09.07-18.00.00/a.txt",
+            "file:///srv/data/@GMT-2026.09.07-18.00.00/a.txt",
+            "file:///srv/data/@G%4DT-2026.09.07-18.00.00/a.txt",
+            "file:///srv/pool/.zfs/snapshot/monday/a.txt",
+            "file:///srv/pool/.zfs/sn%61pshot/monday/a.txt",
+            "file:///srv/data/snapshot%20notes.txt",
+            "file:///srv/data/%E2%82%AC%20prices.txt",
+            "file:///srv/data/bad%ZZescape.txt",
+            "smb://studio-nas/projects/.snapshot/a.txt",
+            "trash:///",
+            "",
+        ];
+        for uri in uris {
+            assert_eq!(
+                has_snapshot_component(uri),
+                decoded_has_snapshot_component(uri),
+                "{uri}"
+            );
+        }
+        assert!(has_snapshot_component("file:///srv/data/.%73napshot/a.txt"));
+        assert!(has_snapshot_component(
+            "file:///srv/data/%40GMT-2026.09.07-18.00.00/a.txt"
+        ));
+        assert!(!may_name_a_snapshot(
+            "file:///home/test/Documents/Report%20final.pdf"
+        ));
+    }
 
     /// Virtual places and folders are never writable, not even a malformed
     /// item address inside one.
