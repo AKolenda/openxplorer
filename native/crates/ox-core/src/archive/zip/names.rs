@@ -5,6 +5,14 @@
 //! any other name is IBM code page 437, the historical ZIP encoding. The
 //! name is then cut at its first NUL character (`_sanitize_filename`),
 //! while the uncut name is kept to detect exactly that trick.
+//!
+//! A backslash separates folders, as Info-ZIP's
+//! `unzip` and 7-Zip read it: some Windows tools (Windows PowerShell
+//! 5.1's `Compress-Archive` among them) write `Docs\a.txt` although the
+//! ZIP specification asks for `Docs/a.txt` (APPNOTE.TXT 4.4.17), and a
+//! Windows file name cannot hold a backslash. The names are turned into
+//! forward slashes before any rule sees them, so `..\x`, `\\server` and
+//! `C:\x` are refused as `../x`, `//server` and `C:/x` are.
 
 use super::error::ZipFormatError;
 
@@ -33,12 +41,20 @@ const CP437_HIGH_HALF: [char; 128] = [
 /// [`ZipFormatError::NameNotUtf8`] for a name flagged as UTF-8 that is not.
 pub(super) fn decode_name(raw: &[u8], flags: u16) -> Result<String, ZipFormatError> {
     if flags & UTF8_NAME_FLAG == 0 {
-        return Ok(raw.iter().copied().map(cp437_char).collect());
+        return Ok(with_forward_slashes(
+            &raw.iter().copied().map(cp437_char).collect::<String>(),
+        ));
     }
     match std::str::from_utf8(raw) {
-        Ok(name) => Ok(name.to_owned()),
+        Ok(name) => Ok(with_forward_slashes(name)),
         Err(_) => Err(ZipFormatError::NameNotUtf8),
     }
+}
+
+/// `name` with every backslash, a Windows folder separator, turned into
+/// a forward slash (see the module).
+pub(super) fn with_forward_slashes(name: &str) -> String {
+    name.replace('\\', "/")
 }
 
 /// The name up to its first NUL character. Python's `zipfile` does this
@@ -81,6 +97,16 @@ mod tests {
             decode_name(b"Caf\xe9.txt", UTF8_NAME_FLAG),
             Err(ZipFormatError::NameNotUtf8)
         );
+    }
+
+    #[test]
+    fn backslashes_become_forward_slashes() {
+        assert_eq!(decode_name(b"Docs\\a.txt", 0), Ok("Docs/a.txt".to_owned()));
+        assert_eq!(
+            decode_name("Café\\a.txt".as_bytes(), UTF8_NAME_FLAG),
+            Ok("Café/a.txt".to_owned())
+        );
+        assert_eq!(decode_name(b"..\\x", 0), Ok("../x".to_owned()));
     }
 
     #[test]

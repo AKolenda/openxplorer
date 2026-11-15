@@ -34,7 +34,9 @@ fn backslashes_separate_folders_when_browsing() {
     let uri = fixture.archive_uri();
 
     let top = browser(&fixture).list(&uri, "", &fixture.cancel).expect("lists");
-    let inside = browser(&fixture).list(&uri, "Harbor/", &fixture.cancel).expect("lists");
+    let inside = browser(&fixture)
+        .list(&uri, "Harbor/", &fixture.cancel)
+        .expect("lists");
 
     assert_eq!(top.hidden_unsafe_count, 0);
     let names = |listing: &ox_core::archive::ArchiveListing| -> Vec<String> {
@@ -62,8 +64,14 @@ fn backslashes_separate_folders_when_extracting() {
     fixture.extract("Harbor copy").expect("extracts");
 
     let folder = fixture.destination.join("Harbor copy/Harbor");
-    assert_eq!(fs::read_to_string(folder.join("Charts/north.txt")).unwrap(), "North channel");
-    assert_eq!(fs::read_to_string(folder.join("tides.txt")).unwrap(), "High water at noon.");
+    assert_eq!(
+        fs::read_to_string(folder.join("Charts/north.txt")).unwrap(),
+        "North channel"
+    );
+    assert_eq!(
+        fs::read_to_string(folder.join("tides.txt")).unwrap(),
+        "High water at noon."
+    );
 }
 
 /// The folders a backslash gives are checked like any others: a parent
@@ -86,7 +94,11 @@ fn unsafe_paths_written_with_backslashes_are_still_refused() {
         let listing = browser(&fixture)
             .list(&fixture.archive_uri(), "", &fixture.cancel)
             .expect("lists");
-        assert_eq!((listing.entries.len(), listing.hidden_unsafe_count), (0, 1), "{name}");
+        assert_eq!(
+            (listing.entries.len(), listing.hidden_unsafe_count),
+            (0, 1),
+            "{name}"
+        );
         let error = fixture.extract("Out").unwrap_err();
         assert_eq!(error, refusal, "{name}");
         fixture.assert_no_output();
