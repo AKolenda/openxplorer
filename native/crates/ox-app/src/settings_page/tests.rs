@@ -831,6 +831,34 @@ fn the_compact_view_switch_saves_the_choice() {
     });
 }
 
+/// "Use the desktop font" stays on when turned on, saves the choice and
+/// draws text in the desktop's font; turned off, it saves that too. It
+/// used to spring back off at once: the switch told the shared skin
+/// before the choice was saved, and the skin's change showed the page the
+/// unsaved preference again.
+///
+/// parity: LOOK-025
+#[gtk::test]
+fn the_desktop_font_switch_stays_on_and_saves_the_choice() {
+    let settings = SettingsTest::open();
+    let switch = switch_of(&settings.row("Use the desktop font"));
+    assert!(!switch.is_active(), "off by default");
+
+    switch.set_active(true);
+    wait_until("the desktop font to be saved", || {
+        settings.saved_preferences().desktop_font
+    });
+    assert!(switch.is_active(), "the switch stays on");
+    wait_until("text to use the desktop font", || skin().uses_desktop_font());
+
+    switch.set_active(false);
+    wait_until("the Windows font to be saved", || {
+        !settings.saved_preferences().desktop_font
+    });
+    assert!(!switch.is_active(), "the switch stays off");
+    wait_until("text to use the Windows font", || !skin().uses_desktop_font());
+}
+
 /// Settings > Search > "Show the search filter bar" is off by default, so
 /// searches show Windows 11's Search options; turning it on saves the
 /// choice and the window's next search shows the filter bar.
