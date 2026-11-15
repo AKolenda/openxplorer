@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The traditional PKWARE encryption of ZIP members ("ZipCrypto"), section
+//! The traditional PKWARE encryption of ZIP members (`ZipCrypto`), section
 //! 6.1 of the ZIP specification (APPNOTE.TXT), as Python's `zipfile`
 //! (`_ZipDecrypter`) and Info-ZIP read it. Only reading is supported: the
 //! app never creates password-protected archives.
@@ -13,7 +13,7 @@
 use std::io::{self, Read};
 
 /// The length of the encryption header in front of the data.
-pub(super) const HEADER_LENGTH: u64 = 12;
+pub(super) const HEADER_LENGTH: usize = 12;
 
 /// The three keys of the cipher.
 #[derive(Clone)]
@@ -73,7 +73,7 @@ fn crc32_byte(crc: u32, byte: u8) -> u32 {
 /// Decrypts the encryption header in `header` with `password` and says
 /// whether its last byte is `check_byte`, and returns the keys to decrypt
 /// the data that follows with.
-pub(super) fn open_header(password: &[u8], header: &mut [u8; 12], check_byte: u8) -> Option<Keys> {
+pub(super) fn open_header(password: &[u8], header: &mut [u8; HEADER_LENGTH], check_byte: u8) -> Option<Keys> {
     let mut keys = Keys::new(password);
     keys.decrypt(header);
     (header[11] == check_byte).then_some(keys)

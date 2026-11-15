@@ -46,6 +46,9 @@ const OPENED: &str =
 /// The size of a row's picture (`fileIcon(item, 25)`).
 const ROW_ART_SIZE: i32 = 25;
 
+/// Opens a member: the URI of its private copy, or its name.
+type MemberOpener = Rc<dyn Fn(String)>;
+
 /// What the dialog's buttons and rows ask the window to do.
 pub(crate) struct ArchiveDialogActions {
     /// Extract all…: closes this dialog and opens the Extract dialog.
@@ -184,7 +187,7 @@ impl ArchiveBrowserView {
         archive: ArchiveTarget,
         browser: ArchiveBrowser,
         shown_path: &str,
-        (open_copy, open_protected): (Rc<dyn Fn(String)>, Rc<dyn Fn(String)>),
+        (open_copy, open_protected): (MemberOpener, MemberOpener),
     ) -> Self {
         let view: Self = glib::Object::new();
         let imp = view.imp();

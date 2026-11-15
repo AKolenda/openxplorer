@@ -259,7 +259,7 @@ pub(super) fn mark_encrypted(path: &Path) {
 }
 
 /// Marks every member of the ZIP at `path` as AES-encrypted (method 99 of
-/// the WinZip specification), which the built-in reader cannot decrypt.
+/// the `WinZip` specification), which the built-in reader cannot decrypt.
 fn mark_aes_encrypted(path: &Path) {
     let mut bytes = fs::read(path).expect("the ZIP");
     for at in 0..bytes.len().saturating_sub(12) {
@@ -277,7 +277,7 @@ fn mark_aes_encrypted(path: &Path) {
 /// An AES-encrypted ZIP, which the app cannot decrypt, says so under the
 /// field at once, offers the archive manager in the footer, and Extract
 /// repeats the reason. (The traditional ZIP password asks for the
-/// password instead: tests/archive_passwords.rs.)
+/// password instead: `tests/archive_passwords.rs`.)
 ///
 /// parity: ARC-009
 #[gtk::test]

@@ -7,8 +7,8 @@
 //! while the uncut name is kept to detect exactly that trick.
 //!
 //! A backslash separates folders, as Info-ZIP's
-//! `unzip` and 7-Zip read it: some Windows tools (Windows PowerShell
-//! 5.1's `Compress-Archive` among them) write `Docs\a.txt` although the
+//! `unzip` and 7-Zip read it: some Windows tools (`Compress-Archive` of
+//! Windows `PowerShell` 5.1 among them) write `Docs\a.txt` although the
 //! ZIP specification asks for `Docs/a.txt` (APPNOTE.TXT 4.4.17), and a
 //! Windows file name cannot hold a backslash. The names are turned into
 //! forward slashes before any rule sees them, so `..\x`, `\\server` and

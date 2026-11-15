@@ -8,7 +8,7 @@ const ENCRYPTED_FLAG: u16 = 1;
 const DATA_DESCRIPTOR_FLAG: u16 = 1 << 3;
 /// General purpose flag bit 6: PKWARE strong encryption.
 const STRONG_ENCRYPTION_FLAG: u16 = 1 << 6;
-/// The compression method number of WinZip's AES encryption.
+/// The compression method number of `WinZip`'s AES encryption.
 const AES_METHOD: u16 = 99;
 /// The file type bits of a Unix mode (`S_IFMT`).
 const FILE_TYPE_MASK: u32 = 0o170_000;
@@ -55,7 +55,7 @@ impl CompressionMethod {
 pub(crate) enum Encryption {
     /// Not encrypted.
     None,
-    /// The traditional PKWARE encryption ("ZipCrypto"), which the reader
+    /// The traditional PKWARE encryption (`ZipCrypto`), which the reader
     /// decrypts with a password.
     Traditional,
     /// AES or PKWARE strong encryption, left to an archive manager.

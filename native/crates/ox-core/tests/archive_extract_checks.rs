@@ -41,7 +41,7 @@ fn refusal_with(fixture: &ExtractionFixture, limits: ExtractionLimits) -> Archiv
 /// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_unsafe_paths`.
 /// Python checked only that each is refused; here each refusal is named.
 /// Differs: `a\evil` is no longer refused, because a backslash now
-/// separates folders as Windows tools write them (archive_backslashes.rs).
+/// separates folders as Windows tools write them (`archive_backslashes.rs`).
 ///
 /// parity: ARC-014
 #[test]

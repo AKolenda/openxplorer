@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Password-protected ZIPs: a member encrypted with the traditional PKWARE
-//! method ("ZipCrypto") is listed like any other, and opening or
+//! method (`ZipCrypto`) is listed like any other, and opening or
 //! extracting it asks for the password, as Windows 11 File Explorer does.
 //! A missing password and a wrong one are told apart so the window can
 //! ask again, and nothing is written until the password is right. AES
@@ -257,7 +257,7 @@ fn an_info_zip_archive_extracts_with_its_password() {
     );
 }
 
-/// AES encryption (method 99 of the WinZip specification) is listed, but
+/// AES encryption (method 99 of the `WinZip` specification) is listed, but
 /// opening or extracting it says it needs an archive manager instead of
 /// asking for a password the app cannot use.
 ///

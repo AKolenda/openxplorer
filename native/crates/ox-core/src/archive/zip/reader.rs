@@ -96,7 +96,7 @@ impl<'a> MemberReader<'a> {
         check_no_overlap(member, &header)?;
         let decompressed = match password.filter(|_| encryption == Encryption::Traditional) {
             Some(password) => {
-                let mut encryption_header = [0u8; crypto::HEADER_LENGTH as usize];
+                let mut encryption_header = [0u8; crypto::HEADER_LENGTH];
                 read_encryption_header(source, &mut encryption_header)?;
                 let keys = crypto::open_header(
                     password.bytes(),
@@ -105,7 +105,11 @@ impl<'a> MemberReader<'a> {
                 )
                 .ok_or(ArchiveError::WrongPassword)?;
                 // The member's compressed size counts the header.
-                let data = source.take(member.compressed_size.saturating_sub(crypto::HEADER_LENGTH));
+                let data = source.take(
+                    member
+                        .compressed_size
+                        .saturating_sub(crypto::HEADER_LENGTH as u64),
+                );
                 decompressor(member, Decrypting::new(data, keys))?
             }
             None => decompressor(member, source.take(member.compressed_size))?,

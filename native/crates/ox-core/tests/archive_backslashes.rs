@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! ZIPs whose member names separate folders with backslashes, as some
-//! Windows tools write them (Windows PowerShell 5.1's `Compress-Archive`
+//! Windows tools write them (`Compress-Archive` of Windows `PowerShell` 5.1
 //! among them), although the ZIP specification asks for forward slashes
 //! (APPNOTE.TXT 4.4.17). A backslash cannot be part of a Windows file
 //! name, so it is read as a folder separator, as Info-ZIP's `unzip` and
