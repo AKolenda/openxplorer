@@ -11,6 +11,7 @@
 
 use std::cell::OnceCell;
 use std::path::Path;
+use std::rc::Rc;
 
 use gtk::glib;
 use gtk::subclass::prelude::*;
@@ -19,6 +20,7 @@ use ox_core::location::{is_archive_location, is_smb_share_root, parent_location,
 use ox_core::search::display_path;
 
 use crate::folder_view::filter::Visibility;
+use crate::folder_view::groups::{Group, GroupClocks, Grouping};
 use crate::folder_view::sorting::{SortKey, SortName};
 use crate::icons::{Art, Emblems};
 use crate::properties::FolderSizeState;
@@ -125,6 +127,9 @@ impl PreparedEntry {
     }
 }
 
+/// A group worked out for an item, kept with what it was worked out under.
+type KeptGroup = (Grouping, GroupClocks, Rc<Group>);
+
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};
 
@@ -145,6 +150,9 @@ mod imp {
         pub(super) folder_size: RefCell<Option<FolderSizeState>>,
         /// How many items a folder holds, once counted (VIEW-037).
         pub(super) item_count: Cell<Option<u32>>,
+        /// The group the item was last put in, with the grouping and the
+        /// clocks it was put in under.
+        pub(super) group: RefCell<Option<super::KeptGroup>>,
     }
 
     #[glib::object_subclass]
@@ -269,6 +277,32 @@ impl FileItem {
     /// Records what a folder-size scan found for this folder.
     pub(crate) fn set_folder_size(&self, state: FolderSizeState) {
         self.imp().folder_size.replace(Some(state));
+        // Its size group may have changed.
+        self.imp().group.replace(None);
+    }
+
+    /// The group of the item under `grouping` with `clocks`, worked out by
+    /// `work_out` the first time and kept while they stay the same.
+    ///
+    /// Sorting 100,000 items into groups compares about two million pairs;
+    /// working both items' groups out for each comparison (a title, often
+    /// normalised text) froze the window for about a second.
+    pub(crate) fn group_in(
+        &self,
+        grouping: Grouping,
+        clocks: &GroupClocks,
+        work_out: impl FnOnce() -> Group,
+    ) -> Rc<Group> {
+        if let Some((kept_grouping, kept_clocks, group)) = self.imp().group.borrow().as_ref() {
+            if *kept_grouping == grouping && kept_clocks == clocks {
+                return Rc::clone(group);
+            }
+        }
+        let group = Rc::new(work_out());
+        self.imp()
+            .group
+            .replace(Some((grouping, *clocks, Rc::clone(&group))));
+        group
     }
 
     /// How many items the folder holds, once counted.
@@ -279,6 +313,7 @@ impl FileItem {
     /// Records how many items the folder holds.
     pub(crate) fn set_item_count(&self, count: u32) {
         self.imp().item_count.set(Some(count));
+        self.imp().group.replace(None);
     }
 
     /// The size the Size column sorts by: a file's size, a folder's
