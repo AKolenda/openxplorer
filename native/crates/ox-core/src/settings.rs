@@ -55,9 +55,9 @@ pub use model::{Bookmark, RecentEntry, SettingsData};
 pub use mutate::{BookmarkAction, BookmarkKind, BookmarkRequest};
 pub use pane_options::DetailsPaneOptions;
 pub use preferences::{
-    favorite_key, Column, ColumnWidth, ColumnWidths, Preferences, PreferencesUpdate, WindowSize,
-    DEFAULT_TEXT_SIZE, NETWORK_INTERVALS, SIDEBAR_ICON_SIZES, SIDEBAR_WIDTHS, TEXT_SIZES, WINDOW_HEIGHTS,
-    WINDOW_WIDTHS,
+    favorite_key, gallery_folder_key, Column, ColumnWidth, ColumnWidths, Preferences, PreferencesUpdate,
+    WindowSize, DEFAULT_TEXT_SIZE, NETWORK_INTERVALS, SIDEBAR_ICON_SIZES, SIDEBAR_WIDTHS, TEXT_SIZES,
+    WINDOW_HEIGHTS, WINDOW_WIDTHS,
 };
 pub use view_options::{ViewOptions, DEFAULT_DETAILS_COLUMNS, PREVIEW_SIZE_LIMIT};
 
@@ -283,6 +283,33 @@ impl Settings {
             }
             let update = PreferencesUpdate {
                 favorites: Some(favorites),
+                ..PreferencesUpdate::default()
+            };
+            data.preferences.apply(&update);
+            Ok(data.preferences.clone())
+        })
+    }
+
+    /// Adds the folder at `uri` to Gallery's collection, at the end, or
+    /// removes it (HOME-025), changing only that entry of
+    /// `galleryFolders` as the file now holds it. Only local folders are
+    /// kept. Returns the resulting preferences.
+    ///
+    /// # Errors
+    ///
+    /// Every error of [`update_preferences`](Self::update_preferences).
+    pub fn set_gallery_folder(&mut self, uri: &str, added: bool) -> Result<Preferences, SettingsError> {
+        self.mutate(|data| {
+            let Some(key) = gallery_folder_key(uri) else {
+                return Ok(data.preferences.clone());
+            };
+            let mut folders = data.preferences.gallery_folders.clone();
+            folders.retain(|kept| gallery_folder_key(kept).as_ref() != Some(&key));
+            if added {
+                folders.push(key);
+            }
+            let update = PreferencesUpdate {
+                gallery_folders: Some(folders),
                 ..PreferencesUpdate::default()
             };
             data.preferences.apply(&update);
