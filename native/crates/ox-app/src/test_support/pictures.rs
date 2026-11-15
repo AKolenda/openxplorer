@@ -6,9 +6,21 @@ use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
 
 /// A small picture of one flat colour, as PNG bytes.
 pub(crate) fn png_bytes(colour: u32) -> Vec<u8> {
-    let pixbuf = Pixbuf::new(Colorspace::Rgb, false, 8, 64, 48).expect("a picture");
+    png_sized(64, 48, colour)
+}
+
+/// A picture `width` by `height` pixels of one flat colour, as PNG bytes.
+pub(crate) fn png_sized(width: i32, height: i32, colour: u32) -> Vec<u8> {
+    let pixbuf = Pixbuf::new(Colorspace::Rgb, false, 8, width, height).expect("a picture");
     pixbuf.fill(colour << 8 | 0xff);
     pixbuf.save_to_bufferv("png", &[]).expect("PNG bytes")
+}
+
+/// A JPEG `width` by `height` pixels of one flat colour, without EXIF.
+pub(crate) fn jpeg_sized(width: i32, height: i32, colour: u32) -> Vec<u8> {
+    let pixbuf = Pixbuf::new(Colorspace::Rgb, false, 8, width, height).expect("a picture");
+    pixbuf.fill(colour << 8 | 0xff);
+    pixbuf.save_to_bufferv("jpeg", &[]).expect("JPEG bytes")
 }
 
 /// A JPEG of one flat colour whose EXIF says it was taken at `taken`

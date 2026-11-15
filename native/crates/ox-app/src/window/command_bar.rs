@@ -537,6 +537,40 @@ impl CommandBar {
         }
     }
 
+    /// The commands shown in the bar's file group, in order, each named
+    /// by its label or, for an icon command, its tooltip without the
+    /// shortcut, and whether it can be used now; for tests.
+    #[cfg(test)]
+    pub(super) fn shown_commands(&self) -> Vec<(String, bool)> {
+        crate::window::widget_tree::children(&*self.imp().file_commands)
+            .filter(|widget| widget.has_css_class("command") && widget.is_visible())
+            .filter_map(|widget| {
+                let label = crate::window::widget_tree::descendants::<gtk::Label>(&widget)
+                    .first()
+                    .map(|label| label.text().to_string())
+                    .or_else(|| {
+                        let tooltip = widget.tooltip_text()?;
+                        let name = tooltip.split(" (").next().unwrap_or_default();
+                        Some(name.to_owned())
+                    })?;
+                let usable = widget.is_sensitive()
+                    && widget
+                        .downcast_ref::<gtk::Actionable>()
+                        .and_then(gtk::prelude::ActionableExt::action_name)
+                        .is_none_or(|name| {
+                            let (group, action) = name.split_once('.').unwrap_or(("win", &name));
+                            widget
+                                .root()
+                                .and_then(|root| root.downcast::<gtk::ApplicationWindow>().ok())
+                                .filter(|_| group == "win")
+                                .and_then(|window| window.lookup_action(action))
+                                .is_none_or(|action| action.is_enabled())
+                        });
+                Some((label, usable))
+            })
+            .collect()
+    }
+
     /// The Collection button, for the snapshot hook's scenes and tests.
     pub(super) fn collection_button(&self) -> Option<gtk::MenuButton> {
         self.imp().collection.get().map(|(button, _)| button.clone())

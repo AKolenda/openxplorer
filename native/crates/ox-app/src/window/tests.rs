@@ -47,6 +47,8 @@ mod folder_location;
 mod folder_options;
 mod folder_tree;
 mod gallery;
+mod gallery_commands;
+mod gallery_view;
 mod geometry;
 mod group_by;
 mod group_heading_look;

@@ -662,6 +662,8 @@ mod tests {
             entry.map(|entry| entry.icon)
         };
         assert_eq!(icon_of("Home"), Some(Art::TintedGlyph(Icon::Home, Tint::Home)));
+        // Windows 11 draws Gallery's picture glyph in Home's blue (HOME-017).
+        assert_eq!(icon_of("Gallery"), Some(Art::TintedGlyph(Icon::Image, Tint::Home)));
         assert_eq!(
             icon_of("This PC"),
             Some(Art::TintedGlyph(Icon::Laptop, Tint::ThisPc))

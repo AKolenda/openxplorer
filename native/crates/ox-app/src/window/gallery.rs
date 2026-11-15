@@ -298,3 +298,50 @@ impl BrowserWindow {
         }
     }
 }
+
+/// A photo's tile on screen, in the view's content coordinates, for tests.
+#[cfg(test)]
+#[derive(Debug, Clone)]
+pub(crate) struct ShownTile {
+    pub(crate) name: String,
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) width: f64,
+    pub(crate) height: f64,
+}
+
+#[cfg(test)]
+impl BrowserWindow {
+    /// The photos' tiles on screen.
+    pub(crate) fn gallery_tiles(&self) -> Vec<ShownTile> {
+        Vec::new()
+    }
+
+    /// The width the tiles' rows fill.
+    pub(crate) fn gallery_content_width(&self) -> f64 {
+        0.0
+    }
+
+    /// The heading over the photos.
+    pub(crate) fn gallery_heading(&self) -> Option<String> {
+        None
+    }
+
+    /// Scrolls Gallery to `y`, clamped.
+    pub(crate) fn gallery_scroll_to(&self, _y: f64) {}
+
+    /// Gallery's date scrubber.
+    pub(crate) fn gallery_scrubber(&self) -> Option<crate::folder_view::gallery_scrubber::GalleryScrubber> {
+        None
+    }
+
+    /// The tooltip of the photo at `position`.
+    pub(crate) fn gallery_tooltip(&self, _position: u32) -> Option<String> {
+        None
+    }
+
+    /// The Gallery Locations dialog while it is open.
+    pub(crate) fn gallery_locations(&self) -> Option<super::gallery_locations::GalleryLocations> {
+        None
+    }
+}
