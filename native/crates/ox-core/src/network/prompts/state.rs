@@ -91,6 +91,25 @@ pub(super) struct OperationRecord {
     candidate: Option<Candidate>,
 }
 
+impl OperationRecord {
+    /// After `GVfs` asked again, which means it refused the account
+    /// given last, that account's user name, so the dialog keeps what
+    /// was typed (NET-014): `DOMAIN\user` when its domain is not the
+    /// server's `default_domain`. `None` before any account was given.
+    pub(super) fn rejected_username(&self, default_domain: &str) -> Option<String> {
+        if self.attempts < 2 {
+            return None;
+        }
+        let credential = &self.candidate.as_ref()?.credential;
+        let domain = credential.domain.as_str();
+        if domain.is_empty() || domain.eq_ignore_ascii_case(default_domain) {
+            Some(credential.username.clone())
+        } else {
+            Some(format!("{domain}\\{}", credential.username))
+        }
+    }
+}
+
 /// An account given to `GVfs`.
 pub(super) struct Candidate {
     pub(super) credential: Credential,
