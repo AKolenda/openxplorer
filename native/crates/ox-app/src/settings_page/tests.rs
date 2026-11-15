@@ -1285,6 +1285,11 @@ fn folder_views_rows_follow_hidden_files_and_extensions_and_open_folder_options(
 /// parity: SET-019
 #[gtk::test]
 fn every_preference_switch_saves_persists_and_turns_back_exactly() {
+    const IN_THE_SEARCH_CACHE: [&str; 3] = [
+        "Cache this folder for search",
+        "Index pinned folders automatically",
+        "Index frequently opened folders (experimental)",
+    ];
     let settings = SettingsTest::open();
     let file = settings
         .test
@@ -1318,7 +1323,9 @@ fn every_preference_switch_saves_persists_and_turns_back_exactly() {
                 continue;
             };
             let title = row.text().title;
-            if !switch.is_sensitive() {
+            // The search cache keeps these, not the settings file, and
+            // tests/indexing.rs tests them.
+            if !switch.is_sensitive() || IN_THE_SEARCH_CACHE.contains(&title) {
                 continue;
             }
             let before = saved();
