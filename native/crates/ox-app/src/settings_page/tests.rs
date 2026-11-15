@@ -1342,3 +1342,31 @@ fn every_preference_switch_saves_persists_and_turns_back_exactly() {
     }
     assert!(checked.len() >= 30, "{checked:?}");
 }
+
+/// Every category's page, light and dark, at a narrow window's width,
+/// for the pictures `$OX_NATIVE_CAPTURE_DIR` collects (nothing is saved
+/// without it); each page shows its rows.
+///
+/// parity: SET-019
+#[gtk::test]
+fn every_settings_page_is_captured_light_and_dark() {
+    use crate::test_support::harness::capture;
+
+    let _theme = ThemeGuard::keep();
+    let settings = SettingsTest::open();
+    settings.test.window.set_default_size(760, 540);
+    for theme in ["light", "dark"] {
+        settings.test.activate("theme", Some(theme));
+        for category in Category::ALL {
+            settings.page.show_view(SettingsView::Category(category));
+            assert!(
+                !settings.page.category_section(category).rows().is_empty(),
+                "{category:?} has rows"
+            );
+            capture(
+                &settings.test.window,
+                &format!("settings-{}-{theme}.png", category.as_str()),
+            );
+        }
+    }
+}
