@@ -373,6 +373,10 @@ pub(crate) struct ShownTile {
     pub(crate) height: f64,
     /// The photo's thumbnail is drawn.
     pub(crate) thumbnail: bool,
+    /// The device pixels its sharp picture was asked at.
+    pub(crate) requested: Option<(i32, i32)>,
+    /// The size of the picture drawn, in pixels.
+    pub(crate) drawn: Option<(i32, i32)>,
 }
 
 #[cfg(test)]
@@ -387,9 +391,11 @@ impl BrowserWindow {
             .gallery()
             .shown_tiles()
             .into_iter()
-            .map(|(name, bounds, thumbnail)| ShownTile {
+            .map(|(name, bounds, state)| ShownTile {
                 name,
-                thumbnail,
+                thumbnail: state.thumbnail,
+                requested: state.requested,
+                drawn: state.drawn,
                 x: f64::from(bounds.x()),
                 y: f64::from(bounds.y()),
                 width: f64::from(bounds.width()),
@@ -398,6 +404,11 @@ impl BrowserWindow {
             .collect();
         tiles.sort_by(|a, b| a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x)));
         tiles
+    }
+
+    /// The device pixels per pixel Gallery draws at.
+    pub(crate) fn gallery_scale(&self) -> i32 {
+        self.folder_pane().gallery().canvas().scale_factor()
     }
 
     /// The width the tiles' rows fill.

@@ -1600,6 +1600,38 @@ native = "done"
 native_note = "native/crates/ox-app/src/photo_rotate.rs (rotate_file, turn_jpeg, turned_orientation); native/crates/ox-app/src/window/gallery.rs (rotate_selection, rotatable_selection). Tests: native/crates/ox-app/src/photo_rotate.rs (orientations_turn_a_quarter_at_a_time, jpegs_turn_by_their_orientation_alone, a_png_turns_by_its_pixels); native/crates/ox-app/src/window/tests/gallery_commands.rs (rotate_turns_jpegs_by_their_orientation_and_pngs_by_their_pixels). Which types Windows rotates is not documented here."
 
 [[feature]]
+id = "HOME-033"
+area = "HOME"
+title = "Gallery's photos are sharp at every size"
+behaviour = "Each photo on screen in Gallery is drawn from a picture at least as large as its tile in device pixels (at 1x and 2x, at Extra large to Small icons), so text in a screenshot stays readable, as Windows draws it. A tile first shows the desktop's cached thumbnail; once it is on screen, the photo on this computer's disks is decoded at the tile's size off the main thread (a few at a time, within the app's picture limits, turned upright) and replaces it. Leaving the screen cancels a decode not done yet; a larger tile (a larger View size or a wider window) asks again. A photo elsewhere keeps the cached thumbnail."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "comparison with Windows 11 File Explorer, build 26200 (2026-11-15): sharp thumbnails of screenshots in Gallery",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/folder_view/gallery_view.rs (GalleryCanvas::ask_sharp, sharp_pixels); native/crates/ox-app/src/thumbnails.rs (sharp_picture). Test: native/crates/ox-app/src/window/tests/gallery_view.rs (photos_are_drawn_sharp_at_the_size_of_their_tiles)."
+
+[[feature]]
+id = "HOME-034"
+area = "HOME"
+title = "Gallery's loading progress is honest"
+behaviour = "While Gallery is being listed, whose number of photos is not known until every folder is read, the address bar's progress sweeps instead of crawling toward an end it cannot know, and the status bar counts the photos found so far with 'Loading…' from the start; both stop once Gallery is listed. With animations off the sweep stands still."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "comparison with Windows 11 File Explorer, build 26200 (2026-11-15): progress while a large folder is added to Gallery",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/slow_location.rs (show_busy_state, INDETERMINATE_CLASS); native/crates/ox-app/src/window/selection.rs (update_status); resources/skin/navigation.css (.address.loading.indeterminate). Test: native/crates/ox-app/src/window/tests/gallery_view.rs (listing_gallery_shows_honest_progress)."
+
+[[feature]]
 id = "TAB-001"
 area = "TAB"
 title = "New tab via '+' button and Ctrl+T"

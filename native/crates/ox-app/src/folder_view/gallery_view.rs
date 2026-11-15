@@ -62,6 +62,18 @@ pub(crate) fn nearest_named(size: IconSize) -> IconSize {
         .unwrap_or(IconSize::MEDIUM)
 }
 
+/// What a tile on screen shows, for tests.
+#[cfg(test)]
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TileState {
+    /// A picture is drawn.
+    pub(crate) thumbnail: bool,
+    /// The device pixels its sharp picture was asked at.
+    pub(crate) requested: Option<(i32, i32)>,
+    /// The size of the picture drawn, in pixels.
+    pub(crate) drawn: Option<(i32, i32)>,
+}
+
 /// The aspect ratio (width over height) of `item`'s photo as shown, if
 /// its size was read.
 fn aspect_of(item: Option<&FileItem>) -> Option<f64> {
@@ -257,6 +269,15 @@ mod tile {
         pub(crate) fn shows_thumbnail(&self) -> bool {
             self.imp().texture.borrow().is_some()
         }
+
+        /// The size of the picture drawn, for tests.
+        #[cfg(test)]
+        pub(crate) fn texture_pixels(&self) -> Option<(i32, i32)> {
+            let texture = self.imp().texture.borrow();
+            texture
+                .as_ref()
+                .map(|texture| (texture.width(), texture.height()))
+        }
     }
 
     glib::wrapper! {
@@ -289,6 +310,12 @@ mod tile {
         /// What the preview was last asked for.
         pub(crate) fn asked(&self) -> &RefCell<Option<(String, Option<u64>, i32)>> {
             &self.imp().asked
+        }
+
+        /// The device pixels the sharp picture was asked at, for tests.
+        #[cfg(test)]
+        pub(crate) fn requested_pixels(&self) -> Option<(i32, i32)> {
+            None
         }
 
         /// Shows the tile selected or not.
@@ -1405,7 +1432,7 @@ impl GalleryView {
     /// The tiles on screen with the names they show and their places in
     /// the canvas, for tests.
     #[cfg(test)]
-    pub(crate) fn shown_tiles(&self) -> Vec<(String, graphene::Rect, bool)> {
+    pub(crate) fn shown_tiles(&self) -> Vec<(String, graphene::Rect, TileState)> {
         let canvas = self.canvas();
         let (top, page) = canvas.shown_span();
         canvas
@@ -1419,7 +1446,11 @@ impl GalleryView {
                     (
                         item.entry().name.clone(),
                         bounds,
-                        tile.picture().shows_thumbnail(),
+                        TileState {
+                            thumbnail: tile.picture().shows_thumbnail(),
+                            requested: tile.requested_pixels(),
+                            drawn: tile.picture().texture_pixels(),
+                        },
                     )
                 })
             })
