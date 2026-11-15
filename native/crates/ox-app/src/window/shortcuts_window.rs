@@ -607,6 +607,52 @@ mod tests {
         dialog.finish();
     }
 
+    /// The keys of Microsoft's File Explorer list that work here without
+    /// a binding of their own are listed too, in Microsoft's words
+    /// (<https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows>):
+    /// Backspace beside Alt+Left, the arrow keys with Shift and Ctrl, Home
+    /// and End, Left and Right in the navigation pane, Ctrl with the scroll
+    /// wheel and Alt alone; and Enter is named Enter, as Windows names it.
+    ///
+    /// parity: CMD-032
+    #[gtk::test]
+    fn the_shortcuts_window_lists_the_keys_that_work_without_a_binding() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let (rows, _) = test.window.shortcut_rows();
+        let row = |label: &str| {
+            rows.iter()
+                .find(|row| row.label == label)
+                .unwrap_or_else(|| panic!("{label} is listed: {:?}", rows.iter().map(|row| &row.label).collect::<Vec<_>>()))
+                .clone()
+        };
+        assert!(row("Back").keys.contains(&"Backspace".to_owned()), "{:?}", row("Back").keys);
+        assert_eq!(row("Properties").keys, ["Alt+Enter"]);
+        for (label, keys, group) in [
+            ("Select several items", "Shift+arrow keys", Group::Selection),
+            ("Move to an item without selecting it", "Ctrl+arrow keys", Group::Selection),
+            ("Select or clear the item the keyboard is on", "Ctrl+Space", Group::Selection),
+            ("First item", "Home", Group::Selection),
+            ("Last item", "End", Group::Selection),
+            (
+                "Collapse the folder, or go to the folder it is in (navigation pane)",
+                "Left",
+                Group::Navigation,
+            ),
+            (
+                "Expand the folder, or go to its first subfolder (navigation pane)",
+                "Right",
+                Group::Navigation,
+            ),
+            ("Move to the command bar", "Alt", Group::Navigation),
+            ("Change the view", "Ctrl+scroll wheel", Group::View),
+        ] {
+            let listed = row(label);
+            assert_eq!(listed.keys, [keys], "{label}");
+            assert_eq!(listed.group, group, "{label}");
+        }
+    }
+
     /// The search's words: one spelling, the separators between keys
     /// dropped, a key that is "+", "-" or "*" named.
     ///
