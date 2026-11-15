@@ -1247,3 +1247,63 @@ fn folder_views_rows_follow_hidden_files_and_extensions_and_open_folder_options(
             .any(|toplevel| toplevel.is_visible() && toplevel.has_css_class("ox-folder-options"))
     });
 }
+
+/// Every switch of the pages that only choose how the app looks and
+/// behaves (not Default apps or About, whose switches change the desktop,
+/// browser profiles or updates) saves its change to the settings file at
+/// once, still shows it after the file is read again, as after a restart,
+/// and turned back leaves the file exactly as it was.
+///
+/// parity: SET-019
+#[gtk::test]
+fn every_preference_switch_saves_persists_and_turns_back_exactly() {
+    let settings = SettingsTest::open();
+    let file = settings
+        .test
+        .settings_directory()
+        .join(ox_core::settings::Settings::FILE_NAME);
+    let saved = || std::fs::read_to_string(&file).unwrap_or_default();
+    let categories = [
+        Category::General,
+        Category::Appearance,
+        Category::FilesAndFolders,
+        Category::Archives,
+        Category::Confirmations,
+        Category::Search,
+    ];
+    // The file is written by the first change; from then on each switch
+    // must leave it exactly as it was.
+    let compact = switch_of(&settings.row("Compact view"));
+    compact.set_active(!compact.is_active());
+    wait_until("the settings file to be written", || !saved().is_empty());
+    let first = saved();
+    compact.set_active(!compact.is_active());
+    wait_until("Compact view to be saved again", || saved() != first);
+    let mut checked = Vec::new();
+    for category in categories {
+        for row in settings.page.category_section(category).rows() {
+            let Some(switch) = row
+                .controls()
+                .into_iter()
+                .find_map(|control| control.downcast::<gtk::Switch>().ok())
+            else {
+                continue;
+            };
+            let title = row.text().title;
+            if !switch.is_sensitive() {
+                continue;
+            }
+            let before = saved();
+            let was = switch.is_active();
+            switch.set_active(!was);
+            wait_until(&format!("{title} to be saved"), || saved() != before);
+            settings.test.context.reload_settings();
+            settings.page.show_current_preferences();
+            assert_eq!(switch.is_active(), !was, "{title} shows what was saved");
+            switch.set_active(was);
+            wait_until(&format!("{title} to be turned back"), || saved() == before);
+            checked.push(title);
+        }
+    }
+    assert!(checked.len() >= 30, "{checked:?}");
+}
