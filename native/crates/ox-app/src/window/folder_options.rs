@@ -111,8 +111,8 @@ fn browse_folders() -> Setting {
     Setting {
         label: message_id("Browse folders"),
         choices: Some([
-            (message_id("Open each folder in the same window"), false),
-            (message_id("Open each folder in its own window"), true),
+            (message_id("Open each folder in the s_ame window"), false),
+            (message_id("Open each folder in its own _window"), true),
         ]),
         read: |preferences| preferences.open_folders_in_own_window,
         write: |update, _, on| update.open_folders_in_own_window = Some(on),
@@ -352,8 +352,11 @@ const GROUP_ART: i32 = 32;
 /// A check box or a choice of Folder Options, close together, as Windows
 /// lists them.
 fn option_check(label: &str) -> gtk::CheckButton {
+    // A letter marked with "_" is the option's access key: Alt and the
+    // letter choose it, as in Windows.
     let check = gtk::CheckButton::builder()
         .label(label)
+        .use_underline(true)
         .css_classes(["option-row"])
         .build();
     // A long option wraps, as in Windows, rather than widening the
@@ -436,6 +439,15 @@ fn start_places(chosen: Option<&str>) -> Vec<Option<String>> {
     places
 }
 
+/// Where `startup_folder` is among `places`; Home when it is not there.
+fn start_position(places: &[Option<String>], startup_folder: Option<&str>) -> u32 {
+    let chosen = places
+        .iter()
+        .position(|place| place.as_deref() == startup_folder)
+        .unwrap_or(0);
+    u32::try_from(chosen).unwrap_or(0)
+}
+
 /// The name "Open `OpenXplorer` to" shows for `place`.
 fn start_place_name(place: Option<&str>) -> String {
     match place {
@@ -451,7 +463,8 @@ fn start_place_name(place: Option<&str>) -> String {
 struct OptionsForm {
     settings: Vec<ShownSetting>,
     start: gtk::DropDown,
-    places: Vec<Option<String>>,
+    /// The start places the list offers, in its order.
+    places: RefCell<Vec<Option<String>>>,
     saved_start: Cell<u32>,
     /// Privacy's Clear, which clears File Explorer's history at once.
     clear_history: gtk::Button,
@@ -481,10 +494,10 @@ impl OptionsForm {
             settings.push(ShownSetting::add(setting, Tab::General, &column, preferences));
         }
         let privacy_rows = privacy_start..settings.len();
-        let clear_history = push_button(&gettext("Clear"));
+        let clear_history = push_button(&gettext("C_lear"));
         column.append(&clear_row(&clear_history));
         general.append(&privacy);
-        let restore_general = push_button(&gettext("Restore Defaults"));
+        let restore_general = push_button(&gettext("Restore _Defaults"));
         general.append(&tab_footer(&restore_general));
 
         let caption = gtk::Label::builder()
@@ -509,7 +522,7 @@ impl OptionsForm {
         tree.append(&files_and_folders);
         tree.update_relation(&[gtk::accessible::Relation::LabelledBy(&[caption.upcast_ref()])]);
         view.append(&advanced_list(&tree));
-        let restore_view = push_button(&gettext("Restore Defaults"));
+        let restore_view = push_button(&gettext("Restore _Defaults"));
         // The list takes the room the tab has, as in Windows.
         let view_footer = tab_footer(&restore_view);
         view_footer.set_vexpand(false);
@@ -520,14 +533,14 @@ impl OptionsForm {
             settings.push(ShownSetting::add(setting, Tab::Search, &column, preferences));
         }
         search.append(&non_indexed);
-        let restore_search = push_button(&gettext("Restore Defaults"));
+        let restore_search = push_button(&gettext("Restore _Defaults"));
         search.append(&tab_footer(&restore_search));
 
         let form = Rc::new(Self {
             settings,
             saved_start: Cell::new(start.selected()),
             start,
-            places,
+            places: RefCell::new(places),
             clear_history,
             privacy: privacy_rows,
         });
@@ -557,6 +570,37 @@ impl OptionsForm {
         }
     }
 
+    /// Shows `preferences` that Settings, the View menu, a key such as
+    /// Ctrl+H or another window saved while Folder Options is open, in
+    /// every choice the user has not changed here; a choice changed here
+    /// keeps the user's change, for OK or Apply to save.
+    fn follow_preferences(&self, preferences: &Preferences) {
+        self.follow_navigation_pane(preferences.more_navigation_pane_items);
+        for shown in &self.settings {
+            let now = (shown.setting.read)(preferences);
+            if shown.value() == shown.saved.get() && now != shown.saved.get() {
+                shown.saved.set(now);
+                shown.show(now);
+            }
+        }
+        if self.start.selected() != self.saved_start.get() {
+            return;
+        }
+        let places = start_places(preferences.startup_folder.as_deref());
+        if *self.places.borrow() != places {
+            let names: Vec<String> = places
+                .iter()
+                .map(|place| start_place_name(place.as_deref()))
+                .collect();
+            let names: Vec<&str> = names.iter().map(String::as_str).collect();
+            self.start.set_model(Some(&gtk::StringList::new(&names)));
+            self.places.replace(places);
+        }
+        let chosen = start_position(&self.places.borrow(), preferences.startup_folder.as_deref());
+        self.saved_start.set(chosen);
+        self.start.set_selected(chosen);
+    }
+
     /// Sets every choice of `tab` to the app's default, to be saved with
     /// OK or Apply.
     fn restore_defaults(&self, tab: Tab) {
@@ -584,7 +628,7 @@ impl OptionsForm {
         }
         let start = self.start.selected();
         if start != self.saved_start.get() {
-            let place = self.places.get(start as usize).cloned().flatten();
+            let place = self.places.borrow().get(start as usize).cloned().flatten();
             // An empty folder is Home.
             update.startup_folder = Some(place.unwrap_or_default());
             self.saved_start.set(start);
@@ -654,13 +698,10 @@ fn open_file_explorer_to(
     let start = gtk::DropDown::from_strings(&names);
     start.set_halign(gtk::Align::Start);
     start.add_css_class("properties-combo");
-    let chosen = places
-        .iter()
-        .position(|place| *place == preferences.startup_folder)
-        .unwrap_or(0);
-    start.set_selected(u32::try_from(chosen).unwrap_or(0));
+    start.set_selected(start_position(&places, preferences.startup_folder.as_deref()));
     let caption = gtk::Label::builder()
-        .label(gettext("Open OpenXplorer to:"))
+        .label(gettext("Open OpenXplorer _to:"))
+        .use_underline(true)
         .xalign(0.0)
         .mnemonic_widget(&start)
         .build();
@@ -736,9 +777,12 @@ fn advanced_list(tree: &gtk::Box) -> gtk::Frame {
 /// tab, as tall as the General tab makes it.
 const ADVANCED_LIST_HEIGHT: i32 = 120;
 
-/// A Windows push button in a tab, as Apply to Folders and Clear.
+/// A Windows push button in a tab, as Apply to Folders and Clear, whose
+/// letter marked with "_" is its access key, as in Windows.
 fn push_button(label: &str) -> gtk::Button {
-    crate::properties::push_button(label)
+    let button = crate::properties::push_button(label);
+    button.set_use_underline(true);
+    button
 }
 
 /// The foot of a tab: Restore Defaults at its bottom right, as in
@@ -781,8 +825,9 @@ impl BrowserWindow {
             form: Rc::clone(&form),
         }));
         form.follow_with(&options);
-        // Settings may turn the navigation pane's extra rows on or off in
-        // any window while Folder Options is open; Privacy follows.
+        // Settings, the View menu, Ctrl+H or another window may change a
+        // preference while Folder Options is open; the choices not changed
+        // here follow, and so do Privacy's check boxes (SIDE-034).
         let preferences_changed = self.context().connect_places_changed(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -790,7 +835,7 @@ impl BrowserWindow {
             form,
             move || {
                 let preferences = window.context().settings_data().preferences;
-                form.follow_navigation_pane(preferences.more_navigation_pane_items);
+                form.follow_preferences(&preferences);
             }
         ));
         let preferences_changed = RefCell::new(Some(preferences_changed));
@@ -836,9 +881,9 @@ impl BrowserWindow {
         column.append(&text);
         let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         buttons.add_css_class("options-folder-views-buttons");
-        let apply = push_button(&gettext("Apply to Folders"));
+        let apply = push_button(&gettext("Apply to F_olders"));
         apply.set_sensitive(source);
-        let reset = push_button(&gettext("Reset Folders"));
+        let reset = push_button(&gettext("_Reset Folders"));
         buttons.append(&apply);
         buttons.append(&reset);
         column.append(&buttons);

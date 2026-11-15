@@ -22,10 +22,11 @@ use crate::locations::{self, Page};
 use crate::window::ButtonStyle;
 
 const STARTUP_FOLDER: RowText = RowText {
-    title: "New windows open at",
-    description: "The folder a new window shows first. Leave it empty for Home.",
-    keywords: "open new windows at startup start home folder location default show on startup \
-               open explorer to",
+    title: "Open OpenXplorer to",
+    description: "The folder a new window shows first. Leave it empty for Home. Folder Options \
+                  offers Home, This PC and the folder chosen here.",
+    keywords: "new windows open at startup start home folder location default show on startup \
+               open file explorer to this pc folder options",
 };
 
 const HOME_QUICK_ACCESS: RowText = RowText {
@@ -42,7 +43,7 @@ const RESTORE_SESSION: RowText = RowText {
     description: "Starting OpenXplorer without a folder reopens the tabs and split panes the last \
                   window had.",
     keywords: "restore previous tabs at startup session remember reopen restore tabs last time \
-               startup logon",
+               startup logon restore previous folder windows at logon",
 };
 
 /// The startup folder `typed` asks for, relative to `base`: its canonical
@@ -115,7 +116,7 @@ pub(super) fn startup_group(page: &SettingsPage) -> SettingsGroup {
     group
 }
 
-/// "New windows open at": the folder's field, "Use current location" and
+/// "Open `OpenXplorer` to": the folder's field, "Use current location" and
 /// "Use Home".
 fn startup_folder_row(page: &SettingsPage) -> SettingRow {
     let row = SettingRow::new(STARTUP_FOLDER);
