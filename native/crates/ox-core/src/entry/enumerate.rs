@@ -63,6 +63,11 @@ pub async fn enumerate_folder(uri: &str, on_batch: impl FnMut(Vec<Entry>)) -> Re
             }
             Read::End => {
                 batches.finish();
+                // The listing ends after the views have taken in the last
+                // rows, at low priority as closing GIO's enumerator here
+                // used to: what runs at the end (restoring the scroll
+                // position and the selection) needs the rows laid out.
+                glib::timeout_future_with_priority(glib::Priority::LOW, Duration::ZERO).await;
                 return Ok(());
             }
             Read::Failed(error) => return Err(error),

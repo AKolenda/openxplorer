@@ -289,7 +289,7 @@ impl FolderModel {
         let options = Rc::clone(&self.sort_options);
         Rc::new(move |item| {
             let (grouping, clocks) = options.get().grouping?;
-            Some(groups::group_in(grouping, item, &clocks).title)
+            Some(groups::group_in(grouping, item, &clocks).title.clone())
         })
     }
 
