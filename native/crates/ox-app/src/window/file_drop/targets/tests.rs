@@ -936,3 +936,71 @@ fn a_folder_of_the_folder_tree_takes_drops_and_opens_under_a_held_drag() {
         "no outline stays once the drag leaves"
     );
 }
+
+/// With `OX_NATIVE_CAPTURE_DIR` set, saves the folder tree's drop outline
+/// and the note a drag over an open ZIP shows, in both themes; without
+/// it, proves they show.
+#[gtk::test]
+fn the_folder_tree_drop_outline_and_the_open_zip_note_are_captured() {
+    use ox_core::location::{same_location, ArchiveLocation};
+
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Shelf")).expect("fixture subfolder");
+    let request = ox_core::archive::CompressionRequest {
+        uris: vec![fixture.uri_of("Notes 2.txt")],
+        destination_uri: fixture.uri(),
+        archive_name: "Bundle.zip".to_owned(),
+    };
+    ox_core::archive::ZipCompressor::new()
+        .compress(&request, &ox_core::transfer::Cancellation::new())
+        .expect("the fixture ZIP is written");
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
+    test.activate("folder-tree", None);
+    let tree = test.window.folder_tree();
+    let shown = fixture.uri_of("Documents");
+    wait_until("the tree selects the folder shown", || {
+        tree.selected_uri().is_some_and(|uri| same_location(&uri, &shown))
+    });
+    let shelf_row = u32::try_from(
+        tree.outline()
+            .iter()
+            .position(|line| line == "    Shelf")
+            .expect("Shelf is listed"),
+    )
+    .expect("a small tree");
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        wait_for_frames(&test.window, 3);
+        let list = tree.rows_list();
+        let shelf_y = (0..list.height())
+            .map(f64::from)
+            .find(|y| tree.folder_at(*y).is_some_and(|(row, _)| row == shelf_row))
+            .expect("Shelf's row is shown");
+        let spot = test
+            .window
+            .drop_spot(DropZone::FolderTree, list.upcast_ref(), 20.0, shelf_y);
+        test.window.show_drop_spot(DropZone::FolderTree, spot.as_ref());
+        assert!(tree.is_drop_row(shelf_row));
+        capture(&test.window, &format!("native-drop-folder-tree-{theme}.png"));
+        test.window.leave_drop_zone(DropZone::FolderTree);
+    }
+
+    let root = ArchiveLocation::root(&fixture.uri_of("Bundle.zip"));
+    test.window
+        .navigate(&root.uri())
+        .expect("a ZIP opens like a folder");
+    test.wait_for_listing("the ZIP's listing");
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        wait_for_frames(&test.window, 3);
+        test.window
+            .explain_refused_drop(&FakeDrop::from_another_app(gdk::DragAction::COPY));
+        assert_eq!(
+            test.window.shown_message(),
+            "An archive is read-only. Extract it to add items."
+        );
+        capture(&test.window, &format!("native-drop-open-zip-{theme}.png"));
+    }
+}
