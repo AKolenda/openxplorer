@@ -600,8 +600,8 @@ fn a_zip_handed_in_opens_like_a_folder_when_zips_do() {
 }
 
 /// Now that ZIPs open in the tab by default, a corrupt ZIP says there why
-/// it cannot be listed, and a file in a password ZIP says it needs the
-/// archive manager, as the Compressed folder window says.
+/// it cannot be listed, and a file in a password ZIP asks for the
+/// password, as in Windows 11.
 ///
 /// parity: ARC-005, ARC-009, ARC-026
 #[gtk::test]
@@ -624,11 +624,10 @@ fn a_corrupt_or_password_zip_says_why_in_the_tab() {
     open_bundle(&test, &fixture);
     test.select_named("readme.txt");
     test.activate("open", None);
-    wait_until("the refusal", || !test.window.shown_message().is_empty());
-    assert_eq!(
-        test.window.shown_message(),
-        "Encrypted ZIP members require an archive manager."
-    );
+    let question = super::file_ops_support::open_dialog(&test);
+    assert_eq!(question.title_text(), "Password needed");
+    question.press("Cancel");
+    super::file_ops_support::wait_for_no_dialog(&test);
     assert!(test.context.recorded_launches().is_empty());
 }
 
