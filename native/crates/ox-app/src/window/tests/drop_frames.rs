@@ -40,9 +40,11 @@ fn green_on_left_edge(test: &TestWindow, widget: &gtk::Widget) -> usize {
             place.height() as usize,
         )
     };
-    rows[top..top + height]
+    // A window bigger than the screen is drawn only as far as it shows.
+    let bottom = (top + height).min(rows.len());
+    rows[top.min(bottom)..bottom]
         .iter()
-        .flat_map(|row| row[left..left + 3].iter())
+        .flat_map(|row| row.iter().skip(left).take(3))
         .filter(|[blue, green, red, _]| *green > red.saturating_add(50) && *green > blue.saturating_add(20))
         .count()
 }
@@ -82,5 +84,36 @@ fn a_drag_over_the_navigation_pane_or_the_address_bar_draws_no_frame_round_it() 
         let green = green_on_left_edge(&test, &widget);
         widget.unset_state_flags(gtk::StateFlags::DROP_ACTIVE);
         assert_eq!(green, 0, "{name} has no green frame under a drag");
+    }
+}
+
+/// With `OX_NATIVE_CAPTURE_DIR` set, saves the window while a drag is
+/// over the navigation pane and the address bar, with the folder tree
+/// shown, in both themes; without it, proves neither is framed in green.
+#[gtk::test]
+fn the_navigation_pane_under_a_drag_is_captured() {
+    use crate::test_support::harness::{capture, ThemeGuard};
+
+    let _theme = ThemeGuard::keep();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
+    test.activate("folder-tree", None);
+    let tree = test.window.folder_tree();
+    wait_until("the tree shows a folder", || tree.selected_uri().is_some());
+    let list: gtk::Widget = test.window.sidebar().list().clone().upcast();
+    let address: gtk::Widget = test.window.address_bar().clone().upcast();
+    for theme in ["light", "dark"] {
+        test.activate("theme", Some(theme));
+        wait_for_frames(&test.window, 3);
+        for widget in [&list, &address] {
+            widget.set_state_flags(gtk::StateFlags::DROP_ACTIVE, false);
+        }
+        let green = green_on_left_edge(&test, &list) + green_on_left_edge(&test, &address);
+        capture(&test.window, &format!("native-drop-no-frame-{theme}.png"));
+        for widget in [&list, &address] {
+            widget.unset_state_flags(gtk::StateFlags::DROP_ACTIVE);
+        }
+        assert_eq!(green, 0);
     }
 }
