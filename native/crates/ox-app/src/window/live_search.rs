@@ -122,6 +122,8 @@ impl BrowserWindow {
                     if let Some(window) = window.upgrade() {
                         window.imp().search.borrow_mut().show_found(&run, rows.clone());
                         window.show_searched_items();
+                        // The first match shows at once, in the list.
+                        window.update_content();
                     }
                     shows_rows = true;
                 }

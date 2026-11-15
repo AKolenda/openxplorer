@@ -210,11 +210,11 @@ msgid "Running actions"
 msgstr ""
 
 #: crates/ox-app/resources/ui/search-box.ui
-msgid "Search cached filenames and paths. Enable folders in Settings → Search."
+msgid "Search filenames and paths"
 msgstr ""
 
 #: crates/ox-app/resources/ui/search-box.ui
-msgid "Search filenames and paths"
+msgid "Search names in this folder and its subfolders. Folders cached in Settings → Search are searched faster."
 msgstr ""
 
 #: crates/ox-app/resources/ui/search-info-strip.ui
