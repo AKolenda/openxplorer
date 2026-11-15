@@ -312,7 +312,7 @@ impl BrowserWindow {
     }
 
     /// True while the tab shows the Recycle Bin itself.
-    pub(super) fn shows_recycle_bin(&self) -> bool {
+    pub(crate) fn shows_recycle_bin(&self) -> bool {
         self.command_facts().folder.is_recycle_bin
     }
 }
