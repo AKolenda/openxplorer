@@ -966,6 +966,42 @@ fn read_only_refuses_a_location_made_a_previous_version_meanwhile() {
     assert_eq!(mode_of(&path), 0o644, "the previous version is unchanged");
 }
 
+/// An item in a folder the user may not change cannot be renamed, so its
+/// name and Hidden (a leading dot) are greyed from the start, as GIO's
+/// `access::can-rename` says, instead of failing with "Permission denied"
+/// on Apply.
+///
+/// parity: PROP-005
+#[gtk::test]
+fn an_item_that_cannot_be_renamed_greys_its_name_and_hidden() {
+    // The superuser may rename anything, so only another user sees this.
+    if ox_core::permissions::current_user_is_superuser() {
+        return;
+    }
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Fixed")).expect("a folder");
+    fs::write(fixture.path("Fixed/plan.txt"), b"plan").expect("a file");
+    fs::set_permissions(fixture.path("Fixed"), fs::Permissions::from_mode(0o555)).expect("mode");
+    let test = TestWindow::open(&fixture.uri_of("Fixed"));
+    test.select_named("plan.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("plan.txt Properties");
+    let page = general(&window);
+    let shown = (
+        name_field(&window).is_editable(),
+        check(&page, "Hidden").is_sensitive(),
+        check(&page, "Read-only").is_sensitive(),
+    );
+    window.close();
+    fs::set_permissions(fixture.path("Fixed"), fs::Permissions::from_mode(0o755)).expect("mode");
+
+    assert_eq!(
+        shown,
+        (false, false, true),
+        "the name and Hidden are greyed; Read-only, a permission of the file, is not"
+    );
+}
+
 /// Hidden adds a leading dot to the name on Apply, and a taken name is
 /// refused with the normal message.
 ///

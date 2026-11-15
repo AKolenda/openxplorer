@@ -424,7 +424,8 @@ impl ItemPages {
 
 /// Whether the item `properties` describes can be renamed, and so hidden
 /// (PROP-005): not a standard folder, a share, a page or anything inside a
-/// previous version.
+/// previous version, nor an item its file system says the user may not
+/// rename (`access::can-rename`, as in a folder the user may not change).
 pub(super) fn can_rename(
     properties: &ItemProperties,
     context: &PropertiesContext,
@@ -434,7 +435,13 @@ pub(super) fn can_rename(
     let is_share = is_smb_server(uri) || is_smb_share_root(uri);
     let is_read_only = context.locations.is_snapshot_location(uri) || is_conventional_snapshot(uri);
     let is_renamable_place = uri.starts_with("file:") || is_smb_location(uri);
-    !is_standard_folder && properties.parent_uri.is_some() && !is_share && !is_read_only && is_renamable_place
+    let may_rename = properties.entry.can_rename != Some(false);
+    !is_standard_folder
+        && properties.parent_uri.is_some()
+        && !is_share
+        && !is_read_only
+        && is_renamable_place
+        && may_rename
 }
 
 /// Reads the file type's default application again each time the window
