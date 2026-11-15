@@ -28,7 +28,7 @@
 //! restored or deleted.
 
 use gtk::subclass::prelude::*;
-use ox_core::location::{is_archive_location, is_smb_share_root, same_location, LocationContext, TRASH_URI};
+use ox_core::location::{is_archive_location, same_location, LocationContext, TRASH_URI};
 use ox_core::ops::JournalDirection;
 
 use crate::folder_view::item::FileItem;
@@ -319,18 +319,20 @@ pub(crate) fn selection_facts(items: &[FileItem], locations: &LocationContext) -
     // A row of Recent files that names its file is copied as that file,
     // whether `GVfs` types it as a file or as a shortcut; its Cut,
     // Duplicate, Rename and Delete are refused as `has_recent`.
+    // What each item's address says is worked out once per item
+    // (`AddressFacts`), so updating the commands for 100,000 selected items
+    // does not split and decode 100,000 addresses each time.
     let has_inoperable = items.iter().any(|item| {
         let entry = item.entry();
         let stands_for_a_file = entry.meta.recent_target.is_some();
-        !stands_for_a_file && (!entry.can_operate || entry.is_virtual || is_smb_share_root(&entry.uri))
+        !stands_for_a_file && (!entry.can_operate || entry.is_virtual || item.address_facts().smb_share_root)
     });
+    let has_snapshot_roots = !locations.snapshot_roots.is_empty();
     let has_read_only = items.iter().any(|item| {
-        let uri = &item.entry().uri;
-        locations.is_snapshot_location(uri) || is_archive_location(uri)
+        item.address_facts().read_only_by_path
+            || (has_snapshot_roots && locations.is_snapshot_location(&item.entry().uri))
     });
-    let has_recent = items
-        .iter()
-        .any(|item| crate::window::context_menu::is_recent_row(item.entry()));
+    let has_recent = items.iter().any(|item| item.address_facts().recent_row);
     SelectionFacts {
         count: items.len(),
         has_inoperable,
@@ -459,6 +461,58 @@ mod tests {
             .into_iter()
             .filter(|command| facts.allows(*command))
             .collect()
+    }
+
+    fn address_reads() -> u32 {
+        crate::folder_view::item::ADDRESS_READS.with(std::cell::Cell::get)
+    }
+
+    /// The commands are updated several times after each change of the
+    /// selection; each item's address is read only the first time.
+    ///
+    /// parity: PERF-004
+    #[gtk::test]
+    fn each_selected_address_is_read_once() {
+        let items: Vec<FileItem> = (0..500)
+            .map(|number| FileItem::new(crate::test_support::file_entry(&format!("photo {number}.jpg"))))
+            .collect();
+        let locations = LocationContext::default();
+        let before = address_reads();
+        for _ in 0..4 {
+            let facts = selection_facts(&items, &locations);
+            assert_eq!(facts.count, 500);
+            assert!(!facts.has_inoperable && !facts.has_read_only && !facts.has_recent);
+        }
+        assert_eq!(address_reads() - before, 500);
+    }
+
+    /// What an address says stays right with the reading kept: a snapshot
+    /// by its path, a ZIP, a share, a row of Recent files, and a folder the
+    /// settings name a snapshot root, which is checked each time.
+    ///
+    /// parity: PERF-004
+    #[gtk::test]
+    fn kept_address_facts_still_mark_read_only_and_inoperable_items() {
+        let item = |uri: &str| {
+            let mut entry = crate::test_support::file_entry("item");
+            entry.uri = uri.to_owned();
+            FileItem::new(entry)
+        };
+        let plain = LocationContext::default();
+        let facts = |uri: &str, locations: &LocationContext| selection_facts(&[item(uri)], locations);
+        assert!(facts("file:///srv/data/.snapshot/daily/a.txt", &plain).has_read_only);
+        let inside_zip = ox_core::location::ArchiveLocation::root("file:///srv/a.zip")
+            .member("inside.txt")
+            .uri();
+        assert!(facts(&inside_zip, &plain).has_read_only);
+        assert!(facts("smb://studio-nas/projects", &plain).has_inoperable);
+        assert!(facts("recent:///abc", &plain).has_recent);
+        assert!(!facts("file:///srv/data/a.txt", &plain).has_read_only);
+        let rooted = LocationContext {
+            snapshot_roots: vec!["file:///srv/backup".to_owned()],
+            ..LocationContext::default()
+        };
+        assert!(facts("file:///srv/backup/a.txt", &rooted).has_read_only);
     }
 
     /// parity: CMD-002

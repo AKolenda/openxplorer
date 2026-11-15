@@ -3,12 +3,18 @@
 //!
 //! Ports Dolphin's expandable folders (`ExpandableFolders`, on by default):
 //! a folder's arrow lists its contents beneath it, indented, filtered and
-//! sorted as the folder's own items are. A [`FolderTree`] puts GTK's tree
-//! list model between the sorted items and the selection; it passes the
-//! items through, so every position the views and the window use names a
-//! [`FileItem`], whether it is a folder's own item or one of a sub-folder.
-//! A folder is listed when it is expanded and forgotten when it is
-//! collapsed, together with the listings beneath it.
+//! sorted as the folder's own items are. While folders may expand, a
+//! [`FolderTree`] puts GTK's tree list model between the sorted items and
+//! the selection; it passes the items through, so every position the views
+//! and the window use names a [`FileItem`], whether it is a folder's own
+//! item or one of a sub-folder. A folder is listed when it is expanded and
+//! forgotten when it is collapsed, together with the listings beneath it.
+//!
+//! The tree list model exists only while folders may expand (the setting
+//! is off by default): it builds a node for every item the sorted list
+//! reports as changed, which while a folder of 100,000 items is listed in
+//! batches is the whole list each time, and it cost about two seconds of
+//! the interface thread's time.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -28,10 +34,15 @@ pub(crate) struct FolderTree(Rc<TreeState>);
 /// What a [`FolderTree`] keeps; its folders' listings hold it weakly.
 #[derive(Debug)]
 struct TreeState {
-    /// The sorted items with the contents of expanded folders beneath them.
-    tree: gtk::TreeListModel,
-    /// Whether folders may expand now, which the tree's callback reads.
-    expandable: Rc<Cell<bool>>,
+    /// The sorted items the tree is made over.
+    sorted: gtk::SortListModel,
+    /// What filters an expanded folder's contents.
+    filter: gtk::CustomFilter,
+    /// The sorted items with the contents of expanded folders beneath them,
+    /// while folders may expand.
+    tree: RefCell<Option<gtk::TreeListModel>>,
+    /// Whether folders may expand now.
+    expandable: Cell<bool>,
     /// The running listings of expanded folders, by location.
     listings: RefCell<HashMap<String, ChildListing>>,
     /// Folders to expand again once they are listed, by location (Back and
@@ -91,25 +102,14 @@ fn row_uri(row: &gtk::TreeListRow) -> Option<String> {
 impl FolderTree {
     /// A tree over `sorted`, whose sub-folders' contents are filtered by
     /// `filter` and sorted as `sorted` sorts.
+    /// The tree list model is made when folders may expand
+    /// ([`FolderTree::set_expandable`]).
     pub(crate) fn new(sorted: &gtk::SortListModel, filter: &gtk::CustomFilter) -> Self {
-        let expandable = Rc::new(Cell::new(false));
-        let create = {
-            let sorted = sorted.clone();
-            let filter = filter.clone();
-            move |object: &glib::Object| -> Option<gio::ListModel> {
-                let item = object.downcast_ref::<FileItem>()?;
-                // GTK caches a None answer permanently. Whether the UI
-                // currently allows expansion must not change this answer.
-                if !item.entry().is_dir || item.entry().is_virtual {
-                    return None;
-                }
-                Some(child_items(&sorted, &filter).upcast())
-            }
-        };
-        let tree = gtk::TreeListModel::new(sorted.clone(), true, false, create);
         Self(Rc::new(TreeState {
-            tree,
-            expandable,
+            sorted: sorted.clone(),
+            filter: filter.clone(),
+            tree: RefCell::default(),
+            expandable: Cell::new(false),
             listings: RefCell::default(),
             pending: RefCell::default(),
             expanded: RefCell::default(),
@@ -125,15 +125,26 @@ impl FolderTree {
         self.0.views.borrow_mut().push(view.downgrade());
     }
 
-    /// The model the selection shows.
-    pub(crate) fn model(&self) -> &gtk::TreeListModel {
-        &self.0.tree
+    /// The sorted items with expanded folders' contents, for the selection
+    /// to show while folders may expand; `None` while they may not, when
+    /// the selection shows the sorted items themselves.
+    pub(crate) fn model(&self) -> Option<gtk::TreeListModel> {
+        self.0.tree.borrow().clone()
     }
 
-    /// Lets folders expand, or collapses them all and stops them.
+    /// Lets folders expand, making the tree list model, or collapses them
+    /// all, stops them and lets the tree list model go.
     pub(crate) fn set_expandable(&self, expandable: bool) {
-        if !expandable {
+        if expandable {
+            let made = self.0.tree.borrow().is_some();
+            if !made {
+                self.0
+                    .tree
+                    .replace(Some(tree_over(&self.0.sorted, &self.0.filter)));
+            }
+        } else {
             self.collapse_all();
+            self.0.tree.replace(None);
         }
         self.0.expandable.set(expandable);
         self.0.views.borrow_mut().retain(|view| {
@@ -152,7 +163,7 @@ impl FolderTree {
 
     /// The tree row at `position`.
     pub(crate) fn row(&self, position: u32) -> Option<gtk::TreeListRow> {
-        self.0.tree.row(position)
+        self.0.tree.borrow().as_ref()?.row(position)
     }
 
     /// Expands or collapses `row`, listing a folder that expands.
@@ -310,6 +321,25 @@ impl FolderTree {
     }
 }
 
+/// GTK's tree list model over `sorted`, whose sub-folders' contents are
+/// filtered by `filter` and sorted as `sorted` sorts.
+fn tree_over(sorted: &gtk::SortListModel, filter: &gtk::CustomFilter) -> gtk::TreeListModel {
+    let create = {
+        let sorted = sorted.clone();
+        let filter = filter.clone();
+        move |object: &glib::Object| -> Option<gio::ListModel> {
+            let item = object.downcast_ref::<FileItem>()?;
+            // GTK caches a None answer permanently. Whether the UI
+            // currently allows expansion must not change this answer.
+            if !item.entry().is_dir || item.entry().is_virtual {
+                return None;
+            }
+            Some(child_items(&sorted, &filter).upcast())
+        }
+    };
+    gtk::TreeListModel::new(sorted.clone(), true, false, create)
+}
+
 /// An empty, filtered and sorted list for a folder's contents; the folder
 /// is listed into it when it expands.
 fn child_items(sorted: &gtk::SortListModel, filter: &gtk::CustomFilter) -> gtk::SortListModel {
@@ -330,6 +360,11 @@ mod tests {
     use super::*;
     use crate::test_support::harness::{wait_until, Fixture};
 
+    /// What the selection shows while folders may expand.
+    fn shown(tree: &FolderTree) -> gtk::TreeListModel {
+        tree.model().expect("folders may expand")
+    }
+
     /// A metadata refresh replaces the parent row, so its previous
     /// completed listing cannot stand in for the new row's empty store.
     #[gtk::test]
@@ -345,7 +380,7 @@ mod tests {
         tree.set_expandable(true);
         let old_row = tree.row(0).unwrap();
         tree.set_expanded(&old_row, true);
-        wait_until("the original child listing", || tree.model().n_items() == 2);
+        wait_until("the original child listing", || shown(&tree).n_items() == 2);
         let expanded = tree.expanded_uris();
 
         entry.modified = Some(entry.modified.unwrap_or_default() + 1);
@@ -355,11 +390,11 @@ mod tests {
         tree.expand_when_listed(expanded);
 
         wait_until("children below the replacement row", || {
-            tree.model().n_items() == 2
+            shown(&tree).n_items() == 2
         });
         assert!(new_row.is_expanded());
         assert_eq!(
-            tree.model()
+            shown(&tree)
                 .item(1)
                 .and_downcast::<FileItem>()
                 .unwrap()
@@ -387,35 +422,57 @@ mod tests {
         let sorted = gtk::SortListModel::new(Some(store), None::<gtk::Sorter>);
         let filter = gtk::CustomFilter::new(|_| true);
         let tree = FolderTree::new(&sorted, &filter);
-        let documents = tree.row(0).expect("Documents");
-        assert!(
-            documents.is_expandable(),
-            "GTK's cached capability survives the setting being off"
-        );
         tree.set_expandable(true);
+        let documents = tree.row(0).expect("Documents");
+        assert!(documents.is_expandable());
         tree.set_expanded(&documents, true);
-        wait_until("Nested to be listed", || tree.model().n_items() == 2);
+        wait_until("Nested to be listed", || shown(&tree).n_items() == 2);
         let child = tree.row(1).expect("Nested");
         tree.set_expanded(&child, true);
-        wait_until("the nested file", || tree.model().n_items() == 3);
+        wait_until("the nested file", || shown(&tree).n_items() == 3);
         assert_eq!(tree.0.listings.borrow().len(), 2);
         tree.set_expanded(&documents, false);
-        assert_eq!(tree.model().n_items(), 1);
+        assert_eq!(shown(&tree).n_items(), 1);
         assert!(
             tree.0.listings.borrow().is_empty(),
             "descendant listings are cancelled too"
         );
         std::fs::write(fixture.path("Documents").join("new.txt"), b"Synthetic data\n").expect("another file");
         tree.set_expanded(&documents, true);
-        wait_until("fresh contents on reopen", || tree.model().n_items() == 3);
-        assert!((0..tree.model().n_items())
-            .filter_map(|position| tree.model().item(position).and_downcast::<FileItem>())
+        wait_until("fresh contents on reopen", || shown(&tree).n_items() == 3);
+        assert!((0..shown(&tree).n_items())
+            .filter_map(|position| shown(&tree).item(position).and_downcast::<FileItem>())
             .any(|item| item.entry().name == "new.txt"));
         std::fs::remove_file(fixture.path("Documents").join("new.txt")).expect("remove a fixture file");
         tree.refresh_expanded();
         wait_until("refresh removes stale expanded children", || {
-            tree.model().n_items() == 2
+            shown(&tree).n_items() == 2
         });
         tree.collapse_all();
+    }
+
+    /// GTK's tree list model builds a node for every item the sorted list
+    /// reports as changed. While folders may not expand (the default) there
+    /// is no tree, so listing a large folder in batches costs it nothing.
+    ///
+    /// parity: PERF-002
+    #[gtk::test]
+    fn no_tree_is_made_while_folders_may_not_expand() {
+        let store = gio::ListStore::new::<FileItem>();
+        store.append(&FileItem::new(crate::test_support::folder_entry("Documents")));
+        let sorted = gtk::SortListModel::new(Some(store), None::<gtk::Sorter>);
+        let tree = FolderTree::new(&sorted, &gtk::CustomFilter::new(|_| true));
+        assert!(tree.model().is_none());
+        assert!(tree.row(0).is_none());
+
+        tree.set_expandable(true);
+        assert_eq!(shown(&tree).n_items(), 1);
+        assert!(tree.row(0).is_some());
+
+        tree.set_expandable(false);
+        assert!(
+            tree.model().is_none(),
+            "the tree goes when folders stop expanding"
+        );
     }
 }
