@@ -146,7 +146,7 @@ impl BrowserWindow {
 
     /// Shows the item count and the selection in the status bar.
     pub(super) fn update_status(&self) {
-        // Search results from Home are counted as results (HOME-017).
+        // Search results from Home are counted as results (HOME-026).
         let page = self
             .current_uri()
             .as_deref()

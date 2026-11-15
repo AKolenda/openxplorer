@@ -55,7 +55,7 @@ impl PaneState {
     pub(super) fn of(tab: &Tab) -> Self {
         Self {
             uri: tab.uri().to_owned(),
-            // Search results from Home are listed in its place (HOME-017).
+            // Search results from Home are listed in its place (HOME-026).
             page: Page::drawn_at(tab.uri()).filter(|_| tab.history.current_search().is_none()),
             listing: match (tab.listing_state.is_listing(), tab.reloading) {
                 (false, _) => Listing::Idle,
