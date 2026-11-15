@@ -296,6 +296,9 @@ pub(crate) enum WindowAction {
     /// Compresses the folder at the location given into a plain TAR
     /// beside it.
     CompressToTarOf,
+    /// Compresses the folder at the location given into a 7z archive
+    /// beside it.
+    CompressToSevenZipOf,
     /// Asks for the name and format of an archive of the folder at the
     /// location given.
     CompressToOf,
@@ -476,6 +479,9 @@ pub(crate) enum WindowAction {
     /// Compress to › TAR File: the selection into a new plain TAR beside
     /// it, as Windows 11 creates TAR archives besides ZIP (ARC-023).
     CompressToTar,
+    /// Compress to › 7z File: the selection into a new 7z archive beside
+    /// it, as Windows 11 creates 7z archives (ARC-023).
+    CompressToSevenZip,
     /// Compress to…: asks for the new archive's name and format first
     /// (ARC-023).
     CompressTo,
@@ -653,6 +659,7 @@ impl WindowAction {
             WindowAction::CopyPathOf => "copy-path-of",
             WindowAction::CompressToZipOf => "compress-to-zip-of",
             WindowAction::CompressToTarOf => "compress-to-tar-of",
+            WindowAction::CompressToSevenZipOf => "compress-to-7z-of",
             WindowAction::CompressToOf => "compress-to-of",
             WindowAction::NewIn => "new-in",
             WindowAction::ShowNewMenu => "show-new-menu",
@@ -722,6 +729,7 @@ impl WindowAction {
             WindowAction::ExtractHere => "extract-here",
             WindowAction::CompressToZip => "compress-to-zip",
             WindowAction::CompressToTar => "compress-to-tar",
+            WindowAction::CompressToSevenZip => "compress-to-7z",
             WindowAction::CompressTo => "compress-to",
             WindowAction::SendTo => "send-to",
             WindowAction::SendToDesktop => "send-to-desktop",
