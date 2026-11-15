@@ -4993,7 +4993,7 @@ mod tests {
     }
 
     /// The keyboard's ring on the accept button shows, light and dark. The
-    /// ring is drawn in the accent colour (C29), which on the accent-filled
+    /// ring is drawn in the accent color (C29), which on the accent-filled
     /// Open or Save button was the button's own fill, so Tab to it showed
     /// nothing. It is drawn just outside that button now, as Windows draws
     /// its focus visual around a control, so it shows against the bar; the
@@ -5037,20 +5037,20 @@ mod tests {
             crate::test_support::harness::wait_for(std::time::Duration::from_millis(600));
             let without = painted(false);
             let with = painted(true);
-            // The button's fill, the colour most of the bar's saturated
-            // pixels have, which is the ring's colour too (C29).
+            // The button's fill, the color most of the bar's saturated
+            // pixels have, which is the ring's color too (C29).
             let fill = most_common_saturated(&without);
             let near = |pixel: &[u8; 3]| pixel.iter().zip(fill).all(|(a, b)| a.abs_diff(b) <= 12);
             let count = |pixels: &[[u8; 3]]| pixels.iter().filter(|pixel| near(pixel)).count();
             let (before, after) = (count(&without), count(&with));
             assert!(
                 after > before + 80,
-                "{theme}: the ring adds its colour around the button: {before} pixels without it, {after} with"
+                "{theme}: the ring adds its color around the button: {before} pixels without it, {after} with"
             );
         }
     }
 
-    /// The RGB colours of the pixels `widget` paints, outlines of its
+    /// The RGB colors of the pixels `widget` paints, outlines of its
     /// children included.
     fn painted_pixels(widget: &gtk::Widget) -> Vec<[u8; 3]> {
         let renderer = widget
@@ -5079,7 +5079,7 @@ mod tests {
             .collect()
     }
 
-    /// The colour most of the strongly coloured `pixels` have.
+    /// The color most of the strongly colored `pixels` have.
     fn most_common_saturated(pixels: &[[u8; 3]]) -> [u8; 3] {
         let mut counts: std::collections::HashMap<[u8; 3], usize> = std::collections::HashMap::new();
         for pixel in pixels {
@@ -5093,7 +5093,7 @@ mod tests {
         counts
             .into_iter()
             .max_by_key(|(_, count)| *count)
-            .map(|(colour, _)| colour)
+            .map(|(color, _)| color)
             .expect("the accept button's fill")
     }
 
