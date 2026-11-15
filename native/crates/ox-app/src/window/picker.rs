@@ -5553,6 +5553,47 @@ mod tests {
         wait_until("the picker to close", || !window.is_visible());
     }
 
+    /// Ctrl+Shift+N makes a new folder from File name too, where a Save
+    /// dialog starts, as Alt+Up and the other folder keys work from there
+    /// ("Ctrl + Shift + N: Create a new folder", Keyboard shortcuts in
+    /// Windows). Before, the key did nothing there, and the new folder's
+    /// name typed next replaced the file's name, so Enter saved a file
+    /// called after the folder.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn ctrl_shift_n_makes_a_new_folder_from_file_name() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "inside.txt".to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let name = name_box(window);
+        name.grab_focus();
+        settle();
+        assert!(window.focus_is_in_picker_name());
+
+        assert!(
+            press(
+                test,
+                gdk::Key::n,
+                gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::SHIFT_MASK
+            ),
+            "Ctrl+Shift+N acts from File name"
+        );
+        wait_until("the new folder", || fixture.path("New folder").is_dir());
+        assert_eq!(name.text(), "inside.txt", "File name keeps the file's name");
+
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
     /// The Properties window of the item called `name`, opened from the
     /// dialog `test` shows, as its Details pane's Properties button and
     /// its context menu open it.
