@@ -34,6 +34,9 @@ pub(super) enum Probe {
     Missing,
     /// No answer within [`PROBE_TIMEOUT`]: a share that stopped answering.
     NoAnswer,
+    /// A failure that says the place cannot be reached, as a share
+    /// whose server went away fails at once: not "nothing is here".
+    Unreachable,
 }
 
 impl Probe {
@@ -54,6 +57,7 @@ pub(super) async fn probe_within(path: &Path, timeout: Duration) -> Probe {
         Answer::Info(info) if info.file_type() == gio::FileType::Directory => Probe::Folder,
         Answer::Info(_) => Probe::File,
         Answer::Failed => Probe::Missing,
+        Answer::Unreachable => Probe::Unreachable,
         Answer::TimedOut => Probe::NoAnswer,
     }
 }
@@ -69,7 +73,7 @@ pub(super) async fn all_writable(locations: &[PathBuf]) -> bool {
     for location in locations {
         let writable = match query(location, gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE).await {
             Answer::Info(info) => info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE),
-            Answer::Failed | Answer::TimedOut => false,
+            Answer::Failed | Answer::Unreachable | Answer::TimedOut => false,
         };
         if !writable {
             return false;
@@ -364,7 +368,28 @@ pub(super) fn fail_removal_in(folder: &Path) {
 enum Answer {
     Info(gio::FileInfo),
     Failed,
+    /// Failed because the place cannot be reached ([`is_unreachable`]).
+    Unreachable,
     TimedOut,
+}
+
+/// True for an error that says a place cannot be reached rather than
+/// that nothing is there: a share whose server went away answers its
+/// `GVfs` FUSE path with `EIO` (GIO's plain "failed"), or a refused or
+/// broken connection.
+fn is_unreachable(error: &glib::Error) -> bool {
+    [
+        gio::IOErrorEnum::Failed,
+        gio::IOErrorEnum::NotMounted,
+        gio::IOErrorEnum::HostNotFound,
+        gio::IOErrorEnum::HostUnreachable,
+        gio::IOErrorEnum::NetworkUnreachable,
+        gio::IOErrorEnum::ConnectionRefused,
+        gio::IOErrorEnum::BrokenPipe,
+        gio::IOErrorEnum::TimedOut,
+    ]
+    .into_iter()
+    .any(|kind| error.matches(kind))
 }
 
 /// Asks GIO for `attributes` of `path`, waiting at most [`PROBE_TIMEOUT`].
@@ -383,12 +408,13 @@ async fn query_within(path: &Path, attributes: &str, timeout: Duration) -> Answe
     }
     #[cfg(test)]
     if NOT_REACHED.with(|folders| folders.borrow().iter().any(|folder| path.starts_with(folder))) {
-        return Answer::Failed;
+        return Answer::Unreachable;
     }
     let file = gio::File::for_path(path);
     let asking = file.query_info_future(attributes, gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT);
     match glib::future_with_timeout(timeout, asking).await {
         Ok(Ok(info)) => Answer::Info(info),
+        Ok(Err(error)) if is_unreachable(&error) => Answer::Unreachable,
         Ok(Err(_)) => Answer::Failed,
         Err(_) => Answer::TimedOut,
     }

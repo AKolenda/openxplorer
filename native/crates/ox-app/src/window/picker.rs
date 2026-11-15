@@ -252,11 +252,31 @@ impl Picker {
     }
 }
 
+/// How the dialog names `path` to the user: a folder of a share by its
+/// network address (`\\nas\projects\Plans`), never by the `GVfs` FUSE
+/// path the caller gets; a local folder by its path.
+fn shown_path(path: &Path) -> String {
+    let uri = gio::File::for_path(path).uri();
+    if uri.starts_with("file:") {
+        return path.display().to_string();
+    }
+    ox_core::location::LocationContext::default().display_location(&uri)
+}
+
 /// The message for a folder or file on a share that stopped answering.
 fn not_answering(path: &Path) -> String {
     ox_core::i18n::format_message(
         "“{path}” is not answering. Its network share may have stopped responding.",
-        &[("path", &path.display().to_string())],
+        &[("path", &shown_path(path))],
+    )
+}
+
+/// The message for a folder or file that cannot be reached, as on a
+/// share whose server went away.
+fn unavailable(path: &Path) -> String {
+    ox_core::i18n::format_message(
+        "{location} is unavailable. Make sure you are connected to the network and the server is turned on, and then try again.",
+        &[("location", &shown_path(path))],
     )
 }
 
@@ -1131,7 +1151,7 @@ impl BrowserWindow {
         let missing = |folder: &Path| {
             ox_core::i18n::format_message(
                 "The folder “{folder}” does not exist.",
-                &[("folder", &folder.display().to_string())],
+                &[("folder", &shown_path(folder))],
             )
         };
         // A path that ends in a slash names a folder, never a file.
@@ -1144,6 +1164,7 @@ impl BrowserWindow {
         match probe(&folder).await {
             Probe::Folder => {}
             Probe::NoAnswer => return Err(not_answering(&folder)),
+            Probe::Unreachable => return Err(unavailable(&folder)),
             Probe::File | Probe::Missing => return Err(missing(&folder)),
         }
         let written = path
@@ -1176,6 +1197,9 @@ impl BrowserWindow {
         if found == Probe::NoAnswer {
             return Err(not_answering(&folder));
         }
+        if found == Probe::Unreachable {
+            return Err(unavailable(&folder));
+        }
         if found == Probe::Folder {
             name_box.set_text("");
             self.navigate_or_report(&gio::File::for_path(&target).uri());
@@ -1188,6 +1212,7 @@ impl BrowserWindow {
             // look again, and never answer it as a new file.
             match probe(&target).await {
                 Probe::NoAnswer => return Err(not_answering(&folder)),
+                Probe::Unreachable => return Err(unavailable(&folder)),
                 Probe::Folder => {
                     name_box.set_text("");
                     self.navigate_or_report(&gio::File::for_path(&target).uri());
@@ -1337,6 +1362,7 @@ impl BrowserWindow {
             }
             Probe::File => return Some(Ok(vec![path])),
             Probe::NoAnswer => return Some(Err(not_answering(&path))),
+            Probe::Unreachable => return Some(Err(unavailable(&path))),
             Probe::Missing => {}
         }
         Some(Err(ox_core::i18n::format_message(NOT_FOUND, &[("name", &typed)])))
@@ -1762,6 +1788,7 @@ async fn typed_files(picker: &Picker, shown: &Path, names: &[String]) -> Result<
                 continue;
             }
             Probe::NoAnswer => return Err(not_answering(&path)),
+            Probe::Unreachable => return Err(unavailable(&path)),
             Probe::Folder => NOT_A_FILE,
             Probe::Missing => NOT_FOUND,
         };
