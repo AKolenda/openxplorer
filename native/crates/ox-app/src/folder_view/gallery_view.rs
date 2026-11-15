@@ -1175,6 +1175,8 @@ mod view_imp {
         pub(super) heading: OnceCell<gtk::Label>,
         pub(super) scroller: OnceCell<gtk::ScrolledWindow>,
         pub(super) scrubber: OnceCell<GalleryScrubber>,
+        /// The month under the pointer on the scrubber.
+        pub(super) hovered_month: OnceCell<gtk::Label>,
     }
 
     #[glib::object_subclass]
@@ -1232,6 +1234,14 @@ impl GalleryView {
         scrubber.set_valign(gtk::Align::Fill);
         let overlay = gtk::Overlay::builder().child(&scroller).vexpand(true).build();
         overlay.add_overlay(&scrubber);
+        let hovered_month = gtk::Label::builder()
+            .halign(gtk::Align::End)
+            .valign(gtk::Align::Start)
+            .can_target(false)
+            .visible(false)
+            .css_classes(["gallery-scrubber-month"])
+            .build();
+        overlay.add_overlay(&hovered_month);
         view.append(&overlay);
         canvas.follow_adjustment(&scroller.vadjustment());
         let imp = view.imp();
@@ -1239,6 +1249,29 @@ impl GalleryView {
         imp.heading.set(heading).expect("new runs once");
         imp.scroller.set(scroller.clone()).expect("new runs once");
         imp.scrubber.set(scrubber.clone()).expect("new runs once");
+        imp.hovered_month
+            .set(hovered_month.clone())
+            .expect("new runs once");
+        scrubber.connect_hover(glib::clone!(
+            #[weak]
+            hovered_month,
+            #[weak]
+            scrubber,
+            move |shown| {
+                let Some((month, y)) = shown else {
+                    hovered_month.set_visible(false);
+                    return;
+                };
+                hovered_month.set_text(&month);
+                let (_, height) = hovered_month.preferred_size();
+                // Beside the track, its middle at the pointer.
+                #[expect(clippy::cast_possible_truncation, reason = "pixel positions")]
+                let top = (y - f64::from(height.height()) / 2.0).round() as i32;
+                hovered_month.set_margin_top(top.max(0));
+                hovered_month.set_margin_end(scrubber.width() + 8);
+                hovered_month.set_visible(true);
+            }
+        ));
         canvas.connect_shown(glib::clone!(
             #[weak]
             view,
@@ -1284,6 +1317,12 @@ impl GalleryView {
             .get()
             .expect("new builds the scroller")
             .vadjustment()
+    }
+
+    /// The month the scrubber shows under the pointer, while it shows.
+    pub(crate) fn hovered_month(&self) -> Option<String> {
+        let label = self.imp().hovered_month.get()?;
+        label.is_visible().then(|| label.text().to_string())
     }
 
     /// The heading over the photos, while it shows.

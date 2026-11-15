@@ -51,6 +51,9 @@ mod imp {
         pub(super) position: Cell<f64>,
         pub(super) on_jump: RefCell<Option<Box<dyn Fn(f64)>>>,
         pub(super) on_step: RefCell<Option<Box<dyn Fn(bool)>>>,
+        /// Runs with the month under the pointer and where it is down the
+        /// scrubber, or `None` once the pointer leaves.
+        pub(super) on_hover: RefCell<Option<Box<dyn Fn(Option<(String, f64)>)>>>,
         /// Where a drag on the track started, in the track's coordinates.
         pub(super) drag_start: Cell<f64>,
     }
@@ -178,20 +181,22 @@ impl GalleryScrubber {
         imp.down.set(down).expect("built once");
         imp.track.set(track.clone().upcast()).expect("built once");
         imp.thumb.set(thumb.upcast()).expect("built once");
-        track.set_has_tooltip(true);
-        track.connect_query_tooltip(glib::clone!(
+        // The month under the pointer shows beside the track, as Windows'
+        // Gallery shows it in a tooltip there.
+        let motion = gtk::EventControllerMotion::new();
+        motion.connect_motion(glib::clone!(
             #[weak(rename_to = scrubber)]
             self,
-            #[upgrade_or]
-            false,
-            move |track, _, y, _, tooltip| {
-                let fraction = f64::from(y) / f64::from(track.height().max(1));
-                scrubber.month_at_fraction(fraction).is_some_and(|month| {
-                    tooltip.set_text(Some(&month));
-                    true
-                })
-            }
+            #[weak]
+            track,
+            move |_, _, y| scrubber.hover_track(Some(y / f64::from(track.height().max(1))))
         ));
+        motion.connect_leave(glib::clone!(
+            #[weak(rename_to = scrubber)]
+            self,
+            move |_| scrubber.hover_track(None)
+        ));
+        track.add_controller(motion);
         let press = gtk::GestureClick::new();
         press.set_button(gdk::BUTTON_PRIMARY);
         press.connect_pressed(glib::clone!(
@@ -230,6 +235,29 @@ impl GalleryScrubber {
     /// Runs `step` with `true` for the up arrow, `false` for the down one.
     pub(crate) fn connect_step(&self, step: impl Fn(bool) + 'static) {
         self.imp().on_step.replace(Some(Box::new(step)));
+    }
+
+    /// Runs `hover` with the month under the pointer and its height in
+    /// the scrubber, or `None` when the pointer leaves the track.
+    pub(crate) fn connect_hover(&self, hover: impl Fn(Option<(String, f64)>) + 'static) {
+        self.imp().on_hover.replace(Some(Box::new(hover)));
+    }
+
+    /// The pointer is over the track at `fraction` of its height, or left
+    /// it.
+    pub(crate) fn hover_track(&self, fraction: Option<f64>) {
+        let shown = fraction.and_then(|fraction| {
+            let month = self.month_at_fraction(fraction)?;
+            let track = self.imp().track.get()?;
+            let top = track.compute_point(self, &gtk::graphene::Point::zero())?.y();
+            Some((
+                month,
+                f64::from(top) + fraction.clamp(0.0, 1.0) * f64::from(track.height()),
+            ))
+        });
+        if let Some(hover) = self.imp().on_hover.borrow().as_ref() {
+            hover(shown);
+        }
     }
 
     fn jump(&self, fraction: f64) {
@@ -319,7 +347,8 @@ impl GalleryScrubber {
                     .can_target(false)
                     .css_classes(["scrubber-year"])
                     .build();
-                label.insert_before(self, imp.thumb.get());
+                // Over the position bar.
+                label.set_parent(self);
                 label
             })
             .collect();

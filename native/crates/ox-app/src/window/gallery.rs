@@ -278,6 +278,18 @@ impl BrowserWindow {
             .is_some()
     }
 
+    /// Puts the pointer on Gallery's scrubber `fraction` down its track,
+    /// for the snapshot hook's scenes; false when it does not show.
+    pub(crate) fn hover_gallery_scrubber(&self, fraction: f64) -> bool {
+        let pane = self.folder_pane();
+        let scrubber = pane.gallery().scrubber();
+        if !pane.shows_gallery() || !scrubber.is_mapped() {
+            return false;
+        }
+        scrubber.hover_track(Some(fraction));
+        true
+    }
+
     /// Whether the active tab shows Gallery.
     pub(super) fn shows_gallery(&self) -> bool {
         self.current_uri().as_deref() == Some(GALLERY_URI)
@@ -411,6 +423,11 @@ impl BrowserWindow {
     pub(crate) fn gallery_scrubber(&self) -> Option<crate::folder_view::gallery_scrubber::GalleryScrubber> {
         let pane = self.folder_pane();
         pane.shows_gallery().then(|| pane.gallery().scrubber().clone())
+    }
+
+    /// The month the scrubber shows under the pointer.
+    pub(crate) fn gallery_hovered_month(&self) -> Option<String> {
+        self.folder_pane().gallery().hovered_month()
     }
 
     /// The tooltip of the photo at `position`.

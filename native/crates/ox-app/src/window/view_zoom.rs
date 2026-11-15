@@ -11,7 +11,7 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-use super::folder_pane::FolderPane;
+use super::folder_pane::{FolderPane, FolderView};
 use super::{BrowserWindow, WindowAction};
 
 /// Touchpad movement, in pixels, that makes one step: about a wheel
@@ -63,7 +63,11 @@ impl BrowserWindow {
     pub(crate) fn zoom_view(&self, steps: i32) {
         let pane = self.folder_pane();
         let view = pane.view();
-        let zoomed = view.zoomed(steps);
+        let zoomed = if pane.shows_gallery() {
+            gallery_zoomed(view, steps)
+        } else {
+            view.zoomed(steps)
+        };
         if zoomed == view {
             return;
         }
@@ -79,6 +83,25 @@ impl BrowserWindow {
             ));
         }
     }
+}
+
+/// Gallery's size `steps` notches bigger (smaller when negative) than
+/// `view`: it steps through the four named icon sizes only (HOME-031).
+fn gallery_zoomed(view: FolderView, steps: i32) -> FolderView {
+    use crate::folder_view::gallery_view::nearest_named;
+    use crate::folder_view::icon_size::IconSize;
+    let FolderView::Icons(size) = view else {
+        return FolderView::Icons(IconSize::MEDIUM);
+    };
+    // Largest first, as the View menu lists them.
+    let named = IconSize::NAMED;
+    let at = named
+        .iter()
+        .position(|candidate| *candidate == nearest_named(size))
+        .unwrap_or(2);
+    let at = i64::try_from(at).unwrap_or(2) - i64::from(steps);
+    let at = usize::try_from(at.clamp(0, 3)).unwrap_or(2);
+    FolderView::Icons(named[at])
 }
 
 /// The whole steps that `delta_y` of a scroll in `unit` adds to the

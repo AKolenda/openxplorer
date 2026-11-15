@@ -687,3 +687,12 @@ gallery.files > child.gallery-tile.hidden-item > picture { opacity: .5; }
 .gallery-view scrubber .scrubber-track:hover { background-color: alpha(@ox_text, .04); border-radius: 4px; }
 .gallery-view scrubber .scrubber-year { font-size: smaller; }
 .gallery-view scrubber .scrubber-thumb { min-height: 3px; border-radius: 2px; background-color: @ox_accent; }
+/* The month under the pointer on the scrubber, drawn as a tooltip. */
+.gallery-view .gallery-scrubber-month {
+  background-color: @ox_tooltip;
+  color: @ox_text;
+  border: 1px solid @ox_border;
+  border-radius: 4px;
+  padding: 5px 8px;
+  box-shadow: 0 2px 6px alpha(black, .14);
+}

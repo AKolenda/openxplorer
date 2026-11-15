@@ -290,6 +290,16 @@ impl BrowserWindow {
                 let Some(view) = FolderView::from_key(key) else {
                     return false;
                 };
+                // Gallery offers its four icon sizes only (HOME-031).
+                if window.folder_pane().shows_gallery() {
+                    let FolderView::Icons(size) = view else {
+                        return false;
+                    };
+                    let named = crate::folder_view::gallery_view::nearest_named(size);
+                    if named != size {
+                        return false;
+                    }
+                }
                 window.change_view(view);
                 true
             }),

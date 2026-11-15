@@ -17,6 +17,8 @@ use super::gallery::{gallery_window, set_modified, PicturesHome};
 use super::support::menu_button_with_class;
 use crate::test_support::harness::{wait_until, TestWindow};
 use crate::test_support::pictures::{jpeg_bytes, png_sized};
+use crate::folder_view::icon_size::IconSize;
+use crate::window::folder_pane::FolderView;
 use crate::window::gallery_locations::GalleryLocations;
 use crate::window::menu_popover::MenuPopover;
 
@@ -153,6 +155,24 @@ fn the_view_menu_offers_only_the_icon_sizes_and_the_panes() {
     );
     assert!(menu.checked_labels().contains(&"Medium icons".to_owned()));
     close(&menu);
+
+    // Ctrl+wheel steps through the four sizes only, and the other layouts'
+    // keys and buttons change nothing.
+    let view = || test.window.folder_pane().view();
+    test.window.zoom_view(1);
+    assert_eq!(view(), FolderView::Icons(IconSize::LARGE));
+    test.window.zoom_view(4);
+    assert_eq!(view(), FolderView::Icons(IconSize::EXTRA_LARGE));
+    test.window.zoom_view(-9);
+    assert_eq!(view(), FolderView::Icons(IconSize::SMALL));
+    test.window.zoom_view(-1);
+    assert_eq!(view(), FolderView::Icons(IconSize::SMALL));
+    for other in ["details", "compact", "tiles", "content"] {
+        test.activate("view", Some(other));
+        assert_eq!(view(), FolderView::Icons(IconSize::SMALL), "{other}");
+    }
+    test.activate("view", Some("medium"));
+    assert_eq!(view(), FolderView::Icons(IconSize::MEDIUM));
 }
 
 /// The Collection menu: "Show all" chosen, one row per location, then

@@ -265,6 +265,13 @@ fn the_date_scrubber_marks_years_names_months_and_jumps_there() {
     assert!(years.contains(&"2024".to_owned()), "{years:?}");
     assert_eq!(scrubber.month_at(0.0).as_deref(), Some(month(2026, 11).as_str()));
     assert_eq!(scrubber.month_at(1.0).as_deref(), Some(month(2024, 5).as_str()));
+    // Hovering names the month beside the scrubber; leaving hides it.
+    scrubber.hover_track(Some(0.0));
+    assert_eq!(test.window.gallery_hovered_month(), Some(month(2026, 11)));
+    scrubber.hover_track(Some(1.0));
+    assert_eq!(test.window.gallery_hovered_month(), Some(month(2024, 5)));
+    scrubber.hover_track(None);
+    assert_eq!(test.window.gallery_hovered_month(), None);
 
     scrubber.click_at(1.0);
     wait_until("the oldest photos", || {
