@@ -119,7 +119,7 @@ struct ReadItems {
 /// Fills the General tab and returns its Size, Size on disk and Contains
 /// values.
 fn fill_general(panel: &gtk::Box, entries: &[Entry], context: &PropertiesContext) -> FolderCountRows {
-    let files = entries.iter().filter(|entry| !entry.is_dir).count() as u64;
+    let files = entries.iter().filter(|entry| !counts_as_folder(entry)).count() as u64;
     let folders = entries.len() as u64 - files;
     let header = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
@@ -185,29 +185,46 @@ fn common_location(entries: &[Entry], context: &PropertiesContext) -> String {
     }
 }
 
+/// Whether `entry` is counted and measured as a folder: a folder, but not
+/// a link to one, which is a file here as one link's Properties show it
+/// and as Windows counts a shortcut.
+pub(super) fn counts_as_folder(entry: &Entry) -> bool {
+    entry.is_dir && !entry.is_symlink
+}
+
 /// Reads the space each selected file takes, then counts the selected
 /// folders one after another, showing the totals as they climb.
 fn measure(entries: &[Entry], rows: &FolderCountRows, cancel: &Cancellation) {
     let folders: Vec<String> = entries
         .iter()
-        .filter(|entry| entry.is_dir)
+        .filter(|entry| counts_as_folder(entry))
         .map(|entry| entry.uri.clone())
         .collect();
-    let files: Vec<(String, u64)> = entries
+    let files: Vec<(String, Option<u64>)> = entries
         .iter()
-        .filter(|entry| !entry.is_dir)
-        .map(|entry| (entry.uri.clone(), entry.size.unwrap_or_default()))
+        .filter(|entry| !counts_as_folder(entry))
+        // A link to a folder is measured as the link itself.
+        .map(|entry| {
+            (
+                entry.uri.clone(),
+                (!entry.is_dir).then(|| entry.size.unwrap_or_default()),
+            )
+        })
         .collect();
     let rows = rows.clone();
     let cancel = cancel.clone();
     glib::spawn_future_local(async move {
         let mut totals = Totals::zero();
         for (uri, bytes) in files {
+            let (bytes, allocated) = match bytes {
+                Some(bytes) => (bytes, size_on_disk(&uri, &cancel).await),
+                None => link_sizes(&uri, &cancel).await,
+            };
             totals.bytes = totals.bytes.saturating_add(bytes);
             totals.files += 1;
             totals.on_disk = totals
                 .on_disk
-                .zip(size_on_disk(&uri, &cancel).await)
+                .zip(allocated)
                 .map(|(total, allocated)| total.saturating_add(allocated));
             if cancel.is_cancelled() {
                 return;
@@ -223,19 +240,36 @@ fn measure(entries: &[Entry], rows: &FolderCountRows, cancel: &Cancellation) {
 /// size). `None` when it cannot be read, its backend does not say, or
 /// `cancel` stops the reading, as closing the dialog does.
 async fn size_on_disk(uri: &str, cancel: &Cancellation) -> Option<u64> {
+    let info = query(uri, gio::FileQueryInfoFlags::NONE, cancel).await?;
+    info.has_attribute("standard::allocated-size")
+        .then(|| info.attribute_uint64("standard::allocated-size"))
+}
+
+/// The size of the link at `uri` itself and the bytes it takes on disk,
+/// for a link to a folder, which is not measured as the folder.
+async fn link_sizes(uri: &str, cancel: &Cancellation) -> (u64, Option<u64>) {
+    let Some(info) = query(uri, gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS, cancel).await else {
+        return (0, None);
+    };
+    let allocated = info
+        .has_attribute("standard::allocated-size")
+        .then(|| info.attribute_uint64("standard::allocated-size"));
+    (u64::try_from(info.size()).unwrap_or_default(), allocated)
+}
+
+/// The size attributes of the item at `uri`, read off the main thread.
+async fn query(uri: &str, flags: gio::FileQueryInfoFlags, cancel: &Cancellation) -> Option<gio::FileInfo> {
     let (sender, receiver) = async_channel::bounded(1);
     gio::File::for_uri(uri).query_info_async(
-        "standard::allocated-size",
-        gio::FileQueryInfoFlags::NONE,
+        "standard::size,standard::allocated-size",
+        flags,
         glib::Priority::DEFAULT,
         Some(cancel.cancellable()),
         move |result| {
             let _ = sender.try_send(result);
         },
     );
-    let info = receiver.recv().await.ok()?.ok()?;
-    info.has_attribute("standard::allocated-size")
-        .then(|| info.attribute_uint64("standard::allocated-size"))
+    receiver.recv().await.ok()?.ok()
 }
 
 /// Reads every item's permissions, then fills the Security tab: the

@@ -74,8 +74,9 @@ pub(super) fn tab(window: &PropertiesWindow, name: &str) -> gtk::Widget {
 /// The General tab of `window`, once its rows show.
 pub(super) fn general(window: &PropertiesWindow) -> gtk::Widget {
     let page = tab(window, "general");
+    // An item in the Recycle Bin has Origin where others have Location.
     wait_until("the properties to be read", || {
-        value_after(&page, "Location:").is_some()
+        value_after(&page, "Location:").is_some() || value_after(&page, "Origin:").is_some()
     });
     page
 }
@@ -110,14 +111,18 @@ pub(super) fn press(widget: &impl IsA<gtk::Widget>, label: &str) {
 pub(super) fn check(widget: &impl IsA<gtk::Widget>, label: &str) -> gtk::CheckButton {
     descendants::<gtk::CheckButton>(widget)
         .into_iter()
-        .find(|check| check.label().as_deref() == Some(label))
+        .find(|check| {
+            check
+                .label()
+                .is_some_and(|text| crate::test_support::harness::without_mnemonic(&text) == label)
+        })
         .unwrap_or_else(|| panic!("a {label} check box"))
 }
 
 /// A button's text: its label, or the label inside it.
 fn button_label(button: &gtk::Button) -> Option<String> {
     if let Some(label) = button.label() {
-        return Some(label.to_string());
+        return Some(crate::test_support::harness::without_mnemonic(&label));
     }
     let inner = descendants::<gtk::Label>(button).into_iter().next()?;
     Some(inner.text().to_string())
@@ -966,6 +971,101 @@ fn read_only_refuses_a_location_made_a_previous_version_meanwhile() {
     assert_eq!(mode_of(&path), 0o644, "the previous version is unchanged");
 }
 
+/// Holds Alt and taps `key` on the private display's keyboard, as a user
+/// presses a control's access key.
+fn press_alt(pointer: &mut crate::test_support::pointer::Pointer, key: gtk::gdk::Key) {
+    pointer.hold_key(gtk::gdk::Key::Alt_L);
+    pointer.tap_key(key);
+    pointer.let_go_key(gtk::gdk::Key::Alt_L);
+}
+
+/// As in Windows' Properties, Alt and a control's underlined letter press
+/// it: Alt+R ticks Read-only, Alt+H Hidden, Alt+A applies, and on the
+/// Security tab Alt+E opens Edit.... The letters are underlined, and the
+/// labels read without the underscore.
+///
+/// parity: PROP-003
+#[gtk::test]
+fn alt_and_an_underlined_letter_press_the_properties_controls() {
+    let fixture = Fixture::standard();
+    let path = fixture.path("Notes 2.txt");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).expect("a known mode");
+    let test = TestWindow::open(&fixture.uri());
+    // Before the window opens, which a new pointer would put away.
+    let mut pointer = crate::test_support::pointer::Pointer::connect();
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let page = general(&window);
+    let read_only = check(&page, "Read-only");
+    let hidden = check(&page, "Hidden");
+    wait_until("Read-only to be enabled", || read_only.is_sensitive());
+    assert!(read_only.uses_underline() && hidden.uses_underline());
+    let (x, y) = crate::test_support::pointer::screen_point(&mut pointer, &page, (20.0, 20.0), (40, 40));
+    // The keyboard follows the pointer on the private display.
+    pointer.move_to(x, y);
+
+    press_alt(&mut pointer, gtk::gdk::Key::r);
+    wait_until("Alt+R ticks Read-only", || read_only.is_active());
+    press_alt(&mut pointer, gtk::gdk::Key::h);
+    wait_until("Alt+H ticks Hidden", || hidden.is_active());
+    press_alt(&mut pointer, gtk::gdk::Key::a);
+    let hidden_path = fixture.path(".Notes 2.txt");
+    wait_until("Alt+A applies", || hidden_path.exists());
+    wait_until("Read-only applied", || mode_of(&hidden_path) & 0o222 == 0);
+
+    window.select_tab("security");
+    wait_until("the Security tab to be read", || {
+        descendants::<gtk::Button>(&tab(&window, "security"))
+            .iter()
+            .any(|button| button.is_sensitive() && button_label(button).as_deref() == Some("Edit..."))
+    });
+    press_alt(&mut pointer, gtk::gdk::Key::e);
+    wait_until("Alt+E opens Edit", || {
+        gtk::Window::list_toplevels()
+            .iter()
+            .filter_map(|widget| widget.downcast_ref::<PropertiesWindow>())
+            .any(|dialog| dialog.title_text().starts_with("Permissions for"))
+    });
+    window.close();
+}
+
+/// An item in a folder the user may not change cannot be renamed, so its
+/// name and Hidden (a leading dot) are greyed from the start, as GIO's
+/// `access::can-rename` says, instead of failing with "Permission denied"
+/// on Apply.
+///
+/// parity: PROP-005
+#[gtk::test]
+fn an_item_that_cannot_be_renamed_greys_its_name_and_hidden() {
+    // The superuser may rename anything, so only another user sees this.
+    if ox_core::permissions::current_user_is_superuser() {
+        return;
+    }
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Fixed")).expect("a folder");
+    fs::write(fixture.path("Fixed/plan.txt"), b"plan").expect("a file");
+    fs::set_permissions(fixture.path("Fixed"), fs::Permissions::from_mode(0o555)).expect("mode");
+    let test = TestWindow::open(&fixture.uri_of("Fixed"));
+    test.select_named("plan.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("plan.txt Properties");
+    let page = general(&window);
+    let shown = (
+        name_field(&window).is_editable(),
+        check(&page, "Hidden").is_sensitive(),
+        check(&page, "Read-only").is_sensitive(),
+    );
+    window.close();
+    fs::set_permissions(fixture.path("Fixed"), fs::Permissions::from_mode(0o755)).expect("mode");
+
+    assert_eq!(
+        shown,
+        (false, false, true),
+        "the name and Hidden are greyed; Read-only, a permission of the file, is not"
+    );
+}
+
 /// Hidden adds a leading dot to the name on Apply, and a taken name is
 /// refused with the normal message.
 ///
@@ -1270,6 +1370,78 @@ fn the_security_tab_reads_and_changes_the_linux_permissions() {
     check(&advanced, "Set group ID").set_active(true);
     advanced.ok_button().emit_clicked();
     wait_until("the special bit", || mode_of(&path) == 0o2674);
+}
+
+/// An item in the Recycle Bin has Properties too, as in Windows 11: one
+/// General tab with its name, type, where it was deleted from (Origin),
+/// its sizes, its dates and when it was deleted, none of which can be
+/// changed there.
+///
+/// parity: PROP-003
+#[gtk::test]
+fn an_item_in_the_recycle_bin_shows_where_it_came_from_and_when_it_was_deleted() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Draft to delete.txt");
+    gtk::gio::File::for_path(fixture.path("Draft to delete.txt"))
+        .trash(None::<&gtk::gio::Cancellable>)
+        .expect("the private Trash takes the file");
+    let test = TestWindow::open(ox_core::location::TRASH_URI);
+    wait_until("the trashed file to be listed", || {
+        test.names().contains(&"Draft to delete.txt".to_owned())
+    });
+    super::file_ops_support::select_names(&test, &["Draft to delete.txt"]);
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Draft to delete.txt Properties");
+    let page = tab(&window, "general");
+    wait_until("the item to be read", || value_after(&page, "Origin:").is_some());
+
+    assert_eq!(window.tab_labels(), ["General"]);
+    assert_eq!(
+        value_after(&page, "Origin:").as_deref(),
+        Some(fixture.root().to_str().expect("a UTF-8 path"))
+    );
+    assert!(value_after(&page, "Deleted:").is_some_and(|date| !date.is_empty()));
+    let shown = texts(&page);
+    assert!(!shown.iter().any(|text| text == "Opens with:"), "{shown:?}");
+    assert!(!shown.iter().any(|text| text.contains("supported")), "{shown:?}");
+    assert!(!name_field(&window).is_editable());
+    assert!(!check(&page, "Hidden").is_sensitive());
+    assert!(!check(&page, "Read-only").is_sensitive());
+    super::file_ops_support::assert_ended_without_a_message(&test);
+}
+
+/// With several items selected, a link to a folder is a file, as one
+/// link's Properties show it and Windows counts a shortcut: it is not
+/// measured as the folder it points to, so the totals are exact (no "≥")
+/// and Read-only applies to it as to any file.
+///
+/// parity: PROP-002
+#[gtk::test]
+fn several_items_count_a_link_to_a_folder_as_a_file() {
+    let fixture = Fixture::standard();
+    fixture.write("Documents/inside.txt");
+    std::os::unix::fs::symlink(fixture.path("Documents"), fixture.path("Docs link"))
+        .expect("the link is made");
+    let link_size = fs::symlink_metadata(fixture.path("Docs link"))
+        .expect("the link")
+        .len();
+    let note_size = fs::metadata(fixture.path("Notes 2.txt")).expect("the file").len();
+    let test = TestWindow::open(&fixture.uri());
+    super::file_ops_support::select_names(&test, &["Docs link", "Notes 2.txt"]);
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Docs link, Notes 2.txt Properties");
+    let expected = ox_core::format::exact_size_text(link_size + note_size);
+
+    wait_until("the totals", || {
+        value_after(&window, "Size:") == Some(expected.clone())
+    });
+    assert_eq!(
+        value_after(&window, "Contains:").as_deref(),
+        Some(ox_core::format::contents_text(2, 0).as_str())
+    );
+    assert!(texts(&window).contains(&ox_core::format::contents_text(2, 0)));
+    check(&window, "Read-only");
 }
 
 /// With several items selected, Size on disk counts a link to a file as

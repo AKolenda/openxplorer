@@ -165,7 +165,7 @@ impl SelectionAttributes {
         entries: &[Entry],
         versions: Arc<PreviousVersions>,
     ) -> Rc<Self> {
-        let has_folder = entries.iter().any(|entry| entry.is_dir);
+        let has_folder = entries.iter().any(super::selection_view::counts_as_folder);
         let read_only_label = if has_folder {
             ox_core::i18n::gettext("Read-only (Only applies to files in folder)")
         } else {
@@ -181,6 +181,8 @@ impl SelectionAttributes {
             versions,
             renamed: RefCell::new(Vec::new()),
         });
+        super::window::give_access_key(&attributes.read_only.check, 'r');
+        super::window::give_access_key(&attributes.hidden.check, 'h');
         for check in [&attributes.read_only.check, &attributes.hidden.check] {
             let window = window.downgrade();
             check.connect_toggled(move |_| {

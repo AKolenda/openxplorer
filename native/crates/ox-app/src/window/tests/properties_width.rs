@@ -437,24 +437,26 @@ fn every_kind(theme: Option<&str>, each: &mut dyn FnMut(&str, &PropertiesWindow)
     show("wrapped", seven_tab_properties(test));
 }
 
-/// Every Properties window has Windows' one fixed size, whatever it
-/// shows: a file, a shortcut, several items, a folder, a drive or a mount
-/// point, with one row of tabs or two, on every tab. Windows sizes a
-/// property sheet once and never changes it.
+/// Every Properties window has one fixed size, about 380 by 520 logical
+/// pixels with its title bar and border, whatever it shows: a file, a
+/// shortcut, several items, a folder, a drive or a mount point, with one
+/// row of tabs or two, on every tab. Windows sizes a property sheet once
+/// and never changes it. A page taller than the window scrolls inside it,
+/// never sideways.
 ///
 /// parity: PROP-001
 #[gtk::test]
 fn every_kind_of_properties_has_one_size() {
     let mut sizes = Vec::new();
     every_kind(None, &mut |kind, window| {
-        let scrolling = window.scroller().vadjustment();
+        let sideways = window.scroller().hadjustment();
         let mut look = |what: String| {
             sizes.push((what.clone(), (window.width(), window.height())));
             assert!(
-                scrolling.upper() <= scrolling.page_size() + 1.0,
-                "{what}: fits without scrolling ({} of {})",
-                scrolling.upper(),
-                scrolling.page_size()
+                sideways.upper() <= sideways.page_size() + 1.0,
+                "{what}: never scrolls sideways ({} of {})",
+                sideways.upper(),
+                sideways.page_size()
             );
         };
         look(kind.to_owned());
@@ -467,7 +469,7 @@ fn every_kind_of_properties_has_one_size() {
             look(format!("{kind} {name}"));
         }
     });
-    let expected = (PropertiesWindow::WIDTH, sizes[0].1 .1);
+    let expected = (PropertiesWindow::WIDTH, PropertiesWindow::HEIGHT);
     let others: Vec<_> = sizes.iter().filter(|(_, size)| *size != expected).collect();
     assert!(others.is_empty(), "every window is {expected:?}: {others:?}");
 }
