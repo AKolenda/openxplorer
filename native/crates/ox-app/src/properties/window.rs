@@ -32,16 +32,16 @@ use ox_core::transfer::Cancellation;
 use crate::icons::{self, Art, ArtImage, Icon};
 use crate::window::BrowserWindow;
 
-/// The width of a Properties window, as Windows 11 draws it at 100 %.
-const WINDOW_WIDTH: i32 = 400;
-/// The height of every Properties window under its title bar, whatever
-/// it shows: Windows sizes a property sheet once, for its largest page,
-/// and never changes it. This holds the tallest page here, a folder's
-/// Customize, under two rows of tabs (a standard folder's six tabs, or
-/// five in a wider font) at the default text size in Noto Sans; shorter
-/// pages leave room at the bottom, as in Windows, and taller ones (at a
-/// larger text size) scroll.
-const WINDOW_HEIGHT: i32 = 556;
+/// The width of a Properties window's content: with its border, the
+/// window is 380 logical pixels wide, as Windows 11 draws Properties at
+/// 100 %.
+const WINDOW_WIDTH: i32 = 378;
+/// The height of every Properties window, its title bar and border
+/// included, whatever it shows: Windows sizes a property sheet once and
+/// never changes it. Pages taller than the room under the tabs, as a
+/// folder's Customize under two rows of tabs or any page at a larger text
+/// size, scroll inside it; shorter pages leave room at the bottom.
+const WINDOW_HEIGHT: i32 = 520;
 /// The space around the tabs and their page (`.properties-notebook`).
 const PAGE_MARGIN: i32 = 11;
 /// The size of the item's picture in the title bar.
@@ -276,10 +276,13 @@ impl PropertiesWindow {
         tab_area.remove(&imp.notebook);
         imp.scroller.set_child(Some(&imp.notebook));
         tab_area.append(&imp.scroller);
-        let height = imp.tallest.get().map_or(WINDOW_HEIGHT, |tallest| {
-            WINDOW_HEIGHT.min(tallest - self.title_bar_height() - 2)
-        });
-        holder.set_height(height);
+        // On a short screen it is held within the screen, its border
+        // included.
+        let height = imp
+            .tallest
+            .get()
+            .map_or(WINDOW_HEIGHT, |tallest| WINDOW_HEIGHT.min(tallest - 2));
+        holder.set_height(height - self.title_bar_height());
     }
 
     /// The title bar's height.
@@ -291,6 +294,11 @@ impl PropertiesWindow {
     /// The width of every Properties window, its border included.
     #[cfg(test)]
     pub(crate) const WIDTH: i32 = WINDOW_WIDTH + 2;
+
+    /// The height of every Properties window, its title bar and border
+    /// included.
+    #[cfg(test)]
+    pub(crate) const HEIGHT: i32 = WINDOW_HEIGHT;
 
     fn build(&self) {
         let imp = self.imp();
@@ -530,7 +538,7 @@ impl PropertiesWindow {
         // A window of Windows' fixed size is held within the screen too,
         // its title bar and border included, its tabs scrolling inside it.
         if let Some(holder) = self.holder().filter(|holder| holder.height() > 0) {
-            holder.set_height(WINDOW_HEIGHT.min(height - self.title_bar_height() - 2));
+            holder.set_height(WINDOW_HEIGHT.min(height - 2) - self.title_bar_height());
         }
     }
 
