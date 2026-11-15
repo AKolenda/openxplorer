@@ -149,3 +149,32 @@ fn f4_shows_the_items_of_a_drop_down_in_a_dialog() {
     wait_until("the list to show", || shows_its_list(&drop_down));
     dialog.close();
 }
+
+/// A dialog shown inside the window, as Create archive is, keeps Tab and
+/// Shift+Tab within itself, as its own window would (ACC-004): they went
+/// on to the tab strip and the title bar's Minimize, Maximize and Close,
+/// which the window's own Tab order never visits (ACC-016).
+///
+/// parity: ACC-004
+#[gtk::test]
+fn tab_stays_in_a_dialog_shown_inside_the_window() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the folder");
+    test.select_named("Notes 2.txt");
+    test.activate("compress-to", None);
+    let frame = test.wait_for_dialog("the Create archive dialog");
+    wait_for_frames(&test.window, 3);
+    for direction in [gtk::DirectionType::TabForward, gtk::DirectionType::TabBackward] {
+        let mut outside = Vec::new();
+        for _ in 0..24 {
+            test.window.emit_move_focus(direction);
+            settle();
+            let focus = GtkWindowExt::focus(&test.window);
+            if !focus.as_ref().is_some_and(|focus| focus.is_ancestor(&frame)) {
+                outside.push(describe(focus.as_ref()));
+            }
+        }
+        assert!(outside.is_empty(), "{direction:?} left the dialog for {outside:?}");
+    }
+}
