@@ -502,17 +502,17 @@ fn a_folder_the_zip_does_not_have_is_not_found() {
 #[gtk::test]
 fn hidden_members_are_announced_in_the_message_line() {
     let fixture = fixture_with_zip();
-    let sources = tempfile::tempdir().expect("a folder for the sources");
-    let unsafe_name = sources.path().join("back\\slash.txt");
-    fs::write(&unsafe_name, b"hidden").expect("a source file");
-    let request = ox_core::archive::CompressionRequest {
-        uris: vec![ox_core::location::file_uri(&unsafe_name)],
-        destination_uri: fixture.uri(),
-        archive_name: "Unsafe.zip".to_owned(),
-    };
-    ox_core::archive::ZipCompressor::new()
-        .compress(&request, &ox_core::transfer::Cancellation::new())
-        .expect("the ZIP is written");
+    // A path that climbs out is never shown. (A backslash would now read
+    // as a folder separator, as Windows tools write it.)
+    let script = "import sys, zipfile\n\
+        with zipfile.ZipFile(sys.argv[1], 'w') as z:\n\
+        \x20   z.writestr('../escape.txt', 'hidden')\n";
+    let written = std::process::Command::new("python3")
+        .args(["-I", "-c", script])
+        .arg(fixture.path("Unsafe.zip"))
+        .status()
+        .expect("run python3");
+    assert!(written.success());
     let test = opening_zips_as_folders(&fixture);
 
     let root = ArchiveLocation::root(&fixture.uri_of("Unsafe.zip"));
