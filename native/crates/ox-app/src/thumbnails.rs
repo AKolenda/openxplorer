@@ -82,6 +82,10 @@ pub(crate) struct PreviewPolicy {
     pub videos: bool,
     /// Every other type gets previews.
     pub documents: bool,
+    /// The folder shown is on the network, as a kernel CIFS mount is
+    /// though its files have `file:` URIs: its files' thumbnails are made
+    /// on the network's own slots without asking their file system first.
+    pub folder_on_network: bool,
 }
 
 impl PreviewPolicy {
@@ -95,6 +99,7 @@ impl PreviewPolicy {
             pictures: options.preview_pictures,
             videos: options.preview_videos,
             documents: options.preview_documents,
+            folder_on_network: is_remote,
         }
     }
 
@@ -114,7 +119,7 @@ impl PreviewPolicy {
         let request = PreviewRequest::for_entry(entry, pixels).filter(|_| self.allows(entry))?;
         Some(PreviewRequest {
             local_only: !self.remote,
-            on_network: is_remote_item(entry),
+            on_network: self.folder_on_network || is_remote_item(entry),
             ..request
         })
     }
@@ -625,6 +630,30 @@ mod tests {
             .request(&picture, 128)
             .expect("a picture of this computer");
         assert!(!at_home.on_network);
+    }
+
+    /// A file of a folder known to be on the network, such as a kernel
+    /// CIFS mount whose files have `file:` URIs, asks for its thumbnail on
+    /// the network's own slots from the start, with no file system probe
+    /// of its own that a mount that stopped answering would hold up.
+    ///
+    /// parity: VIEW-057, VIEW-058
+    #[test]
+    fn a_file_of_a_mounted_share_asks_for_the_networks_slots() {
+        let mut picture = crate::test_support::file_entry("photo.jpg");
+        picture.content_type = Some("image/jpeg".to_owned());
+        picture.uri = "file:///mnt/nas/Photos/photo.jpg".to_owned();
+        let everywhere = ViewOptions {
+            remote_previews: true,
+            ..ViewOptions::default()
+        };
+
+        let request = PreviewPolicy::for_folder(&everywhere, true)
+            .request(&picture, 128)
+            .expect("a picture on the mounted share");
+
+        assert!(request.on_network);
+        assert!(!request.local_only);
     }
 
     /// A thumbnailer of the test's own, and the file it leaves when it is
