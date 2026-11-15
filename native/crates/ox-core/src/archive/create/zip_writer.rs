@@ -399,7 +399,7 @@ mod tests {
             .collect();
         assert_eq!(names, ["Docs/", "Docs/notes é.txt"]);
         assert_eq!(archive.members()[1].size, data.len() as u64);
-        let mut member = archive.open_member(1).unwrap();
+        let mut member = archive.open_member(1, None).unwrap();
         let mut read_back = Vec::new();
         let mut chunk = vec![0u8; 4096];
         loop {

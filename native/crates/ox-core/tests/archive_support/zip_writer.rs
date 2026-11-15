@@ -293,7 +293,11 @@ impl TraditionalKeys {
 fn crc_step(crc: u32, byte: u8) -> u32 {
     let mut value = (crc ^ u32::from(byte)) & 0xff;
     for _ in 0..8 {
-        value = if value & 1 == 1 { (value >> 1) ^ 0xedb8_8320 } else { value >> 1 };
+        value = if value & 1 == 1 {
+            (value >> 1) ^ 0xedb8_8320
+        } else {
+            value >> 1
+        };
     }
     (crc >> 8) ^ value
 }

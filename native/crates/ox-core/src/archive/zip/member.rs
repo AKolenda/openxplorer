@@ -4,6 +4,12 @@
 
 /// General purpose flag bit 0: the member is encrypted.
 const ENCRYPTED_FLAG: u16 = 1;
+/// General purpose flag bit 3: the sizes and CRC-32 follow the data.
+const DATA_DESCRIPTOR_FLAG: u16 = 1 << 3;
+/// General purpose flag bit 6: PKWARE strong encryption.
+const STRONG_ENCRYPTION_FLAG: u16 = 1 << 6;
+/// The compression method number of WinZip's AES encryption.
+const AES_METHOD: u16 = 99;
 /// The file type bits of a Unix mode (`S_IFMT`).
 const FILE_TYPE_MASK: u32 = 0o170_000;
 /// A regular file (`S_IFREG`).
@@ -42,6 +48,18 @@ impl CompressionMethod {
     pub(crate) fn is_supported(self) -> bool {
         !matches!(self, CompressionMethod::Other(_))
     }
+}
+
+/// How a member is encrypted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Encryption {
+    /// Not encrypted.
+    None,
+    /// The traditional PKWARE encryption ("ZipCrypto"), which the reader
+    /// decrypts with a password.
+    Traditional,
+    /// AES or PKWARE strong encryption, left to an archive manager.
+    Unsupported,
 }
 
 /// The Unix file type an archive records for a member, in the upper half
@@ -142,6 +160,30 @@ impl ZipMember {
     /// True when the member is encrypted.
     pub(crate) fn is_encrypted(&self) -> bool {
         self.flags & ENCRYPTED_FLAG != 0
+    }
+
+    /// How the member is encrypted.
+    pub(crate) fn encryption(&self) -> Encryption {
+        if !self.is_encrypted() {
+            Encryption::None
+        } else if self.flags & STRONG_ENCRYPTION_FLAG != 0
+            || self.method == CompressionMethod::Other(AES_METHOD)
+        {
+            Encryption::Unsupported
+        } else {
+            Encryption::Traditional
+        }
+    }
+
+    /// The byte the decrypted encryption header ends with: the high byte
+    /// of the modification time when the sizes follow the data, else of
+    /// the CRC-32 (`_ZipDecrypter` in `zipfile`).
+    pub(crate) fn encryption_check_byte(&self) -> u8 {
+        if self.flags & DATA_DESCRIPTOR_FLAG != 0 {
+            self.modified.time.to_be_bytes()[0]
+        } else {
+            self.crc32.to_be_bytes()[0]
+        }
     }
 
     /// True when the cleaned-up name is the name the archive records. A NUL

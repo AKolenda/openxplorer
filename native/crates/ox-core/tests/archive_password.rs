@@ -88,7 +88,10 @@ fn a_password_protected_zip_lists_its_files_without_a_password() {
 
     let names: Vec<&str> = listing.entries.iter().map(|entry| entry.name.as_str()).collect();
     assert_eq!(names, ["buoys.txt", "tides.txt"]);
-    assert!(listing.entries.iter().all(|entry| entry.is_encrypted && entry.can_open));
+    assert!(listing
+        .entries
+        .iter()
+        .all(|entry| entry.is_encrypted && entry.can_open));
 }
 
 /// Opening a file asks for the password; a wrong one is told apart from
@@ -114,7 +117,10 @@ fn opening_an_encrypted_file_needs_its_password() {
     let left = fs::read_dir(&previews).map_or(0, Iterator::count);
     assert_eq!(left, 0, "a refused try leaves no copy");
 
-    for (member, text) in [("Harbor/tides.txt", "High water at noon."), ("Harbor/buoys.txt", "Red, green, red.")] {
+    for (member, text) in [
+        ("Harbor/tides.txt", "High water at noon."),
+        ("Harbor/buoys.txt", "Red, green, red."),
+    ] {
         let copy = browser(&fixture, Some(PASSWORD))
             .preview_member(&uri, member, &fixture.cancel)
             .expect("the right password opens the file");
@@ -166,8 +172,14 @@ fn extracting_needs_the_password_and_writes_nothing_until_it_is_right() {
         .expect("the right password extracts");
 
     let folder = fixture.destination.join("Harbor copy").join("Harbor");
-    assert_eq!(fs::read_to_string(folder.join("tides.txt")).unwrap(), "High water at noon.");
-    assert_eq!(fs::read_to_string(folder.join("buoys.txt")).unwrap(), "Red, green, red.");
+    assert_eq!(
+        fs::read_to_string(folder.join("tides.txt")).unwrap(),
+        "High water at noon."
+    );
+    assert_eq!(
+        fs::read_to_string(folder.join("buoys.txt")).unwrap(),
+        "Red, green, red."
+    );
 }
 
 /// Copying items out of the ZIP extracts only them, and needs the
@@ -239,7 +251,10 @@ fn an_info_zip_archive_extracts_with_its_password() {
         fs::read_to_string(folder.join("tides.txt")).unwrap(),
         "Tide table for the fictional Tidewater harbor.\n"
     );
-    assert_eq!(fs::read_to_string(folder.join("buoys.txt")).unwrap(), "Buoy list\n");
+    assert_eq!(
+        fs::read_to_string(folder.join("buoys.txt")).unwrap(),
+        "Buoy list\n"
+    );
 }
 
 /// AES encryption (method 99 of the WinZip specification) is listed, but
@@ -255,11 +270,18 @@ fn aes_encrypted_files_are_listed_and_left_to_an_archive_manager() {
         .with_flags(ENCRYPTED_FLAG)]);
     let uri = file_uri(&fixture.archive);
 
-    let listing = browser(&fixture, None).list(&uri, "", &fixture.cancel).expect("lists");
-    assert!(listing.entries.iter().all(|entry| entry.is_encrypted && !entry.can_open));
+    let listing = browser(&fixture, None)
+        .list(&uri, "", &fixture.cancel)
+        .expect("lists");
+    assert!(listing
+        .entries
+        .iter()
+        .all(|entry| entry.is_encrypted && !entry.can_open));
     let opened = browser(&fixture, Some(PASSWORD)).preview_member(&uri, "vault.txt", &fixture.cancel);
     assert_eq!(opened.unwrap_err(), ArchiveError::UnsupportedEncryption);
     let checked = fixture.extractor().inspect(&uri, &fixture.cancel);
     assert_eq!(checked.unwrap_err(), ArchiveError::UnsupportedEncryption);
-    assert!(ArchiveError::UnsupportedEncryption.to_string().contains("archive manager"));
+    assert!(ArchiveError::UnsupportedEncryption
+        .to_string()
+        .contains("archive manager"));
 }

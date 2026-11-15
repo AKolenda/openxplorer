@@ -9,13 +9,14 @@
 //! its CRC-32 is checked when the member ends: a corrupt member fails
 //! instead of passing damaged bytes on.
 
-use std::io::{self, Read, Seek, SeekFrom, Take};
+use std::io::{self, Read, Seek, SeekFrom};
 
+use super::crypto::{self, Decrypting};
 use super::error::ZipFormatError;
-use super::member::{CompressionMethod, ZipMember};
+use super::member::{CompressionMethod, Encryption, ZipMember};
 use super::names::decode_name;
 use super::records::LocalHeader;
-use crate::archive::{ArchiveError, MAX_DECODER_MEMORY_KIB};
+use crate::archive::{ArchiveError, ArchivePassword, MAX_DECODER_MEMORY_KIB};
 use crate::transfer::Cancellation;
 
 /// General purpose flag bit 5: compressed patched data.
@@ -35,27 +36,36 @@ pub(crate) struct MemberReader<'a> {
     checksum: crc32fast::Hasher,
     expected_checksum: u32,
     finished: bool,
+    /// The data was decrypted: damaged data then means a wrong password.
+    decrypted: bool,
     cancel: Cancellation,
 }
 
 impl<'a> MemberReader<'a> {
     /// Checks `member`'s local header at file position `header_position`
-    /// and starts decompressing its data. A read that fails after `cancel`
-    /// was cancelled reports the cancellation.
+    /// and starts decompressing its data, decrypting it with `password`
+    /// when it is encrypted. A read that fails after `cancel` was
+    /// cancelled reports the cancellation.
     ///
     /// # Errors
     ///
     /// A [`ZipFormatError`] for a damaged header, a name that differs from
     /// the central directory's, overlapping data, flags or a compression
     /// method `zipfile` does not support, or an encrypted member; the
-    /// source's read error or [`ArchiveError::Cancelled`].
+    /// source's read error or [`ArchiveError::Cancelled`]. An encrypted
+    /// member without `password` is [`ArchiveError::PasswordRequired`],
+    /// one whose header the password does not decrypt is
+    /// [`ArchiveError::WrongPassword`], and AES or strong encryption is
+    /// [`ArchiveError::UnsupportedEncryption`].
     pub(super) fn open<S: Read + Seek>(
         source: &'a mut S,
         member: &ZipMember,
         header_position: u64,
+        password: Option<&ArchivePassword>,
         cancel: &Cancellation,
     ) -> Result<Self, ArchiveError> {
-        Self::start(source, member, header_position, cancel).map_err(|error| error.unless_cancelled(cancel))
+        Self::start(source, member, header_position, password, cancel)
+            .map_err(|error| error.unless_cancelled(cancel))
     }
 
     /// [`Self::open`] without the cancellation check of its errors.
@@ -63,8 +73,16 @@ impl<'a> MemberReader<'a> {
         source: &'a mut S,
         member: &ZipMember,
         header_position: u64,
+        password: Option<&ArchivePassword>,
         cancel: &Cancellation,
     ) -> Result<Self, ArchiveError> {
+        let encryption = member.encryption();
+        if encryption == Encryption::Unsupported {
+            return Err(ArchiveError::UnsupportedEncryption);
+        }
+        if encryption == Encryption::Traditional && password.is_none() {
+            return Err(ArchiveError::PasswordRequired);
+        }
         source.seek(SeekFrom::Start(header_position))?;
         let header = read_local_header(source)?;
         let mut raw_name = Vec::new();
@@ -76,17 +94,30 @@ impl<'a> MemberReader<'a> {
         check_flags(member)?;
         check_local_name(member, &raw_name, header.flags)?;
         check_no_overlap(member, &header)?;
-        if member.is_encrypted() {
-            return Err(ZipFormatError::PasswordRequired(member.name.clone()).into());
-        }
-        let compressed = source.take(member.compressed_size);
+        let decompressed = match password.filter(|_| encryption == Encryption::Traditional) {
+            Some(password) => {
+                let mut encryption_header = [0u8; crypto::HEADER_LENGTH as usize];
+                read_encryption_header(source, &mut encryption_header)?;
+                let keys = crypto::open_header(
+                    password.bytes(),
+                    &mut encryption_header,
+                    member.encryption_check_byte(),
+                )
+                .ok_or(ArchiveError::WrongPassword)?;
+                // The member's compressed size counts the header.
+                let data = source.take(member.compressed_size.saturating_sub(crypto::HEADER_LENGTH));
+                decompressor(member, Decrypting::new(data, keys))?
+            }
+            None => decompressor(member, source.take(member.compressed_size))?,
+        };
         Ok(Self {
-            decompressed: decompressor(member, compressed)?,
+            decompressed,
             name: member.name.clone(),
             remaining: member.size,
             checksum: crc32fast::Hasher::new(),
             expected_checksum: member.crc32,
             finished: false,
+            decrypted: encryption == Encryption::Traditional,
             cancel: cancel.clone(),
         })
     }
@@ -128,6 +159,9 @@ impl<'a> MemberReader<'a> {
         let checksum = std::mem::take(&mut self.checksum).finalize();
         if checksum == self.expected_checksum {
             Ok(())
+        } else if self.decrypted {
+            // One wrong password in 256 passes the header's check byte.
+            Err(ArchiveError::WrongPassword)
         } else {
             Err(ZipFormatError::BadCrc(self.name.clone()).into())
         }
@@ -136,6 +170,11 @@ impl<'a> MemberReader<'a> {
     /// Sorts a decompressor failure: damaged data, or a failing source.
     fn read_failure(&self, error: io::Error) -> ArchiveError {
         let failure: ArchiveError = match error.kind() {
+            io::ErrorKind::InvalidData | io::ErrorKind::InvalidInput | io::ErrorKind::UnexpectedEof
+                if self.decrypted =>
+            {
+                ArchiveError::WrongPassword
+            }
             io::ErrorKind::InvalidData | io::ErrorKind::InvalidInput | io::ErrorKind::UnexpectedEof => {
                 ZipFormatError::CorruptData {
                     name: self.name.clone(),
@@ -163,6 +202,15 @@ fn read_local_header(source: &mut impl Read) -> Result<LocalHeader, ArchiveError
         return Err(ZipFormatError::BadHeaderSignature.into());
     }
     Ok(header)
+}
+
+/// Reads the 12-byte encryption header in front of an encrypted member's
+/// data; an archive that ends inside it is damaged.
+fn read_encryption_header(source: &mut impl Read, header: &mut [u8]) -> Result<(), ArchiveError> {
+    source.read_exact(header).map_err(|error| match error.kind() {
+        io::ErrorKind::UnexpectedEof => ZipFormatError::TruncatedHeader.into(),
+        _ => ArchiveError::from(error),
+    })
 }
 
 /// Refuses the flags `zipfile` cannot read.
@@ -204,9 +252,9 @@ fn check_no_overlap(member: &ZipMember, header: &LocalHeader) -> Result<(), ZipF
 }
 
 /// The decompressor for `member`'s method over its compressed bytes.
-fn decompressor<'a, S: Read>(
+fn decompressor<'a, R: Read + 'a>(
     member: &ZipMember,
-    compressed: Take<&'a mut S>,
+    compressed: R,
 ) -> Result<Box<dyn Read + 'a>, ArchiveError> {
     match member.method {
         CompressionMethod::Stored => Ok(Box::new(compressed)),
@@ -221,9 +269,9 @@ fn decompressor<'a, S: Read>(
 /// (2 bytes) and the properties, followed by a raw LZMA stream. The stream
 /// is read to the member's declared size. Decoder working memory is
 /// checked separately: the allowed output size can be several gigabytes.
-fn lzma_decompressor<'a, S: Read>(
+fn lzma_decompressor<'a, R: Read + 'a>(
     member: &ZipMember,
-    mut compressed: Take<&'a mut S>,
+    mut compressed: R,
 ) -> Result<Box<dyn Read + 'a>, ArchiveError> {
     let corrupt = |detail: String| ZipFormatError::CorruptData {
         name: member.name.clone(),

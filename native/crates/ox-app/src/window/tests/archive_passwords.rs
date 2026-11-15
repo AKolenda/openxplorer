@@ -17,7 +17,9 @@ use ox_core::location::{file_uri, ArchiveLocation};
 use super::file_ops_support::{dialog_over, open_dialog, wait_for_no_dialog};
 use super::item_dialogs::press;
 use crate::dialog::Dialog;
-use crate::test_support::harness::{capture_in_both_themes, descendants, settle, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{
+    capture_in_both_themes, descendants, settle, wait_until, Fixture, TestWindow,
+};
 
 /// The password of `Harbor.zip`.
 const PASSWORD: &str = "lighthouse";
@@ -54,7 +56,11 @@ fn open_harbor(test: &TestWindow, fixture: &Fixture) {
     test.select_named("Harbor.zip");
     test.activate("open", None);
     let folder = ArchiveLocation::root(&fixture.uri_of("Harbor.zip")).member("Harbor/");
-    wait_until("the ZIP in the tab", || test.window.current_uri().is_some_and(|uri| uri.contains("Harbor.zip")));
+    wait_until("the ZIP in the tab", || {
+        test.window
+            .current_uri()
+            .is_some_and(|uri| uri.contains("Harbor.zip"))
+    });
     test.wait_for_listing("the ZIP's listing");
     test.window.navigate(&folder.uri()).expect("the folder inside");
     test.wait_for_listing("the folder inside the ZIP");
@@ -87,12 +93,22 @@ fn opening_a_file_in_a_password_zip_asks_for_the_password() {
     let fixture = fixture_with_password_zip();
     let test = TestWindow::open(&fixture.uri());
     open_harbor(&test, &fixture);
-    assert_eq!(test.names(), ["buoys.txt", "tides.txt"], "listed without a password");
+    assert_eq!(
+        test.names(),
+        ["buoys.txt", "tides.txt"],
+        "listed without a password"
+    );
 
     test.select_named("tides.txt");
     test.activate("open", None);
     let dialog = password_question(&test);
-    assert!(dialog.message_text().contains("“Harbor.zip” is password protected"), "{}", dialog.message_text());
+    assert!(
+        dialog
+            .message_text()
+            .contains("“Harbor.zip” is password protected"),
+        "{}",
+        dialog.message_text()
+    );
     assert_eq!(dialog.button_labels(), ["Cancel", "OK"]);
     assert_eq!(dialog.error_text(), None);
     capture_in_both_themes(&dialog, "native-zip-password");
@@ -100,12 +116,19 @@ fn opening_a_file_in_a_password_zip_asks_for_the_password() {
     wait_for_no_dialog(&test);
 
     let again = password_question(&test);
-    assert_eq!(again.error_text().as_deref(), Some("The password is incorrect. Try again."));
+    assert_eq!(
+        again.error_text().as_deref(),
+        Some("The password is incorrect. Try again.")
+    );
     capture_in_both_themes(&again, "native-zip-password-wrong");
     assert!(test.context.recorded_launches().is_empty());
     answer(&again, PASSWORD);
-    wait_until("the copy to open", || !test.context.recorded_launches().is_empty());
-    let copy = gtk::gio::File::for_uri(&test.context.recorded_launches()[0]).path().expect("a local copy");
+    wait_until("the copy to open", || {
+        !test.context.recorded_launches().is_empty()
+    });
+    let copy = gtk::gio::File::for_uri(&test.context.recorded_launches()[0])
+        .path()
+        .expect("a local copy");
     assert_eq!(
         fs::read_to_string(copy).expect("the copy"),
         "Tide table for the fictional Tidewater harbor.\n"
@@ -113,7 +136,9 @@ fn opening_a_file_in_a_password_zip_asks_for_the_password() {
 
     test.select_named("buoys.txt");
     test.activate("open", None);
-    wait_until("the second copy to open", || test.context.recorded_launches().len() == 2);
+    wait_until("the second copy to open", || {
+        test.context.recorded_launches().len() == 2
+    });
     assert!(dialog_over(&test).is_none(), "the password is not asked again");
 }
 
@@ -149,7 +174,9 @@ fn extract_all_asks_for_the_password_and_writes_nothing_until_it_is_right() {
     test.activate("extract-all", None);
     let frame = test.wait_for_dialog("the Extract dialog");
     wait_until("the check", || {
-        super::item_dialogs::texts(&frame).iter().any(|text| text.ends_with("unpacked"))
+        super::item_dialogs::texts(&frame)
+            .iter()
+            .any(|text| text.ends_with("unpacked"))
     });
     assert_eq!(frame.error_text(), "", "the check passes without a password");
     press(&frame, "Extract");
@@ -157,12 +184,20 @@ fn extract_all_asks_for_the_password_and_writes_nothing_until_it_is_right() {
     answer(&password_question(&test), "harbor");
     wait_for_no_dialog(&test);
     let again = password_question(&test);
-    assert!(!fixture.path("Harbor").exists(), "nothing written for a wrong password");
+    assert!(
+        !fixture.path("Harbor").exists(),
+        "nothing written for a wrong password"
+    );
     answer(&again, PASSWORD);
 
     let extracted = fixture.path("Harbor");
-    wait_until("the extracted folder", || test.window.current_uri() == Some(file_uri(&extracted)));
-    assert_eq!(fs::read_to_string(extracted.join("buoys.txt")).expect("extracted"), "Buoy list\n");
+    wait_until("the extracted folder", || {
+        test.window.current_uri() == Some(file_uri(&extracted))
+    });
+    assert_eq!(
+        fs::read_to_string(extracted.join("buoys.txt")).expect("extracted"),
+        "Buoy list\n"
+    );
 }
 
 /// Extract here asks for the password too; Cancel leaves nothing beside
@@ -204,7 +239,9 @@ fn copying_out_of_a_password_zip_asks_for_the_password() {
     test.activate("copy", None);
     answer(&password_question(&test), PASSWORD);
     wait_until("the copy on the clipboard", || {
-        !test.window.is_writing_files() && test.window.shown_message().is_empty() && clipboard_has_files(&test)
+        !test.window.is_writing_files()
+            && test.window.shown_message().is_empty()
+            && clipboard_has_files(&test)
     });
 }
 

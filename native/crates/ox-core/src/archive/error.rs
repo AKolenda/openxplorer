@@ -103,12 +103,6 @@ pub enum ArchiveError {
         crate::i18n::gettext("This archive member is missing or duplicated. Use an archive manager.")
     )]
     MissingOrDuplicatedMember,
-    /// The member to open is encrypted.
-    #[error(
-        "{}",
-        crate::i18n::gettext("Encrypted ZIP members require an archive manager.")
-    )]
-    EncryptedMember,
     /// The member to open is a link or special file, has an altered name,
     /// is over 256 MiB or compressed more than 1,000 times.
     #[error(
@@ -185,12 +179,25 @@ pub enum ArchiveError {
         )
     )]
     LinkIntoExistingFolder(String),
-    /// ARC-016: a member is encrypted.
+    /// A member to open or extract is encrypted and no password was
+    /// given: the window asks for it and tries again.
     #[error(
         "{}",
-        crate::i18n::gettext("Password-protected ZIPs need an external archive manager in this release.")
+        crate::i18n::gettext("This archive is password protected. Enter its password to open it.")
     )]
-    PasswordProtected,
+    PasswordRequired,
+    /// The password given does not decrypt an encrypted member.
+    #[error("{}", crate::i18n::gettext("The password is incorrect. Try again."))]
+    WrongPassword,
+    /// ARC-016: a member is encrypted with AES or the PKWARE strong
+    /// encryption, which the built-in reader cannot decrypt.
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "This ZIP uses an encryption method OpenXplorer cannot open. Use an archive manager."
+        )
+    )]
+    UnsupportedEncryption,
     /// ARC-016: a member uses a method other than stored, deflate, bzip2
     /// or LZMA.
     #[error(
