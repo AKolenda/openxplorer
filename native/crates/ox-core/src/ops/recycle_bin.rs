@@ -24,6 +24,8 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::OnceLock;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -228,47 +230,56 @@ fn listed_blocking<T>(
     item: impl FnMut(&gio::FileEnumerator, &gio::FileInfo) -> T,
 ) -> Result<Vec<T>, OpsError> {
     cancel.check()?;
-    let bin = gio::File::for_uri(TRASH_URI);
     // Without a watcher, GVfs skips rescanning when the Trash folder's
     // modification time is unchanged. A rapid delete and new Trash can
     // share even a nanosecond timestamp, leaving the new item invisible.
-    // Requesting a monitor enables its backend's filesystem notifications.
-    // The private context releases the monitor's asynchronous subscription
-    // reference too; worker threads otherwise have no running main loop.
-    let context = glib::MainContext::new();
-    context
-        .with_thread_default(|| {
-            let monitor = bin
-                .monitor_directory(gio::FileMonitorFlags::NONE, Some(cancel.cancellable()))
-                .ok();
-            let result = enumerate_recycle_bin(&bin, attributes, cancel, item);
-            release_trash_monitor(monitor, &context);
-            result
-        })
-        .map_err(|error| OpsError::failed(error.to_string()))?
+    keep_trash_watched();
+    let bin = gio::File::for_uri(TRASH_URI);
+    enumerate_recycle_bin(&bin, attributes, cancel, item)
 }
 
-/// Cancels the monitor and dispatches its subscription cleanup on this worker.
-fn release_trash_monitor(monitor: Option<gio::FileMonitor>, context: &glib::MainContext) {
-    if let Some(monitor) = monitor {
-        let released = monitor.downgrade();
-        monitor.cancel();
-        drop(monitor);
-        // GVfs holds a reference until its asynchronous Subscribe callback.
-        // Cancellation can beat that reply, so pending() alone is insufficient.
-        // Dispatch until the callback releases the monitor; its D-Bus request
-        // has the normal finite timeout, including when the backend disappears.
-        while released.upgrade().is_some() {
-            context.iteration(true);
-        }
-    }
-    while context.pending() {
-        context.iteration(false);
-    }
+/// How many watches on `trash:///` this process made, for tests.
+static WATCHES_MADE: AtomicUsize = AtomicUsize::new(0);
+
+/// Makes sure that the Trash backend of `GVfs` watches the Trash folders,
+/// which it does while a program watches `trash:///`: with the process's
+/// one watch, made on a thread of its own the first time the Recycle Bin
+/// is listed and kept while the process runs. True once it watches.
+///
+/// Each listing used to make a watch of its own and drop it: the backend
+/// kept sending its changes to every watch whose connection had closed,
+/// and with thousands of changes it spent minutes on them, listing items
+/// that were gone meanwhile.
+fn keep_trash_watched() -> bool {
+    static WATCHED: OnceLock<bool> = OnceLock::new();
+    *WATCHED.get_or_init(|| {
+        let (made, is_made) = std::sync::mpsc::channel();
+        let watching = thread::Builder::new()
+            .name(String::from("recycle-bin-watch"))
+            .spawn(move || {
+                let context = glib::MainContext::new();
+                let _ = context.with_thread_default(|| {
+                    let bin = gio::File::for_uri(TRASH_URI);
+                    let monitor = bin
+                        .monitor_directory(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE)
+                        .ok();
+                    if monitor.is_some() {
+                        WATCHES_MADE.fetch_add(1, Ordering::Relaxed);
+                    }
+                    let _ = made.send(monitor.is_some());
+                    if monitor.is_some() {
+                        // The watch's replies arrive on this context.
+                        loop {
+                            context.iteration(true);
+                        }
+                    }
+                });
+            });
+        watching.is_ok() && is_made.recv().unwrap_or(false)
+    })
 }
 
-/// Reads a listing with `attributes` while its caller holds the Trash
-/// monitor, making each item with `item`.
+/// Reads a listing with `attributes`, making each item with `item`.
 fn enumerate_recycle_bin<T>(
     bin: &gio::File,
     attributes: &str,
@@ -466,13 +477,14 @@ fn delete_items_blocking(
     let mut store = StoreDeleter::with_targets(targets);
     let mut questions = ItemQuestions::new(context, TransferMode::Delete);
     let mut reports = ItemReports::new(uris.len());
-    for (index, uri) in uris.iter().enumerate() {
+    for (position, index) in store.deletion_order(uris).into_iter().enumerate() {
+        let uri = &uris[index];
         let name = GioNode::new(uri).display_name();
-        reports.report(index, &name, &mut progress);
+        reports.report(position, &name, &mut progress);
         let item = AskedItem {
             name: &name,
             uri,
-            more_items: index + 1 < uris.len(),
+            more_items: position + 1 < uris.len(),
         };
         if questions
             .run(&mut result, item, || {
@@ -697,37 +709,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cancellation_before_enumeration_releases_the_trash_monitor() {
+    fn listings_share_the_process_s_one_watch_of_the_recycle_bin() {
         assert_eq!(std::env::var("OX_ISOLATED_SESSION").as_deref(), Ok("1"));
         let data = PathBuf::from(std::env::var_os("XDG_DATA_HOME").expect("private data directory"));
         assert!(data.starts_with(std::env::temp_dir()));
         assert_eq!(glib::user_data_dir(), data);
 
-        // Exercise the real GVfs subscription, which completes asynchronously
-        // after monitor_directory returns. No files are trashed or removed.
-        for _ in 0..64 {
-            let context = glib::MainContext::new();
-            context
-                .with_thread_default(|| {
-                    let bin = gio::File::for_uri(TRASH_URI);
-                    let cancel = Cancellation::new();
-                    let monitor = bin
-                        .monitor_directory(gio::FileMonitorFlags::NONE, Some(cancel.cancellable()))
-                        .expect("the isolated GVfs Trash backend supports monitoring");
-                    let released = monitor.downgrade();
-                    cancel.cancel();
-
-                    let result = enumerate_recycle_bin(&bin, ATTRIBUTES, &cancel, |_, _| ());
-                    release_trash_monitor(Some(monitor), &context);
-
-                    assert_eq!(result, Err(OpsError::Cancelled));
-                    assert!(
-                        released.upgrade().is_none(),
-                        "the subscription retained its monitor"
-                    );
-                })
-                .unwrap();
+        // The real GVfs backend; nothing is trashed or removed.
+        for _ in 0..16 {
+            listed_blocking(NAME_ATTRIBUTES, &Cancellation::new(), |_, _| ()).unwrap();
         }
+        let cancelled = Cancellation::new();
+        cancelled.cancel();
+        let result = listed_blocking(NAME_ATTRIBUTES, &cancelled, |_, _| ());
+
+        assert_eq!(result, Err(OpsError::Cancelled));
+        assert!(keep_trash_watched());
+        assert_eq!(
+            WATCHES_MADE.load(Ordering::Relaxed),
+            1,
+            "one watch for every listing"
+        );
     }
 
     fn recycled(uri: &str, original: &str, deleted_at: u64) -> RecycledItem {
