@@ -45,7 +45,11 @@ fn a_folder_of_more_than_65535_files_compresses_with_zip64() {
         .arg(&archive)
         .output()
         .expect("run python3");
-    assert!(checked.status.success(), "{}", String::from_utf8_lossy(&checked.stderr));
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
     assert_eq!(String::from_utf8_lossy(&checked.stdout).trim(), "65537");
     let browser = ArchiveBrowser::new(
         std::sync::Arc::new(ox_core::archive::GioArchiveOpener),

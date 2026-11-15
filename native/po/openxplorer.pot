@@ -7666,6 +7666,10 @@ msgid "Open a network share before choosing it as an extraction destination."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
+msgid "OpenXplorer cannot compress more than 1,000,000 items or a file that grows while it is compressed. Use an archive manager."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
 msgid "Select files or folders to compress."
 msgstr ""
 
@@ -7787,10 +7791,6 @@ msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
 msgid "ZIP directory is too large for the built-in viewer. Use an archive manager."
-msgstr ""
-
-#: crates/ox-core/src/archive/error.rs
-msgid "ZIP files over 4 GiB or with more than 65,535 items need an archive manager."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

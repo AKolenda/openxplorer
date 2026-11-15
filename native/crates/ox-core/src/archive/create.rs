@@ -54,7 +54,7 @@ use crate::transfer::{
     TransferError, WriteGuard,
 };
 use tar_writer::TarWriter;
-use zip_writer::{DosTime, ZipWriter, MAX_ENTRIES};
+use zip_writer::{DosTime, ZipWriter};
 
 /// The endings that ask for a TAR instead of a ZIP: compressed with XZ,
 /// gzip or bzip2 (the Create archive dialog's methods), or plain, as
@@ -550,7 +550,11 @@ fn add_folder_contents(
     Ok(())
 }
 
-/// Adds one entry, within the entry limit of a ZIP without ZIP64.
+/// The most items one compression plans. ZIP64 has no practical limit;
+/// this keeps the plan's memory bounded.
+const MAX_ENTRIES: usize = 1_000_000;
+
+/// Adds one entry, within [`MAX_ENTRIES`].
 fn push_entry(
     plan: &mut CompressionPlan,
     source: Option<gio::File>,
@@ -599,7 +603,7 @@ impl<W: std::io::Write> EntryWriter<W> {
         match self {
             Self::Zip(writer) => {
                 let modified = DosTime::from_unix_seconds(entry.modified);
-                writer.add_file(&entry.name, modified, content, cancel, progress)
+                writer.add_file(&entry.name, (modified, entry.size), content, cancel, progress)
             }
             Self::Tar(writer) => writer.add_file(
                 &entry.name,

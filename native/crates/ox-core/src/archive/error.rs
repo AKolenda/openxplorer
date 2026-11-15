@@ -295,11 +295,13 @@ pub enum ArchiveError {
     /// Compress was given nothing it can put in a ZIP.
     #[error("{}", crate::i18n::gettext("Select files or folders to compress."))]
     NothingToCompress,
-    /// ARC-023: the new ZIP would need ZIP64, which the writer does not
-    /// write.
+    /// ARC-023: the selection holds more than 1,000,000 items, or a file
+    /// grew past 4 GiB after the compression planned it smaller.
     #[error(
         "{}",
-        crate::i18n::gettext("ZIP files over 4 GiB or with more than 65,535 items need an archive manager.")
+        crate::i18n::gettext(
+            "OpenXplorer cannot compress more than 1,000,000 items or a file that grows while it is compressed. Use an archive manager."
+        )
     )]
     TooLargeToCompress,
     /// ARC-023: two selected items have the same name, which one ZIP folder
