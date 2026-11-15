@@ -428,7 +428,8 @@ fn right_on_a_folder_without_subfolders_stays_on_it_in_the_folder_tree() {
     tree.activate_row(u32::try_from(archive).expect("a short tree"));
     let archive = fixture.uri_of("Documents/Archive");
     wait_until("the tree to select Archive", || {
-        tree.selected_uri().is_some_and(|uri| same_location(&uri, &archive))
+        tree.selected_uri()
+            .is_some_and(|uri| same_location(&uri, &archive))
     });
     for _ in 0..3 {
         assert!(press_on(&view, gdk::Key::Right), "Right stays in the tree");
@@ -436,5 +437,8 @@ fn right_on_a_folder_without_subfolders_stays_on_it_in_the_folder_tree() {
     }
     crate::test_support::harness::wait_for_frames(&test.window, 3);
     let selected = tree.selected_uri().unwrap_or_default();
-    assert!(same_location(&selected, &archive), "still on Archive, not {selected}");
+    assert!(
+        same_location(&selected, &archive),
+        "still on Archive, not {selected}"
+    );
 }
