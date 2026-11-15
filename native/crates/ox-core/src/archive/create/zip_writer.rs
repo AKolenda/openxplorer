@@ -412,6 +412,78 @@ mod tests {
         assert_eq!(read_back, data);
     }
 
+    /// Reads back every member of `bytes` with the app's reader and
+    /// returns each name, size and data.
+    fn read_back(bytes: Vec<u8>) -> Vec<(String, u64, Vec<u8>)> {
+        let cancel = Cancellation::new();
+        let mut archive = ZipArchive::open(Cursor::new(bytes), &cancel).unwrap();
+        let mut members = Vec::new();
+        for index in 0..archive.members().len() {
+            let (name, size) = {
+                let member = &archive.members()[index];
+                (member.name.clone(), member.size)
+            };
+            let mut reader = archive.open_member(index, None).unwrap();
+            let mut data = Vec::new();
+            let mut chunk = vec![0u8; 4096];
+            loop {
+                let count = reader.read_chunk(&mut chunk).unwrap();
+                if count == 0 {
+                    break;
+                }
+                data.extend_from_slice(&chunk[..count]);
+            }
+            members.push((name, size, data));
+        }
+        members
+    }
+
+    /// With the ZIP64 threshold lowered to a few bytes, every size, offset
+    /// and the directory are written as ZIP64 values, and the archive
+    /// reads back with the app's reader and with Python's `zipfile`, as an
+    /// archive over 4 GiB would.
+    ///
+    /// parity: ARC-023
+    #[test]
+    fn sizes_and_offsets_past_the_threshold_are_written_as_zip64() {
+        let mut writer = ZipWriter::new(Cursor::new(Vec::new())).with_zip64_threshold(16);
+        let cancel = Cancellation::new();
+        let data = b"Tidewater soundings\n".repeat(50);
+        writer.add_folder("Charts/", DosTime::EARLIEST).unwrap();
+        for name in ["Charts/north.txt", "Charts/south.txt", "east.txt"] {
+            writer
+                .add_file(name, DosTime::EARLIEST, &mut data.as_slice(), &cancel, &mut |_| {})
+                .unwrap();
+        }
+        let bytes = writer.finish().unwrap().into_inner();
+
+        assert!(
+            bytes.windows(4).any(|window| window == [0x50, 0x4b, 0x06, 0x06]),
+            "a ZIP64 end record"
+        );
+        let members = read_back(bytes.clone());
+        let names: Vec<&str> = members.iter().map(|(name, _, _)| name.as_str()).collect();
+        assert_eq!(names, ["Charts/", "Charts/north.txt", "Charts/south.txt", "east.txt"]);
+        for (_, size, read) in &members[1..] {
+            assert_eq!((*size, read), (data.len() as u64, &data));
+        }
+        let path = std::env::temp_dir().join(format!("zip64-{}.zip", std::process::id()));
+        std::fs::write(&path, bytes).unwrap();
+        let checked = std::process::Command::new("python3")
+            .args([
+                "-I",
+                "-c",
+                "import sys, zipfile; z = zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None; \
+                 assert all(i.file_size == 1000 for i in z.infolist()[1:]); print(len(z.infolist()))",
+            ])
+            .arg(&path)
+            .output()
+            .unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert!(checked.status.success(), "{}", String::from_utf8_lossy(&checked.stderr));
+        assert_eq!(String::from_utf8_lossy(&checked.stdout).trim(), "4");
+    }
+
     #[test]
     fn times_a_zip_cannot_store_become_1980() {
         assert_eq!(DosTime::from_unix_seconds(Some(0)), DosTime::EARLIEST);
