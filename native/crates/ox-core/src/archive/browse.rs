@@ -175,15 +175,19 @@ pub(crate) fn is_listable(member: &ZipMember) -> bool {
 /// ARC-004, ARC-016: true for a TAR's symbolic link to `target` that the
 /// browser shows, as extracting keeps it: a safe name the archive
 /// records unaltered, and a relative target that stays inside the
-/// archive (the rule of [`check_link_target`]). Every other link, and
-/// every special file, stays hidden.
+/// archive (the rule of [`check_link_target`]). A link named with a
+/// folder's ending (`link/`) is hidden, as extracting refuses its empty
+/// last segment. Every other link, and every special file, stays hidden.
 fn is_listable_link(member: &ZipMember, target: &str) -> bool {
     if !is_safe_member(&member.name) || !member.has_unaltered_name() {
         return false;
     }
-    let name = member.name.trim_end_matches('/');
-    let segments: Vec<String> = name.split('/').map(str::to_owned).collect();
-    check_link_target(name, &segments, target).is_ok()
+    // The segments extracting checks: the name as stored, not trimmed.
+    let segments: Vec<String> = member.name.split('/').map(str::to_owned).collect();
+    if segments.iter().any(String::is_empty) {
+        return false;
+    }
+    check_link_target(&member.name, &segments, target).is_ok()
 }
 
 /// The rows of one folder, collected member by member.
