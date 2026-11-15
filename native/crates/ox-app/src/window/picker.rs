@@ -5110,7 +5110,7 @@ mod tests {
         crate::test_support::harness::descendants::<gtk::Label>(&*window.imp().picker_bar)
             .iter()
             .filter(|label| label.has_css_class("picker-label"))
-            .map(|label| label.label().to_string())
+            .map(|label| label.text().to_string())
             .collect()
     }
 
