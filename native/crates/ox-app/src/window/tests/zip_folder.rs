@@ -398,6 +398,42 @@ fn a_zip_named_with_brackets_opens_like_a_folder() {
     assert_eq!(test.names(), ["Docs", "readme.txt"]);
 }
 
+/// A ZIP whose names separate folders with backslashes, as some Windows
+/// tools write them, shows those folders in the tab.
+///
+/// parity: ARC-004, ARC-026
+#[gtk::test]
+fn a_zip_written_with_backslashes_shows_its_folders() {
+    let fixture = Fixture::standard();
+    let script = "import sys, zipfile\n\
+        with zipfile.ZipFile(sys.argv[1], 'w') as z:\n\
+        \x20   z.writestr('Harbor\\\\Charts\\\\north.txt', 'North channel')\n\
+        \x20   z.writestr('Harbor\\\\tides.txt', 'High water at noon.')\n";
+    let written = std::process::Command::new("python3")
+        .args(["-I", "-c", script])
+        .arg(fixture.path("Made on Windows.zip"))
+        .status()
+        .expect("run python3");
+    assert!(written.success());
+    let test = opening_zips_as_folders(&fixture);
+    test.wait_for_listing("the folder");
+    test.select_named("Made on Windows.zip");
+    test.activate("open", None);
+    wait_until("the ZIP in the tab", || {
+        test.window
+            .current_uri()
+            .is_some_and(|uri| ox_core::location::is_archive_location(&uri))
+    });
+    test.wait_for_listing("the ZIP's listing");
+    assert_eq!(test.names(), ["Harbor"]);
+    assert_eq!(test.window.shown_message(), "", "nothing hidden");
+
+    test.select_named("Harbor");
+    test.activate("open", None);
+    wait_until("the folder inside", || test.names() == ["Charts", "tides.txt"]);
+    crate::test_support::harness::capture_in_both_themes(&test.window, "native-zip-backslash");
+}
+
 /// A path typed through the ZIP to a file opens its folder with the file
 /// selected.
 ///

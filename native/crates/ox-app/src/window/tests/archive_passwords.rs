@@ -73,6 +73,15 @@ fn password_question(test: &TestWindow) -> Dialog {
     dialog
 }
 
+/// The password question that follows `previous` over `test`, once the
+/// wrong password closed `previous`.
+fn next_question(test: &TestWindow, previous: &Dialog) -> Dialog {
+    wait_until("the question again", || {
+        dialog_over(test).is_some_and(|dialog| &dialog != previous)
+    });
+    password_question(test)
+}
+
 /// Types `password` into `dialog`'s field and presses OK.
 fn answer(dialog: &Dialog, password: &str) {
     let field = descendants::<gtk::PasswordEntry>(dialog)
@@ -113,9 +122,8 @@ fn opening_a_file_in_a_password_zip_asks_for_the_password() {
     assert_eq!(dialog.error_text(), None);
     capture_in_both_themes(&dialog, "native-zip-password");
     answer(&dialog, "lighthouses");
-    wait_for_no_dialog(&test);
 
-    let again = password_question(&test);
+    let again = next_question(&test, &dialog);
     assert_eq!(
         again.error_text().as_deref(),
         Some("The password is incorrect. Try again.")
@@ -181,9 +189,9 @@ fn extract_all_asks_for_the_password_and_writes_nothing_until_it_is_right() {
     assert_eq!(frame.error_text(), "", "the check passes without a password");
     press(&frame, "Extract");
 
-    answer(&password_question(&test), "harbor");
-    wait_for_no_dialog(&test);
-    let again = password_question(&test);
+    let first = password_question(&test);
+    answer(&first, "harbor");
+    let again = next_question(&test, &first);
     assert!(
         !fixture.path("Harbor").exists(),
         "nothing written for a wrong password"

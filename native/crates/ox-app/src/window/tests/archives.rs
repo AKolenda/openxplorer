@@ -285,6 +285,7 @@ fn a_password_zip_says_so_and_offers_the_archive_manager() {
     let frame = test.wait_for_dialog("the Extract dialog");
 
     wait_until("the refusal", || frame.error_text().contains("encryption"));
+    crate::test_support::harness::capture_in_both_themes(&test.window, "native-zip-aes-refused");
     assert_eq!(
         frame.error_text(),
         "This ZIP uses an encryption method OpenXplorer cannot open. Use an archive manager."
