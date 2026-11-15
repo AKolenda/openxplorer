@@ -30,7 +30,10 @@ const MOVED_ROWS: [(&str, &str); 77] = [
         "Buttons in the right-click menu",
     ),
     ("Show previews", "Show previews"),
-    ("Show previews in network folders", "Also in network folders"),
+    (
+        "Show previews in network folders",
+        "Show thumbnails in network folders",
+    ),
     ("Skip previews of large files", "Skip very large files"),
     ("Preview pictures", "Pictures"),
     ("Preview videos", "Videos"),
@@ -41,7 +44,10 @@ const MOVED_ROWS: [(&str, &str); 77] = [
     ),
     ("Compact view", "Compact view"),
     ("Relative dates", "Relative dates (Today, Yesterday)"),
-    ("Remember each folder's view", "Remember each folder's view"),
+    (
+        "Remember each folder's view",
+        "Remember each folder's view settings",
+    ),
     ("Selection marker", "Item check boxes"),
     (
         "Show check boxes only while Ctrl is held",
@@ -98,10 +104,10 @@ const MOVED_ROWS: [(&str, &str); 77] = [
     ),
     (
         "Show full path in the title bar",
-        "Show the full path in the title bar",
+        "Display the full path in the title bar",
     ),
     ("Open new tabs", "New tabs open"),
-    ("Open new windows at", "New windows open at"),
+    ("Open new windows at", "Open OpenXplorer to"),
     (
         "Restore previous tabs at startup",
         "Reopen my tabs when OpenXplorer starts",
@@ -204,7 +210,9 @@ fn fold_button(group: &SettingsGroup) -> gtk::Button {
 /// "Shift+F10 opens the classic menu" (CMD-013), About's "Show the Update
 /// button in the command bar" (UPD-001), Home's "Open Quick access on
 /// Home" (HOME-012), and Layout's two switches that keep the app's own
-/// items in the navigation pane and tab menu (SIDE-034, TAB-060).
+/// items in the navigation pane and tab menu (SIDE-034, TAB-060), and the
+/// Folder views rows of the folder options Windows users look for in
+/// settings: hidden files, file name extensions and Folder Options itself.
 ///
 /// parity: SET-019
 #[gtk::test]
@@ -225,8 +233,14 @@ fn every_setting_of_the_earlier_layout_is_on_one_of_the_new_pages() {
         ]
     );
     let rows = every_row(&settings);
-    // "Open Quick access on Home" came later.
-    let added_since = ["Open Quick access on Home"];
+    // "Open Quick access on Home" came later, and so did the rows of the
+    // folder options Windows users look for in settings.
+    let added_since = [
+        "Open Quick access on Home",
+        "Show hidden files, folders, and drives",
+        "Hide extensions for known file types",
+        "Folder Options",
+    ];
     for title in added_since {
         settings.row(title);
     }

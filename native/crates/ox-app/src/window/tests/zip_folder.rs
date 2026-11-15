@@ -398,6 +398,42 @@ fn a_zip_named_with_brackets_opens_like_a_folder() {
     assert_eq!(test.names(), ["Docs", "readme.txt"]);
 }
 
+/// A ZIP whose names separate folders with backslashes, as some Windows
+/// tools write them, shows those folders in the tab.
+///
+/// parity: ARC-004, ARC-026
+#[gtk::test]
+fn a_zip_written_with_backslashes_shows_its_folders() {
+    let fixture = Fixture::standard();
+    let script = "import sys, zipfile\n\
+        with zipfile.ZipFile(sys.argv[1], 'w') as z:\n\
+        \x20   z.writestr('Harbor\\\\Charts\\\\north.txt', 'North channel')\n\
+        \x20   z.writestr('Harbor\\\\tides.txt', 'High water at noon.')\n";
+    let written = std::process::Command::new("python3")
+        .args(["-I", "-c", script])
+        .arg(fixture.path("Made on Windows.zip"))
+        .status()
+        .expect("run python3");
+    assert!(written.success());
+    let test = opening_zips_as_folders(&fixture);
+    test.wait_for_listing("the folder");
+    test.select_named("Made on Windows.zip");
+    test.activate("open", None);
+    wait_until("the ZIP in the tab", || {
+        test.window
+            .current_uri()
+            .is_some_and(|uri| ox_core::location::is_archive_location(&uri))
+    });
+    test.wait_for_listing("the ZIP's listing");
+    assert_eq!(test.names(), ["Harbor"]);
+    assert_eq!(test.window.shown_message(), "", "nothing hidden");
+
+    test.select_named("Harbor");
+    test.activate("open", None);
+    wait_until("the folder inside", || test.names() == ["Charts", "tides.txt"]);
+    crate::test_support::harness::capture_in_both_themes(&test.window, "native-zip-backslash");
+}
+
 /// A path typed through the ZIP to a file opens its folder with the file
 /// selected.
 ///
@@ -466,17 +502,17 @@ fn a_folder_the_zip_does_not_have_is_not_found() {
 #[gtk::test]
 fn hidden_members_are_announced_in_the_message_line() {
     let fixture = fixture_with_zip();
-    let sources = tempfile::tempdir().expect("a folder for the sources");
-    let unsafe_name = sources.path().join("back\\slash.txt");
-    fs::write(&unsafe_name, b"hidden").expect("a source file");
-    let request = ox_core::archive::CompressionRequest {
-        uris: vec![ox_core::location::file_uri(&unsafe_name)],
-        destination_uri: fixture.uri(),
-        archive_name: "Unsafe.zip".to_owned(),
-    };
-    ox_core::archive::ZipCompressor::new()
-        .compress(&request, &ox_core::transfer::Cancellation::new())
-        .expect("the ZIP is written");
+    // A path that climbs out is never shown. (A backslash would now read
+    // as a folder separator, as Windows tools write it.)
+    let script = "import sys, zipfile\n\
+        with zipfile.ZipFile(sys.argv[1], 'w') as z:\n\
+        \x20   z.writestr('../escape.txt', 'hidden')\n";
+    let written = std::process::Command::new("python3")
+        .args(["-I", "-c", script])
+        .arg(fixture.path("Unsafe.zip"))
+        .status()
+        .expect("run python3");
+    assert!(written.success());
     let test = opening_zips_as_folders(&fixture);
 
     let root = ArchiveLocation::root(&fixture.uri_of("Unsafe.zip"));
@@ -484,7 +520,7 @@ fn hidden_members_are_announced_in_the_message_line() {
     test.wait_for_listing("the ZIP's listing");
 
     assert!(test.names().is_empty());
-    assert_eq!(test.window.shown_message(), "1 unsafe names or links are hidden.");
+    assert_eq!(test.window.shown_message(), "1 unsafe name or link is hidden.");
 }
 
 /// Writes `Linked.zip` into `fixture` with Python's `zipfile`: a folder
@@ -600,8 +636,8 @@ fn a_zip_handed_in_opens_like_a_folder_when_zips_do() {
 }
 
 /// Now that ZIPs open in the tab by default, a corrupt ZIP says there why
-/// it cannot be listed, and a file in a password ZIP says it needs the
-/// archive manager, as the Compressed folder window says.
+/// it cannot be listed, and a file in a password ZIP asks for the
+/// password, as in Windows 11.
 ///
 /// parity: ARC-005, ARC-009, ARC-026
 #[gtk::test]
@@ -624,11 +660,10 @@ fn a_corrupt_or_password_zip_says_why_in_the_tab() {
     open_bundle(&test, &fixture);
     test.select_named("readme.txt");
     test.activate("open", None);
-    wait_until("the refusal", || !test.window.shown_message().is_empty());
-    assert_eq!(
-        test.window.shown_message(),
-        "Encrypted ZIP members require an archive manager."
-    );
+    let question = super::file_ops_support::open_dialog(&test);
+    assert_eq!(question.title_text(), "Password needed");
+    question.press("Cancel");
+    super::file_ops_support::wait_for_no_dialog(&test);
     assert!(test.context.recorded_launches().is_empty());
 }
 
@@ -762,6 +797,41 @@ pub(super) fn write_tar_named(fixture: &Fixture, name: &str) {
             ruzstd::encoding::compress_to_vec(plain.as_slice(), ruzstd::encoding::CompressionLevel::Fastest);
         fs::write(&path, compressed).expect("the .tar.zst");
     }
+}
+
+/// An opened archive has one name: the tab, the window's title and the
+/// address bar's crumb all read its real file name, "Bundle.tar.gz",
+/// while known extensions are hidden (the default) too.
+///
+/// parity: ARC-026, VIEW-069
+#[gtk::test]
+fn an_opened_archive_is_named_the_same_in_the_tab_and_the_address_bar() {
+    let fixture = Fixture::standard();
+    write_tar_named(&fixture, "Bundle.tar.gz");
+    let test = opening_zips_as_folders(&fixture);
+    test.wait_for_listing("the folder");
+    let root = ArchiveLocation::root(&fixture.uri_of("Bundle.tar.gz"));
+    test.window.navigate(&root.uri()).expect("the archive");
+    test.wait_for_listing("the archive's listing");
+
+    let crumbs: Vec<String> = test
+        .window
+        .address_bar()
+        .crumb_buttons()
+        .iter()
+        .filter_map(ButtonExt::label)
+        .map(|label| label.to_string())
+        .collect();
+    assert_eq!(
+        crumbs.last().map(String::as_str),
+        Some("Bundle.tar.gz"),
+        "{crumbs:?}"
+    );
+    let title = test.window.title().map(String::from).unwrap_or_default();
+    assert!(
+        title.starts_with("Bundle.tar.gz "),
+        "the window's title: {title:?}"
+    );
 }
 
 /// Every kind of TAR the app reads opens in the tab like a ZIP, as

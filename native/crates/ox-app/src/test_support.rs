@@ -13,6 +13,7 @@
 pub(crate) mod desktop_setting;
 pub(crate) mod harness;
 pub(crate) mod held;
+pub(crate) mod pictures;
 pub(crate) mod pointer;
 pub(crate) mod portal;
 pub(crate) mod python;

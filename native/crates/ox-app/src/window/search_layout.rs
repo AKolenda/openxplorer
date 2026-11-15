@@ -13,7 +13,7 @@
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::search::{is_wildcard, DateFacet, KindFacet, SearchFacets, SearchIn, SizeFacet};
+use ox_core::search::{DateFacet, KindFacet, NamePattern, SearchFacets, SearchIn, SizeFacet};
 
 use super::actions::{choice_action, plain_action, toggle_action};
 use super::window_action::WindowAction;
@@ -195,14 +195,9 @@ impl BrowserWindow {
     }
 }
 
-/// The words of `text` a result's name is marked at: each word once,
-/// lower-cased, without wildcard patterns, which stand for no one text.
+/// The words and phrases of `text` a result's name is marked at: each
+/// once, lower-cased, without wildcard patterns, which stand for no one
+/// text, operators, or words a result must lack ([`NamePattern`]).
 fn marked_words(text: &str) -> Vec<String> {
-    let mut words: Vec<String> = Vec::new();
-    for word in text.to_lowercase().split_whitespace() {
-        if !is_wildcard(word) && !words.iter().any(|known| known == word) {
-            words.push(word.to_owned());
-        }
-    }
-    words
+    NamePattern::new(text).marked_words()
 }

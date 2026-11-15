@@ -110,6 +110,7 @@ pub(super) fn fill_security(page: &gtk::Box, facts: &SecurityFacts, context: &Se
     edit_text.set_hexpand(true);
     edit_row.append(&edit_text);
     let edit = push_button(&ox_core::i18n::gettext("Edit..."));
+    super::window::give_access_key(&edit, 'e');
     edit.set_sensitive(facts.can_edit && facts.mode.is_some());
     edit_row.append(&edit);
     page.append(&edit_row);
@@ -136,6 +137,7 @@ pub(super) fn fill_security(page: &gtk::Box, facts: &SecurityFacts, context: &Se
     advanced_text.set_hexpand(true);
     advanced_row.append(&advanced_text);
     let advanced = push_button(&ox_core::i18n::gettext("Advanced"));
+    super::window::give_access_key(&advanced, 'v');
     advanced.set_valign(gtk::Align::Center);
     advanced_row.append(&advanced);
     page.append(&advanced_row);

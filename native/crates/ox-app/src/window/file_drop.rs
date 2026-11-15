@@ -318,6 +318,7 @@ impl BrowserWindow {
     /// theirs with the rest of their input.
     pub(super) fn connect_drag_and_drop(&self) {
         self.attach_file_drop_zone(self.sidebar().list(), DropZone::Sidebar);
+        self.attach_file_drop_zone(self.folder_tree().rows_list(), DropZone::FolderTree);
         self.attach_file_drop_zone(self.address_bar(), DropZone::Breadcrumbs);
         self.attach_file_drop_zone(self.tab_strip(), DropZone::Tabs);
         self.attach_sidebar_file_drag();

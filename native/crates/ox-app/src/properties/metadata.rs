@@ -13,6 +13,7 @@ use ox_core::entry::{entry_from_info, Entry, EntryError, ATTRIBUTES};
 use ox_core::location::is_network_filesystem;
 use ox_core::location::{normalise, parent_location};
 use ox_core::network::{read_mount_table, MountEntry};
+use ox_core::ops::is_recycle_bin_item;
 use ox_core::permissions::Account;
 
 use super::drive_facts::{drive_type, filesystem_name, read_block_facts, DriveType};
@@ -61,6 +62,10 @@ pub(crate) struct ItemProperties {
     pub default_app: Option<String>,
     /// What is mounted at the item, when a folder is a mount point.
     pub mount: Option<MountFacts>,
+    /// For an item in the Recycle Bin, where its Trash folder keeps it,
+    /// as the backend reports it: a trashed folder's size is counted
+    /// there.
+    pub stored_uri: Option<String>,
     /// The width and height of a local image, read from its header
     /// (PROP-013).
     pub dimensions: Option<(i32, i32)>,
@@ -152,7 +157,15 @@ pub(crate) async fn read_properties(uri: String) -> Result<ItemProperties, Entry
 
 /// [`read_properties`] on the calling thread.
 fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
-    let file = gio::File::for_uri(&normalise(uri)?);
+    // An item in the Recycle Bin is read where it is, as its menu's
+    // Properties and opening it show it (OPS-040); the location rules
+    // accept no other `trash:` address.
+    let address = if is_recycle_bin_item(uri) {
+        uri.to_owned()
+    } else {
+        normalise(uri)?
+    };
+    let file = gio::File::for_uri(&address);
     let attributes = format!("{ATTRIBUTES},{PROPERTY_ATTRIBUTES}");
     let info = file.query_info(
         &attributes,
@@ -190,6 +203,9 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
         size_on_disk: info
             .has_attribute("standard::allocated-size")
             .then(|| info.attribute_uint64("standard::allocated-size")),
+        stored_uri: is_recycle_bin_item(uri)
+            .then(|| optional_string(&info, "standard::target-uri"))
+            .flatten(),
         entry,
     })
 }
@@ -375,6 +391,7 @@ mod tests {
             dimensions: None,
             custom_icon: None,
             size_on_disk: None,
+            stored_uri: None,
         };
 
         assert_eq!(properties.mode_text().as_deref(), Some("0o644"));

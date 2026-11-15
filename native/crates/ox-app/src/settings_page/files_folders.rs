@@ -22,6 +22,8 @@ use super::row::{ControlName, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
 use super::SettingsPage;
+use crate::icons::Icon;
+use crate::window::WindowAction;
 
 const RELATIVE_DATES: RowText = RowText {
     title: "Relative dates (Today, Yesterday)",
@@ -30,9 +32,38 @@ const RELATIVE_DATES: RowText = RowText {
 };
 
 const FOLDER_STYLES: RowText = RowText {
-    title: "Remember each folder's view",
-    description: "Each folder keeps its own layout, sorting and grouping; off, every folder shares one.",
-    keywords: "view properties per folder display style layout sort group remember global",
+    title: "Remember each folder's view settings",
+    description: "Each folder keeps its own layout, sorting and grouping; off, every folder shares one. \
+                  Also in Folder Options.",
+    keywords: "remember each folder's view properties per folder display style layout sort group \
+               remember global folder options",
+};
+
+const SHOW_HIDDEN: RowText = RowText {
+    title: "Show hidden files, folders, and drives",
+    description: "Items whose names start with a dot show in every folder. Ctrl+H, View > Show > \
+                  Hidden items and Folder Options change it too.",
+    keywords: "show hidden items hidden files dot files dotfiles invisible ctrl+h folder options",
+};
+
+const HIDE_EXTENSIONS: RowText = RowText {
+    title: "Hide extensions for known file types",
+    description: "“Notes.txt” shows as “Notes”, as in Windows. View > Show > File name extensions \
+                  and Folder Options change it too.",
+    keywords: "show file name extensions file extensions suffix type known types folder options",
+};
+
+const FOLDER_OPTIONS: RowText = RowText {
+    title: "Folder Options",
+    description: "The rest of File Explorer's folder options: browsing folders in one window or \
+                  several, privacy, the status bar, pop-up descriptions, typing into the search \
+                  box, and Apply to Folders. Also in … > Options.",
+    keywords: "folder options file explorer options folder and search options open each folder in \
+               its own window single-click double-click show recently used files frequently used \
+               folders status bar pop-up description infotips tooltips preview \
+               handlers preview pane always show icons never thumbnails check boxes when typing into \
+               list view search box always search file names and contents clear file explorer \
+               history apply to folders reset folders restore defaults",
 };
 
 const ITEM_CHECK_BOXES: RowText = RowText {
@@ -71,10 +102,11 @@ const SHOW_PREVIEWS: RowText = RowText {
 };
 
 const REMOTE_PREVIEWS: RowText = RowText {
-    title: "Also in network folders",
-    description: "Off: files on SMB shares, servers and phones keep their icons, so browsing \
-                  them reads no file contents.",
-    keywords: "show previews in network folders thumbnails remote network smb nas sftp slow",
+    title: "Show thumbnails in network folders",
+    description: "Off by default, as in Windows: files on shares, servers, phones and cameras \
+                  show their type icons. Turn on to show their thumbnails and previews too.",
+    keywords: "show previews in network folders thumbnails remote network smb nas sftp phone camera \
+               also",
 };
 
 const LARGE_PREVIEWS: RowText = RowText {
@@ -188,19 +220,53 @@ pub(super) fn compact_view_row(page: &SettingsPage) -> SettingRow {
     row
 }
 
-/// "Remember each folder's view".
+/// "Remember each folder's view settings", the hidden files and the file
+/// name extensions, which Folder Options, View > Show and Ctrl+H change
+/// too, and the row that opens Folder Options for the rest of its options.
 fn folder_views_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Folder views"));
-    let row = SettingRow::new(FOLDER_STYLES);
-    let binding = PreferenceBinding {
-        read: |preferences| preferences.per_folder_views,
-        write: |on| PreferencesUpdate {
-            per_folder_views: Some(on),
-            ..PreferencesUpdate::default()
-        },
-    };
-    row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
-    group.add_row(&row);
+    let rows = [
+        (
+            FOLDER_STYLES,
+            PreferenceBinding {
+                read: |preferences| preferences.per_folder_views,
+                write: |on| PreferencesUpdate {
+                    per_folder_views: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            SHOW_HIDDEN,
+            PreferenceBinding {
+                read: |preferences| preferences.show_hidden,
+                write: |on| PreferencesUpdate {
+                    show_hidden: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            HIDE_EXTENSIONS,
+            PreferenceBinding {
+                read: |preferences| !preferences.show_extensions,
+                write: |hidden| PreferencesUpdate {
+                    show_extensions: Some(!hidden),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+    ];
+    for (text, binding) in rows {
+        let row = SettingRow::new(text);
+        row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+        group.add_row(&row);
+    }
+    let options = SettingRow::new(FOLDER_OPTIONS);
+    let open = parts::button_with_glyph(&ox_core::i18n::gettext("Open Folder Options"), Icon::Options24);
+    WindowAction::FolderOptions.assign_to(&open);
+    options.add_control(&open, ControlName::OwnLabel);
+    group.add_row(&options);
     group
 }
 

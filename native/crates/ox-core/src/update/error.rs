@@ -62,7 +62,7 @@ pub enum UpdateError {
     #[error("{}", crate::i18n::gettext("The update response is not valid JSON."))]
     InvalidResponse,
     /// GitHub answered the check with an HTTP error.
-    #[error("{}", crate::i18n::format_message("GitHub could not check for updates (HTTP {status}). Try again later.", &[("status", &status.to_string())]))]
+    #[error("{}", crate::i18n::format_message("GitHub refused the update check (HTTP {status}). Try again later.", &[("status", &status.to_string())]))]
     CheckRefused {
         /// The HTTP status code.
         status: u32,

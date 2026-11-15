@@ -115,7 +115,9 @@ impl Usershares {
     /// are not permitted.
     pub fn list(&self) -> Result<Vec<Usershare>, UsershareError> {
         let listed = self
-            .run(["usershare", "info", "-l"])
+            // `--long`, not `-l`: Samba 4.15 and newer read `-l` as
+            // `--log-basename`, which wants a value.
+            .run(["usershare", "info", "--long"])
             .map_err(|error| error.into_error(UsershareError::Unavailable))?;
         Ok(parse_info(&listed))
     }
@@ -234,7 +236,7 @@ pub fn validate_share_name(name: &str) -> Result<(), UsershareError> {
     }
 }
 
-/// Parses `net usershare info -l`: an INI section per share.
+/// Parses `net usershare info --long`: an INI section per share.
 fn parse_info(text: &str) -> Vec<Usershare> {
     let mut shares: Vec<Usershare> = Vec::new();
     for line in text.lines().map(str::trim) {
@@ -365,5 +367,28 @@ mod tests {
         assert!(calls(folder.path())
             .iter()
             .all(|call| !call.contains("usershare add")));
+    }
+
+    /// Samba 4.15 and newer read `-l` as `--log-basename`, which takes a
+    /// value, so `net usershare info -l` fails there with "Invalid option
+    /// -l: missing argument" and folder sharing would always read as
+    /// unavailable. The long spelling, `--long`, works on every Samba.
+    ///
+    /// parity: NET-035
+    #[test]
+    fn shares_are_listed_with_the_long_option_newer_samba_takes() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let program = folder.path().join("net");
+        let script = "#!/bin/sh\nfor argument in \"$@\"; do\n  if [ \"$argument\" = -l ]; then echo 'Invalid option -l: \
+                      missing argument' >&2; exit 1; fi\ndone\nprintf '[Projects]\\npath=/home/anna/Projects\\n\
+                      comment=\\nusershare_acl=Everyone:R,\\nguest_ok=n\\n'\n";
+        fs::write(&program, script).expect("the fake net");
+        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).expect("executable");
+        let net = Usershares::with_program(program);
+
+        let listed = net.list().expect("listed with --long");
+
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].path, Path::new("/home/anna/Projects"));
     }
 }

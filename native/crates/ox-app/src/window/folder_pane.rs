@@ -32,6 +32,9 @@ use super::empty_page::EmptyState;
 use parts::PaneParts;
 pub(crate) use view::FolderView;
 
+/// The name of Gallery's page in the pane's view stack (HOME-026).
+const GALLERY_PAGE: &str = "gallery";
+
 /// How long after a scroll position is restored a relayout may still
 /// move it; see [`FolderPane::restore_scroll_position`].
 const RELAYOUT_WINDOW: std::time::Duration = std::time::Duration::from_millis(250);
@@ -78,6 +81,8 @@ mod imp {
         /// The tab, by its store, and the location whose folder style
         /// the pane shows.
         pub(super) styled: RefCell<Option<super::StyledFor>>,
+        /// The pane shows Gallery's photos in justified rows (HOME-026).
+        pub(super) gallery: std::cell::Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -286,9 +291,10 @@ impl FolderPane {
         }
         note.set_visible(show);
         self.show_keyboard_on_empty_list();
-        let lists: [gtk::Widget; 2] = [
+        let lists: [gtk::Widget; 3] = [
             self.details().column_view().clone().upcast(),
             self.icon_view().grid().clone().upcast(),
+            self.gallery().canvas().clone().upcast(),
         ];
         for list in lists {
             if show {
@@ -312,7 +318,10 @@ impl FolderPane {
         let rows_hidden = !self.shows_rows();
         let on_list = focus.is_some_and(|focus| {
             (focus == view || focus.is_ancestor(&view))
-                && (rows_hidden || focus.is::<gtk::ListView>() || focus.is::<gtk::GridView>())
+                && (rows_hidden
+                    || focus.is::<gtk::ListView>()
+                    || focus.is::<gtk::GridView>()
+                    || focus.is::<crate::folder_view::gallery_view::GalleryCanvas>())
         });
         // The note says "This folder is empty." or, while the rows are
         // hidden, "Working on it..."; either way the list has no item to
@@ -378,6 +387,11 @@ impl FolderPane {
                     .and_then(|titles| titles.compute_bounds(overlay))
                     .map_or(0.0, |bounds| bounds.y() + bounds.height())
             }
+            _ if self.shows_gallery_page() => self
+                .gallery()
+                .canvas()
+                .compute_bounds(overlay)
+                .map_or(0.0, |bounds| bounds.y().max(0.0)),
             _ => self
                 .icon_view()
                 .grid()
@@ -481,6 +495,9 @@ impl FolderPane {
         if shown.as_deref() == Some(FolderView::Details.stack_name()) {
             return FolderView::Details;
         }
+        if shown.as_deref() == Some(GALLERY_PAGE) {
+            return FolderView::Icons(self.gallery().canvas().icon_size());
+        }
         FolderView::of_grid_layout(self.icon_view().layout())
     }
 
@@ -496,6 +513,23 @@ impl FolderPane {
         let switching_the_listing = self.page() == Some(PanePage::Listing) && self.view_has_focus();
         let parts = self.parts();
         let selection = parts.model.selection();
+        if self.shows_gallery() {
+            // Gallery shows icon sizes only, in justified rows.
+            let size = match view {
+                FolderView::Icons(size) => crate::folder_view::gallery_view::nearest_named(size),
+                _ => crate::folder_view::icon_size::IconSize::MEDIUM,
+            };
+            parts.icon_view.set_model(None);
+            parts.details.set_model(None);
+            parts.gallery.canvas().set_icon_size(size);
+            parts.gallery.canvas().set_model(Some(selection));
+            parts.views.set_visible_child_name(GALLERY_PAGE);
+            if previous != FolderView::Icons(size) && switching_the_listing {
+                self.focus_view();
+            }
+            return;
+        }
+        parts.gallery.canvas().set_model(None);
         match view.grid_layout() {
             None => {
                 parts.icon_view.set_model(None);
@@ -517,6 +551,9 @@ impl FolderPane {
     /// The visible view's scroll adjustment: the compact list scrolls
     /// sideways, the others down.
     fn visible_vadjustment(&self) -> gtk::Adjustment {
+        if self.shows_gallery_page() {
+            return self.gallery().vadjustment();
+        }
         match self.view() {
             FolderView::Details => self.details().vadjustment(),
             _ => self.icon_view().scroll_adjustment(),
@@ -571,6 +608,9 @@ impl FolderPane {
 
     /// The visible view, as a widget.
     pub(super) fn view_widget(&self) -> gtk::Widget {
+        if self.shows_gallery_page() {
+            return self.gallery().canvas().clone().upcast();
+        }
         match self.view() {
             FolderView::Details => self.details().column_view().clone().upcast(),
             _ => self.icon_view().grid().clone().upcast(),
@@ -624,6 +664,9 @@ impl FolderPane {
     /// The position of the item with keyboard focus in the visible view:
     /// the one it had last, when focus is elsewhere in the window.
     pub(super) fn focused_position(&self) -> Option<u32> {
+        if self.shows_gallery_page() {
+            return self.gallery().canvas().focused();
+        }
         let view = self.view_widget();
         let focused = std::iter::successors(view.focus_child(), WidgetExt::focus_child).last()?;
         self.owners().position_holding(&view, focused)
@@ -713,6 +756,9 @@ impl FolderPane {
     /// The positions of the items whose rows or tiles show in the list's
     /// visible part, at least half of each.
     pub(super) fn positions_shown(&self) -> Vec<u32> {
+        if self.shows_gallery_page() {
+            return self.gallery().canvas().positions_shown();
+        }
         let view = self.view_widget();
         let Some(scroller) = view.ancestor(gtk::ScrolledWindow::static_type()) else {
             return Vec::new();
@@ -760,6 +806,9 @@ impl FolderPane {
     /// The grouped model the visible view lists, while it heads the
     /// folder's groups: Details, Tiles or Content of a grouped folder.
     pub(super) fn grouped(&self) -> Option<GroupedSelection> {
+        if self.shows_gallery_page() {
+            return None;
+        }
         match self.view() {
             FolderView::Details => self.details().grouped(),
             _ => self.icon_view().grouped(),
@@ -799,6 +848,12 @@ impl FolderPane {
         self.scroll_to(position, gtk::ListScrollFlags::FOCUS, None);
     }
 
+    /// Scrolls `position` into view without moving keyboard focus or the
+    /// selection.
+    pub(super) fn scroll_into_view(&self, position: u32) {
+        self.scroll_to(position, gtk::ListScrollFlags::NONE, None);
+    }
+
     /// Gives `position` keyboard focus without scrolling the view.
     pub(super) fn focus_item(&self, position: u32) {
         let stay = gtk::ScrollInfo::new();
@@ -824,12 +879,50 @@ impl FolderPane {
             // Scrolling to an item wins over a list kept at its top.
             self.parts().top_keeper.let_go();
         }
+        if self.shows_gallery_page() {
+            let canvas = self.gallery().canvas();
+            let stay = scroll.is_some_and(|scroll| !scroll.enables_vertical());
+            if flags.contains(gtk::ListScrollFlags::SELECT) {
+                canvas.select_only(position);
+            }
+            if flags.contains(gtk::ListScrollFlags::FOCUS) {
+                canvas.grab_focus();
+                canvas.set_focused(position, stay);
+            } else if !stay {
+                canvas.scroll_to_item(position);
+            }
+            return;
+        }
         match self.view() {
             FolderView::Details => self.details().scroll_to(position, flags, scroll),
             _ => {
                 self.icon_view().scroll_to(position, flags, scroll);
             }
         }
+    }
+
+    /// Gallery's view.
+    pub(super) fn gallery(&self) -> &crate::folder_view::gallery_view::GalleryView {
+        &self.parts().gallery
+    }
+
+    /// Shows Gallery's photos in justified rows, or the folder views.
+    pub(super) fn set_gallery(&self, gallery: bool) {
+        if self.imp().gallery.replace(gallery) == gallery {
+            return;
+        }
+        let view = self.view();
+        self.show_view(view);
+    }
+
+    /// Whether the pane is set to show Gallery's rows.
+    pub(super) fn shows_gallery(&self) -> bool {
+        self.imp().gallery.get()
+    }
+
+    /// Whether Gallery's rows are the view shown now.
+    fn shows_gallery_page(&self) -> bool {
+        self.parts().views.visible_child_name().as_deref() == Some(GALLERY_PAGE)
     }
 
     /// Draws the icon view's cells for text of `size`.

@@ -19,7 +19,7 @@ use std::fs;
 
 use ox_core::archive::{ArchiveError, ExtractionRequest};
 
-use archive_support::{file_type, file_uri, ExtractionFixture, TestMember, ENCRYPTED_FLAG};
+use archive_support::{file_type, file_uri, Compression, ExtractionFixture, TestMember, ENCRYPTED_FLAG};
 use transfer_support::versions::{PreviousVersions, READ_ONLY};
 
 /// The `archiveExtract` branch of `dispatch` in `v2.0.0:desktop/winspace.py`
@@ -299,7 +299,7 @@ fn links_inside_a_copied_folder_are_left_out_and_counted() {
 }
 
 /// A copied member that breaks a rule the browser does not hide it for,
-/// here an encrypted file, still refuses the copy, and nothing is left
+/// here a compression method the reader lacks, still refuses the copy, and nothing is left
 /// behind (ARC-016, ARC-026).
 ///
 /// parity: ARC-026, ARC-016
@@ -308,7 +308,7 @@ fn a_copied_member_that_breaks_a_rule_refuses_the_copy() {
     let fixture = ExtractionFixture::new();
     fixture.write_zip(&[
         TestMember::file("tidewater/a.txt", b"a"),
-        TestMember::file("tidewater/secret.txt", b"s").with_flags(ENCRYPTED_FLAG),
+        TestMember::file("tidewater/secret.txt", b"s").compressed_with(Compression::Unsupported(9)),
     ]);
 
     let refused = fixture
@@ -317,7 +317,7 @@ fn a_copied_member_that_breaks_a_rule_refuses_the_copy() {
         .extract(&copy_request(&fixture), &fixture.cancel);
 
     assert!(
-        matches!(refused, Err(ArchiveError::PasswordProtected)),
+        matches!(refused, Err(ArchiveError::UnsupportedCompression)),
         "{refused:?}"
     );
     assert!(!fixture.destination.join("copy").exists());

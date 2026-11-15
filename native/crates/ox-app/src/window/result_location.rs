@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! "Open file location" on a search result or a Recent row: its folder
+//! "Open file location" on a search result, a Recent row or a photo in
+//! Gallery: its folder
 //! opens in this tab, a new tab or a new window, with the file selected
 //! (SRCH-015, SRCH-016, SIDE-026).
 
@@ -42,7 +43,8 @@ impl BrowserWindow {
     /// search result itself, or the file a Recent row stands for, as
     /// Windows offers it on Home's Recent files. `None` for anything else.
     pub(super) fn located_file<'a>(&self, entry: &'a Entry) -> Option<&'a str> {
-        let search_result = self.is_searching().then_some(entry.uri.as_str());
+        // A photo in Gallery stands for a file in its folder (HOME-022).
+        let search_result = (self.is_searching() || self.shows_gallery()).then_some(entry.uri.as_str());
         entry.meta.recent_target.as_deref().or(search_result)
     }
 

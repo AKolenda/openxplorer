@@ -33,20 +33,22 @@
 
 mod denied_folder;
 mod disconnected;
+pub(super) use disconnected::disconnected_message;
 mod mount_retry;
 mod removed_folder;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gio, glib};
 use ox_core::entry::{Entry, EntryError};
 use ox_core::integration::FOLDER_CONTENT_TYPE;
 use ox_core::location::{
-    is_archive_location, is_smb_location, parent_location, ArchiveLocation, RECENT_LOCATIONS_URI,
+    is_archive_location, is_smb_location, parent_location, ArchiveLocation, GALLERY_URI, RECENT_LOCATIONS_URI,
 };
+use ox_core::search::HiddenItems;
 
 use crate::app_context::add_to_desktop_history;
 use crate::folder_view::item::FileItem;
@@ -133,6 +135,12 @@ impl BrowserWindow {
         let Some(start) = self.begin_load(id, mode) else {
             return;
         };
+        if start.uri != GALLERY_URI {
+            // Leaving Gallery stops watching its photo folders.
+            if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+                tab.gallery_watch = None;
+            }
+        }
         if Page::drawn_at(&start.uri).is_some() {
             self.finish_page(id);
             return;
@@ -263,6 +271,10 @@ impl BrowserWindow {
         if uri == RECENT_LOCATIONS_URI {
             return;
         }
+        if uri == GALLERY_URI {
+            self.watch_gallery(id);
+            return;
+        }
         let watched = self
             .imp()
             .session
@@ -350,6 +362,27 @@ impl BrowserWindow {
                 ),
             );
         }
+        if start.uri == GALLERY_URI {
+            let hidden = if self.folder_pane().model().shows_hidden() {
+                HiddenItems::Include
+            } else {
+                HiddenItems::Skip
+            };
+            return crate::folder_view::gallery::list_gallery(
+                self.gallery_folders(),
+                hidden,
+                glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    move |entries| window.receive_batch(&batch_run, entries)
+                ),
+                glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    move |result| window.finish_load(&run, result)
+                ),
+            );
+        }
         if let Some(inside) = ArchiveLocation::from_uri(&start.uri) {
             return loader::list_archive_folder(
                 &inside,
@@ -394,6 +427,9 @@ impl BrowserWindow {
         }
         let items: Vec<FileItem> = entries.into_iter().map(FileItem::new).collect();
         if let Some(store) = self.tab_store(run.tab) {
+            if items.iter().any(|item| item.entry().is_hidden) {
+                self.expect_hidden_items(&store);
+            }
             store.splice(store.n_items(), 0, &items);
         }
         self.redraw_pane(run.tab);
@@ -507,7 +543,18 @@ impl BrowserWindow {
     /// Merges a completed reload into the rows, keeping unchanged items.
     fn merge_rows(&self, id: TabId, entries: Vec<Entry>) {
         let Some(store) = self.tab_store(id) else { return };
+        if entries.iter().any(|entry| entry.is_hidden) {
+            self.expect_hidden_items(&store);
+        }
         self.change_model(|| reconcile::update_in_place(&store, entries));
+    }
+
+    /// Readies the folder panes that show `store` for hidden items, before
+    /// they are added to it.
+    fn expect_hidden_items(&self, store: &gio::ListStore) {
+        for pane in self.folder_panes() {
+            pane.model().expect_hidden_items(store);
+        }
     }
 
     /// Records why a listing failed and stops watching a folder that cannot

@@ -395,8 +395,10 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/archive_view/browser.rs
-msgid "{hidden_unsafe_count} unsafe names or links are hidden."
-msgstr ""
+msgid "{hidden_unsafe_count} unsafe name or link is hidden."
+msgid_plural "{hidden_unsafe_count} unsafe names or links are hidden."
+msgstr[0] ""
+msgstr[1] ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/archive_view/browser.rs
@@ -426,7 +428,7 @@ msgstr ""
 msgid "Browse…"
 msgstr ""
 
-#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs crates/ox-app/src/window/picker.rs crates/ox-app/src/window/transfer_panel/failure.rs
+#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs crates/ox-app/src/window/gallery_locations.rs crates/ox-app/src/window/picker.rs crates/ox-app/src/window/transfer_panel/failure.rs
 msgid "Cancel"
 msgstr ""
 
@@ -468,7 +470,7 @@ msgid "Select a destination"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "Show extracted files when finished"
+msgid "Show extracted files when complete"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
@@ -477,10 +479,6 @@ msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
 msgid "The archive is kept unchanged. A folder that does not exist yet is created; in an existing folder you are asked before any file is replaced."
-msgstr ""
-
-#: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "This ZIP has a password, so OpenXplorer cannot extract it. Open it in the archive manager instead."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -543,7 +541,7 @@ msgstr ""
 msgid "Not provided"
 msgstr ""
 
-#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/choose_details.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
+#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/archive_password.rs crates/ox-app/src/window/choose_details.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/gallery_locations.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
 msgid "OK"
 msgstr ""
 
@@ -774,7 +772,7 @@ msgid "Date modified: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/folder_view/gallery_view.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Size: {size}"
 msgstr ""
 
@@ -804,6 +802,33 @@ msgstr ""
 
 #: crates/ox-app/src/folder_view/details/select_all.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Select all"
+msgstr ""
+
+#: crates/ox-app/src/folder_view/gallery.rs
+msgid "Gallery could not start reading your photos."
+msgstr ""
+
+#: crates/ox-app/src/folder_view/gallery_scrubber.rs
+msgid "Scroll down"
+msgstr ""
+
+#: crates/ox-app/src/folder_view/gallery_scrubber.rs
+msgid "Scroll up"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/gallery_view.rs
+msgid "Date: {date}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/gallery_view.rs
+msgid "Item type: {type}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/folder_view/gallery_view.rs
+msgid "Path: {name} ({folder})"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/grouping.rs
@@ -914,6 +939,10 @@ msgstr ""
 msgid "Date created"
 msgstr ""
 
+#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/properties/details_rows.rs
+msgid "Date taken"
+msgstr ""
+
 #: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs
 msgid "File extension"
 msgstr ""
@@ -938,7 +967,7 @@ msgstr ""
 msgid "Date deleted"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/search/info_strip.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/versions_panel.rs crates/ox-app/src/search/info_strip.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-core/src/grouping.rs crates/ox-core/src/search/facets.rs
 msgid "Date modified"
 msgstr ""
 
@@ -1351,6 +1380,10 @@ msgstr ""
 msgid "Sharing"
 msgstr ""
 
+#: crates/ox-app/src/properties.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
+msgid "Shortcut"
+msgstr ""
+
 #: crates/ox-app/src/properties/change_icon.rs
 msgid "Browse..."
 msgstr ""
@@ -1570,10 +1603,6 @@ msgid "Data rate"
 msgstr ""
 
 #: crates/ox-app/src/properties/details_rows.rs
-msgid "Date taken"
-msgstr ""
-
-#: crates/ox-app/src/properties/details_rows.rs
 msgid "Description"
 msgstr ""
 
@@ -1718,7 +1747,7 @@ msgstr ""
 msgid "Normal"
 msgstr ""
 
-#: crates/ox-app/src/properties/details_rows.rs
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs
 msgid "Origin"
 msgstr ""
 
@@ -1870,7 +1899,7 @@ msgstr ""
 msgid "{width} x {height}"
 msgstr ""
 
-#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/details_tab.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/loading/denied_folder.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/details_tab.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/empty_page.rs crates/ox-app/src/window/loading/denied_folder.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Details"
 msgstr ""
 
@@ -1975,6 +2004,10 @@ msgstr ""
 msgid "Created"
 msgstr ""
 
+#: crates/ox-app/src/properties/general_tab.rs
+msgid "Deleted"
+msgstr ""
+
 #: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_attributes.rs
 msgid "Hidden"
 msgstr ""
@@ -2019,7 +2052,7 @@ msgstr ""
 msgid "Size on disk"
 msgstr ""
 
-#: crates/ox-app/src/properties/general_tab.rs
+#: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/shortcut_tab.rs
 msgid "Target"
 msgstr ""
 
@@ -2504,6 +2537,51 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/properties/sharing_panel.rs
 msgid "\\\\{value1}\\{name}"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "Address"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs crates/ox-core/src/entry/type_label.rs
+msgid "Application"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "Comment"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "Open File Location"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "Start in"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "Target location"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "Target type"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "The shortcut could not be changed."
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "The target cannot be found."
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "Type the target the shortcut opens."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "{name} could not be changed."
 msgstr ""
 
 #: crates/ox-app/src/properties/size_scan_strip.rs
@@ -3422,10 +3500,6 @@ msgstr ""
 msgid "Also copy paths as text"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Also in network folders"
-msgstr ""
-
 #: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/context_menu/entries.rs
 msgid "Calculate folder sizes"
 msgstr ""
@@ -3451,7 +3525,7 @@ msgid "Documents and other files"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Each folder keeps its own layout, sorting and grouping; off, every folder shares one."
+msgid "Each folder keeps its own layout, sorting and grouping; off, every folder shares one. Also in Folder Options."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3466,12 +3540,20 @@ msgstr ""
 msgid "Files larger than 50 MB keep their icon."
 msgstr ""
 
+#: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/folder_options.rs
+msgid "Folder Options"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Folder sizes"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/folder_options.rs
 msgid "Folder views"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/folder_options.rs
+msgid "Hide extensions for known file types"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3491,11 +3573,19 @@ msgid "Item check boxes stay out of the way until you hold Ctrl to pick several 
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Items whose names start with a dot show in every folder. Ctrl+H, View > Show > Hidden items and Folder Options change it too."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Logical file bytes, the space on disk, what a scan skips, and its limits."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Off: files on SMB shares, servers and phones keep their icons, so browsing them reads no file contents."
+msgid "Off by default, as in Windows: files on shares, servers, phones and cameras show their type icons. Turn on to show their thumbnails and previews too."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Open Folder Options"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3526,8 +3616,8 @@ msgstr ""
 msgid "Relative dates (Today, Yesterday)"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Remember each folder's view"
+#: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/folder_options.rs
+msgid "Remember each folder's view settings"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3546,12 +3636,20 @@ msgstr ""
 msgid "Show check boxes only while Ctrl is held"
 msgstr ""
 
+#: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/folder_options.rs
+msgid "Show hidden files, folders, and drives"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Show previews"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Show the number of items in folders"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Show thumbnails in network folders"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3564,6 +3662,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "The Size column says how many items a folder on this computer holds."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "The rest of File Explorer's folder options: browsing folders in one window or several, privacy, the status bar, pop-up descriptions, typing into the search box, and Apply to Folders. Also in … > Options."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3595,6 +3697,10 @@ msgid "expandable folders tree expand collapse arrow chevron details subfolders 
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
+msgid "folder options file explorer options folder and search options open each folder in its own window single-click double-click show recently used files frequently used folders status bar pop-up description infotips tooltips preview handlers preview pane always show icons never thumbnails check boxes when typing into list view search box always search file names and contents clear file explorer history apply to folders reset folders restore defaults"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "folder sizes scans run on demand outside the browsing worker pool compressed zfs space snapshot usage hidden files links nested filesystem mounts snapshot collections 1 million entries 5 minutes partial total cancel recalculate"
 msgstr ""
 
@@ -3619,11 +3725,23 @@ msgid "relative dates date modified time today yesterday absolute short format c
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
+msgid "remember each folder's view properties per folder display style layout sort group remember global folder options"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "replace overwrite file conflict copy move paste drag restore recycle bin trash undo old replaced keep windows"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "show previews in network folders thumbnails remote network smb nas sftp slow"
+msgid "show file name extensions file extensions suffix type known types folder options"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "show hidden items hidden files dot files dotfiles invisible ctrl+h folder options"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "show previews in network folders thumbnails remote network smb nas sftp phone camera also"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3635,11 +3753,11 @@ msgid "thumbnails thumbnail image photo preview icons cache"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "view properties per folder display style layout sort group remember global"
+msgid "zfs logical bytes size on disk compressed snapshots disk usage. Results are kept only for this window session."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "zfs logical bytes size on disk compressed snapshots disk usage. Results are kept only for this window session."
+msgid "“Notes.txt” shows as “Notes”, as in Windows. View > Show > File name extensions and Folder Options change it too."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
@@ -3652,6 +3770,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
 msgid "At the end of the tab bar"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/general.rs crates/ox-app/src/window/folder_options.rs
+msgid "Display the full path in the title bar"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
@@ -3719,7 +3841,7 @@ msgid "Off: inside your home folder the address starts at Home, as in Home / Doc
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
-msgid "Off: the title is the folder's name, as in File Explorer."
+msgid "Off: the title is the folder's name, as in File Explorer. Also in Folder Options."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
@@ -3744,10 +3866,6 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
 msgid "Show the full path"
-msgstr ""
-
-#: crates/ox-app/src/settings_page/general.rs
-msgid "Show the full path in the title bar"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
@@ -3799,7 +3917,7 @@ msgid "show full path in the address bar breadcrumbs crumbs location bar path ro
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
-msgid "show full path in the title bar window title taskbar caption path"
+msgid "show full path in the title bar window title taskbar caption path folder options"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
@@ -3942,7 +4060,7 @@ msgstr ""
 msgid "Cache {label}"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs crates/ox-app/src/window/folder_options.rs
+#: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs
 msgid "Clear"
 msgstr ""
 
@@ -4196,7 +4314,7 @@ msgid "Home shows your Quick access folders, the files you opened lately and you
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
-msgid "New windows open at"
+msgid "Open OpenXplorer to"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
@@ -4220,7 +4338,7 @@ msgid "Starting OpenXplorer without a folder reopens the tabs and split panes th
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
-msgid "The folder a new window shows first. Leave it empty for Home."
+msgid "The folder a new window shows first. Leave it empty for Home. Folder Options offers Home, This PC and the folder chosen here."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
@@ -4236,11 +4354,11 @@ msgid "home page quick access recent files favorites favourites pinned folders w
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
-msgid "open new windows at startup start home folder location default show on startup open explorer to"
+msgid "new windows open at startup start home folder location default show on startup open file explorer to this pc folder options"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
-msgid "restore previous tabs at startup session remember reopen restore tabs last time startup logon"
+msgid "restore previous tabs at startup session remember reopen restore tabs last time startup logon restore previous folder windows at logon"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -4330,12 +4448,17 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/update/state.rs
-msgid "Could not check for updates. {reason}"
+msgid "Could not restart. {reason}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/update/state.rs
-msgid "Could not restart. {reason}"
+msgid "Couldn't check for updates (HTTP {status}). Try again later."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "Couldn't check for updates. {reason}"
 msgstr ""
 
 #: crates/ox-app/src/update/state.rs
@@ -4585,6 +4708,23 @@ msgstr ""
 msgid "Preparing extraction…"
 msgstr ""
 
+#: crates/ox-app/src/window/archive_password.rs
+msgid "Password needed"
+msgstr ""
+
+#: crates/ox-app/src/window/archive_password.rs
+msgid "Password:"
+msgstr ""
+
+#: crates/ox-app/src/window/archive_password.rs crates/ox-core/src/archive/error.rs
+msgid "The password is incorrect. Try again."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/archive_password.rs
+msgid "“{name}” is password protected. Enter the password below."
+msgstr ""
+
 #: crates/ox-app/src/window/cache_folder.rs
 msgid "Cache disabled; this root’s indexed names were removed."
 msgstr ""
@@ -4700,6 +4840,10 @@ msgstr ""
 msgid "Close search"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/folder_search.rs
+msgid "Collection"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Copy"
 msgstr ""
@@ -4764,12 +4908,28 @@ msgstr ""
 msgid "Restore the selected items"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs
+msgid "Rotate left"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs
+msgid "Rotate right"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/folder_search.rs
 msgid "Search options"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
 msgid "See more"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Set as background"
+msgstr ""
+
+#: crates/ox-app/src/window/command_bar.rs
+msgid "Setting the desktop background is not available yet."
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
@@ -4911,10 +5071,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Select none"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
-msgid "Shortcut"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -5206,6 +5362,10 @@ msgid "Send to"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Set as desktop background"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Share with"
 msgstr ""
 
@@ -5386,7 +5546,15 @@ msgid "No matching items"
 msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
+msgid "No photos to show"
+msgstr ""
+
+#: crates/ox-app/src/window/empty_page.rs
 msgid "No shared folders found"
+msgstr ""
+
+#: crates/ox-app/src/window/empty_page.rs
+msgid "Photos in your Pictures folder show here."
 msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
@@ -5399,6 +5567,11 @@ msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
 msgid "Try again"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/empty_page.rs crates/ox-app/src/window/picker.rs
+msgid "{location} is unavailable. Make sure you are connected to the network and the server is turned on, and then try again."
 msgstr ""
 
 #: crates/ox-app/src/window/extract_into.rs
@@ -5546,12 +5719,12 @@ msgstr ""
 msgid "“{name}” is on a network share, a removable drive or a drive where every file can run, such as a Windows drive. Run it only if you trust where it came from."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/availability.rs
-msgid "A previous version is read-only."
+#: crates/ox-app/src/window/file_drop/targets.rs crates/ox-app/src/window/file_ops/availability.rs
+msgid "An archive is read-only. Extract it to add items."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
-msgid "An archive is read-only. Extract it to add items."
+msgid "A previous version is read-only."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
@@ -6025,7 +6198,7 @@ msgid "Always show icons, never thumbnails"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "Apply to Folders"
+msgid "Apply to F_olders"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
@@ -6037,15 +6210,15 @@ msgid "Browse folders"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
+msgid "C_lear"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
 msgid "Clear OpenXplorer history"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
 msgid "Click items as follows"
-msgstr ""
-
-#: crates/ox-app/src/window/folder_options.rs
-msgid "Display the full path in the title bar"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
@@ -6069,10 +6242,6 @@ msgid "Files and Folders"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "Folder Options"
-msgstr ""
-
-#: crates/ox-app/src/window/folder_options.rs
 msgid "Folder Views"
 msgstr ""
 
@@ -6081,19 +6250,15 @@ msgid "Hidden files and folders"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "Hide extensions for known file types"
+msgid "Open OpenXplorer _to:"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "Open OpenXplorer to:"
+msgid "Open each folder in its own _window"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "Open each folder in its own window"
-msgstr ""
-
-#: crates/ox-app/src/window/folder_options.rs
-msgid "Open each folder in the same window"
+msgid "Open each folder in the s_ame window"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
@@ -6105,15 +6270,7 @@ msgid "Privacy"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "Remember each folder's view settings"
-msgstr ""
-
-#: crates/ox-app/src/window/folder_options.rs
-msgid "Reset Folders"
-msgstr ""
-
-#: crates/ox-app/src/window/folder_options.rs
-msgid "Restore Defaults"
+msgid "Restore _Defaults"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
@@ -6126,10 +6283,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
 msgid "Show frequently used folders"
-msgstr ""
-
-#: crates/ox-app/src/window/folder_options.rs
-msgid "Show hidden files, folders, and drives"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
@@ -6180,6 +6333,10 @@ msgstr ""
 msgid "You can apply this view (such as Details or Icons) to all folders."
 msgstr ""
 
+#: crates/ox-app/src/window/folder_options.rs
+msgid "_Reset Folders"
+msgstr ""
+
 #: crates/ox-app/src/window/folder_pane/parts.rs
 msgid "This folder is empty."
 msgstr ""
@@ -6214,6 +6371,60 @@ msgstr ""
 
 #: crates/ox-app/src/window/folder_tree/menu.rs
 msgid "Show hidden folders"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/gallery.rs
+msgid "Could not rotate {name}: {error}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/gallery.rs
+msgid "Could not save Gallery's folders: {error}"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery.rs
+msgid "Manage collection"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery.rs
+msgid "Show all"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "Add a folder to Gallery"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "Choose which folders to see in Gallery"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "Default save location"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "Gallery Locations"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "Gallery locations"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "Manage your Gallery by adding or removing folders from locations across your PC. Folders added here will still be stored in their original locations."
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "Only folders on this computer can be added."
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "_Add…"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery_locations.rs
+msgid "_Remove"
 msgstr ""
 
 #: crates/ox-app/src/window/group_headings.rs
@@ -6968,6 +7179,10 @@ msgstr ""
 msgid "Empty"
 msgstr ""
 
+#: crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+msgid "Gallery"
+msgstr ""
+
 #: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Opened this session"
 msgstr ""
@@ -7705,10 +7920,6 @@ msgid "Decompression safety limit reached."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
-msgid "Encrypted ZIP members require an archive manager."
-msgstr ""
-
-#: crates/ox-core/src/archive/error.rs
 msgid "Invalid archive folder."
 msgstr ""
 
@@ -7717,7 +7928,7 @@ msgid "Open a network share before choosing it as an extraction destination."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
-msgid "Password-protected ZIPs need an external archive manager in this release."
+msgid "OpenXplorer cannot compress more than 1,000,000 items or a file that grows while it is compressed. Use an archive manager."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
@@ -7801,7 +8012,15 @@ msgid "This ZIP compression method needs an external archive manager."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
+msgid "This ZIP uses an encryption method OpenXplorer cannot open. Use an archive manager."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
 msgid "This archive is damaged or is not a TAR archive. Use an archive manager."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
+msgid "This archive is password protected. Enter its password to open it."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
@@ -7834,10 +8053,6 @@ msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
 msgid "ZIP directory is too large for the built-in viewer. Use an archive manager."
-msgstr ""
-
-#: crates/ox-core/src/archive/error.rs
-msgid "ZIP files over 4 GiB or with more than 65,535 items need an archive manager."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -7929,11 +8144,6 @@ msgstr ""
 msgid "File size"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/archive/zip/error.rs
-msgid "File {name} is encrypted, password required for extraction"
-msgstr ""
-
 #: crates/ox-core/src/archive/zip/error.rs
 msgid "Header offset"
 msgstr ""
@@ -8006,10 +8216,6 @@ msgstr ""
 
 #: crates/ox-core/src/entry/error.rs
 msgid "Only folders and network shares can be pinned to Quick access."
-msgstr ""
-
-#: crates/ox-core/src/entry/type_label.rs
-msgid "Application"
 msgstr ""
 
 #: crates/ox-core/src/entry/type_label.rs
@@ -8206,7 +8412,7 @@ msgstr ""
 msgid "Another item now has the staging folder's name. It was left in place."
 msgstr ""
 
-#: crates/ox-core/src/gio_node/local_delete.rs
+#: crates/ox-core/src/gio_node/local_delete.rs crates/ox-core/src/ops/recycle_bin_storage.rs
 msgid "Choose a file or folder to delete."
 msgstr ""
 
@@ -9913,12 +10119,12 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/update/error.rs
-msgid "GitHub could not check for updates (HTTP {status}). Try again later."
+msgid "GitHub could not provide the installer (HTTP {status}). Nothing was installed."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/update/error.rs
-msgid "GitHub could not provide the installer (HTTP {status}). Nothing was installed."
+msgid "GitHub refused the update check (HTTP {status}). Try again later."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

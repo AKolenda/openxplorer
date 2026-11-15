@@ -95,6 +95,7 @@ pub(super) fn sharing_panel(folder: PathBuf, usershares: Usershares) -> (gtk::Bo
     let path = path_rows.add(&ox_core::i18n::gettext("Network Path"), "");
     content.append(path_rows.widget());
     let share = push_button(&ox_core::i18n::gettext("Share..."));
+    super::window::give_access_key(&share, 's');
     content.append(&share);
     page.append(&network);
 
@@ -111,6 +112,7 @@ pub(super) fn sharing_panel(folder: PathBuf, usershares: Usershares) -> (gtk::Bo
     advanced_content.append(&icons::image(Icon::ShieldLock, 16));
     advanced_content.append(&gtk::Label::new(Some(&advanced_label)));
     advanced.set_child(Some(&advanced_content));
+    super::window::give_access_key(&advanced, 'd');
     advanced.update_property(&[gtk::accessible::Property::Label(&advanced_label)]);
     content.append(&advanced);
     page.append(&advanced_group);

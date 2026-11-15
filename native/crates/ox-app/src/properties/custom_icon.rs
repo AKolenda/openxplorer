@@ -118,6 +118,8 @@ pub(super) fn customize_tab(
     let buttons = gtk::Box::builder().css_classes(["properties-button-row"]).build();
     let change = push_button(&ox_core::i18n::gettext("Change Icon..."));
     let restore = push_button(&ox_core::i18n::gettext("Restore Default"));
+    super::window::give_access_key(&change, 'i');
+    super::window::give_access_key(&restore, 't');
     buttons.append(&change);
     buttons.append(&restore);
     text.append(&buttons);

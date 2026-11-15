@@ -539,7 +539,10 @@ fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
     assert_eq!(name_top, Some(96 + 8), "the name starts 8 pixels under the icon");
 }
 
-/// Choosing a view starts it from the top and saves it; Explorer's keys
+/// Choosing a view while the keyboard is on no item but the first, and
+/// nothing is selected, starts it from the top and saves it (an item
+/// that has the keyboard stays in view: `selection.rs`,
+/// `changing_the_view_keeps_the_focused_item_in_view`); Explorer's keys
 /// choose Details (Ctrl+Shift+6) and the icon sizes (Ctrl+Shift+1 to 4),
 /// and Alt+Shift+P opens the details pane.
 ///
@@ -551,9 +554,12 @@ fn a_chosen_view_starts_at_the_top_and_has_explorers_keys() {
     // The Python app's view key is saved while every folder shares one.
     test.share_one_view();
     let pane = test.window.folder_pane();
-    let last = pane.model().n_items() - 1;
-    pane.reveal(last);
+    pane.restore_scroll_position(2000.0);
     wait_until("the list to scroll", || pane.scroll_position() > 0.0);
+    assert!(
+        matches!(pane.focused_position(), None | Some(0)),
+        "the keyboard is on no item but the first"
+    );
     test.activate("view", Some("small"));
     wait_until("the icons to start at the top", || pane.scroll_position() == 0.0);
     wait_until("the view to be saved", || {

@@ -64,10 +64,41 @@ const ITEM_WIDGET_NAMES: [&str; 2] = ["row", "child"];
 /// Content list headings among the items (VIEW-071).
 pub(crate) type PositionMap = Rc<dyn Fn(u32) -> Option<u32>>;
 
+/// The place a view keeps for one of Gallery's tiles (HOME-026), which
+/// lays its tiles out itself rather than in a GTK list: the item it shows
+/// now and that item's position, both `None` while it shows none.
+#[derive(Debug, Default)]
+pub(crate) struct TileSlot {
+    shown: RefCell<Option<(u32, FileItem)>>,
+}
+
+impl TileSlot {
+    /// Makes the slot show `item` at `position`, or nothing.
+    pub(crate) fn show(&self, shown: Option<(u32, FileItem)>) {
+        self.shown.replace(shown);
+    }
+
+    /// The position the slot shows.
+    pub(crate) fn position(&self) -> Option<u32> {
+        self.shown.borrow().as_ref().map(|(position, _)| *position)
+    }
+
+    /// The item the slot shows.
+    pub(crate) fn item(&self) -> Option<FileItem> {
+        self.shown.borrow().as_ref().map(|(_, item)| item.clone())
+    }
+}
+
+/// What shows a cell: a list item of a GTK list, or a tile slot.
+enum Showing {
+    ListItem(glib::WeakRef<gtk::ListItem>),
+    Slot(std::rc::Weak<TileSlot>),
+}
+
 /// A cell's content widget and the list item that shows it.
 struct CellOwner {
     cell: glib::WeakRef<gtk::Widget>,
-    list_item: glib::WeakRef<gtk::ListItem>,
+    list_item: Showing,
     /// Maps the list item's position, for a view that lists more than
     /// the items.
     positions: Option<PositionMap>,
@@ -78,7 +109,7 @@ impl std::fmt::Debug for CellOwner {
         formatter
             .debug_struct("CellOwner")
             .field("cell", &self.cell)
-            .field("list_item", &self.list_item)
+            .field("slot", &matches!(self.list_item, Showing::Slot(_)))
             .field("maps_positions", &self.positions.is_some())
             .finish()
     }
@@ -87,7 +118,32 @@ impl std::fmt::Debug for CellOwner {
 impl CellOwner {
     /// True while both the cell and its list item exist.
     fn is_alive(&self) -> bool {
-        self.cell.upgrade().is_some() && self.list_item.upgrade().is_some()
+        self.cell.upgrade().is_some()
+            && match &self.list_item {
+                Showing::ListItem(list_item) => list_item.upgrade().is_some(),
+                Showing::Slot(slot) => slot.upgrade().is_some(),
+            }
+    }
+
+    /// The GTK list item that shows the cell, if one does.
+    fn gtk_list_item(&self) -> Option<gtk::ListItem> {
+        match &self.list_item {
+            Showing::ListItem(list_item) => list_item.upgrade(),
+            Showing::Slot(_) => None,
+        }
+    }
+
+    /// The item shown and its position in its view.
+    fn shown(&self) -> Option<(u32, FileItem)> {
+        match &self.list_item {
+            Showing::ListItem(list_item) => {
+                let list_item = list_item.upgrade()?;
+                let position = bound_position(&list_item)?;
+                let item = list_item.item().and_downcast::<FileItem>()?;
+                Some((position, item))
+            }
+            Showing::Slot(slot) => slot.upgrade()?.shown.borrow().clone(),
+        }
     }
 
     /// True when `widget` is this owner's cell.
@@ -97,8 +153,7 @@ impl CellOwner {
 
     /// The cell and the item its list item shows, while it shows one.
     fn bound_cell(&self) -> Option<(gtk::Widget, FileItem)> {
-        let list_item = self.list_item.upgrade()?;
-        let item = list_item.item().and_downcast::<FileItem>()?;
+        let (_, item) = self.shown()?;
         let cell = self.cell.upgrade()?;
         Some((cell, item))
     }
@@ -114,8 +169,7 @@ impl CellOwner {
     /// The position of the item the list item shows, or `None` while it
     /// shows none.
     fn bound_position(&self) -> Option<u32> {
-        let list_item = self.list_item.upgrade()?;
-        let position = bound_position(&list_item)?;
+        let (position, _) = self.shown()?;
         match &self.positions {
             Some(positions) => positions(position),
             None => Some(position),
@@ -199,8 +253,23 @@ impl CellOwners {
         }
         owners.push(CellOwner {
             cell: cell.as_ref().downgrade(),
-            list_item: list_item.downgrade(),
+            list_item: Showing::ListItem(list_item.downgrade()),
             positions,
+        });
+    }
+
+    /// Records that `cell` is the content widget of Gallery's tile
+    /// `slot`, which shows the listing's positions as they are.
+    pub(crate) fn register_slot(&self, cell: &impl IsA<gtk::Widget>, slot: &Rc<TileSlot>) {
+        let mut owners = self.owners.borrow_mut();
+        if owners.len() >= (2 * self.alive_after_pruning.get()).max(MIN_OWNERS_BEFORE_PRUNING) {
+            owners.retain(CellOwner::is_alive);
+            self.alive_after_pruning.set(owners.len());
+        }
+        owners.push(CellOwner {
+            cell: cell.as_ref().downgrade(),
+            list_item: Showing::Slot(Rc::downgrade(slot)),
+            positions: None,
         });
     }
 
@@ -229,7 +298,7 @@ impl CellOwners {
     pub(crate) fn item_of(&self, cell: &impl IsA<gtk::Widget>) -> Option<FileItem> {
         let owners = self.owners.borrow();
         let owner = owners.iter().find(|owner| owner.has_cell(cell.as_ref()))?;
-        owner.list_item.upgrade()?.item().and_downcast::<FileItem>()
+        owner.shown().map(|(_, item)| item)
     }
 
     /// Styles `cell`, which shows `item`: dimmed while a cut has `item` on
@@ -493,7 +562,7 @@ impl CellOwners {
             .iter()
             .filter_map(|owner| {
                 let (cell, item) = owner.bound_cell()?;
-                Some((owner.list_item.upgrade()?, cell, item))
+                Some((owner.gtk_list_item()?, cell, item))
             })
             .collect();
         let words = self.marked_words();
@@ -516,7 +585,7 @@ impl CellOwners {
             .owners
             .borrow()
             .iter()
-            .filter_map(|owner| owner.list_item.upgrade())
+            .filter_map(CellOwner::gtk_list_item)
             .filter(|list_item| list_item.item().is_some())
             .map(|list_item| list_item.accessible_label().to_string())
             .collect();

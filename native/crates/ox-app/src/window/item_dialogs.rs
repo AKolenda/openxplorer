@@ -420,11 +420,12 @@ impl BrowserWindow {
         self.dialog_layer().present(frame);
     }
 
-    /// After a window dialog closed, the control that had the keyboard
-    /// when it opened, `opener`, has it again, such as File name after
-    /// Confirm Save As; else the folder takes it.
+    /// After a window dialog closed: in an Open or Save dialog File name,
+    /// where the choice asked about was typed, has the keyboard again;
+    /// else the control that had it when the dialog opened, `opener`
+    /// (ACC-005); else the folder takes it.
     fn dialog_closed(&self, opener: Option<gtk::Widget>) {
-        if self.dialog_layer().shown().is_some() {
+        if self.dialog_layer().shown().is_some() || self.give_keyboard_back_to_name() {
             return;
         }
         let back = opener

@@ -32,16 +32,16 @@ use ox_core::transfer::Cancellation;
 use crate::icons::{self, Art, ArtImage, Icon};
 use crate::window::BrowserWindow;
 
-/// The width of a Properties window, as Windows 11 draws it at 100 %.
-const WINDOW_WIDTH: i32 = 400;
-/// The height of every Properties window under its title bar, whatever
-/// it shows: Windows sizes a property sheet once, for its largest page,
-/// and never changes it. This holds the tallest page here, a folder's
-/// Customize, under two rows of tabs (a standard folder's six tabs, or
-/// five in a wider font) at the default text size in Noto Sans; shorter
-/// pages leave room at the bottom, as in Windows, and taller ones (at a
-/// larger text size) scroll.
-const WINDOW_HEIGHT: i32 = 556;
+/// The width of a Properties window's content: with its border, the
+/// window is 380 logical pixels wide, as Windows 11 draws Properties at
+/// 100 %.
+const WINDOW_WIDTH: i32 = 378;
+/// The height of every Properties window, its title bar and border
+/// included, whatever it shows: Windows sizes a property sheet once and
+/// never changes it. Pages taller than the room under the tabs, as a
+/// folder's Customize under two rows of tabs or any page at a larger text
+/// size, scroll inside it; shorter pages leave room at the bottom.
+const WINDOW_HEIGHT: i32 = 520;
 /// The space around the tabs and their page (`.properties-notebook`).
 const PAGE_MARGIN: i32 = 11;
 /// The size of the item's picture in the title bar.
@@ -276,10 +276,13 @@ impl PropertiesWindow {
         tab_area.remove(&imp.notebook);
         imp.scroller.set_child(Some(&imp.notebook));
         tab_area.append(&imp.scroller);
-        let height = imp.tallest.get().map_or(WINDOW_HEIGHT, |tallest| {
-            WINDOW_HEIGHT.min(tallest - self.title_bar_height() - 2)
-        });
-        holder.set_height(height);
+        // On a short screen it is held within the screen, its border
+        // included.
+        let height = imp
+            .tallest
+            .get()
+            .map_or(WINDOW_HEIGHT, |tallest| WINDOW_HEIGHT.min(tallest - 2));
+        holder.set_height(height - self.title_bar_height());
     }
 
     /// The title bar's height.
@@ -291,6 +294,11 @@ impl PropertiesWindow {
     /// The width of every Properties window, its border included.
     #[cfg(test)]
     pub(crate) const WIDTH: i32 = WINDOW_WIDTH + 2;
+
+    /// The height of every Properties window, its title bar and border
+    /// included.
+    #[cfg(test)]
+    pub(crate) const HEIGHT: i32 = WINDOW_HEIGHT;
 
     fn build(&self) {
         let imp = self.imp();
@@ -414,6 +422,7 @@ impl PropertiesWindow {
             button.add_css_class("properties-button");
             footer.append(button);
         }
+        give_access_key(&imp.apply, 'a');
         imp.ok.add_css_class("suggested-action");
         imp.apply.set_sensitive(false);
         self.set_default_widget(Some(&imp.ok));
@@ -530,7 +539,7 @@ impl PropertiesWindow {
         // A window of Windows' fixed size is held within the screen too,
         // its title bar and border included, its tabs scrolling inside it.
         if let Some(holder) = self.holder().filter(|holder| holder.height() > 0) {
-            holder.set_height(WINDOW_HEIGHT.min(height - self.title_bar_height() - 2));
+            holder.set_height(WINDOW_HEIGHT.min(height - 2) - self.title_bar_height());
         }
     }
 
@@ -787,12 +796,16 @@ impl PropertiesWindow {
         let imp = self.imp();
         [&imp.ok, &imp.cancel, &imp.apply]
             .into_iter()
-            .find(|button| button.label().as_deref() == Some(label))
+            .find(|button| {
+                button
+                    .label()
+                    .is_some_and(|text| crate::test_support::harness::without_mnemonic(&text) == label)
+            })
             .cloned()
             .unwrap_or_else(|| panic!("the window has a {label} button"))
     }
 
-    /// The labels of the footer buttons shown, for tests.
+    /// The labels of the footer buttons shown, as they read, for tests.
     #[cfg(test)]
     pub(crate) fn button_labels(&self) -> Vec<String> {
         let imp = self.imp();
@@ -800,7 +813,7 @@ impl PropertiesWindow {
             .iter()
             .filter(|button| button.is_visible())
             .filter_map(|button| button.label())
-            .map(String::from)
+            .map(|label| crate::test_support::harness::without_mnemonic(&label))
             .collect()
     }
 }
@@ -925,6 +938,63 @@ pub(crate) fn wrap_check_label(check: &gtk::CheckButton) {
         }
         child = widget.next_sibling();
     }
+}
+
+/// `label` with `key` as its access key, underlined: the first `key` in
+/// it, in either case, or `(key)` after it when it has none, as Windows'
+/// translations add a key their words lack ("表示(V)"). Underscores of the
+/// label itself stay plain.
+pub(crate) fn with_access_key(label: &str, key: char) -> String {
+    let escaped = label.replace('_', "__");
+    let at = escaped
+        .char_indices()
+        .find(|(_, character)| character.to_lowercase().eq(key.to_lowercase()))
+        .map(|(index, _)| index);
+    match at {
+        Some(index) => format!("{}_{}", &escaped[..index], &escaped[index..]),
+        None => format!("{escaped} (_{})", key.to_uppercase()),
+    }
+}
+
+/// Gives `control`, a button or a check box, the access key `key`, as
+/// Windows' Properties underline one letter of each control: Alt and the
+/// letter press the button or tick the box while its tab shows. A button
+/// whose text is a label inside it ([`glyph_button`]) underlines that.
+pub(crate) fn give_access_key(control: &impl IsA<gtk::Widget>, key: char) {
+    let control = control.upcast_ref::<gtk::Widget>();
+    if let Some(check) = control.downcast_ref::<gtk::CheckButton>() {
+        if let Some(label) = check.label() {
+            check.set_label(Some(&with_access_key(&label, key)));
+            check.set_use_underline(true);
+        }
+        return;
+    }
+    if let Some(button) = control.downcast_ref::<gtk::Button>() {
+        if let Some(label) = button.label() {
+            button.set_label(&with_access_key(&label, key));
+            button.set_use_underline(true);
+            return;
+        }
+    }
+    if let Some(label) = first_label(control) {
+        label.set_text_with_mnemonic(&with_access_key(&label.text(), key));
+        label.set_mnemonic_widget(Some(control));
+    }
+}
+
+/// The first label inside `widget`, depth first.
+fn first_label(widget: &gtk::Widget) -> Option<gtk::Label> {
+    let mut child = widget.first_child();
+    while let Some(current) = child {
+        if let Ok(label) = current.clone().downcast::<gtk::Label>() {
+            return Some(label);
+        }
+        if let Some(label) = first_label(&current) {
+            return Some(label);
+        }
+        child = current.next_sibling();
+    }
+    None
 }
 
 /// A wrapped paragraph of plain text.

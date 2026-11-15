@@ -394,6 +394,11 @@ impl SignInDialog {
         error.is_visible().then(|| error.text().to_string())
     }
 
+    /// What the user name field holds.
+    pub(crate) fn username_text(&self) -> String {
+        self.imp().username_entry.text().to_string()
+    }
+
     /// What the password field holds.
     pub(crate) fn password_text(&self) -> String {
         self.imp().password_entry.text().to_string()

@@ -227,6 +227,12 @@ impl Skin {
     }
 
     /// Uses the desktop's font, or the Windows font stack, and redraws text.
+    /// Whether text uses the desktop's font, for tests.
+    #[cfg(test)]
+    pub(crate) fn uses_desktop_font(&self) -> bool {
+        self.imp().uses_desktop_font.get()
+    }
+
     pub(crate) fn set_uses_desktop_font(&self, uses_desktop_font: bool) {
         if self.imp().uses_desktop_font.replace(uses_desktop_font) != uses_desktop_font {
             self.draw_text();

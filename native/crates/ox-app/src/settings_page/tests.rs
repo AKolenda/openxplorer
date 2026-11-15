@@ -470,6 +470,39 @@ fn typing_on_the_page_starts_a_settings_search() {
     assert_eq!(capture, Some(settings.page.clone().upcast()));
 }
 
+/// Typing on the page while the category list has the keyboard starts a
+/// search and moves the keyboard into the search box, with nothing
+/// selected and the cursor after the typed text, so the rest of a phrase
+/// such as "hidden files", its space too, goes on into the search instead
+/// of choosing a category, which would end the search.
+///
+/// parity: SET-019, SET-004, ACC-006
+#[gtk::test]
+fn typing_on_the_category_list_moves_the_keyboard_into_the_search() {
+    let settings = SettingsTest::open();
+    let entry = settings.page.imp().search_entry.get();
+    settings.page.focus_chosen_category();
+    wait_until("the category list to have the keyboard", || {
+        settings
+            .page
+            .imp()
+            .category_list
+            .state_flags()
+            .contains(gtk::StateFlags::FOCUS_WITHIN)
+    });
+    // What the search box's key capture does with the first key typed.
+    entry.set_text("hidden");
+    wait_until("the search box to have the keyboard", || {
+        entry.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN)
+    });
+    assert_eq!(entry.selection_bounds(), None, "nothing typed is selected");
+    assert_eq!(entry.position(), 6, "the cursor is after the typed text");
+    assert!(
+        !settings.result_categories().is_empty(),
+        "the search shows its results"
+    );
+}
+
 /// parity: SET-019, SET-004
 #[gtk::test]
 fn enter_in_the_search_jumps_to_the_first_match() {
@@ -798,6 +831,34 @@ fn the_compact_view_switch_saves_the_choice() {
     });
 }
 
+/// "Use the desktop font" stays on when turned on, saves the choice and
+/// draws text in the desktop's font; turned off, it saves that too. It
+/// used to spring back off at once: the switch told the shared skin
+/// before the choice was saved, and the skin's change showed the page the
+/// unsaved preference again.
+///
+/// parity: LOOK-025
+#[gtk::test]
+fn the_desktop_font_switch_stays_on_and_saves_the_choice() {
+    let settings = SettingsTest::open();
+    let switch = switch_of(&settings.row("Use the desktop font"));
+    assert!(!switch.is_active(), "off by default");
+
+    switch.set_active(true);
+    wait_until("the desktop font to be saved", || {
+        settings.saved_preferences().desktop_font
+    });
+    assert!(switch.is_active(), "the switch stays on");
+    wait_until("text to use the desktop font", || skin().uses_desktop_font());
+
+    switch.set_active(false);
+    wait_until("the Windows font to be saved", || {
+        !settings.saved_preferences().desktop_font
+    });
+    assert!(!switch.is_active(), "the switch stays off");
+    wait_until("text to use the Windows font", || !skin().uses_desktop_font());
+}
+
 /// Settings > Search > "Show the search filter bar" is off by default, so
 /// searches show Windows 11's Search options; turning it on saves the
 /// choice and the window's next search shows the filter bar.
@@ -853,6 +914,50 @@ fn the_replaced_files_switch_is_on_by_default_and_saves_only_its_turning_off() {
     assert!(
         !stored.contains("recycleReplacedFiles"),
         "stored only when off: {stored}"
+    );
+}
+
+/// "Show thumbnails in network folders" is off by default, as Windows 11
+/// File Explorer shows only icons in network folders, says so in its ⓘ,
+/// and is stored only once turned on: turning it off again leaves the
+/// settings file as a new installation's.
+///
+/// parity: VIEW-058
+#[gtk::test]
+fn the_network_thumbnails_switch_is_off_by_default_and_saved_only_when_changed() {
+    let settings = SettingsTest::open();
+    let row = settings.row("Show thumbnails in network folders");
+    let details = row.info().expect("the row explains itself").details();
+    assert!(details.contains("as in Windows"), "{details}");
+    assert!(details.contains("type icons"), "{details}");
+    let switch = switch_of(&row);
+    assert!(!switch.is_active(), "off by default");
+    let settings_file = settings.test.settings_directory().join("settings.json");
+    let stored = || std::fs::read_to_string(&settings_file).unwrap_or_default();
+    assert!(
+        !stored().contains("remotePreviews"),
+        "nothing stored: {}",
+        stored()
+    );
+
+    switch.set_active(true);
+    wait_until("the choice to be saved", || {
+        settings.saved_preferences().view_options.remote_previews
+    });
+    assert!(
+        stored().contains("\"remotePreviews\": true"),
+        "stored when on: {}",
+        stored()
+    );
+
+    switch.set_active(false);
+    wait_until("the choice to be saved", || {
+        !settings.saved_preferences().view_options.remote_previews
+    });
+    assert!(
+        !stored().contains("remotePreviews"),
+        "the default is not stored: {}",
+        stored()
     );
 }
 
@@ -1073,4 +1178,198 @@ fn default_apps_reads_which_app_opens_each_route() {
         "the card states the result: {}",
         card.title()
     );
+}
+
+/// The words a Windows user types for a folder option find the setting
+/// or Folder Options: Windows' own labels ("Show hidden files, folders,
+/// and drives", "Hide extensions for known file types", "Display the
+/// full path in the title bar"), shorter words such as "file extensions",
+/// and Folder Options' other choices, which its row lists.
+///
+/// parity: SET-019, SET-004
+#[gtk::test]
+fn windows_folder_option_words_find_their_settings() {
+    let settings = SettingsTest::open();
+    let cases: [(&str, &str); 16] = [
+        ("hidden files", "Show hidden files, folders, and drives"),
+        (
+            "show hidden files, folders, and drives",
+            "Show hidden files, folders, and drives",
+        ),
+        ("file extensions", "Hide extensions for known file types"),
+        (
+            "hide extensions for known file types",
+            "Hide extensions for known file types",
+        ),
+        (
+            "display the full path in the title bar",
+            "Display the full path in the title bar",
+        ),
+        (
+            "remember each folder's view settings",
+            "Remember each folder's view settings",
+        ),
+        ("open file explorer to", "Open OpenXplorer to"),
+        ("this pc", "Open OpenXplorer to"),
+        (
+            "restore previous folder windows",
+            "Reopen my tabs when OpenXplorer starts",
+        ),
+        ("folder options", "Folder Options"),
+        ("status bar", "Folder Options"),
+        ("open each folder in its own window", "Folder Options"),
+        ("single-click", "Folder Options"),
+        ("clear file explorer history", "Folder Options"),
+        ("preview pane", "Folder Options"),
+        ("always search file names and contents", "Folder Options"),
+    ];
+    for (typed, row) in cases {
+        settings.page.search(typed);
+        let shown = settings.shown_rows();
+        assert!(shown.contains(&row), "{typed:?} finds {row:?}: {shown:?}");
+    }
+}
+
+/// Files & folders > Folder views shows and changes the hidden files and
+/// the file name extensions that Ctrl+H, View > Show and Folder Options
+/// change, in step with them, and its Open Folder Options button opens
+/// Folder Options.
+///
+/// parity: VIEW-023, VIEW-069, VIEW-020
+#[gtk::test]
+fn folder_views_rows_follow_hidden_files_and_extensions_and_open_folder_options() {
+    let settings = SettingsTest::open();
+    let hidden = switch_of(&settings.row("Show hidden files, folders, and drives"));
+    let extensions = switch_of(&settings.row("Hide extensions for known file types"));
+    assert!(!hidden.is_active(), "hidden files are not shown by default");
+    assert!(extensions.is_active(), "known extensions are hidden by default");
+
+    hidden.set_active(true);
+    extensions.set_active(false);
+    wait_until("both choices to be saved", || {
+        let saved = settings.saved_preferences();
+        saved.show_hidden && saved.show_extensions
+    });
+    let window = &settings.test.window;
+    wait_until("the window to follow", || {
+        window.lookup_action("hidden").and_then(|action| action.state()) == Some(true.to_variant())
+    });
+
+    // Ctrl+H and View > Show > File name extensions, elsewhere.
+    settings.test.activate("hidden", None);
+    settings.test.activate("file-name-extensions", None);
+    wait_until("the rows to follow the window", || {
+        !hidden.is_active() && extensions.is_active()
+    });
+
+    let open = settings
+        .row("Folder Options")
+        .controls()
+        .into_iter()
+        .find_map(|control| control.downcast::<gtk::Button>().ok())
+        .expect("the row has a button");
+    open.emit_clicked();
+    wait_until("Folder Options to open", || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .any(|toplevel| toplevel.is_visible() && toplevel.has_css_class("ox-folder-options"))
+    });
+}
+
+/// Every switch of the pages that only choose how the app looks and
+/// behaves (not Default apps or About, whose switches change the desktop,
+/// browser profiles or updates) saves its change to the settings file at
+/// once, still shows it after the file is read again, as after a restart,
+/// and turned back leaves the file exactly as it was.
+///
+/// parity: SET-019
+#[gtk::test]
+fn every_preference_switch_saves_persists_and_turns_back_exactly() {
+    const IN_THE_SEARCH_CACHE: [&str; 3] = [
+        "Cache this folder for search",
+        "Index pinned folders automatically",
+        "Index frequently opened folders (experimental)",
+    ];
+    let settings = SettingsTest::open();
+    let file = settings
+        .test
+        .settings_directory()
+        .join(ox_core::settings::Settings::FILE_NAME);
+    let saved = || std::fs::read_to_string(&file).unwrap_or_default();
+    let categories = [
+        Category::General,
+        Category::Appearance,
+        Category::FilesAndFolders,
+        Category::Archives,
+        Category::Confirmations,
+        Category::Search,
+    ];
+    // The file is written by the first change; from then on each switch
+    // must leave it exactly as it was.
+    let compact = switch_of(&settings.row("Compact view"));
+    compact.set_active(!compact.is_active());
+    wait_until("the settings file to be written", || !saved().is_empty());
+    let first = saved();
+    compact.set_active(!compact.is_active());
+    wait_until("Compact view to be saved again", || saved() != first);
+    let mut checked = Vec::new();
+    for category in categories {
+        for row in settings.page.category_section(category).rows() {
+            let Some(switch) = row
+                .controls()
+                .into_iter()
+                .find_map(|control| control.downcast::<gtk::Switch>().ok())
+            else {
+                continue;
+            };
+            let title = row.text().title;
+            // The search cache keeps these, not the settings file, and
+            // tests/indexing.rs tests them.
+            if !switch.is_sensitive() || IN_THE_SEARCH_CACHE.contains(&title) {
+                continue;
+            }
+            let before = saved();
+            let was = switch.is_active();
+            switch.set_active(!was);
+            wait_until(&format!("{title} to be saved"), || saved() != before);
+            // Read again from the file, as after a restart.
+            settings.test.context.reload_settings();
+            wait_until(&format!("{title} to show what was saved"), || {
+                settings.page.show_current_preferences();
+                switch.is_active() != was
+            });
+            switch.set_active(was);
+            wait_until(&format!("{title} to be turned back"), || saved() == before);
+            checked.push(title);
+        }
+    }
+    assert!(checked.len() >= 30, "{checked:?}");
+}
+
+/// Every category's page, light and dark, at a narrow window's width,
+/// for the pictures `$OX_NATIVE_CAPTURE_DIR` collects (nothing is saved
+/// without it); each page shows its rows.
+///
+/// parity: SET-019
+#[gtk::test]
+fn every_settings_page_is_captured_light_and_dark() {
+    use crate::test_support::harness::capture;
+
+    let _theme = ThemeGuard::keep();
+    let settings = SettingsTest::open();
+    settings.test.window.set_default_size(760, 540);
+    for theme in ["light", "dark"] {
+        settings.test.activate("theme", Some(theme));
+        for category in Category::ALL {
+            settings.page.show_view(SettingsView::Category(category));
+            assert!(
+                !settings.page.category_section(category).rows().is_empty(),
+                "{category:?} has rows"
+            );
+            capture(
+                &settings.test.window,
+                &format!("settings-{}-{theme}.png", category.as_str()),
+            );
+        }
+    }
 }

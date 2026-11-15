@@ -319,6 +319,38 @@ pub(in crate::window) fn view_menu() -> Vec<MenuEntry> {
     entries
 }
 
+/// Gallery's View menu, as Windows 11 File Explorer's Gallery has it: the
+/// four icon sizes, Medium icons first chosen; the Details and Preview
+/// panes; and Show (HOME-031). Gallery has no other layout.
+pub(in crate::window) fn gallery_view_menu() -> Vec<MenuEntry> {
+    let mut entries: Vec<MenuEntry> = IconSize::NAMED
+        .into_iter()
+        .filter_map(|size| {
+            let label = size.label()?;
+            Some(view_item(label, icon_size_glyph(size), FolderView::Icons(size)))
+        })
+        .collect();
+    entries.extend([
+        MenuEntry::Divider,
+        MenuItem::toggle(
+            &gettext("Details pane"),
+            Icon::PanelRight,
+            WindowAction::DetailsPane,
+        )
+        .with_dot_mark()
+        .into(),
+        MenuItem::toggle(
+            &gettext("Preview pane"),
+            Icon::PanelRightGallery,
+            WindowAction::PreviewPane,
+        )
+        .with_dot_mark()
+        .into(),
+        MenuItem::submenu(&gettext("Show"), Icon::Eye, WindowAction::Hidden, show_menu()).into(),
+    ]);
+    entries
+}
+
 /// View > Show, as Windows 11 File Explorer's: the navigation pane,
 /// Compact view, item check boxes, File name extensions and Hidden items,
 /// the hidden-files toggle that Ctrl+H and Folder Options change too

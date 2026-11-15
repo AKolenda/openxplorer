@@ -100,7 +100,7 @@ impl<'a> Unpacking<'a> {
     ) -> Result<(), ArchiveError> {
         let member = &archive.members()[index];
         let (name, declared_size) = (member.name.clone(), member.size);
-        let mut source = archive.open_member(index)?;
+        let mut source = archive.open_member(index, self.extractor.password.as_ref())?;
         let mut output = self.extractor.output.create(file, self.cancel)?;
         let mut block = vec![0u8; BLOCK_BYTES];
         self.written.start_member();

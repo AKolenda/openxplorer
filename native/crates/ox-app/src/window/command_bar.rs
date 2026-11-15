@@ -40,7 +40,9 @@ use super::window_action::WindowAction;
 
 use menus::{appearance_items, more_menu};
 pub(super) use menus::{disconnect_network_drive, FolderPin, MoreMenuState, MorePlace, NetworkDrive};
-pub(super) use menus::{group_by_menu, new_menu, search_options_menu, sort_menu, view_menu};
+pub(super) use menus::{
+    gallery_view_menu, group_by_menu, new_menu, search_options_menu, sort_menu, view_menu,
+};
 
 /// The glyph of an icon-only command: 16 pixels, as Windows 11 draws its
 /// command bar (ui-spec.md I01; the web app's were 18).
@@ -178,6 +180,19 @@ mod imp {
         pub(super) recycle_bin: OnceCell<super::RecycleBinCommands>,
         /// Search options and Close search, shown while searching.
         pub(super) search_commands: OnceCell<super::SearchCommands>,
+        /// Gallery's Collection menu, shown in Gallery (HOME-025).
+        pub(super) collection: OnceCell<(gtk::MenuButton, crate::window::menu_popover::MenuPopover)>,
+        /// What the Collection menu lists now, to build it only on change.
+        pub(super) collection_key: RefCell<String>,
+        /// Sort ▾, grayed in Gallery, and View ▾, whose menu Gallery has
+        /// its own of (HOME-030, HOME-031).
+        pub(super) sort_button: OnceCell<gtk::MenuButton>,
+        pub(super) view_popover: OnceCell<crate::window::menu_popover::MenuPopover>,
+        /// Whether View shows Gallery's menu now.
+        pub(super) gallery_menus: Cell<bool>,
+        /// Set as background, Rotate left and Rotate right after a
+        /// separator, shown in Gallery while photos are selected.
+        pub(super) photo_commands: OnceCell<Vec<gtk::Widget>>,
         /// The "…" menu, which offers Map network drive only in This
         /// PC and Network.
         pub(super) more_menu: OnceCell<crate::window::menu_popover::MenuPopover>,
@@ -282,18 +297,51 @@ impl CommandBar {
         imp.extract_button
             .set(extract)
             .expect("constructed runs once per object");
-        group.append(&text_menu_button(
+        let sort = text_menu_button(
             &ox_core::i18n::gettext("Sort"),
             Icon::ArrowSort,
             "sort-command",
             sort_menu(),
-        ));
-        group.append(&text_menu_button(
+        );
+        group.append(&sort);
+        imp.sort_button
+            .set(sort)
+            .expect("constructed runs once per object");
+        let view = text_menu_button(
             &ox_core::i18n::gettext("View"),
             Icon::Grid,
             "view-command",
             view_menu(),
-        ));
+        );
+        group.append(&view);
+        imp.view_popover
+            .set(
+                view.popover()
+                    .and_downcast::<MenuPopover>()
+                    .expect("View has its menu"),
+            )
+            .expect("constructed runs once per object");
+        let collection_menu = MenuPopover::new(Vec::new());
+        let collection_label = ox_core::i18n::gettext("Collection");
+        let collection = gtk::MenuButton::builder()
+            .child(&text_menu_content(&collection_label, Icon::Image))
+            .popover(&collection_menu)
+            .valign(gtk::Align::Center)
+            .css_classes(["command", "text-command", "collection-command"])
+            .visible(false)
+            .build();
+        name_menu_button(&collection, &collection_label);
+        group.append(&collection);
+        imp.collection
+            .set((collection, collection_menu))
+            .expect("constructed runs once per object");
+        let photo_commands = photo_commands();
+        for command in &photo_commands {
+            group.append(command);
+        }
+        imp.photo_commands
+            .set(photo_commands)
+            .expect("constructed runs once per object");
         let recycle_bin = RecycleBinCommands::new();
         group.append(&recycle_bin.separator);
         group.append(&recycle_bin.empty);
@@ -499,6 +547,111 @@ impl CommandBar {
         }
     }
 
+    /// Shows Gallery's Collection menu with `entries` while the window
+    /// shows Gallery, or hides it for `None` (HOME-025).
+    /// `key` names what `entries` list; the menu is rebuilt only when it
+    /// changes.
+    pub(super) fn show_collection(&self, shown: Option<(String, Vec<MenuEntry>)>) {
+        let Some((button, menu)) = self.imp().collection.get() else {
+            return;
+        };
+        button.set_visible(shown.is_some());
+        match shown {
+            Some((key, entries)) => {
+                if *self.imp().collection_key.borrow() != key {
+                    menu.set_entries(entries);
+                    self.imp().collection_key.replace(key);
+                }
+            }
+            None => button.popdown(),
+        }
+    }
+
+    /// The commands shown in the bar's file group, in order, each named
+    /// by its label or, for an icon command, its tooltip without the
+    /// shortcut, and whether it can be used now; for tests.
+    #[cfg(test)]
+    pub(super) fn shown_commands(&self) -> Vec<(String, bool)> {
+        crate::window::widget_tree::children(&*self.imp().file_commands)
+            .filter(|widget| widget.has_css_class("command") && widget.is_visible())
+            .filter_map(|widget| {
+                // A menu button's own content, not its menu's.
+                let content = widget
+                    .downcast_ref::<gtk::MenuButton>()
+                    .and_then(gtk::MenuButton::child)
+                    .or_else(|| widget.downcast_ref::<gtk::Button>().and_then(ButtonExt::child));
+                let tooltip = widget.tooltip_text().map(|tooltip| tooltip.to_string());
+                let named = EDIT_COMMANDS
+                    .iter()
+                    .find(|command| {
+                        tooltip.as_deref() == Some(ox_core::i18n::gettext(command.tooltip).as_str())
+                    })
+                    .map(|command| ox_core::i18n::gettext(command.name));
+                let label = named
+                    .or_else(|| {
+                        content
+                            .as_ref()
+                            .and_then(|content| {
+                                crate::window::widget_tree::descendants::<gtk::Label>(content)
+                                    .first()
+                                    .cloned()
+                            })
+                            .map(|label| label.text().to_string())
+                    })
+                    .or(tooltip)?;
+                let usable = widget.is_sensitive()
+                    && widget
+                        .downcast_ref::<gtk::Actionable>()
+                        .and_then(gtk::prelude::ActionableExt::action_name)
+                        .is_none_or(|name| {
+                            let (group, action) = name.split_once('.').unwrap_or(("win", &name));
+                            widget
+                                .root()
+                                .and_then(|root| root.downcast::<gtk::ApplicationWindow>().ok())
+                                .filter(|_| group == "win")
+                                .and_then(|window| window.lookup_action(action))
+                                .is_none_or(|action| action.is_enabled())
+                        });
+                Some((label, usable))
+            })
+            .collect()
+    }
+
+    /// Shows Gallery's View menu and grays Sort while the window shows
+    /// Gallery (`in_gallery`), or the folders' (HOME-030, HOME-031).
+    pub(super) fn show_gallery_menus(&self, in_gallery: bool) {
+        let imp = self.imp();
+        if let Some(sort) = imp.sort_button.get() {
+            sort.set_sensitive(!in_gallery);
+            if in_gallery {
+                sort.popdown();
+            }
+        }
+        if imp.gallery_menus.replace(in_gallery) == in_gallery {
+            return;
+        }
+        if let Some(view) = imp.view_popover.get() {
+            view.set_entries(if in_gallery {
+                gallery_view_menu()
+            } else {
+                view_menu()
+            });
+        }
+    }
+
+    /// Shows Set as background, Rotate left and Rotate right, or hides
+    /// them (HOME-030).
+    pub(super) fn show_photo_commands(&self, shown: bool) {
+        for command in self.imp().photo_commands.get().into_iter().flatten() {
+            command.set_visible(shown);
+        }
+    }
+
+    /// The Collection button, for the snapshot hook's scenes and tests.
+    pub(super) fn collection_button(&self) -> Option<gtk::MenuButton> {
+        self.imp().collection.get().map(|(button, _)| button.clone())
+    }
+
     /// Shows Empty Recycle Bin and Restore with what Restore restores
     /// while the window shows the Recycle Bin, or hides them for `None`.
     pub(super) fn show_recycle_bin_commands(&self, restore: Option<RestoreTarget>) {
@@ -623,6 +776,44 @@ impl SearchCommands {
         close.set_visible(false);
         Self { options, close }
     }
+}
+
+/// Set as background (grayed: not done), Rotate left and Rotate right
+/// after a separator, as Windows 11's Gallery shows them while photos are
+/// selected; hidden until then (HOME-030).
+fn photo_commands() -> Vec<gtk::Widget> {
+    let photo_separator = separator();
+    let (background, _) = text_button(
+        &ox_core::i18n::gettext("Set as background"),
+        Icon::Image,
+        WindowAction::SetAsBackground,
+        "set-background-command",
+    );
+    background.set_tooltip_text(Some(&ox_core::i18n::gettext(
+        "Setting the desktop background is not available yet.",
+    )));
+    let (rotate_left, _) = text_button(
+        &ox_core::i18n::gettext("Rotate left"),
+        Icon::ArrowCounterclockwise,
+        WindowAction::RotateLeft,
+        "rotate-left-command",
+    );
+    let (rotate_right, _) = text_button(
+        &ox_core::i18n::gettext("Rotate right"),
+        Icon::ArrowClockwise,
+        WindowAction::RotateRight,
+        "rotate-right-command",
+    );
+    let photo_commands: Vec<gtk::Widget> = vec![
+        photo_separator.upcast(),
+        background.upcast(),
+        rotate_left.upcast(),
+        rotate_right.upcast(),
+    ];
+    for command in &photo_commands {
+        command.set_visible(false);
+    }
+    photo_commands
 }
 
 fn separator() -> gtk::Separator {

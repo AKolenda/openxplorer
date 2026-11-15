@@ -34,6 +34,11 @@ is missing.
   Bin" in the address bar opens it (NAV-033). Search's `?` stands for
   exactly one character (SRCH-004); a Linux name holding a literal `?` is
   matched by it too, and there is no escape for it.
+- **Windows 11 network thumbnails (2026-11-14).** Network folders (SMB,
+  servers, phones, cameras and kernel network mounts) show type icons by
+  default, as Windows 11 File Explorer does; Settings → Files & folders →
+  Previews and thumbnails → Show thumbnails in network folders turns
+  thumbnails and Preview pane previews on (VIEW-058).
 - **Windows 11 differences (2026-11-14).** Changed to Windows 11's behavior,
   replacing earlier choices: a Home Quick access tile has Windows 11's menu
   with "Show more options" (HOME-013); a wildcard search word is found
@@ -56,6 +61,16 @@ is missing.
   Settings category is a Tab stop; Home tiles are a Tab stop each; the
   message boxes Delete File and Rename File have no Alt+letter keys; a
   folder opened from the command line has Home before it in Back's history.
+- **Advanced Query Syntax in the search box (2026-11-15).** Quoted phrases,
+  upper-case `AND`, `OR` and `NOT`, `name:`, `ext:`, `date:` with dates,
+  comparisons and ranges, and sizes in KB, MB or GB are read as Microsoft
+  documents them (SRCH-047). Not read yet: other properties (`author:`,
+  `folder:`, `datecreated:`), day and month names and future dates, dates
+  written day first, and a search option (`kind:`, `date:`, `size:`) after
+  `NOT` or next to `OR`, which stays a word to search for. Not built: a
+  recent-searches list under the search box and the Search options menu's
+  Other properties and Advanced options, which no Microsoft page found so
+  far documents.
 - **Checks this environment cannot run.** LOOK-028 (fractional scales and a
   window moving between monitors of different scales need a Wayland
   compositor), ACC-003 (nobody has checked the file list with Orca; the icon
@@ -67,6 +82,10 @@ is missing.
   headings; Icons and List currently show grouped order without headings.
   Preview settings offer a fixed large-file limit; folder artwork stays the
   bundled Fluent icon rather than a collage of the folder's contents.
+- **Gallery (2026-11-15).** Set as background and Set as desktop background
+  show grayed in Gallery: the app has no opt-in way to set the desktop's
+  background yet (HOME-030). Rotate left and Rotate right turn JPEG and PNG
+  photos only (HOME-032).
 - **Operation history.** Independent transfers have separate progress and
   cancellation panels, but completed and failed jobs are not retained and
   subsequent jobs are not queued (OPS-033).
@@ -78,8 +97,12 @@ is missing.
 - **Terminal.** View → Terminal opens the configured external terminal in the
   current folder. An embedded VTE terminal is not available across the current
   supported build targets and Flatpak configuration.
-- **Archives.** Browsing and extraction support ZIP and compressed TAR. 7z,
-  RAR, encrypted ZIP and ZIP64 still need additional codecs or format support.
+- **Archives.** Browsing and extraction support ZIP and compressed TAR, and
+  ZIPs with the traditional ZIP password, which ask for it. 7z, RAR and
+  AES-encrypted ZIPs still need additional codecs.
+  A TAR's relative links that stay inside the archive are listed and
+  extracted; ZIP links stay hidden and refused. Search inside an opened
+  archive is still unavailable.
   Compress to › 7z File writes 7z archives (sevenz-rust2); browsing and
   extracting 7z is not supported yet.
 - **Flatpak:** "Show in folder" answers only while OpenXplorer runs unless the

@@ -602,3 +602,22 @@ fn only_the_reader_flag_starts_the_reader() {
     ]);
     assert_eq!(bad, Some(glib::ExitCode::FAILURE));
 }
+
+/// The reader is started through `/proc/self/exe`, which reaches the
+/// running program even after its file was replaced, as a package update
+/// does while the app is open; the path `current_exe` gives then ends in
+/// " (deleted)" and nothing could start, so every Details tab would lose
+/// its media rows until the app restarted.
+///
+/// parity: PROP-034
+#[test]
+fn the_reader_starts_the_running_program_even_once_its_file_is_replaced() {
+    use std::os::unix::fs::MetadataExt;
+
+    let program = super::reader_program().expect("a program to start");
+    let running = std::fs::metadata(&program).expect("the program");
+    let named = std::fs::metadata(std::env::current_exe().expect("the test program")).expect("its file");
+
+    assert_eq!(program, Path::new("/proc/self/exe"));
+    assert_eq!((running.dev(), running.ino()), (named.dev(), named.ino()));
+}

@@ -17,7 +17,6 @@ use ox_core::location::{
 use ox_core::ops::JournalDirection;
 use ox_core::places::{KnownFolder, NetworkLocation, Place};
 
-use crate::folder_view::shown_name::shown_name;
 use crate::icons::{Art, Icon, Storage, Tint};
 use crate::locations::Page;
 
@@ -154,6 +153,7 @@ fn listed_place_glyph(uri: &str) -> Option<Icon> {
         VirtualPlace::RecycleBin => Some(Icon::Delete),
         VirtualPlace::Recent => Some(Icon::History),
         VirtualPlace::RecentLocations => Some(Icon::Clock),
+        VirtualPlace::Gallery => Some(Icon::Image),
         VirtualPlace::Home | VirtualPlace::ThisPc | VirtualPlace::Network | VirtualPlace::Settings => None,
     }
 }
@@ -191,6 +191,10 @@ fn tab_icon(
         Some(page @ (Page::Home | Page::Network | Page::Settings)) => return Art::Glyph(page.icon()),
         Some(Page::ThisPc) => return Art::TintedGlyph(Page::ThisPc.icon(), Tint::ThisPc),
         None => {}
+    }
+    if VirtualPlace::from_uri(uri) == Some(VirtualPlace::Gallery) {
+        // In its navigation pane row's blue (HOME-017).
+        return Art::TintedGlyph(Icon::Image, Tint::Home);
     }
     if let Some(glyph) = listed_place_glyph(uri) {
         return Art::Glyph(glyph);
@@ -295,7 +299,7 @@ impl BrowserWindow {
         self.render_address(uri);
         let search = self.search_box();
         search.set_folder_title(&title);
-        // Windows 11's Home searches the home folder (HOME-017); the other
+        // Windows 11's Home searches the home folder (HOME-033); the other
         // pages search nothing.
         let searches_home = Page::from_uri(uri) == Some(Page::Home);
         search.set_enabled((!on_page || searches_home) && !in_zip && !is_device_location(uri));
@@ -449,24 +453,16 @@ impl BrowserWindow {
     }
 
     /// Draws the crumbs and the address of `uri`. The crumb of an opened
-    /// archive is a file's name, so it hides a known extension while
-    /// names do, as Windows' does for a ZIP folder; folders keep theirs.
-    /// Search results add their own crumb and icon.
+    /// archive is its real file name, as its tab and the window's title
+    /// name it, so the archive has one name wherever it is shown. Search
+    /// results add their own crumb and icon.
     pub(super) fn render_address_of(&self, uri: &str) {
         let full_path = self.shows_full_path();
-        let extensions = self.file_name_extensions();
         let is_search = self.current_uri().as_deref() == Some(uri) && self.shows_search_step();
         let locations = self.imp().locations.borrow();
         let mut crumbs = crumb_buttons(&locations, uri, full_path);
         if is_search {
             crumbs.push(search_crumb(&locations, uri));
-        }
-        if let Some(archive) = crumbs
-            .iter_mut()
-            .find(|crumb| is_archive_location(&crumb.crumb.uri))
-        {
-            let shown = shown_name(&archive.crumb.label, false, extensions).to_owned();
-            archive.crumb.label = shown;
         }
         let address = locations.display_location(uri);
         let icon = step_icon(uri, &locations.home_uri(), is_search);
@@ -613,6 +609,13 @@ mod tests {
                 uri: RECENT_LOCATIONS_URI,
                 tab: Art::Glyph(Icon::Clock),
                 address: Icon::Clock,
+            },
+            // Gallery shows its navigation pane row's blue photo glyph
+            // (HOME-017).
+            IconCase {
+                uri: ox_core::location::GALLERY_URI,
+                tab: Art::TintedGlyph(Icon::Image, Tint::Home),
+                address: Icon::Image,
             },
             IconCase {
                 uri: Page::Network.uri(),

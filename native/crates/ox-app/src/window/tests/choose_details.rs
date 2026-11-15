@@ -912,6 +912,7 @@ fn a_search_and_the_recycle_bin_list_their_own_columns() {
             SortColumn::Name,
             SortColumn::OriginalLocation,
             SortColumn::Deleted,
+            SortColumn::Modified,
             SortColumn::Type,
             SortColumn::Size,
             SortColumn::Created,
@@ -926,16 +927,18 @@ fn a_search_and_the_recycle_bin_list_their_own_columns() {
         bin.set_shown(fixed, false);
         assert!(bin.rows()[fixed].shown, "the listing's own columns stay checked");
     }
-    bin.set_shown(5, true);
-    assert_eq!(bin.move_down(4), 5, "Size moves below Date created");
+    bin.set_shown(6, true);
+    assert_eq!(bin.move_down(5), 6, "Size moves below Date created");
+    assert_eq!(bin.move_up(4), 3, "Type moves above Date modified");
     assert_eq!(bin.move_up(3), 0, "Type moves above Name, past its columns");
     assert_eq!(
-        columns(&bin)[..6],
+        columns(&bin)[..7],
         [
             SortColumn::Type,
             SortColumn::Name,
             SortColumn::OriginalLocation,
             SortColumn::Deleted,
+            SortColumn::Modified,
             SortColumn::Created,
             SortColumn::Size,
         ],
@@ -944,9 +947,9 @@ fn a_search_and_the_recycle_bin_list_their_own_columns() {
     assert_eq!(
         bin.chosen(),
         [
-            SortColumn::Modified,
             SortColumn::Type,
             SortColumn::Name,
+            SortColumn::Modified,
             SortColumn::Created,
             SortColumn::Size
         ]
@@ -1025,10 +1028,16 @@ fn choose_details_lists_the_recycle_bin_s_columns_and_sizes_them() {
     let shown = open_from_more(&test);
     let labels = row_labels(&shown);
     assert_eq!(
-        labels[..5],
-        ["Name", "Original location", "Date deleted", "Type", "Size"]
+        labels[..6],
+        [
+            "Name",
+            "Original location",
+            "Date deleted",
+            "Date modified",
+            "Type",
+            "Size"
+        ]
     );
-    assert!(!labels.iter().any(|label| label == "Date modified"));
     shown.select(2);
     assert!(!shown.hide.is_sensitive() && !shown.move_up.is_sensitive());
     shown.width.set_text("201");
@@ -1079,6 +1088,7 @@ fn choose_details_lists_the_recycle_bin_s_columns_and_sizes_them() {
             SortColumn::Name,
             SortColumn::OriginalLocation,
             SortColumn::Deleted,
+            SortColumn::Modified,
             SortColumn::Type,
             SortColumn::Size,
             SortColumn::Created
@@ -1129,9 +1139,9 @@ fn ok_changes_nothing_once_the_pane_shows_another_folder() {
 }
 
 /// A folder arranged as Date modified, Name, Type and Size keeps that
-/// order when Choose Details is accepted unchanged in search results or
-/// the Recycle Bin, which do not list Date modified and so show Name
-/// first.
+/// order when Choose Details is accepted unchanged in search results,
+/// which do not list Date modified and so show Name first, and in the
+/// Recycle Bin, which lists it where the folder does.
 ///
 /// parity: VIEW-033, VIEW-034
 #[test]
@@ -1142,11 +1152,12 @@ fn accepting_an_unchanged_choice_keeps_a_placed_name_where_it_was() {
         SortColumn::Type,
         SortColumn::Size,
     ];
-    for listing in [DetailsListing::SearchResults, DetailsListing::RecycleBin] {
-        let choice = DetailsChoice::for_listing(&arranged, listing, |_| 120);
-        assert_eq!(choice.rows()[0].column, SortColumn::Name, "{listing:?}");
-        assert_eq!(choice.chosen(), arranged, "{listing:?}");
-    }
+    let search = DetailsChoice::for_listing(&arranged, DetailsListing::SearchResults, |_| 120);
+    assert_eq!(search.rows()[0].column, SortColumn::Name);
+    assert_eq!(search.chosen(), arranged);
+    let bin = DetailsChoice::for_listing(&arranged, DetailsListing::RecycleBin, |_| 120);
+    assert_eq!(bin.rows()[0].column, SortColumn::Modified);
+    assert_eq!(bin.chosen(), arranged);
     let default_name = DetailsChoice::for_listing(&DEFAULT_CHOSEN, DetailsListing::SearchResults, |_| 120);
     assert_eq!(default_name.chosen(), DEFAULT_CHOSEN);
 }

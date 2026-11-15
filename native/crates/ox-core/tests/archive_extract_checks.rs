@@ -40,13 +40,15 @@ fn refusal_with(fixture: &ExtractionFixture, limits: ExtractionLimits) -> Archiv
 
 /// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_unsafe_paths`.
 /// Python checked only that each is refused; here each refusal is named.
+/// Differs: `a\evil` is no longer refused, because a backslash now
+/// separates folders as Windows tools write them (`archive_backslashes.rs`).
 ///
 /// parity: ARC-014
 #[test]
 fn unsafe_member_paths_are_refused_with_nothing_written() {
     let groups = [
         UnsafePaths {
-            names: &["/etc/x", "//server/share", "a\\evil", "a\u{1}b"],
+            names: &["/etc/x", "//server/share", "\\evil", "a\u{1}b"],
             expected: ArchiveError::UnsafeMemberPath,
         },
         UnsafePaths {
@@ -265,23 +267,26 @@ fn a_file_entry_with_a_folder_mode_is_refused() {
 }
 
 /// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_encrypted_flag`.
+/// As in Windows 11, an encrypted member no longer stops the check: the
+/// extraction asks for the password and writes nothing without it.
 ///
 /// parity: ARC-016
 #[test]
-fn an_encrypted_member_is_refused() {
+fn an_encrypted_member_needs_its_password() {
     let fixture = ExtractionFixture::new();
     fixture.write_zip(&[
         TestMember::folder("Docs/"),
         TestMember::file("Docs/Guide.txt", b"hello world").with_flags(ENCRYPTED_FLAG),
     ]);
 
-    let error = fixture
+    fixture
         .extractor()
         .inspect(&fixture.archive_uri(), &fixture.cancel)
-        .unwrap_err();
+        .expect("the check counts an encrypted member");
+    let error = fixture.extract("Sample").unwrap_err();
 
-    assert_eq!(error, ArchiveError::PasswordProtected);
-    assert!(error.to_string().starts_with("Password-protected"));
+    assert_eq!(error, ArchiveError::PasswordRequired);
+    fixture.assert_no_output();
 }
 
 /// Ported from `v2.0.0:desktop/tests/test_zip_extract.py::ZipExtractTests::test_directory_payload`.

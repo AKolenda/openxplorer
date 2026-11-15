@@ -11,12 +11,13 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use super::extract::check_link_target;
 use super::member_names::{is_previewable, is_safe_member};
 use super::preview::MAX_PREVIEW_BYTES;
 use super::source::{open_archive, ArchiveOpener};
 use super::worker::on_worker;
-use super::zip::{MemberFileType, ZipMember};
-use super::ArchiveError;
+use super::zip::{Encryption, MemberFileType, ZipMember};
+use super::{ArchiveError, ArchivePassword};
 use crate::transfer::Cancellation;
 
 /// ARC-003: a listing shows at most this many rows.
@@ -30,6 +31,8 @@ pub struct ArchiveBrowser {
     pub(super) opener: Arc<dyn ArchiveOpener>,
     /// Where opened members are copied to.
     pub(super) preview_root: PathBuf,
+    /// The password encrypted members are opened with.
+    pub(super) password: Option<ArchivePassword>,
 }
 
 impl fmt::Debug for ArchiveBrowser {
@@ -98,7 +101,18 @@ impl ArchiveBrowser {
     /// into new private folders under `preview_root`, which is created when
     /// needed. The app uses [`default_preview_root`].
     pub fn new(opener: Arc<dyn ArchiveOpener>, preview_root: PathBuf) -> Self {
-        Self { opener, preview_root }
+        Self {
+            opener,
+            preview_root,
+            password: None,
+        }
+    }
+
+    /// This browser, opening encrypted members with `password` (ARC-006).
+    #[must_use]
+    pub fn with_password(mut self, password: ArchivePassword) -> Self {
+        self.password = Some(password);
+        self
     }
 
     /// Lists the folder `prefix` (empty for the top) of the archive at
@@ -117,9 +131,11 @@ impl ArchiveBrowser {
         let prefix = folder_prefix(prefix)?;
         let archive = open_archive(self.opener.as_ref(), uri, cancel)?;
         let mut rows = ListingRows::new(prefix);
-        for member in archive.members() {
+        let link_targets = archive.link_targets();
+        for (index, member) in archive.members().iter().enumerate() {
             cancel.check()?;
-            rows.add(member);
+            let link_target = link_targets.and_then(|targets| targets.get(&index));
+            rows.add(member, link_target.map(String::as_str));
             if rows.is_full() {
                 break;
             }
@@ -169,6 +185,20 @@ pub(crate) fn is_listable(member: &ZipMember) -> bool {
         && member.file_type() != MemberFileType::LinkOrSpecial
 }
 
+/// ARC-004, ARC-016: true for a TAR's symbolic link to `target` that the
+/// browser shows, as extracting keeps it: a safe name the archive
+/// records unaltered, and a relative target that stays inside the
+/// archive (the rule of [`check_link_target`]). Every other link, and
+/// every special file, stays hidden.
+fn is_listable_link(member: &ZipMember, target: &str) -> bool {
+    if !is_safe_member(&member.name) || !member.has_unaltered_name() {
+        return false;
+    }
+    let name = member.name.trim_end_matches('/');
+    let segments: Vec<String> = name.split('/').map(str::to_owned).collect();
+    check_link_target(name, &segments, target).is_ok()
+}
+
 /// The rows of one folder, collected member by member.
 #[derive(Debug)]
 struct ListingRows {
@@ -191,9 +221,13 @@ impl ListingRows {
     }
 
     /// Adds the row `member` shows in this folder, if any: itself, or the
-    /// folder of this folder's that it is inside.
-    fn add(&mut self, member: &ZipMember) {
-        if !is_listable(member) {
+    /// folder of this folder's that it is inside. `link_target` is where a
+    /// TAR's symbolic link points.
+    fn add(&mut self, member: &ZipMember, link_target: Option<&str>) {
+        let is_link = link_target.is_some();
+        let is_shown =
+            link_target.map_or_else(|| is_listable(member), |target| is_listable_link(member, target));
+        if !is_shown {
             self.hidden_unsafe_count += 1;
             return;
         }
@@ -201,7 +235,11 @@ impl ListingRows {
             Some(relative) if !relative.is_empty() => relative,
             _ => return,
         };
-        let entry = entry_for(&self.prefix, relative, member);
+        let mut entry = entry_for(&self.prefix, relative, member);
+        if is_link && matches!(entry.kind, ArchiveEntryKind::File { .. }) {
+            // A link holds no data of its own to open as a copy.
+            entry.can_open = false;
+        }
         if self.shown.insert(entry.member.clone()) {
             self.entries.push(entry);
         }
@@ -245,7 +283,10 @@ fn entry_for(prefix: &str, relative: &str, member: &ZipMember) -> ArchiveEntry {
         }
     };
     // ARC-006: the same rules `preview_member` applies before opening.
-    let is_openable_file = !is_folder && !member.is_encrypted() && member.size <= MAX_PREVIEW_BYTES;
+    // An encrypted member asks for its password when it is opened, unless
+    // its encryption is one the reader cannot decrypt.
+    let is_decryptable = member.encryption() != Encryption::Unsupported;
+    let is_openable_file = !is_folder && is_decryptable && member.size <= MAX_PREVIEW_BYTES;
     let folder_slash = if is_folder { "/" } else { "" };
     ArchiveEntry {
         name: name.to_owned(),
