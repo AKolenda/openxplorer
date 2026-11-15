@@ -182,7 +182,8 @@ impl Verb {
 }
 
 /// The name a location is shown by: its display name, or for a root
-/// such as a share, its URI.
+/// such as a share or a server, the name its tab shows ("media" for
+/// `smb://nas/media/`, "nas" for `sftp://sam@nas/`), never its address.
 pub(crate) fn location_name(uri: &str) -> String {
     let file = gio::File::for_uri(uri);
     if file.has_uri_scheme("trash") && file.parent().is_none() {
@@ -191,7 +192,7 @@ pub(crate) fn location_name(uri: &str) -> String {
     file.basename()
         .filter(|name| file.parent().is_some() && !name.as_os_str().is_empty())
         .map_or_else(
-            || file.parse_name().to_string(),
+            || ox_core::location::LocationContext::default().base_name(uri),
             |name| name.to_string_lossy().into_owned(),
         )
 }
