@@ -160,6 +160,47 @@ fn holds_a_control(widget: &gtk::Widget) -> bool {
     false
 }
 
+/// A controller for a window: F4 on a drop-down list shows its items, as
+/// Microsoft lists for dialog boxes ("F4: Display the items in the active
+/// list",
+/// <https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows>).
+/// Elsewhere the key goes on, so the browser window's F4 still opens the
+/// address bar. GTK opens a drop-down with Space or Enter only.
+pub(crate) fn f4_shows_a_list() -> gtk::ShortcutController {
+    let action = gtk::CallbackAction::new(|widget, _| {
+        let focus = widget.root().and_then(|root| root.focus());
+        let drop_down = focus.and_then(|focus| {
+            focus
+                .downcast_ref::<gtk::DropDown>()
+                .cloned()
+                .or_else(|| focus.ancestor(gtk::DropDown::static_type()).and_downcast())
+        });
+        let Some(drop_down) = drop_down.filter(|drop_down| drop_down.is_sensitive()) else {
+            return glib::Propagation::Proceed;
+        };
+        show_items(&drop_down);
+        glib::Propagation::Stop
+    });
+    let trigger = gtk::KeyvalTrigger::new(gdk::Key::F4, gdk::ModifierType::empty());
+    let shortcuts = gtk::ShortcutController::new();
+    shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
+    shortcuts.add_shortcut(gtk::Shortcut::new(Some(trigger), Some(action)));
+    shortcuts
+}
+
+/// Shows the list of `drop_down`, as a click on it does: its button is a
+/// toggle button whose press opens the list.
+fn show_items(drop_down: &gtk::DropDown) {
+    let mut next = drop_down.first_child();
+    while let Some(child) = next {
+        if let Some(button) = child.downcast_ref::<gtk::ToggleButton>() {
+            button.set_active(true);
+            return;
+        }
+        next = child.next_sibling();
+    }
+}
+
 /// A controller for a dialog window: Escape closes it through its close
 /// request, which a dialog refuses while it must stay open, such as
 /// Software updates during an installation.

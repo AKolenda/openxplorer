@@ -130,6 +130,9 @@ impl BrowserWindow {
         self.install_tab_commands();
         self.install_closing_actions();
         self.install_window_keys();
+        // F4 on a drop-down list, as in the Open and Save dialog's file
+        // types, shows its items rather than opening the address bar.
+        self.add_controller(crate::modal::f4_shows_a_list());
         self.install_drag_escape();
         self.install_view_keys();
         self.install_tab_move_actions();

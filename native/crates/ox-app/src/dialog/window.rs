@@ -136,6 +136,7 @@ mod imp {
             // app.js).
             self.obj().add_controller(crate::modal::escape_closes());
             crate::modal::tab_goes_round(&*self.obj());
+            self.obj().add_controller(crate::modal::f4_shows_a_list());
         }
 
         fn dispose(&self) {
