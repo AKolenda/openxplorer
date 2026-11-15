@@ -164,6 +164,10 @@ pub(crate) struct Picker {
     /// it hides, as the window hides known types' extensions: the text
     /// shown and that extension, with its dot (`extra_2`, ".txt").
     hidden_extension: RefCell<Option<(String, String)>>,
+    /// Whether the choice being checked came from File name or the
+    /// accept button rather than a file activated in the list, so a
+    /// question about it gives the keyboard back to File name.
+    chosen_by_name: Cell<bool>,
 }
 
 impl Picker {
@@ -530,6 +534,10 @@ impl BrowserWindow {
             self.set_action_enabled(action, false);
         }
         self.update_share_command();
+        // Enter that nothing else takes presses the accept button, as the
+        // default push button of Windows' common dialog: in a folder
+        // dialog with nothing selected, it chooses the folder shown.
+        self.set_default_widget(Some(&picker.accept));
         // Resizable like any window, from 670 × 470 up (`window.ui`), at
         // the size the last dialog was left at (window_size.rs).
         self.open_dialog_at_saved_size();
@@ -719,6 +727,26 @@ impl BrowserWindow {
     /// (INT-032).
     pub(super) fn is_file_dialog(&self) -> bool {
         self.picker().is_some()
+    }
+
+    /// After a question on the dialog layer closed with the dialog still
+    /// open: gives the keyboard back to File name, with the name selected,
+    /// when the choice asked about came from there or the accept button,
+    /// as a Windows dialog gives focus back to the control that had it.
+    /// Returns false to leave the keyboard to the file list.
+    pub(super) fn give_keyboard_back_to_name(&self) -> bool {
+        let Some(picker) = self.picker() else {
+            return false;
+        };
+        let Some(name) = picker.name.as_ref() else {
+            return false;
+        };
+        if !picker.chosen_by_name.get() || picker.reply.is_answered() || picker.pending.borrow().is_some() {
+            return false;
+        }
+        name.grab_focus();
+        select_name(&picker, name);
+        true
     }
 
     /// The window's picker, if it is one.
@@ -924,6 +952,7 @@ impl BrowserWindow {
             return;
         }
         picker.checking.set(true);
+        picker.chosen_by_name.set(matches!(choosing, Choosing::Accept));
         self.update_picker();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
@@ -1274,6 +1303,9 @@ impl BrowserWindow {
         let (replace_key, keep_key) = if keep_focused { ('y', 'n') } else { ('r', 'c') };
         frame.also_press_with(&replace, replace_key);
         frame.also_press_with(&keep, keep_key);
+        // And the letters alone, as the app's other Windows message boxes
+        // take them.
+        frame.press_with_letters_alone();
         // However the question ends: a button, Escape, or the dialog
         // closing under it.
         frame.connect_closed(glib::clone!(
@@ -1608,6 +1640,7 @@ impl BrowserWindow {
             attached_to_caller: Rc::default(),
             caller: None,
             hidden_extension: RefCell::new(None),
+            chosen_by_name: Cell::new(false),
         }
     }
 
@@ -3774,8 +3807,9 @@ mod tests {
     /// as Windows' common dialogs make Open, Save or Select Folder the
     /// default push button, which Enter chooses ("Dialog Box Programming
     /// Considerations", DM_GETDEFID). In a folder dialog with the file list
-    /// focused and nothing selected, Enter chose nothing before; now it
-    /// answers with the folder shown. A Save dialog saves its name.
+    /// focused and no item under the keyboard, as in an empty folder, Enter
+    /// chose nothing before; now it answers with the folder shown. A Save
+    /// dialog saves its name.
     ///
     /// parity: INT-032
     #[gtk::test]
