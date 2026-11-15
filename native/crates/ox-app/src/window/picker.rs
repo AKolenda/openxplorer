@@ -5074,7 +5074,7 @@ mod tests {
     }
 
     /// The keyboard's ring on the accept button shows, light and dark. The
-    /// ring is drawn in the accent colour (C29), which on the accent-filled
+    /// ring is drawn in the accent color (C29), which on the accent-filled
     /// Open or Save button was the button's own fill, so Tab to it showed
     /// nothing. It is drawn just outside that button now, as Windows draws
     /// its focus visual around a control, so it shows against the bar; the
@@ -5118,20 +5118,20 @@ mod tests {
             crate::test_support::harness::wait_for(std::time::Duration::from_millis(600));
             let without = painted(false);
             let with = painted(true);
-            // The button's fill, the colour most of the bar's saturated
-            // pixels have, which is the ring's colour too (C29).
+            // The button's fill, the color most of the bar's saturated
+            // pixels have, which is the ring's color too (C29).
             let fill = most_common_saturated(&without);
             let near = |pixel: &[u8; 3]| pixel.iter().zip(fill).all(|(a, b)| a.abs_diff(b) <= 12);
             let count = |pixels: &[[u8; 3]]| pixels.iter().filter(|pixel| near(pixel)).count();
             let (before, after) = (count(&without), count(&with));
             assert!(
                 after > before + 80,
-                "{theme}: the ring adds its colour around the button: {before} pixels without it, {after} with"
+                "{theme}: the ring adds its color around the button: {before} pixels without it, {after} with"
             );
         }
     }
 
-    /// The RGB colours of the pixels `widget` paints, outlines of its
+    /// The RGB colors of the pixels `widget` paints, outlines of its
     /// children included.
     fn painted_pixels(widget: &gtk::Widget) -> Vec<[u8; 3]> {
         let renderer = widget
@@ -5143,11 +5143,12 @@ mod tests {
         let (width, height) = (widget.width(), widget.height());
         paintable.snapshot(&snapshot, f64::from(width), f64::from(height));
         let node = snapshot.to_node().expect("it paints");
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "a window is far narrower than 2^23 pixels"
-        )]
-        let area = gtk::graphene::Rect::new(0.0, 0.0, width as f32, height as f32);
+        let area = gtk::graphene::Rect::new(
+            0.0,
+            0.0,
+            f32::from(u16::try_from(width).expect("a width")),
+            f32::from(u16::try_from(height).expect("a height")),
+        );
         let texture = renderer.render_texture(&node, Some(&area));
         let mut downloader = gdk::TextureDownloader::new(&texture);
         downloader.set_format(gdk::MemoryFormat::R8g8b8);
@@ -5159,7 +5160,7 @@ mod tests {
             .collect()
     }
 
-    /// The colour most of the strongly coloured `pixels` have.
+    /// The color most of the strongly colored `pixels` have.
     fn most_common_saturated(pixels: &[[u8; 3]]) -> [u8; 3] {
         let mut counts: std::collections::HashMap<[u8; 3], usize> = std::collections::HashMap::new();
         for pixel in pixels {
@@ -5173,7 +5174,7 @@ mod tests {
         counts
             .into_iter()
             .max_by_key(|(_, count)| *count)
-            .map(|(colour, _)| colour)
+            .map(|(color, _)| color)
             .expect("the accept button's fill")
     }
 
@@ -5195,7 +5196,7 @@ mod tests {
         crate::test_support::harness::descendants::<gtk::Label>(&*window.imp().picker_bar)
             .iter()
             .filter(|label| label.has_css_class("picker-label"))
-            .map(|label| label.label().to_string())
+            .map(|label| label.text().to_string())
             .collect()
     }
 
@@ -5812,6 +5813,10 @@ mod tests {
         assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
     }
 
+    /// A caller's choice as the portal sends it: ID, label, options and
+    /// the option chosen at first.
+    type ChoiceParts = (String, String, Vec<(String, String)>, String);
+
     /// The caller's check boxes sit side by side on one row, wrapping
     /// only when the dialog is too narrow, so a caller with several of
     /// them (an office suite's "Automatic file name extension", "Save with
@@ -5835,11 +5840,7 @@ mod tests {
                 "v13",
             ),
         ];
-        #[expect(
-            clippy::type_complexity,
-            reason = "the portal's choices, as the test builds them"
-        )]
-        let choices: Vec<(String, String, Vec<(String, String)>, String)> = choices
+        let choices: Vec<ChoiceParts> = choices
             .into_iter()
             .map(|(id, label, options, initial)| {
                 (

@@ -62,7 +62,7 @@ window.ox .picker-bar button.picker-button.accent:disabled {
   border-color: transparent;
   color: @ox_text_disabled;
 }
-/* The keyboard's ring is the accent colour (base.css, C29), which on the
+/* The keyboard's ring is the accent color (base.css, C29), which on the
    accent-filled Open or Save button was the button's own fill, so Tab to it
    showed nothing. It is drawn just outside that button instead, as Windows
    draws its focus visual around a control, where it shows against the bar. */
