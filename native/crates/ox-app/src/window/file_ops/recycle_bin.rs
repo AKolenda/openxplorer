@@ -19,10 +19,11 @@
 
 use ox_core::location::TRASH_URI;
 use ox_core::ops::{
-    delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, permanent_delete_confirmation,
-    restore_answered_items, restore_free_items, restore_questions, restores_into_one_folder,
-    scan_drag_out_conflicts, scan_restore_conflicts, starting_label, tell_taken_items, ConflictScan,
-    DeleteItem, OperationContext, OpsError, Resolution, RestoreSoFar, TransferOutcome,
+    delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, list_recycle_bin_names,
+    permanent_delete_confirmation, restore_answered_items, restore_free_items, restore_questions,
+    restores_into_one_folder, scan_drag_out_conflicts, scan_restore_conflicts, starting_label,
+    tell_taken_items, ConflictScan, DeleteItem, OperationContext, OpsError, Resolution, RestoreSoFar,
+    TransferOutcome,
 };
 use ox_core::transfer::{Cancellation, TransferMode};
 
@@ -285,7 +286,7 @@ impl BrowserWindow {
     ///
     /// The Recycle Bin could not be listed, so nothing was asked.
     async fn confirm_emptying(&self) -> Result<Option<Vec<String>>, OpsError> {
-        let items = list_recycle_bin(&Cancellation::new()).await?;
+        let items = list_recycle_bin_names(&Cancellation::new()).await?;
         if items.is_empty() {
             return Ok(None);
         }

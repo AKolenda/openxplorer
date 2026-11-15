@@ -16,7 +16,7 @@ use std::time::Duration;
 use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::location::TRASH_URI;
-use ox_core::ops::list_recycle_bin;
+use ox_core::ops::list_recycle_bin_names;
 use ox_core::transfer::Cancellation;
 
 use super::{sidebar, BrowserWindow};
@@ -100,8 +100,10 @@ impl BrowserWindow {
                 loop {
                     window.imp().recycle_bin_watch.stale.set(false);
                     // Listing is what the Recycle Bin page shows; GVfs's
-                    // trash::item-count can lag behind it.
-                    let items = list_recycle_bin(&Cancellation::new()).await;
+                    // trash::item-count can lag behind it. Names alone are
+                    // enough to count, and many times quicker to list in a
+                    // large Recycle Bin, which every change lists again.
+                    let items = list_recycle_bin_names(&Cancellation::new()).await;
                     let count = items.map_or(0, |items| u32::try_from(items.len()).unwrap_or(u32::MAX));
                     if window.imp().trash_items.replace(count) != count {
                         let [_, _, bin] = sidebar::recent_and_bin_entries(count);

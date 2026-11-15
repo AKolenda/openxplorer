@@ -12,6 +12,7 @@ use gtk::gio;
 use ox_core::entry::{entry_from_info, Entry, EntryError, ATTRIBUTES};
 use ox_core::location::is_network_filesystem;
 use ox_core::location::{normalise, parent_location};
+use ox_core::ops::is_recycle_bin_item;
 use ox_core::network::{read_mount_table, MountEntry};
 use ox_core::permissions::Account;
 
@@ -152,7 +153,15 @@ pub(crate) async fn read_properties(uri: String) -> Result<ItemProperties, Entry
 
 /// [`read_properties`] on the calling thread.
 fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
-    let file = gio::File::for_uri(&normalise(uri)?);
+    // An item in the Recycle Bin is read where it is, as its menu's
+    // Properties and opening it show it (OPS-040); the location rules
+    // accept no other `trash:` address.
+    let address = if is_recycle_bin_item(uri) {
+        uri.to_owned()
+    } else {
+        normalise(uri)?
+    };
+    let file = gio::File::for_uri(&address);
     let attributes = format!("{ATTRIBUTES},{PROPERTY_ATTRIBUTES}");
     let info = file.query_info(
         &attributes,

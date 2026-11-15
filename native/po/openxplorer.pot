@@ -1722,7 +1722,7 @@ msgstr ""
 msgid "Normal"
 msgstr ""
 
-#: crates/ox-app/src/properties/details_rows.rs
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs
 msgid "Origin"
 msgstr ""
 
@@ -1977,6 +1977,10 @@ msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs
 msgid "Created"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_tab.rs
+msgid "Deleted"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_attributes.rs
@@ -8146,7 +8150,7 @@ msgstr ""
 msgid "Another item now has the staging folder's name. It was left in place."
 msgstr ""
 
-#: crates/ox-core/src/gio_node/local_delete.rs
+#: crates/ox-core/src/gio_node/local_delete.rs crates/ox-core/src/ops/recycle_bin_storage.rs
 msgid "Choose a file or folder to delete."
 msgstr ""
 
