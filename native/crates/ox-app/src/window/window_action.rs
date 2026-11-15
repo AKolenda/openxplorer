@@ -428,10 +428,16 @@ pub(crate) enum WindowAction {
     /// Gallery's Collection: shows the photos of every folder of the
     /// collection ("all") or of the one in the string target (HOME-025).
     GalleryCollection,
-    /// Gallery's Collection > Add folder…: asks for a folder to add.
-    GalleryAddFolder,
-    /// Removes the folder in the string target from Gallery's collection.
-    GalleryRemoveFolder,
+    /// Gallery's Collection > Manage collection: the Gallery Locations
+    /// dialog.
+    GalleryManage,
+    /// Rotate left: turns the selected photos a quarter turn to the left.
+    RotateLeft,
+    /// Rotate right: turns the selected photos a quarter turn to the right.
+    RotateRight,
+    /// Set as (desktop) background: always disabled, as the app has no
+    /// way to set the desktop's background yet.
+    SetAsBackground,
     /// Save search: adds the search shown to the sidebar (SRCH-038).
     SaveSearch,
     /// Opens the saved search whose `(folder, text)` is the target.
@@ -715,8 +721,10 @@ impl WindowAction {
             WindowAction::OpenItemAt => "open-item-at",
             WindowAction::OpenFileLocationOf => "open-file-location-of",
             WindowAction::GalleryCollection => "gallery-collection",
-            WindowAction::GalleryAddFolder => "gallery-add-folder",
-            WindowAction::GalleryRemoveFolder => "gallery-remove-folder",
+            WindowAction::GalleryManage => "gallery-manage",
+            WindowAction::RotateLeft => "rotate-left",
+            WindowAction::RotateRight => "rotate-right",
+            WindowAction::SetAsBackground => "set-as-background",
             WindowAction::SaveSearch => "save-search",
             WindowAction::OpenSavedSearch => "open-saved-search",
             WindowAction::ForgetSavedSearch => "forget-saved-search",

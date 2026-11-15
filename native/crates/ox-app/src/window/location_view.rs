@@ -192,6 +192,10 @@ fn tab_icon(
         Some(Page::ThisPc) => return Art::TintedGlyph(Page::ThisPc.icon(), Tint::ThisPc),
         None => {}
     }
+    if VirtualPlace::from_uri(uri) == Some(VirtualPlace::Gallery) {
+        // In its navigation pane row's blue (HOME-017).
+        return Art::TintedGlyph(Icon::Image, Tint::Home);
+    }
     if let Some(glyph) = listed_place_glyph(uri) {
         return Art::Glyph(glyph);
     }
@@ -606,10 +610,11 @@ mod tests {
                 tab: Art::Glyph(Icon::Clock),
                 address: Icon::Clock,
             },
-            // Gallery shows its navigation pane row's photo glyph (HOME-017).
+            // Gallery shows its navigation pane row's blue photo glyph
+            // (HOME-017).
             IconCase {
                 uri: ox_core::location::GALLERY_URI,
-                tab: Art::Glyph(Icon::Image),
+                tab: Art::TintedGlyph(Icon::Image, Tint::Home),
                 address: Icon::Image,
             },
             IconCase {

@@ -36,6 +36,7 @@ mod media_details;
 mod modal;
 mod network;
 mod operation_session;
+mod photo_rotate;
 mod picture_guard;
 mod places;
 mod properties;

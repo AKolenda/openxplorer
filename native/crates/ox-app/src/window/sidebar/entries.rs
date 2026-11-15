@@ -352,7 +352,8 @@ pub(in crate::window) fn sidebar_entries(
     let gallery = fixed_entry(
         Section::Home,
         message_id("Gallery"),
-        Art::Glyph(Icon::Image),
+        // Windows 11 draws Gallery's picture glyph in Home's blue.
+        Art::TintedGlyph(Icon::Image, Tint::Home),
         GALLERY_URI,
     );
     let this_pc_icon = Art::TintedGlyph(Page::ThisPc.icon(), Tint::ThisPc);
@@ -662,6 +663,11 @@ mod tests {
             entry.map(|entry| entry.icon)
         };
         assert_eq!(icon_of("Home"), Some(Art::TintedGlyph(Icon::Home, Tint::Home)));
+        // Windows 11 draws Gallery's picture glyph in Home's blue (HOME-017).
+        assert_eq!(
+            icon_of("Gallery"),
+            Some(Art::TintedGlyph(Icon::Image, Tint::Home))
+        );
         assert_eq!(
             icon_of("This PC"),
             Some(Art::TintedGlyph(Icon::Laptop, Tint::ThisPc))

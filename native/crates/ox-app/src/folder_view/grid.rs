@@ -50,10 +50,6 @@ const TILES_CLASS: &str = "tiles";
 /// The CSS class of the Content layout.
 const CONTENT_CLASS: &str = "content";
 
-/// The CSS class of a grouped grid of icon tiles (Gallery's months,
-/// HOME-019), whose heading rows are a line of text tall.
-const ICON_GROUPS_CLASS: &str = "icon-groups";
-
 /// How the icon view lays its items out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum GridLayout {
@@ -147,9 +143,6 @@ mod imp {
         /// The groups collapsed under their headings, which the folder
         /// model shares.
         pub(super) collapsed: RefCell<super::CollapsedGroups>,
-        /// The icon sizes keep the groups too: Gallery's months
-        /// (HOME-019).
-        pub(super) icon_groups: Cell<bool>,
     }
 
     impl std::fmt::Debug for IconView {
@@ -178,7 +171,6 @@ mod imp {
                 group_title: RefCell::default(),
                 grouping: SharedGrouping::default(),
                 collapsed: RefCell::default(),
-                icon_groups: Cell::new(false),
             }
         }
     }
@@ -280,24 +272,6 @@ impl IconView {
         }
     }
 
-    /// Has the icon sizes keep a grouped folder's groups too, each under a
-    /// heading, as Gallery shows its months (HOME-019); other folders show
-    /// them only in Tiles and Content.
-    pub(crate) fn set_icon_groups(&self, kept: bool) {
-        if self.imp().icon_groups.replace(kept) == kept {
-            return;
-        }
-        if matches!(self.layout(), GridLayout::Icons(_)) && self.imp().group_title.borrow().is_some() {
-            self.show_model();
-            self.fit_lines();
-        }
-    }
-
-    /// Whether `layout` shows a grouped folder's groups.
-    fn keeps_groups(&self, layout: GridLayout) -> bool {
-        layout.shows_groups() || (matches!(layout, GridLayout::Icons(_)) && self.imp().icon_groups.get())
-    }
-
     /// The grouped model the grid shows, while it shows grouped Tiles or
     /// Content.
     pub(crate) fn grouped(&self) -> Option<GroupedSelection> {
@@ -336,18 +310,6 @@ impl IconView {
     pub(crate) fn row_heights(&self) -> RowHeights {
         let text_size = self.imp().text_size.get();
         let content = self.layout() == GridLayout::Content;
-        if let GridLayout::Icons(size) = self.layout() {
-            let heading = if self.in_compact_density() {
-                compact_density_heading_row(text_size, false)
-            } else {
-                group_heading_row(text_size)
-            };
-            return RowHeights {
-                page: self.scroll_adjustment().page_size(),
-                item: cell_size(size, text_size).height,
-                heading,
-            };
-        }
         let (item, heading) = match (self.in_compact_density(), content) {
             (false, true) => (content_row(text_size), group_heading_row(text_size)),
             (false, false) => (tiles_cell(text_size).height, group_heading_row(text_size)),
@@ -381,7 +343,7 @@ impl IconView {
         let items = imp.items.borrow().clone();
         let title = imp.group_title.borrow().clone();
         let grouped = match (items.as_ref(), title) {
-            (Some(items), Some(title)) if self.keeps_groups(self.layout()) => {
+            (Some(items), Some(title)) if self.layout().shows_groups() => {
                 let collapsed = imp.collapsed.borrow().clone();
                 Some(GroupedSelection::new(
                     items,
@@ -397,11 +359,6 @@ impl IconView {
             &imp.grid,
             crate::folder_view::details::GROUPED_CLASS,
             grouped.is_some(),
-        );
-        crate::window::widget_tree::toggle_class(
-            &imp.grid,
-            ICON_GROUPS_CLASS,
-            grouped.is_some() && matches!(self.layout(), GridLayout::Icons(_)),
         );
         match (grouped, items) {
             (Some(grouped), _) => imp.grid.set_model(Some(&grouped)),
@@ -497,7 +454,7 @@ impl IconView {
     /// Gives the grid `layout`'s CSS classes, orientation and cells.
     fn apply_layout(&self, layout: GridLayout) {
         let imp = self.imp();
-        let regroups = self.keeps_groups(imp.layout.replace(layout)) != self.keeps_groups(layout);
+        let regroups = imp.layout.replace(layout).shows_groups() != layout.shows_groups();
         for class in IconSize::css_classes().chain([COMPACT_CLASS, TILES_CLASS, CONTENT_CLASS]) {
             imp.grid.remove_css_class(class);
         }

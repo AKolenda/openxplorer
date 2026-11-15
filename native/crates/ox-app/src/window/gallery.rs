@@ -4,13 +4,14 @@
 //! the photos of the Pictures folder and its subfolders
 //! ([`crate::folder_view::gallery`]).
 //!
-//! Gallery is always shown as thumbnails, newest first in month groups,
-//! whatever style the folders keep: the most recently taken photos come
-//! first, as Microsoft describes Windows 11's Gallery
-//! (<https://support.microsoft.com/en-us/topic/september-26-2023-windows-configuration-update-542780c2-594c-46cb-979d-11116fe164ba>).
-//! The size of the thumbnails can be changed while it is shown (Ctrl+mouse
-//! wheel, as Windows has it since build 23440); the style is never saved,
-//! so neither Gallery nor the folders' shared style take the other's.
+//! Gallery is always shown as thumbnails in justified rows, newest first
+//! and without groups, whatever style the folders keep: the most recently
+//! taken photos come first, as Microsoft describes Windows 11's Gallery
+//! (<https://support.microsoft.com/en-us/topic/september-26-2023-windows-configuration-update-542780c2-594c-46cb-979d-11116fe164ba>),
+//! at Medium icons, as Windows 11 opens it. The size of the thumbnails can
+//! be changed while it is shown (View, Ctrl+mouse wheel); the style is
+//! never saved, so neither Gallery nor the folders' shared style take the
+//! other's.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -20,7 +21,7 @@ use ox_core::location::GALLERY_URI;
 use ox_core::places::KnownFolder;
 use ox_core::settings::SettingsError;
 
-use super::actions::{choice_action, plain_action, text_action};
+use super::actions::{choice_action, plain_action};
 use super::folder_pane::{FolderPane, FolderView};
 use super::menu_popover::{MenuEntry, MenuItem};
 use super::session::TabId;
@@ -44,10 +45,9 @@ const GALLERY_SORT: SortState = SortState {
     direction: SortDirection::Descending,
 };
 
-/// Whether `pane` shows Gallery's style now: only Gallery sorts by the
-/// date taken.
+/// Whether `pane` shows Gallery's style now.
 pub(super) fn shows_gallery_style(pane: &FolderPane) -> bool {
-    pane.model().sort_role().map(|(role, _)| role) == Some(SortRole::Taken)
+    pane.shows_gallery()
 }
 
 impl BrowserWindow {
@@ -107,32 +107,96 @@ impl BrowserWindow {
                 }
                 known
             }),
-            plain_action(WindowAction::GalleryAddFolder, BrowserWindow::ask_gallery_folder),
-            text_action(WindowAction::GalleryRemoveFolder, |window, uri| {
-                window.set_gallery_folder(uri, false);
-            }),
+            plain_action(WindowAction::GalleryManage, BrowserWindow::ask_gallery_locations),
+            plain_action(WindowAction::RotateLeft, |window| window.rotate_selection(false)),
+            plain_action(WindowAction::RotateRight, |window| window.rotate_selection(true)),
+            // Not done: the app has no way of its own to set the desktop's
+            // background, so the command shows, as in Windows, but grayed.
+            plain_action(WindowAction::SetAsBackground, |_| {}),
         ]);
+        self.set_action_enabled(WindowAction::SetAsBackground, false);
     }
 
-    /// Collection > Add folder…: asks for a folder and adds it.
-    fn ask_gallery_folder(&self) {
-        let picker = gtk::FileDialog::builder()
-            .title(ox_core::i18n::gettext("Add a folder to Gallery"))
-            .modal(true)
-            .build();
-        picker.select_folder(
-            Some(self),
-            gio::Cancellable::NONE,
-            glib::clone!(
-                #[weak(rename_to = window)]
-                self,
-                move |chosen| {
-                    if let Ok(folder) = chosen {
-                        window.set_gallery_folder(&folder.uri(), true);
-                    }
-                }
-            ),
-        );
+    /// The selected photos Rotate can turn: JPEGs and PNGs on this
+    /// computer; empty unless every selected item is one.
+    fn rotatable_selection(&self) -> Vec<std::path::PathBuf> {
+        let items = self.folder_pane().model().selected_items();
+        let paths: Vec<std::path::PathBuf> = items
+            .iter()
+            .filter(|item| {
+                let entry = item.entry();
+                !entry.is_dir
+                    && entry
+                        .content_type
+                        .as_deref()
+                        .and_then(crate::photo_rotate::Rotatable::of_type)
+                        .is_some()
+            })
+            .filter_map(|item| gio::File::for_uri(&item.entry().uri).path())
+            .collect();
+        if paths.len() == items.len() {
+            paths
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Rotate right (`clockwise`) or Rotate left: turns every selected
+    /// photo a quarter, off the main thread (HOME-032).
+    fn rotate_selection(&self, clockwise: bool) {
+        let paths = self.rotatable_selection();
+        if paths.is_empty() {
+            return;
+        }
+        let window = self.downgrade();
+        glib::spawn_future_local(async move {
+            let failed = gio::spawn_blocking(move || {
+                paths
+                    .iter()
+                    .filter_map(|path| {
+                        crate::photo_rotate::rotate_file(path, clockwise)
+                            .err()
+                            .map(|error| (path.clone(), error.to_string()))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .await
+            .unwrap_or_default();
+            let Some(window) = window.upgrade() else {
+                return;
+            };
+            if let Some((path, error)) = failed.first() {
+                let name = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                window.show_message(&ox_core::i18n::format_message(
+                    "Could not rotate {name}: {error}",
+                    &[("name", &name), ("error", error)],
+                ));
+            }
+            // The watch lists Gallery again; a folder lists on its own.
+            window.reload_gallery_tabs();
+        });
+    }
+
+    /// Shows the command bar as Gallery has it while the window shows
+    /// Gallery: its View menu, Sort grayed, Collection, and the photo
+    /// commands while photos are selected (HOME-030, HOME-031).
+    pub(super) fn show_gallery_commands(&self) {
+        let in_gallery = self.shows_gallery();
+        let collection = in_gallery.then(|| {
+            let key = format!("{:?}", self.gallery_collection());
+            (key, self.gallery_collection_entries())
+        });
+        let bar = self.command_bar();
+        bar.show_collection(collection);
+        bar.show_gallery_menus(in_gallery);
+        let rotatable = !self.rotatable_selection().is_empty();
+        let photos = in_gallery && self.folder_pane().model().summary().count > 0;
+        bar.show_photo_commands(photos);
+        self.set_action_enabled(WindowAction::RotateLeft, rotatable);
+        self.set_action_enabled(WindowAction::RotateRight, rotatable);
     }
 
     /// Adds the folder at `uri` to Gallery's collection, or removes it,
@@ -157,48 +221,34 @@ impl BrowserWindow {
         );
     }
 
-    /// The entries of the Collection menu: every folder, or one of them,
-    /// to show; Add folder…; and the added folders to remove.
+    /// The entries of the Collection menu, as Windows 11 has them: Show
+    /// all, chosen by default, then one choice per location, and Manage
+    /// collection (HOME-025).
     pub(super) fn gallery_collection_entries(&self) -> Vec<MenuEntry> {
-        let collection = self.gallery_collection();
-        let added = self.context().settings_data().preferences.gallery_folders;
         let mut entries: Vec<MenuEntry> = vec![MenuItem::choice(
-            &ox_core::i18n::gettext("All folders"),
+            &ox_core::i18n::gettext("Show all"),
             Icon::Image,
             WindowAction::GalleryCollection,
             ALL_FOLDERS,
         )
+        .with_dot_mark()
         .into()];
-        for (name, uri) in &collection {
-            entries.push(MenuItem::choice(name, Icon::Folder, WindowAction::GalleryCollection, uri).into());
+        for (name, uri) in &self.gallery_collection() {
+            entries.push(
+                MenuItem::choice(name, Icon::Folder, WindowAction::GalleryCollection, uri)
+                    .with_dot_mark()
+                    .into(),
+            );
         }
         entries.push(MenuEntry::Divider);
         entries.push(
             MenuItem::new(
-                &ox_core::i18n::gettext("Add folder…"),
-                Icon::Add,
-                WindowAction::GalleryAddFolder,
+                &ox_core::i18n::gettext("Manage collection"),
+                Icon::Settings,
+                WindowAction::GalleryManage,
             )
             .into(),
         );
-        let removable: Vec<MenuEntry> = collection
-            .iter()
-            .filter(|(_, uri)| added.contains(uri))
-            .map(|(name, uri)| {
-                MenuItem::with_text_target(name, Icon::Folder, WindowAction::GalleryRemoveFolder, uri).into()
-            })
-            .collect();
-        if !removable.is_empty() {
-            entries.push(
-                MenuItem::submenu(
-                    &ox_core::i18n::gettext("Remove folder"),
-                    Icon::Delete,
-                    WindowAction::GalleryRemoveFolder,
-                    removable,
-                )
-                .into(),
-            );
-        }
         entries
     }
 
@@ -226,6 +276,18 @@ impl BrowserWindow {
             .filter(WidgetExt::is_visible)
             .inspect(gtk::MenuButton::popup)
             .is_some()
+    }
+
+    /// Puts the pointer on Gallery's scrubber `fraction` down its track,
+    /// for the snapshot hook's scenes; false when it does not show.
+    pub(crate) fn hover_gallery_scrubber(&self, fraction: f64) -> bool {
+        let pane = self.folder_pane();
+        let scrubber = pane.gallery().scrubber();
+        if !pane.shows_gallery() || !scrubber.is_mapped() {
+            return false;
+        }
+        scrubber.hover_track(Some(fraction));
+        true
     }
 
     /// Whether the active tab shows Gallery.
@@ -271,19 +333,20 @@ impl BrowserWindow {
     }
 
     /// Shows `pane`, which shows the tab of `store` on Gallery, as Gallery
-    /// is shown: Large icons, newest first in month groups.
+    /// is shown: Medium icons in justified rows, newest first, without
+    /// groups (HOME-019, HOME-026).
     pub(super) fn show_gallery_style(&self, pane: &FolderPane, store: &gio::ListStore) {
         let applying = self.imp().applying_style.replace(true);
         pane.set_styled_for(store, GALLERY_URI);
-        pane.icon_view().set_icon_groups(true);
-        if !shows_gallery_style(pane) {
-            pane.icon_view().set_icon_size(IconSize::LARGE);
-            pane.show_view(FolderView::Icons(IconSize::LARGE));
+        let coming = !pane.shows_gallery();
+        pane.set_gallery(true);
+        if coming || !matches!(pane.view(), FolderView::Icons(_)) {
+            pane.show_view(FolderView::Icons(IconSize::MEDIUM));
         }
         pane.model().set_folders_first(false);
         pane.model()
             .set_sort_role(Some((SortRole::Taken, SortDirection::Descending)));
-        group_pane(pane, Grouping::of(GroupBy::Month, GALLERY_SORT));
+        group_pane(pane, Grouping::of(GroupBy::None, GALLERY_SORT));
         self.update_expandability_for(pane);
         self.imp().applying_style.set(applying);
         if pane == self.folder_pane() {
@@ -292,9 +355,83 @@ impl BrowserWindow {
                 WindowAction::Direction,
                 &GALLERY_SORT.direction.as_str().to_variant(),
             );
-            self.set_action_state(WindowAction::GroupBy, &GroupBy::Month.as_str().to_variant());
+            self.set_action_state(WindowAction::GroupBy, &GroupBy::None.as_str().to_variant());
             self.show_pane_view_state();
             self.update_content();
         }
+    }
+}
+
+/// A photo's tile on screen, in the view's content coordinates, for tests.
+#[cfg(test)]
+#[derive(Debug, Clone)]
+pub(crate) struct ShownTile {
+    pub(crate) name: String,
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) width: f64,
+    pub(crate) height: f64,
+    /// The photo's thumbnail is drawn.
+    pub(crate) thumbnail: bool,
+}
+
+#[cfg(test)]
+impl BrowserWindow {
+    /// The photos' tiles on screen.
+    pub(crate) fn gallery_tiles(&self) -> Vec<ShownTile> {
+        let pane = self.folder_pane();
+        if !pane.shows_gallery() {
+            return Vec::new();
+        }
+        let mut tiles: Vec<ShownTile> = pane
+            .gallery()
+            .shown_tiles()
+            .into_iter()
+            .map(|(name, bounds, thumbnail)| ShownTile {
+                name,
+                thumbnail,
+                x: f64::from(bounds.x()),
+                y: f64::from(bounds.y()),
+                width: f64::from(bounds.width()),
+                height: f64::from(bounds.height()),
+            })
+            .collect();
+        tiles.sort_by(|a, b| a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x)));
+        tiles
+    }
+
+    /// The width the tiles' rows fill.
+    pub(crate) fn gallery_content_width(&self) -> f64 {
+        f64::from(self.folder_pane().gallery().canvas().width())
+    }
+
+    /// The heading over the photos.
+    pub(crate) fn gallery_heading(&self) -> Option<String> {
+        let pane = self.folder_pane();
+        pane.shows_gallery()
+            .then(|| pane.gallery().heading_text())
+            .flatten()
+    }
+
+    /// Scrolls Gallery to `y`, clamped.
+    pub(crate) fn gallery_scroll_to(&self, y: f64) {
+        let adjustment = self.folder_pane().gallery().vadjustment();
+        adjustment.set_value(y.min(adjustment.upper() - adjustment.page_size()));
+    }
+
+    /// Gallery's date scrubber.
+    pub(crate) fn gallery_scrubber(&self) -> Option<crate::folder_view::gallery_scrubber::GalleryScrubber> {
+        let pane = self.folder_pane();
+        pane.shows_gallery().then(|| pane.gallery().scrubber().clone())
+    }
+
+    /// The month the scrubber shows under the pointer.
+    pub(crate) fn gallery_hovered_month(&self) -> Option<String> {
+        self.folder_pane().gallery().hovered_month()
+    }
+
+    /// The tooltip of the photo at `position`.
+    pub(crate) fn gallery_tooltip(&self, position: u32) -> Option<String> {
+        self.folder_pane().gallery().canvas().tooltip_for(position)
     }
 }

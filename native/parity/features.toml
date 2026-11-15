@@ -1354,17 +1354,18 @@ native_note = "native/crates/ox-app/src/window/folder_search.rs (searched_folder
 id = "HOME-017"
 area = "HOME"
 title = "Gallery in the navigation pane, right under Home"
-behaviour = "The navigation pane lists 'Gallery' (photo glyph) right under Home, in Home's group, whether Settings' 'Show more items in the navigation pane' is on or off. Activating it opens Gallery (ox:gallery) in the tab, titled 'Gallery' with the same glyph on the tab and in the address bar. Windows 11 lists Gallery as a node in the navigation pane (build 23435); where it sits and its icon are not documented and are to be checked in Windows."
+behaviour = "The navigation pane lists 'Gallery' right under Home, in Home's group, with the picture glyph in Home's blue, whether Settings' 'Show more items in the navigation pane' is on or off. Activating it opens Gallery (ox:gallery) in the tab, titled 'Gallery' with the blue glyph on the tab and the glyph and 'Gallery' in the address bar, as checked in Windows 11 build 26200."
 origin = ["openxplorer"]
 priority = "could"
 openxplorer = "missing"
 sources = [
+  "comparison with Windows 11 File Explorer, build 26200 (2026-11-15): Gallery right under Home with a blue picture glyph, and in the address bar and tab",
   "https://blogs.windows.com/windows-insider/2023/04/14/announcing-windows-11-insider-preview-build-23435/",
 ]
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/sidebar/entries.rs (gallery row in Section::Home); native/crates/ox-app/src/window/gallery.rs; native/crates/ox-core/src/location/virtual_place.rs (GALLERY_URI, VirtualPlace::Gallery). Tests: native/crates/ox-app/src/window/tests/gallery.rs (the_gallery_row_is_right_under_home_and_opens_gallery); native/crates/ox-app/src/window/tests/sidebar_layout.rs (pinned_rows_line_up_with_home_on_the_32_pixel_pitch); native/crates/ox-app/src/window/location_view.rs (tab and address icon table). Microsoft names the node 'Gallery' (build 23435) and changed its icon (build 23451); its place in the pane and its icon are not documented: the Fluent image glyph is used, in the text colour. Check both in Windows."
+native_note = "native/crates/ox-app/src/window/sidebar/entries.rs (gallery row in Section::Home, Art::TintedGlyph(Icon::Image, Tint::Home)); native/crates/ox-app/src/window/location_view.rs (tab_icon); native/crates/ox-app/src/window/gallery.rs; native/crates/ox-core/src/location/virtual_place.rs (GALLERY_URI, VirtualPlace::Gallery). Tests: native/crates/ox-app/src/window/tests/gallery.rs (the_gallery_row_is_right_under_home_and_opens_gallery); native/crates/ox-app/src/window/sidebar/entries.rs (home_this_pc_and_network_show_their_glyphs_in_their_own_colours); native/crates/ox-app/src/window/tests/sidebar_layout.rs (pinned_rows_line_up_with_home_on_the_32_pixel_pitch); native/crates/ox-app/src/window/location_view.rs (tab and address icon table). Place and blue glyph as checked in Windows 11 build 26200 (2026-11-15)."
 
 [[feature]]
 id = "HOME-018"
@@ -1385,19 +1386,20 @@ native_note = "native/crates/ox-app/src/window/navigation.rs (resolve_address, l
 [[feature]]
 id = "HOME-019"
 area = "HOME"
-title = "Gallery: photos of Pictures and its subfolders, newest first, in month groups"
-behaviour = "Gallery lists the photos (image/* files) of the Pictures folder (XDG_PICTURES_DIR) and every subfolder walked as a search walks them (no links, other filesystems or system folders; only local folders are walked below the top level), as thumbnails in the icon view, the most recently taken at the top (Windows: 'Your most recently taken photos appear at the top of Gallery'). They are grouped by month, headed with the month's name and year ('March 2026'), newest month first and newest photo first within a month. A photo's date is its EXIF DateTimeOriginal, read in local time, else its date modified. Folders, videos and other files are not listed. Hidden photos follow Show hidden items."
+title = "Gallery: photos of Pictures and its subfolders, newest first, without groups"
+behaviour = "Gallery lists the photos (image/* files) of the Pictures folder (XDG_PICTURES_DIR) and every subfolder walked as a search walks them (no links, other filesystems or system folders; only local folders are walked below the top level), the most recently taken at the top (Windows: 'Your most recently taken photos appear at the top of Gallery'), without month groups or group headings, at Medium icons each time it opens; the status bar counts them ('6 items'). A photo's date is its EXIF DateTimeOriginal, read in local time, else its date modified. Folders, videos and other files are not listed. Hidden photos follow Show hidden items. Subfolders, order, no groups and the count as checked in Windows 11 build 26200."
 origin = ["openxplorer"]
 priority = "could"
 openxplorer = "missing"
 sources = [
+  "comparison with Windows 11 File Explorer, build 26200 (2026-11-15): Pictures with its subfolders, newest first, '6 items' for six photos, no month groups",
   "https://support.microsoft.com/en-us/topic/september-26-2023-windows-configuration-update-542780c2-594c-46cb-979d-11116fe164ba",
   "https://blogs.windows.com/windows-insider/2023/04/14/announcing-windows-11-insider-preview-build-23435/",
 ]
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/folder_view/gallery.rs (list_gallery on ox-core's walk_search with KindFacet::Images); native/crates/ox-app/src/folder_view/groups.rs (GroupBy::Month, month_group); native/crates/ox-app/src/folder_view/sort_roles.rs (SortRole::Taken, photo_date); native/crates/ox-app/src/window/gallery.rs (show_gallery_style: Large icons, never saved); native/crates/ox-app/src/folder_view/grid.rs and cells/heading_span.rs (headings in the icon sizes for Gallery only). Tests: native/crates/ox-app/src/window/tests/gallery.rs (photos_are_grouped_by_month_newest_first_by_date_taken_or_modified); native/crates/ox-app/src/folder_view/groups.rs (photos_group_by_the_month_taken_newest_first). Microsoft documents only that the most recently taken photos come first (KB of September 26, 2023); the month grouping, heading format, the date used, videos and the default folders are not documented: check them in Windows."
+native_note = "native/crates/ox-app/src/folder_view/gallery.rs (list_gallery, walk_folders, photo_facts_of); native/crates/ox-app/src/window/gallery.rs (show_gallery_style: Medium icons, SortRole::Taken descending, GroupBy::None); native/crates/ox-app/src/folder_view/sort_roles.rs (SortRole::Taken, photo_date). Tests: native/crates/ox-app/src/window/tests/gallery_view.rs (gallery_lists_photos_newest_first_without_month_headings); native/crates/ox-app/src/window/tests/gallery.rs (photos_are_newest_first_by_date_taken_or_modified). The month groups of the first version were removed (2026-11-15), as Windows' Gallery has none (checked in Windows 11 build 26200)."
 
 [[feature]]
 id = "HOME-020"
@@ -1435,11 +1437,12 @@ native_note = "native/crates/ox-core/src/search/tree_watch.rs (TreeWatch on the 
 id = "HOME-022"
 area = "HOME"
 title = "Gallery's photos open and act as files"
-behaviour = "In Gallery a double-click or Enter opens a photo in its default application; the right-click menu, the Menu key and Shift+F10 offer the file's menu (Open, Open with, Cut, Copy, Rename, Delete, Properties and the rest), with 'Open file location' (also in a new tab or window), which opens the photo's folder with the photo selected. Selection is as in any folder: click, Ctrl+click, Shift+click, rubber band, Ctrl+A; Delete moves the selection to the Recycle Bin; F2 renames. New and Paste are off, as Gallery is no folder. Item check boxes show while their setting is on, Ctrl+mouse wheel resizes the thumbnails, and Alt+P / Alt+Shift+P open the preview and details panes (builds 23451, 23440, 22631.2191)."
+behaviour = "In Gallery a double-click or Enter opens a photo in its default application. A photo's right-click menu (Windows 11 style) has Cut, Copy, Share and Delete in its strip, then Open, Open with, Share with, Set as desktop background (grayed: not done), Rotate right, Rotate left, Open file location, Add to Favorites, Compress to, Copy as path, Properties and Show more options, as checked in Windows 11 build 26200; Windows-only applications' commands (Edit with Paint, AI actions) are left out; Show more options and Shift+F10 open the classic file menu. Selection: click, Ctrl+click, Shift+click, rubber band, Ctrl+A, and the arrow keys among the tiles (Up and Down to the nearest tile of the row above or below, Home, End, Page Up, Page Down; Shift extends, Ctrl moves the keyboard alone, Ctrl+Space toggles); Delete moves the selection to the Recycle Bin; F2 renames. New and Paste are off, as Gallery is no folder. Ctrl+mouse wheel and View change the thumbnail size, and Alt+P / Alt+Shift+P open the preview and details panes (builds 23440, 22631.2191)."
 origin = ["openxplorer"]
 priority = "could"
 openxplorer = "missing"
 sources = [
+  "comparison with Windows 11 File Explorer, build 26200 (2026-11-15): a photo's right-click menu",
   "https://blogs.windows.com/windows-insider/2023/04/14/announcing-windows-11-insider-preview-build-23435/",
   "https://blogs.windows.com/windows-insider/2023/05/04/announcing-windows-11-insider-preview-build-23451/",
   "https://blogs.windows.com/windows-insider/2023/04/19/announcing-windows-11-insider-preview-build-23440/",
@@ -1448,7 +1451,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/result_location.rs (located_file for Gallery); the folder view's selection, menus and commands. Test: native/crates/ox-app/src/window/tests/gallery.rs (a_photo_opens_in_its_application_and_its_location_opens_with_it_selected). Microsoft documents check boxes (build 23451), Ctrl+mouse wheel resizing (build 23440), Alt+P and Shift+Alt+P (build 22631.2191) and a tooltip on hover (build 23471); single-click, double-click and the context menu are not documented: check them in Windows."
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (gallery_photo_menu); native/crates/ox-app/src/window/context_menu.rs (menu_for_selection, favorite_fact); native/crates/ox-app/src/folder_view/gallery_view.rs (GalleryCanvas: press, key, moved_to); native/crates/ox-app/src/window/input.rs (connect_view_activation, install_input). Tests: native/crates/ox-app/src/window/tests/gallery_commands.rs (a_photos_menu_is_windows_galleries); native/crates/ox-app/src/window/tests/gallery.rs (a_photo_opens_in_its_application_and_its_location_opens_with_it_selected); native/crates/ox-app/src/folder_view/justified.rs (the_layout_finds_rows_items_and_neighbours). The menu's items and order as checked in Windows 11 build 26200 (2026-11-15)."
 
 [[feature]]
 id = "HOME-023"
@@ -1485,12 +1488,13 @@ native_note = "native/crates/ox-app/src/folder_view/gallery.rs (a walk thread, b
 [[feature]]
 id = "HOME-025"
 area = "HOME"
-title = "Gallery's Collection menu chooses and adds folders"
-behaviour = "While Gallery is shown, the command bar has a 'Collection' menu button (hidden elsewhere). Its menu lists 'All folders', then the collection's folders: the Pictures folder and the folders the user added, each a choice that shows only that folder's photos (and its subfolders'), the current choice marked with a dot; 'Add folder…' asks for a folder (local folders only) and adds it to the collection; 'Remove folder' lists the added folders and removes the one chosen. The added folders are saved in settings.json as galleryFolders (stored only when there is one) and Gallery is listed again in every window when they change. The Pictures folder cannot be removed. Windows: 'You can choose which folders are shown in Gallery through the Collection dropdown. You can also add subfolders of existing sources' (build 23435); its 'Manage Collection' dialog is not copied, its look is not documented."
+title = "Gallery's Collection menu and the Gallery Locations dialog"
+behaviour = "While Gallery is shown, the command bar has a 'Collection' menu button (hidden elsewhere). Its menu lists 'Show all' (the default, marked with a dot), then one choice per location (the Pictures folder, then the folders the user added), each showing only that folder's photos and its subfolders', a separator and 'Manage collection'. Manage collection opens the 'Gallery Locations' dialog: the blue heading 'Choose which folders to see in Gallery', 'Manage your Gallery by adding or removing folders from locations across your PC. Folders added here will still be stored in their original locations.', the label 'Gallery locations' over a list of the folders, each with its name over its path and Pictures with 'Default save location' at its right; Add… (asks for a local folder) and Remove (grayed for Pictures); OK keeps the list and Cancel or Escape drops the changes. The added folders are saved in settings.json as galleryFolders (stored only when there is one) and Gallery is listed again in every window when they change. Menu and dialog as checked in Windows 11 build 26200."
 origin = ["openxplorer"]
 priority = "could"
 openxplorer = "missing"
 sources = [
+  "comparison with Windows 11 File Explorer, build 26200 (2026-11-15): the Collection menu and the Gallery Locations dialog",
   "https://blogs.windows.com/windows-insider/2023/04/14/announcing-windows-11-insider-preview-build-23435/",
   "https://blogs.windows.com/windows-insider/2023/06/14/announcing-windows-11-insider-preview-build-23481/",
   "https://blogs.windows.com/windows-insider/2023/05/24/announcing-windows-11-insider-preview-build-23466/",
@@ -1498,7 +1502,119 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/gallery.rs (gallery_collection, install_gallery_actions, gallery_collection_entries); native/crates/ox-app/src/window/command_bar.rs (show_collection); native/crates/ox-core/src/settings.rs (set_gallery_folder) and settings/preferences.rs (galleryFolders, gallery_folder_key). Tests: native/crates/ox-app/src/window/tests/gallery.rs (the_collection_menu_chooses_folders_and_added_folders_join_gallery); native/crates/ox-core/src/settings/preferences.rs (gallery_folders_keep_only_local_folders_once). The labels 'All folders', 'Add folder…' and 'Remove folder' are the app's: Windows' Collection menu items and its Manage Collection dialog are not documented."
+native_note = "native/crates/ox-app/src/window/gallery.rs (gallery_collection, install_gallery_actions, gallery_collection_entries); native/crates/ox-app/src/window/gallery_locations.rs (GalleryLocations); native/crates/ox-app/src/window/command_bar.rs (show_collection); native/crates/ox-core/src/settings.rs (set_gallery_folder) and settings/preferences.rs (galleryFolders, gallery_folder_key). Tests: native/crates/ox-app/src/window/tests/gallery_commands.rs (the_collection_menu_shows_all_each_location_and_manage_collection, gallery_locations_adds_and_removes_folders_and_ok_keeps_them, choosing_a_location_shows_only_its_photos); native/crates/ox-app/src/window/tests/gallery.rs (the_collection_menu_chooses_folders_and_added_folders_join_gallery); native/crates/ox-core/src/settings/preferences.rs (gallery_folders_keep_only_local_folders_once). The dialog is drawn by the app's own dialog frame over the window; 'across your PC' is kept as Windows words it."
+
+[[feature]]
+id = "HOME-026"
+area = "HOME"
+title = "Gallery lays its photos out in justified rows"
+behaviour = "Gallery shows its photos as a photo grid does: each thumbnail keeps its photo's aspect ratio (after its EXIF orientation), a narrow screenshot narrow and a panorama wide (ratios beyond 1:4 and 5:1 are cropped to them), in rows of one height that fill the view's width exactly, with the same 4-pixel gap between tiles and between rows; a last row short of the width keeps the row height from the left. Rows are about 160 pixels tall at Medium icons (Small 100, Large 240, Extra large 320). Only the rows near the part on screen have widgets, so 10,000 photos scroll smoothly. Layout and the Medium height as checked in Windows 11 build 26200."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "comparison with Windows 11 File Explorer, build 26200 (2026-11-15): the justified rows, kept aspect ratios, even gaps and rows about 160 pixels tall at Medium icons",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/folder_view/justified.rs (justify); native/crates/ox-app/src/folder_view/gallery_view.rs (GalleryCanvas, row_height); native/crates/ox-app/src/folder_view/gallery.rs (read_photo_facts: pixel size from the header, EXIF orientation); native/crates/ox-app/src/folder_view/cells/cell_owners.rs (TileSlot, register_slot); native/crates/ox-app/src/window/folder_pane.rs (set_gallery). Tests: native/crates/ox-app/src/folder_view/justified.rs (rows_fill_the_width_and_keep_aspect_ratios, odd_aspects_are_clamped_and_unknown_ones_are_square); native/crates/ox-app/src/folder_view/gallery_view.rs (rows_are_160_pixels_at_medium_icons); native/crates/ox-app/src/window/tests/gallery_view.rs (photos_fill_justified_rows_that_keep_their_aspect_ratios, a_jpeg_keeps_its_aspect_ratio_too). The gap and the heights other than Medium are the app's choice."
+
+[[feature]]
+id = "HOME-027"
+area = "HOME"
+title = "Gallery's heading names the months on screen"
+behaviour = "Gallery has no month headings; one heading over the photos names the months of the photos on screen, newest to oldest with an en dash ('November 2026 – July 2025'), or one month when they share it, and follows the scrolling. Checked in Windows 11 build 26200."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "comparison with Windows 11 File Explorer, build 26200 (2026-11-15): one heading with the months on screen ('November 2026 – July 2025'), no month headings",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/folder_view/gallery_view.rs (range_text, GalleryCanvas::shown_dates, GalleryView::show_dates). Tests: native/crates/ox-app/src/folder_view/gallery_view.rs (the_heading_names_the_newest_and_oldest_months); native/crates/ox-app/src/window/tests/gallery_view.rs (the_heading_shows_the_dates_on_screen_and_follows_the_scrolling); native/crates/ox-app/src/window/tests/gallery.rs (photos_are_newest_first_by_date_taken_or_modified)."
+
+[[feature]]
+id = "HOME-028"
+area = "HOME"
+title = "Gallery's date scrubber"
+behaviour = "At Gallery's right edge, in place of the scroll bar, a date scrubber: an up arrow, a track marking where each year starts ('2025'), and a down arrow. Hovering the track shows the month there in a tooltip ('November 2026'); a click or a drag on it scrolls Gallery there; the arrows scroll a row up or down. The track maps its height to the whole scroll, and a thin bar marks the view's place. It takes no keyboard focus, as a scroll bar does; the keys scroll the photos. Checked in Windows 11 build 26200."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "comparison with Windows 11 File Explorer, build 26200 (2026-11-15): the date scrubber at the right edge with year marks, up and down arrows, a month tooltip on hover, and click and drag",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/folder_view/gallery_scrubber.rs (GalleryScrubber); native/crates/ox-app/src/folder_view/gallery_view.rs (GalleryCanvas::timeline, GalleryView::new). Test: native/crates/ox-app/src/window/tests/gallery_view.rs (the_date_scrubber_marks_years_names_months_and_jumps_there). What Windows' arrows step by is not known: here a row."
+
+[[feature]]
+id = "HOME-029"
+area = "HOME"
+title = "A photo's tooltip in Gallery"
+behaviour = "Hovering a photo in Gallery shows 'Path: <name> (<folder>)', 'Item type: <type>' ('PNG File'), 'Date: <date taken, else modified>' and 'Size: <size>', as checked in Windows 11 build 26200. The name follows File name extensions."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "comparison with Windows 11 File Explorer, build 26200 (2026-11-15): the tooltip lines Path, Item type, Date and Size",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/folder_view/gallery_view.rs (photo_tooltip). Test: native/crates/ox-app/src/window/tests/gallery_view.rs (a_photos_tooltip_says_its_path_type_date_and_size)."
+
+[[feature]]
+id = "HOME-030"
+area = "HOME"
+title = "Gallery's command bar"
+behaviour = "In Gallery the command bar shows New (grayed), Cut, Copy, Paste, Rename, Share (where the desktop shares), Delete, Sort (grayed: Gallery is not sorted), View, Collection and '…'; while photos are selected it also shows Set as background (grayed: not done), Rotate left and Rotate right, after Collection. Other folders keep their bar. Checked in Windows 11 build 26200."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "comparison with Windows 11 File Explorer, build 26200 (2026-11-15): the command bar in Gallery and the photo commands with a photo selected",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/command_bar.rs (show_gallery_menus, show_photo_commands); native/crates/ox-app/src/window/gallery.rs (show_gallery_commands, install_gallery_actions). Tests: native/crates/ox-app/src/window/tests/gallery_commands.rs (the_command_bar_grays_sort_and_offers_photo_commands_for_a_photo, set_as_background_shows_grayed). Set as background is not done: the app has no opt-in way to set the desktop's background, so the command shows grayed with a tooltip saying so."
+
+[[feature]]
+id = "HOME-031"
+area = "HOME"
+title = "Gallery's View menu"
+behaviour = "In Gallery the View menu offers Extra large icons, Large icons, Medium icons (chosen when Gallery opens), Small icons, then the Details pane and the Preview pane, then Show; List, Details, Tiles, Content and the app's other View items are not offered there. Checked in Windows 11 build 26200."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "comparison with Windows 11 File Explorer, build 26200 (2026-11-15): the View menu in Gallery",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/command_bar/menus.rs (gallery_view_menu); native/crates/ox-app/src/window/command_bar.rs (show_gallery_menus). Test: native/crates/ox-app/src/window/tests/gallery_commands.rs (the_view_menu_offers_only_the_icon_sizes_and_the_panes)."
+
+[[feature]]
+id = "HOME-032"
+area = "HOME"
+title = "Rotate left and Rotate right turn photos losslessly"
+behaviour = "Rotate left and Rotate right (Gallery's command bar and a photo's menu) turn every selected photo a quarter turn. A JPEG keeps its pixels: only its EXIF orientation changes (in place, or with IFD0 copied with an orientation to the end of its EXIF block, or in a new EXIF block holding only the orientation). A PNG's pixels are turned and saved as PNG again, losslessly (its text and colour chunks are not kept). Other types are not offered. The new file is written beside the photo and renamed over it, keeping its permissions; a failure leaves the photo as it was and says why. No new dependency."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "comparison with Windows 11 File Explorer, build 26200 (2026-11-15): Rotate left and Rotate right in Gallery's command bar and a photo's menu",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/photo_rotate.rs (rotate_file, turn_jpeg, turned_orientation); native/crates/ox-app/src/window/gallery.rs (rotate_selection, rotatable_selection). Tests: native/crates/ox-app/src/photo_rotate.rs (orientations_turn_a_quarter_at_a_time, jpegs_turn_by_their_orientation_alone, a_png_turns_by_its_pixels); native/crates/ox-app/src/window/tests/gallery_commands.rs (rotate_turns_jpegs_by_their_orientation_and_pngs_by_their_pixels). Which types Windows rotates is not documented here."
 
 [[feature]]
 id = "TAB-001"

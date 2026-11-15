@@ -1030,6 +1030,54 @@ fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
     }
 }
 
+/// A photo's menu in Gallery, as Windows 11 File Explorer's Gallery shows
+/// it (HOME-022): Cut, Copy, Share and Delete in the strip, then Open,
+/// Open with, Share with, Set as desktop background (grayed: the app has
+/// no way to set it yet), Rotate right, Rotate left, Open file location,
+/// Add to Favorites, Compress to, Copy as path, Properties and Show more
+/// options. Windows-only applications' commands are left out.
+pub(crate) fn gallery_photo_menu(facts: &ItemFacts) -> ContextMenu {
+    let mut entries = vec![open_item(facts)];
+    entries.extend(compact_open_with(facts));
+    entries.extend(share_with_item(facts));
+    entries.push(
+        item(
+            ox_core::i18n::gettext_static("Set as desktop background"),
+            Icon::Image,
+            WindowAction::SetAsBackground,
+        )
+        .into(),
+    );
+    entries.push(
+        item(
+            ox_core::i18n::gettext_static("Rotate right"),
+            Icon::ArrowClockwise,
+            WindowAction::RotateRight,
+        )
+        .into(),
+    );
+    entries.push(
+        item(
+            ox_core::i18n::gettext_static("Rotate left"),
+            Icon::ArrowCounterclockwise,
+            WindowAction::RotateLeft,
+        )
+        .into(),
+    );
+    entries.extend(file_location_items(facts).into_iter().take(1));
+    entries.extend(favorite_item(facts));
+    entries.push(compress_submenu());
+    entries.push(copy_path_item());
+    entries.push(properties_item());
+    entries.push(MenuEntry::Divider);
+    entries.push(show_more_options_item());
+    let [cut, copy, _, _, delete] = edit_items(facts);
+    let mut strip = vec![cut, copy];
+    strip.extend(share_item(facts));
+    strip.push(delete);
+    ContextMenu { entries, strip }
+}
+
 /// Rename items…, under Rename while several items are selected: the
 /// "Rename items" dialog with its `#` template (OPS-014). Disabled, saying
 /// why, in a previous version; its action is off wherever Rename is.
