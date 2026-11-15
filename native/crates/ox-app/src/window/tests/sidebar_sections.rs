@@ -188,3 +188,33 @@ fn a_click_on_a_chevron_opens_no_place() {
     wait_for_frames(&test.window, 2);
     assert_eq!(test.tab_listing_needs().len(), tabs, "no tab opened");
 }
+
+/// Left and Right with nowhere to go keep the keyboard on the row, as in
+/// Windows' navigation pane, where Right expands the selection or selects
+/// its first subfolder and Left collapses it or selects the folder it is
+/// in (<https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows>,
+/// File Explorer keyboard shortcuts). GTK moved the keyboard out of the
+/// pane instead, to the resize handle beside it, where the next Left or
+/// Right resized the pane.
+///
+/// parity: SIDE-033, ACC-006
+#[gtk::test]
+fn left_and_right_with_nowhere_to_go_keep_the_keyboard_on_the_row() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    for name in ["Local Disk", "Home"] {
+        let row = row_named(&test, name);
+        row.grab_focus();
+        for key in [gdk::Key::Right, gdk::Key::Left] {
+            if name == "Local Disk" && key == gdk::Key::Left {
+                continue; // Left steps out to This PC.
+            }
+            assert!(press(&test, key), "{key:?} on {name} is taken");
+            assert_eq!(
+                gtk::prelude::GtkWindowExt::focus(&test.window),
+                Some(row.clone().upcast()),
+                "{key:?} keeps the keyboard on {name}"
+            );
+        }
+    }
+}
