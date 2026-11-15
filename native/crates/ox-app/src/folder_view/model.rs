@@ -43,6 +43,44 @@ pub(crate) struct SelectionSummary {
     pub all_files: bool,
 }
 
+impl SelectionSummary {
+    /// The counts of `items`.
+    fn of(items: &[FileItem]) -> Self {
+        let mut summary = Self {
+            all_files: true,
+            ..Self::default()
+        };
+        for item in items {
+            summary.count += 1;
+            match item.file_size() {
+                Some(size) => summary.bytes += size,
+                None => summary.all_files = false,
+            }
+        }
+        summary.all_files &= summary.count > 0;
+        summary
+    }
+}
+
+/// The selected items in display order, with their counts.
+#[derive(Debug)]
+struct SelectedItems {
+    items: Vec<FileItem>,
+    summary: SelectionSummary,
+}
+
+/// The positions in `bitset`, ascending.
+fn positions_in(bitset: &gtk::Bitset) -> Vec<u32> {
+    let Some((rest, first)) = gtk::BitsetIter::init_first(bitset) else {
+        return Vec::new();
+    };
+    // A list model has at most u32::MAX positions.
+    let mut positions = Vec::with_capacity(usize::try_from(bitset.size()).unwrap_or(0));
+    positions.push(first);
+    positions.extend(rest);
+    positions
+}
+
 /// Filter, sort and selection over the active tab's store.
 #[derive(Debug)]
 pub(crate) struct FolderModel {
@@ -64,6 +102,9 @@ pub(crate) struct FolderModel {
     collapsed: CollapsedGroups,
     /// The store shown, whose collapsed groups stay while it does.
     store: RefCell<Option<glib::WeakRef<gio::ListStore>>>,
+    /// The selected items, once looked up; forgotten when the selection or
+    /// the items change.
+    selected: Rc<RefCell<Option<Rc<SelectedItems>>>>,
 }
 
 impl FolderModel {
@@ -81,7 +122,19 @@ impl FolderModel {
         let filter_model = gtk::FilterListModel::new(None::<gio::ListStore>, Some(filter.clone()));
         let sort_model = gtk::SortListModel::new(Some(filter_model.clone()), None::<gtk::Sorter>);
         let tree = FolderTree::new(&sort_model, &filter);
-        let selection = gtk::MultiSelection::new(Some(tree.model().clone()));
+        // Folders do not expand yet, so the selection shows the sorted items.
+        let selection = gtk::MultiSelection::new(Some(sort_model.clone()));
+        // Connected first, so the window's handlers, which run after, never
+        // read the selection of before the change.
+        let selected: Rc<RefCell<Option<Rc<SelectedItems>>>> = Rc::default();
+        let forget = Rc::clone(&selected);
+        selection.connect_selection_changed(move |_, _, _| {
+            forget.replace(None);
+        });
+        let forget = Rc::clone(&selected);
+        selection.connect_items_changed(move |_, _, _, _| {
+            forget.replace(None);
+        });
         let sort_options = SharedOptions::default();
         Self {
             filter_state,
@@ -96,6 +149,7 @@ impl FolderModel {
             sort_options,
             collapsed: CollapsedGroups::default(),
             store: RefCell::default(),
+            selected,
         }
     }
 
@@ -160,11 +214,32 @@ impl FolderModel {
             // items are shown without it, and folders do not expand.
             if grouping.is_some() {
                 self.tree.set_expandable(false);
-                self.selection.set_model(Some(&self.sort_model));
-            } else {
-                self.selection.set_model(Some(self.tree.model()));
             }
+            self.selection.set_model(Some(&self.shown_items()));
             self.select_uris(&selected);
+        }
+    }
+
+    /// Lets folders expand in place (VIEW-035), or stops them, keeping the
+    /// selection: while they may, the selection shows the tree of the
+    /// sorted items and the expanded folders' contents, else the sorted
+    /// items themselves.
+    pub(crate) fn set_expandable(&self, expandable: bool) {
+        if self.tree.is_expandable() == expandable {
+            return;
+        }
+        let selected = self.selected_uris();
+        self.tree.set_expandable(expandable);
+        self.selection.set_model(Some(&self.shown_items()));
+        self.select_uris(&selected);
+    }
+
+    /// What the selection shows: the tree while folders may expand and the
+    /// items are not grouped, else the sorted items.
+    fn shown_items(&self) -> gio::ListModel {
+        match self.tree.model() {
+            Some(tree) if self.grouping().is_none() => tree.upcast(),
+            _ => self.sort_model.clone().upcast(),
         }
     }
 
@@ -322,19 +397,42 @@ impl FolderModel {
     }
 
     /// Display positions of the selected items, ascending.
+    ///
+    /// Walks the selection's bitset once: asking it for each nth member
+    /// instead searched the bitset again for every one, which with 100,000
+    /// items selected took most of a second.
     pub(crate) fn selected_positions(&self) -> Vec<u32> {
-        let bitset = self.selection.selection();
-        // A list model has at most u32::MAX positions.
-        let count = u32::try_from(bitset.size()).unwrap_or(u32::MAX);
-        (0..count).map(|nth| bitset.nth(nth)).collect()
+        positions_in(&self.selection.selection())
     }
 
     /// The selected items in display order.
+    ///
+    /// Many parts of the window ask after each change of the selection
+    /// (the status bar, the details pane, the commands), so the items are
+    /// looked up once and kept until the selection or the items change.
     pub(crate) fn selected_items(&self) -> Vec<FileItem> {
-        self.selected_positions()
+        self.selected().items.clone()
+    }
+
+    /// The selected items and their summary, looked up again only after
+    /// the selection or the items changed.
+    fn selected(&self) -> Rc<SelectedItems> {
+        if let Some(selected) = self.selected.borrow().as_ref() {
+            return Rc::clone(selected);
+        }
+        #[cfg(test)]
+        tests::LOOKUPS.with(|lookups| lookups.set(lookups.get() + 1));
+        let items: Vec<FileItem> = self
+            .selected_positions()
             .into_iter()
             .filter_map(|position| self.item(position))
-            .collect()
+            .collect();
+        let selected = Rc::new(SelectedItems {
+            summary: SelectionSummary::of(&items),
+            items,
+        });
+        self.selected.replace(Some(Rc::clone(&selected)));
+        selected
     }
 
     /// The first selected position, if any.
@@ -348,19 +446,7 @@ impl FolderModel {
 
     /// Count and size of the selection.
     pub(crate) fn summary(&self) -> SelectionSummary {
-        let mut summary = SelectionSummary {
-            all_files: true,
-            ..SelectionSummary::default()
-        };
-        for item in self.selected_items() {
-            summary.count += 1;
-            match item.file_size() {
-                Some(size) => summary.bytes += size,
-                None => summary.all_files = false,
-            }
-        }
-        summary.all_files &= summary.count > 0;
-        summary
+        self.selected().summary
     }
 
     /// Selects only `position`.
@@ -525,6 +611,87 @@ mod tests {
         let (model, _store) = model_with(&["a.txt", "b.txt"]);
         assert_eq!(model.name_at(1).as_deref(), Some("b.txt"));
         assert_eq!(model.name_at(2), None);
+    }
+
+    /// While folders may not expand (the default), the selection shows the
+    /// sorted items themselves, so a batch of a large folder's listing is
+    /// not copied into a tree of every item; while they may, it shows the
+    /// tree, and the selection survives each switch.
+    ///
+    /// parity: PERF-002
+    #[gtk::test]
+    fn the_selection_shows_a_tree_only_while_folders_may_expand() {
+        let (model, store) = model_with(&["a.txt", "b.txt"]);
+        let shows_sorted = |model: &FolderModel| {
+            model
+                .selection()
+                .model()
+                .and_downcast::<gtk::SortListModel>()
+                .is_some()
+        };
+        assert!(shows_sorted(&model));
+        model.select_uris(&[uri("b.txt")]);
+
+        model.set_expandable(true);
+        assert!(model
+            .selection()
+            .model()
+            .and_downcast::<gtk::TreeListModel>()
+            .is_some());
+        assert_eq!(model.selected_uris(), [uri("b.txt")]);
+        store.append(&FileItem::new(file_entry("c.txt")));
+        assert_eq!(model.n_items(), 3);
+
+        model.set_expandable(false);
+        assert!(shows_sorted(&model));
+        assert_eq!(model.selected_uris(), [uri("b.txt")]);
+        assert_eq!(model.n_items(), 3);
+    }
+
+    thread_local! {
+        /// How often the model looked the selected items up.
+        pub(super) static LOOKUPS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+    }
+
+    fn lookups() -> u32 {
+        LOOKUPS.with(std::cell::Cell::get)
+    }
+
+    /// The status bar, the details pane and the commands each ask for the
+    /// selection after it changes; with 100,000 items selected each asking
+    /// looked every item up again. Now one change costs one lookup.
+    ///
+    /// parity: PERF-004
+    #[gtk::test]
+    fn the_selected_items_are_looked_up_once_per_change() {
+        let names: Vec<String> = (0..3000).map(|number| format!("file {number}.txt")).collect();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let (model, store) = model_with(&names);
+        model.select_all();
+        let before = lookups();
+        for _ in 0..5 {
+            assert_eq!(model.summary().count, 3000);
+            assert_eq!(model.selected_items().len(), 3000);
+            assert_eq!(model.selected_uris().len(), 3000);
+        }
+        assert_eq!(lookups() - before, 1);
+
+        model.select_only(1);
+        assert_eq!(model.summary().count, 1, "a new selection is looked up again");
+        assert_eq!(model.selected_items()[0].entry().name, "file 1.txt");
+        store.remove(1);
+        assert_eq!(model.summary().count, 0, "so are changed items");
+        assert_eq!(lookups() - before, 3);
+    }
+
+    /// The positions of a selection come from one walk over it, in order.
+    #[gtk::test]
+    fn selected_positions_are_ascending_and_complete() {
+        let selected = gtk::Bitset::new_empty();
+        selected.add_range(5, 3);
+        selected.add(66_000);
+        assert_eq!(positions_in(&selected), [5, 6, 7, 66_000]);
+        assert!(positions_in(&gtk::Bitset::new_empty()).is_empty());
     }
 
     /// parity: NAV-014
