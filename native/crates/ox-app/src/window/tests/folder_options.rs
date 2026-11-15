@@ -587,3 +587,56 @@ fn folder_options_choices_and_buttons_have_access_keys() {
     assert!(own_window.is_active());
     close_folder_options(&test, &options, "Cancel");
 }
+
+/// Under the real keyboard, Alt and an option's letter choose it, Enter
+/// with a choice focused presses OK, the default button, which saves and
+/// closes Folder Options, as in Windows, and Escape closes it without
+/// saving.
+///
+/// parity: VIEW-020, ACC-006
+#[gtk::test]
+fn real_keys_choose_options_and_enter_presses_ok() {
+    use gtk::gdk::Key;
+
+    use super::view_styles::folder_options_over;
+    use crate::test_support::harness::wait_for_frames;
+    use crate::test_support::pointer::Pointer;
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let mut keys = Pointer::connect();
+    let own_window = || {
+        test.context
+            .settings_data()
+            .preferences
+            .open_folders_in_own_window
+    };
+    let alt = |keys: &mut Pointer, key: Key| {
+        keys.hold_key(Key::Alt_L);
+        keys.tap_key(key);
+        keys.let_go_key(Key::Alt_L);
+    };
+
+    let options = open_folder_options(&test);
+    wait_for_frames(&options, 3);
+    alt(&mut keys, Key::w);
+    wait_until("Alt+W to choose Open each folder in its own window", || {
+        option_check(&options, "General", "Open each folder in its own window").is_active()
+    });
+    keys.tap_key(Key::Return);
+    wait_until("Enter to press OK", || folder_options_over(&test).is_none());
+    wait_until("the choice to be saved", own_window);
+
+    let options = open_folder_options(&test);
+    wait_for_frames(&options, 3);
+    alt(&mut keys, Key::a);
+    wait_until("Alt+A to choose Open each folder in the same window", || {
+        option_check(&options, "General", "Open each folder in the same window").is_active()
+    });
+    keys.tap_key(Key::Escape);
+    wait_until("Escape to close Folder Options", || {
+        folder_options_over(&test).is_none()
+    });
+    assert!(own_window(), "Escape saves nothing");
+    keys.move_to(720, 500);
+}
