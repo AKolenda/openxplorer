@@ -120,12 +120,11 @@ impl Reader {
     async fn next(&self) -> Read {
         poll_fn(|context| {
             let mut mailbox = lock(&self.mailbox);
-            match mailbox.reads.pop_front() {
-                Some(read) => Poll::Ready(read),
-                None => {
-                    mailbox.waker = Some(context.waker().clone());
-                    Poll::Pending
-                }
+            if let Some(read) = mailbox.reads.pop_front() {
+                Poll::Ready(read)
+            } else {
+                mailbox.waker = Some(context.waker().clone());
+                Poll::Pending
             }
         })
         .await
