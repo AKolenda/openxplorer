@@ -164,6 +164,10 @@ pub(crate) struct Picker {
     /// it hides, as the window hides known types' extensions: the text
     /// shown and that extension, with its dot (`extra_2`, ".txt").
     hidden_extension: RefCell<Option<(String, String)>>,
+    /// Whether the choice being checked came from File name or the
+    /// accept button rather than a file activated in the list, so a
+    /// question about it gives the keyboard back to File name.
+    chosen_by_name: Cell<bool>,
 }
 
 impl Picker {
@@ -550,6 +554,10 @@ impl BrowserWindow {
             self.set_action_enabled(action, false);
         }
         self.update_share_command();
+        // Enter that nothing else takes presses the accept button, as the
+        // default push button of Windows' common dialog: in a folder
+        // dialog with nothing selected, it chooses the folder shown.
+        self.set_default_widget(Some(&picker.accept));
         // Resizable like any window, from 670 × 470 up (`window.ui`), at
         // the size the last dialog was left at (window_size.rs).
         self.open_dialog_at_saved_size();
@@ -557,6 +565,7 @@ impl BrowserWindow {
         self.open_start_folder(start_folders);
         self.listen_for_escape();
         self.cancel_on_quit_key();
+        self.new_folder_from_name_box();
         self.keep_one_selected();
         self.present();
         self.remember_dialog_size();
@@ -739,6 +748,26 @@ impl BrowserWindow {
     /// (INT-032).
     pub(super) fn is_file_dialog(&self) -> bool {
         self.picker().is_some()
+    }
+
+    /// After a question on the dialog layer closed with the dialog still
+    /// open: gives the keyboard back to File name, with the name selected,
+    /// when the choice asked about came from there or the accept button,
+    /// as a Windows dialog gives focus back to the control that had it.
+    /// Returns false to leave the keyboard to the file list.
+    pub(super) fn give_keyboard_back_to_name(&self) -> bool {
+        let Some(picker) = self.picker() else {
+            return false;
+        };
+        let Some(name) = picker.name.as_ref() else {
+            return false;
+        };
+        if !picker.chosen_by_name.get() || picker.reply.is_answered() || picker.pending.borrow().is_some() {
+            return false;
+        }
+        name.grab_focus();
+        select_name(&picker, name);
+        true
     }
 
     /// The window's picker, if it is one.
@@ -944,6 +973,7 @@ impl BrowserWindow {
             return;
         }
         picker.checking.set(true);
+        picker.chosen_by_name.set(matches!(choosing, Choosing::Accept));
         self.update_picker();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
@@ -1299,6 +1329,9 @@ impl BrowserWindow {
         let (replace_key, keep_key) = if keep_focused { ('y', 'n') } else { ('r', 'c') };
         frame.also_press_with(&replace, replace_key);
         frame.also_press_with(&keep, keep_key);
+        // And the letters alone, as the app's other Windows message boxes
+        // take them.
+        frame.press_with_letters_alone();
         // However the question ends: a button, Escape, or the dialog
         // closing under it.
         frame.connect_closed(glib::clone!(
@@ -1543,6 +1576,31 @@ impl BrowserWindow {
         self.add_controller(shortcuts);
     }
 
+    /// Ctrl+Shift+N makes a new folder from File name too, where the
+    /// window's file keys, which leave a text field its own keys, do
+    /// nothing; the box has no use for the key. As in Windows' dialog,
+    /// the folder keys work from File name.
+    fn new_folder_from_name_box(&self) {
+        let shortcuts = gtk::ShortcutController::new();
+        shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let trigger = gtk::ShortcutTrigger::parse_string("<Primary><Shift>n");
+        let new_folder = gtk::CallbackAction::new(|widget, _| {
+            let Some(window) = widget.downcast_ref::<BrowserWindow>() else {
+                return glib::Propagation::Proceed;
+            };
+            let enabled = window
+                .lookup_action(WindowAction::NewFolder.name())
+                .is_some_and(|action| action.is_enabled());
+            if !window.focus_is_in_picker_name() || window.dialog_in_front() || !enabled {
+                return glib::Propagation::Proceed;
+            }
+            WindowAction::NewFolder.activate_from(window, None);
+            glib::Propagation::Stop
+        });
+        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(new_folder)));
+        self.add_controller(shortcuts);
+    }
+
     /// Builds the bar for `request` and puts it under the status bar.
     fn build_picker_bar(&self, request: ChooserRequest, reply: ChooserReply) -> Picker {
         let bar = &self.imp().picker_bar;
@@ -1561,7 +1619,7 @@ impl BrowserWindow {
         };
         let name = suggested.map(|suggested| {
             let entry = gtk::Entry::builder().text(suggested).hexpand(true).build();
-            attach_field(&fields, row, "File name:", &entry);
+            attach_field(&fields, row, "File _name:", &entry);
             row += 1;
             entry
         });
@@ -1581,9 +1639,9 @@ impl BrowserWindow {
                 place_open_type_list(&fields, &list);
             } else {
                 let caption = if name.is_some() {
-                    "Save as type:"
+                    "Save as _type:"
                 } else {
-                    "File type:"
+                    "File _type:"
                 };
                 attach_field(&fields, row, caption, &list);
                 row += 1;
@@ -1634,6 +1692,7 @@ impl BrowserWindow {
             attached_to_caller: Rc::default(),
             caller: None,
             hidden_extension: RefCell::new(None),
+            chosen_by_name: Cell::new(false),
         }
     }
 
@@ -1684,14 +1743,37 @@ impl BrowserWindow {
 }
 
 /// The controls of the caller's extra choices, from row `row` of
-/// `fields` on; `row` moves past them.
+/// `fields` on; `row` moves past them. The check boxes sit side by side on
+/// one row, where the first of them comes, wrapping only when the dialog
+/// is too narrow, as GTK's own dialog lines them up, so several of them
+/// leave the file list its room; a list keeps a row of its own.
 fn choice_controls(fields: &gtk::Grid, row: &mut i32, request: &ChooserRequest) -> Vec<ChoiceControl> {
     let mut choices = Vec::new();
+    let mut check_row: Option<gtk::FlowBox> = None;
     for choice in &request.choices {
         if choice.is_check_box() {
             let check = gtk::CheckButton::with_label(&choice.label);
             check.set_active(choice.initial == "true");
-            fields.attach(&check, 1, *row, 1, 1);
+            let boxes = check_row.get_or_insert_with(|| {
+                let boxes = gtk::FlowBox::builder()
+                    .selection_mode(gtk::SelectionMode::None)
+                    .orientation(gtk::Orientation::Horizontal)
+                    .column_spacing(16)
+                    .row_spacing(4)
+                    .homogeneous(false)
+                    .max_children_per_line(u32::try_from(request.choices.len()).unwrap_or(1).max(1))
+                    .hexpand(true)
+                    .build();
+                boxes.add_css_class("picker-check-boxes");
+                fields.attach(&boxes, 1, *row, 1, 1);
+                *row += 1;
+                boxes
+            });
+            boxes.append(&check);
+            // The check box takes the keyboard, not the cell around it.
+            if let Some(cell) = check.parent() {
+                cell.set_focusable(false);
+            }
             choices.push(ChoiceControl::Check(choice.id.clone(), check));
         } else {
             let labels: Vec<&str> = choice.options.iter().map(|(_, label)| label.as_str()).collect();
@@ -1699,16 +1781,20 @@ fn choice_controls(fields: &gtk::Grid, row: &mut i32, request: &ChooserRequest) 
             let ids: Vec<String> = choice.options.iter().map(|(id, _)| id.clone()).collect();
             let initial = ids.iter().position(|id| *id == choice.initial).unwrap_or(0);
             list.set_selected(u32::try_from(initial).unwrap_or(0));
-            attach_field(fields, *row, &format!("{}:", choice.label), &list);
+            // The caller's words as they are: an underscore is not a key.
+            let caption = format!("{}:", choice.label.replace('_', "__"));
+            attach_field(fields, *row, &caption, &list);
             choices.push(ChoiceControl::List(choice.id.clone(), ids, list));
+            *row += 1;
         }
-        *row += 1;
     }
     choices
 }
 
 /// Puts `caption` and `control` in row `row` of `fields`, labelled for
-/// screen readers.
+/// screen readers. An underscore in `caption` marks the letter that, with
+/// Alt, moves the keyboard to `control`, as Windows' dialog underlines the
+/// N of "File name:" and the T of "Save as type:".
 fn attach_field(
     fields: &gtk::Grid,
     row: i32,
@@ -1717,9 +1803,18 @@ fn attach_field(
 ) {
     let label = gtk::Label::builder()
         .label(caption)
+        .use_underline(true)
+        .mnemonic_widget(control)
         .xalign(1.0)
         .css_classes(["picker-label"])
         .build();
+    // A list takes the keyboard on its button, not on itself.
+    if let Some(button) = control
+        .dynamic_cast_ref::<gtk::DropDown>()
+        .and_then(WidgetExt::first_child)
+    {
+        label.set_mnemonic_widget(Some(&button));
+    }
     control.update_relation(&[gtk::accessible::Relation::LabelledBy(&[label.upcast_ref()])]);
     fields.attach(&label, 0, row, 1, 1);
     fields.attach(control, 1, row, 1, 1);
@@ -3739,6 +3834,159 @@ mod tests {
         assert_eq!(uris, [fixture.uri_of("extra_2.txt")]);
     }
 
+    /// After Confirm Save As closes without saving (No, Escape or its
+    /// close button), the keyboard is back in File name with the name
+    /// selected, as a Windows dialog gives focus back to the control that
+    /// had it ("Dialog Box Programming Considerations", `WM_ACTIVATE`), so
+    /// a new name can be typed at once. Before, the file list took it, and
+    /// the next Enter opened the first folder there or the file under the
+    /// keyboard instead of asking again. Y and N alone answer the question,
+    /// as the app's other Windows message boxes take them.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn after_confirm_save_as_the_keyboard_is_back_in_file_name() {
+        let fixture = Fixture::empty();
+        fs::write(fixture.path("notes.txt"), "old").expect("a file");
+        std::fs::create_dir(fixture.path("Archive")).expect("a folder");
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "notes.txt".to_variant())],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let name = window
+            .picker()
+            .expect("a picker")
+            .name
+            .clone()
+            .expect("a name box");
+        let back_in_name = |how: &str| {
+            wait_until("the question to close", || {
+                window.dialog_layer().shown().is_none()
+            });
+            settle();
+            assert!(
+                window.focus_is_in_picker_name(),
+                "{how}: File name has the keyboard"
+            );
+            assert_eq!(name.text(), "notes.txt", "{how}: the name is kept");
+            assert_eq!(
+                name.selection_bounds(),
+                Some((0, 5)),
+                "{how}: the name is selected"
+            );
+        };
+
+        enter(&name);
+        press_in(&replace_question(&portal.test), "No");
+        back_in_name("No");
+
+        enter(&name);
+        replace_question(&portal.test).close();
+        back_in_name("Escape");
+
+        enter(&name);
+        assert!(
+            press_letter(&replace_question(&portal.test), gdk::Key::n),
+            "N alone answers No"
+        );
+        back_in_name("N");
+        assert!(answer.borrow().is_none(), "nothing was saved");
+        assert_eq!(
+            fs::read_to_string(fixture.path("notes.txt")).expect("kept"),
+            "old"
+        );
+
+        enter(&name);
+        assert!(
+            press_letter(&replace_question(&portal.test), gdk::Key::y),
+            "Y alone answers Yes"
+        );
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("notes.txt")]);
+    }
+
+    /// Presses the letter `key` without Alt in `frame`, through its
+    /// shortcuts: whether one took it.
+    fn press_letter(frame: &crate::dialog::DialogFrame, key: gdk::Key) -> bool {
+        frame
+            .observe_controllers()
+            .iter::<glib::Object>()
+            .filter_map(Result::ok)
+            .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+            .flat_map(|controller| {
+                (0..controller.n_items())
+                    .filter_map(|position| controller.item(position).and_downcast::<gtk::Shortcut>())
+                    .collect::<Vec<_>>()
+            })
+            .filter(|shortcut| {
+                shortcut
+                    .trigger()
+                    .is_some_and(|trigger| is_triggered_by(&trigger, key, gdk::ModifierType::empty()))
+            })
+            .any(|shortcut| {
+                shortcut
+                    .action()
+                    .is_some_and(|action| action.activate(gtk::ShortcutActionFlags::empty(), frame, None))
+            })
+    }
+
+    /// Enter that nothing in the dialog takes presses its accept button,
+    /// as Windows' common dialogs make Open, Save or Select Folder the
+    /// default push button, which Enter chooses ("Dialog Box Programming
+    /// Considerations", `DM_GETDEFID`). In a folder dialog with the file list
+    /// focused and no item under the keyboard, as in an empty folder, Enter
+    /// chose nothing before; now it answers with the folder shown. A Save
+    /// dialog saves its name.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn enter_that_nothing_takes_presses_the_accept_button() {
+        let fixture = Fixture::empty();
+        std::fs::create_dir(fixture.path("Photos")).expect("a folder");
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "OpenFile",
+            vec![("directory", true.to_variant())],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let accept = window.picker().expect("a picker").accept.clone();
+        assert_eq!(
+            window.default_widget().as_ref(),
+            Some(accept.upcast_ref::<gtk::Widget>()),
+            "the accept button is the default button"
+        );
+        window.folder_pane().focus_view();
+        assert!(window.selected_entries().is_empty());
+        window.emit_by_name::<()>("activate-default", &[]);
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri()], "the folder shown");
+
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "list.txt".to_variant())],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        window.folder_pane().focus_view();
+        window.emit_by_name::<()>("activate-default", &[]);
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("list.txt")]);
+    }
+
     /// A long name wraps in Confirm Save As, which stays a compact box
     /// rather than growing to the dialog's width.
     ///
@@ -4825,6 +5073,111 @@ mod tests {
         }
     }
 
+    /// The keyboard's ring on the accept button shows, light and dark. The
+    /// ring is drawn in the accent colour (C29), which on the accent-filled
+    /// Open or Save button was the button's own fill, so Tab to it showed
+    /// nothing. It is drawn just outside that button now, as Windows draws
+    /// its focus visual around a control, so it shows against the bar; the
+    /// Cancel button keeps the ring inside.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn the_keyboard_ring_on_the_accept_button_shows() {
+        let _theme = crate::test_support::harness::ThemeGuard::keep();
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "ring.txt".to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let accept = window.picker().expect("a picker").accept.clone();
+        let bar = accept
+            .parent()
+            .and_then(|row| row.parent())
+            .expect("the dialog's bar");
+        // The bar's pixels with the keyboard's ring on the accept button
+        // shown or not.
+        let painted = |visible: bool| {
+            for _ in 0..3 {
+                gtk::prelude::GtkWindowExt::set_focus(window, Some(&accept));
+                window.set_focus_visible(visible);
+                wait_until("the button to have the keyboard", || accept.has_focus());
+                crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+                crate::test_support::harness::wait_for_frames(window, 3);
+            }
+            assert!(accept.has_focus(), "the accept button has the keyboard");
+            painted_pixels(&bar)
+        };
+        for theme in ["light", "dark"] {
+            test.activate("theme", Some(theme));
+            crate::test_support::harness::wait_for(std::time::Duration::from_millis(600));
+            let without = painted(false);
+            let with = painted(true);
+            // The button's fill, the colour most of the bar's saturated
+            // pixels have, which is the ring's colour too (C29).
+            let fill = most_common_saturated(&without);
+            let near = |pixel: &[u8; 3]| pixel.iter().zip(fill).all(|(a, b)| a.abs_diff(b) <= 12);
+            let count = |pixels: &[[u8; 3]]| pixels.iter().filter(|pixel| near(pixel)).count();
+            let (before, after) = (count(&without), count(&with));
+            assert!(
+                after > before + 80,
+                "{theme}: the ring adds its colour around the button: {before} pixels without it, {after} with"
+            );
+        }
+    }
+
+    /// The RGB colours of the pixels `widget` paints, outlines of its
+    /// children included.
+    fn painted_pixels(widget: &gtk::Widget) -> Vec<[u8; 3]> {
+        let renderer = widget
+            .native()
+            .and_then(|native| native.renderer())
+            .expect("a drawn window");
+        let paintable = gtk::WidgetPaintable::new(Some(widget));
+        let snapshot = gtk::Snapshot::new();
+        let (width, height) = (widget.width(), widget.height());
+        paintable.snapshot(&snapshot, f64::from(width), f64::from(height));
+        let node = snapshot.to_node().expect("it paints");
+        let area = gtk::graphene::Rect::new(
+            0.0,
+            0.0,
+            f32::from(u16::try_from(width).expect("a width")),
+            f32::from(u16::try_from(height).expect("a height")),
+        );
+        let texture = renderer.render_texture(&node, Some(&area));
+        let mut downloader = gdk::TextureDownloader::new(&texture);
+        downloader.set_format(gdk::MemoryFormat::R8g8b8);
+        let (bytes, stride) = downloader.download_bytes();
+        let row_bytes = usize::try_from(width).expect("a width") * 3;
+        bytes
+            .chunks(stride)
+            .flat_map(|row| row[..row_bytes].chunks_exact(3).map(|p| [p[0], p[1], p[2]]))
+            .collect()
+    }
+
+    /// The colour most of the strongly coloured `pixels` have.
+    fn most_common_saturated(pixels: &[[u8; 3]]) -> [u8; 3] {
+        let mut counts: std::collections::HashMap<[u8; 3], usize> = std::collections::HashMap::new();
+        for pixel in pixels {
+            let (low, high) = (pixel.iter().min().copied(), pixel.iter().max().copied());
+            if let (Some(low), Some(high)) = (low, high) {
+                if high - low > 80 {
+                    *counts.entry(*pixel).or_default() += 1;
+                }
+            }
+        }
+        counts
+            .into_iter()
+            .max_by_key(|(_, count)| *count)
+            .map(|(colour, _)| colour)
+            .expect("the accept button's fill")
+    }
+
     /// Two types, as an image viewer's Open and Save dialogs offer them.
     fn image_types() -> glib::Variant {
         let types = [
@@ -4843,7 +5196,7 @@ mod tests {
         crate::test_support::harness::descendants::<gtk::Label>(&*window.imp().picker_bar)
             .iter()
             .filter(|label| label.has_css_class("picker-label"))
-            .map(|label| label.label().to_string())
+            .map(|label| label.text().to_string())
             .collect()
     }
 
@@ -5417,6 +5770,190 @@ mod tests {
         assert_eq!(response, RESPONSE_CANCELLED, "Ctrl+Q cancels the dialog");
         assert!(uris.is_empty());
         wait_until("the picker to close", || !window.is_visible());
+    }
+
+    /// Ctrl+Shift+N makes a new folder from File name too, where a Save
+    /// dialog starts, as Alt+Up and the other folder keys work from there
+    /// ("Ctrl + Shift + N: Create a new folder", Keyboard shortcuts in
+    /// Windows). Before, the key did nothing there, and the new folder's
+    /// name typed next replaced the file's name, so Enter saved a file
+    /// called after the folder.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn ctrl_shift_n_makes_a_new_folder_from_file_name() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "inside.txt".to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let name = name_box(window);
+        name.grab_focus();
+        settle();
+        assert!(window.focus_is_in_picker_name());
+
+        assert!(
+            press(
+                test,
+                gdk::Key::n,
+                gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::SHIFT_MASK
+            ),
+            "Ctrl+Shift+N acts from File name"
+        );
+        wait_until("the new folder", || fixture.path("New folder").is_dir());
+        assert_eq!(name.text(), "inside.txt", "File name keeps the file's name");
+
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// A caller's choice as the portal sends it: ID, label, options and
+    /// the option chosen at first.
+    type ChoiceParts = (String, String, Vec<(String, String)>, String);
+
+    /// The caller's check boxes sit side by side on one row, wrapping
+    /// only when the dialog is too narrow, so a caller with several of
+    /// them (an office suite's "Automatic file name extension", "Save with
+    /// password", "Edit filter settings") leaves the file list its room;
+    /// one row each took most of it. A list keeps a row of its own, and
+    /// every choice still answers.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn the_callers_check_boxes_share_one_row() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let choices = vec![
+            ("ext", "Automatic file name extension", Vec::new(), "true"),
+            ("password", "Save with password", Vec::new(), "false"),
+            ("filter", "Edit filter settings", Vec::new(), "false"),
+            (
+                "version",
+                "Version",
+                vec![("v12", "ODF 1.2"), ("v13", "ODF 1.3")],
+                "v13",
+            ),
+        ];
+        let choices: Vec<ChoiceParts> = choices
+            .into_iter()
+            .map(|(id, label, options, initial)| {
+                (
+                    id.to_owned(),
+                    label.to_owned(),
+                    options
+                        .into_iter()
+                        .map(|(id, label)| (id.to_owned(), label.to_owned()))
+                        .collect(),
+                    initial.to_owned(),
+                )
+            })
+            .collect();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "Letter.odt".to_variant()),
+                ("choices", choices.to_variant()),
+            ],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        crate::test_support::harness::wait_for_frames(window, 3);
+        let checks: Vec<gtk::CheckButton> = crate::test_support::harness::descendants(window)
+            .into_iter()
+            .filter(|check: &gtk::CheckButton| check.label().is_some())
+            .collect();
+        assert_eq!(checks.len(), 3, "the three check boxes");
+        let tops: Vec<f32> = checks
+            .iter()
+            .map(|check| check.compute_bounds(window).expect("shown").y())
+            .collect();
+        assert!(
+            tops.iter().all(|top| (top - tops[0]).abs() < 1.0),
+            "on one row: {tops:?}"
+        );
+        crate::test_support::harness::capture_in_both_themes(window, "save-dialog-choices");
+
+        checks[1].set_active(true);
+        let name = name_box(window);
+        enter(&name);
+        wait_until("the answer", || answer.borrow().is_some());
+        let (response, results) = answer.borrow_mut().take().expect("answered");
+        assert_eq!(response, RESPONSE_SUCCESS);
+        let chosen: Vec<(String, String)> = results.lookup("choices").ok().flatten().expect("the choices");
+        assert_eq!(
+            chosen,
+            [
+                ("ext".to_owned(), "true".to_owned()),
+                ("password".to_owned(), "true".to_owned()),
+                ("filter".to_owned(), "false".to_owned()),
+                ("version".to_owned(), "v13".to_owned()),
+            ]
+        );
+    }
+
+    /// Alt+N moves the keyboard to File name and Alt+T to the type list
+    /// from anywhere in the dialog, as Windows' dialog underlines the N of
+    /// "File name:" and the T of "Save as type:" ("Alt + underlined
+    /// letter", Keyboard shortcuts in Windows). Before, neither label had
+    /// a key, so Alt+N did nothing and Enter then acted on whatever had the
+    /// keyboard, such as a check box of the caller's.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn alt_n_and_alt_t_reach_file_name_and_the_type_list() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "notes.txt".to_variant()),
+                ("filters", two_text_types()),
+            ],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        let types = picker.types.clone().expect("a type list");
+        let labels: Vec<gtk::Label> = crate::test_support::harness::descendants(window)
+            .into_iter()
+            .filter(|label: &gtk::Label| label.has_css_class("picker-label"))
+            .collect();
+        let label_for = |key: gdk::Key| {
+            labels
+                .iter()
+                .find(|label| label.mnemonic_keyval() == key)
+                .unwrap_or_else(|| panic!("a label with {key:?}"))
+                .clone()
+        };
+
+        window.folder_pane().focus_view();
+        let file_name = label_for(gdk::Key::n);
+        assert_eq!(file_name.text(), "File name:");
+        assert!(file_name.mnemonic_activate(false));
+        settle();
+        assert!(window.focus_is_in_picker_name(), "Alt+N reaches File name");
+
+        let save_as_type = label_for(gdk::Key::t);
+        assert_eq!(save_as_type.text(), "Save as type:");
+        assert!(save_as_type.mnemonic_activate(false));
+        settle();
+        let focus = gtk::prelude::GtkWindowExt::focus(window).expect("a focus");
+        assert!(
+            focus == *types.upcast_ref::<gtk::Widget>() || focus.is_ancestor(&types),
+            "Alt+T reaches the type list"
+        );
+        assert_eq!(picker.named(&name.text()), "notes.txt", "the name is kept");
     }
 
     /// The Properties window of the item called `name`, opened from the
