@@ -1332,9 +1332,12 @@ fn every_preference_switch_saves_persists_and_turns_back_exactly() {
             let was = switch.is_active();
             switch.set_active(!was);
             wait_until(&format!("{title} to be saved"), || saved() != before);
+            // Read again from the file, as after a restart.
             settings.test.context.reload_settings();
-            settings.page.show_current_preferences();
-            assert_eq!(switch.is_active(), !was, "{title} shows what was saved");
+            wait_until(&format!("{title} to show what was saved"), || {
+                settings.page.show_current_preferences();
+                switch.is_active() != was
+            });
             switch.set_active(was);
             wait_until(&format!("{title} to be turned back"), || saved() == before);
             checked.push(title);
