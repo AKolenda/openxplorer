@@ -261,6 +261,8 @@ impl BrowserWindow {
         search.set_enabled(!on_page && !in_zip && !is_device_location(uri));
         self.show_extract_button();
         self.update_more_menu();
+        let tab = self.imp().session.borrow().active_id();
+        self.command_bar().follow_shown_location(tab, uri);
         self.update_cache_folder_action();
         self.render_tabs();
         self.show_pane_captions();

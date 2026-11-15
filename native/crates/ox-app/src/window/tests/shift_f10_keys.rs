@@ -11,10 +11,12 @@ use gtk::prelude::*;
 
 use super::context_menus::choose_menu_style;
 use super::file_ops_support::select_names;
-use crate::test_support::harness::{wait_for, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{
+    skin, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+};
 use crate::test_support::pointer::{screen_point, Pointer};
 use crate::window::menu_popover::{MenuPopover, MenuStyle};
-use ox_core::settings::ContextMenu;
+use ox_core::settings::{ContextMenu, Theme};
 
 /// How long the keys get to take effect.
 const SETTLE: std::time::Duration = std::time::Duration::from_millis(300);
@@ -439,4 +441,253 @@ fn show_more_options_shows_shift_f10_only_when_it_opens_the_classic_menu() {
         menu.popdown();
     }
     choose_shift_f10_classic(&test, false);
+}
+
+/// Taps `key` with `modifier` held on the real keyboard, `times` times.
+fn tap_with(pointer: &mut Pointer, modifier: gdk::Key, key: gdk::Key, times: usize) {
+    pointer.hold_key(modifier);
+    for _ in 0..times {
+        pointer.tap_key(key);
+        wait_for(std::time::Duration::from_millis(60));
+    }
+    pointer.let_go_key(modifier);
+    wait_for(std::time::Duration::from_millis(100));
+}
+
+/// One way of selecting several items from the keyboard before the menu
+/// opens, as Windows 11 File Explorer's selection keys do.
+#[derive(Debug, Clone, Copy)]
+enum KeyboardSelection {
+    /// Only the item clicked.
+    One,
+    /// Shift+Down three times from the item clicked: the keyboard ends on
+    /// the last item of the range.
+    ShiftDown,
+    /// Shift+Up three times: the keyboard ends on the first item.
+    ShiftUp,
+    /// Two items, then Ctrl+Down twice and Ctrl+Space, which selects the
+    /// item the keyboard moved to.
+    CtrlSpaceSelects,
+    /// The same, then Ctrl+Space again, which takes the item back out of
+    /// the selection while the keyboard stays on it.
+    CtrlSpaceUnselects,
+    /// Ctrl+A with the keyboard on an item in the middle.
+    CtrlA,
+}
+
+/// Clicks, as the pointer would, the item at `position`, then makes
+/// `selection` with the real keyboard.
+fn select_from_the_keyboard(
+    pointer: &mut Pointer,
+    test: &TestWindow,
+    position: u32,
+    selection: KeyboardSelection,
+) {
+    let pane = test.window.folder_pane();
+    pane.select_and_reveal(position);
+    wait_until("the item to take the keyboard", || {
+        pane.focused_position() == Some(position)
+    });
+    match selection {
+        KeyboardSelection::One => {}
+        KeyboardSelection::ShiftDown => tap_with(pointer, gdk::Key::Shift_L, gdk::Key::Down, 3),
+        KeyboardSelection::ShiftUp => tap_with(pointer, gdk::Key::Shift_L, gdk::Key::Up, 3),
+        KeyboardSelection::CtrlSpaceSelects | KeyboardSelection::CtrlSpaceUnselects => {
+            tap_with(pointer, gdk::Key::Shift_L, gdk::Key::Down, 1);
+            tap_with(pointer, gdk::Key::Control_L, gdk::Key::Down, 2);
+            tap_with(pointer, gdk::Key::Control_L, gdk::Key::space, 1);
+            if matches!(selection, KeyboardSelection::CtrlSpaceUnselects) {
+                tap_with(pointer, gdk::Key::Control_L, gdk::Key::space, 1);
+            }
+        }
+        KeyboardSelection::CtrlA => tap_with(pointer, gdk::Key::Control_L, gdk::Key::a, 1),
+    }
+    wait_for_frames(&test.window, 2);
+}
+
+/// Where the keyboard's menu should point: at the item with keyboard
+/// focus when it is selected, as Windows 11 File Explorer opens it there,
+/// else at the first selected item.
+fn expected_menu_item(test: &TestWindow, case: &str) -> u32 {
+    let pane = test.window.folder_pane();
+    let model = pane.model();
+    let selected = model.selected_positions();
+    assert!(!selected.is_empty(), "{case}: something is selected");
+    match pane.focused_position() {
+        Some(focused) if selected.contains(&focused) => focused,
+        _ => selected[0],
+    }
+}
+
+/// Opens the menu with Shift+F10 or, with `menu_key`, the Menu key.
+fn open_menu_from_the_keyboard(pointer: &mut Pointer, test: &TestWindow, menu_key: bool) -> MenuPopover {
+    if menu_key {
+        pointer.tap_key(gdk::Key::Menu);
+        wait_until("the Menu key to open the menu", || {
+            test.window.context_menu().is_visible()
+        });
+        wait_for_frames(&test.window, 2);
+        test.window.context_menu()
+    } else {
+        menu_after_shift_f10(pointer, test)
+    }
+}
+
+/// With several items selected, Shift+F10 and the Menu key open the menu
+/// at the item the keyboard moved to last, as Windows 11 File Explorer
+/// does (with `extra_2.txt` clicked and Shift+Down pressed three times, at
+/// the fourth item), in Details, List, Tiles, Large icons and the compact
+/// view; at the first selected item when the keyboard is on an item that
+/// is not selected. The pointer is parked far away.
+///
+/// parity: CMD-014
+#[gtk::test]
+fn the_keyboards_menu_opens_at_the_focused_item_of_a_selection() {
+    let fixture = Fixture::with_files(12);
+    let mut pointer = Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    choose_menu_style(&test, ContextMenu::Win11);
+    let mut moved_on = false;
+    let _theme = ThemeGuard::keep();
+    for (theme, theme_name) in [(Theme::Light, "light"), (Theme::Dark, "dark")] {
+        skin().set_theme(theme);
+        for (view, compact) in [
+            ("details", false),
+            ("list", false),
+            ("tiles", false),
+            ("large", false),
+            ("details", true),
+        ] {
+            test.activate("view", Some(view));
+            if compact != test.context.settings_data().preferences.compact_density {
+                test.activate("compact-density", None);
+            }
+            test.wait_for_listing(view);
+            wait_for_frames(&test.window, 3);
+            for selection in [
+                KeyboardSelection::One,
+                KeyboardSelection::ShiftDown,
+                KeyboardSelection::ShiftUp,
+                KeyboardSelection::CtrlSpaceSelects,
+                KeyboardSelection::CtrlSpaceUnselects,
+                KeyboardSelection::CtrlA,
+            ] {
+                for menu_key in [false, true] {
+                    let key = if menu_key { "Menu key" } else { "Shift+F10" };
+                    let case = format!(
+                        "{theme_name} {view}{}: {selection:?}, {key}",
+                        if compact { " compact" } else { "" }
+                    );
+                    let start = if matches!(selection, KeyboardSelection::ShiftUp) {
+                        5
+                    } else {
+                        2
+                    };
+                    park_pointer(&mut pointer, &test);
+                    select_from_the_keyboard(&mut pointer, &test, start, selection);
+                    let expected = expected_menu_item(&test, &case);
+                    let first = test.window.folder_pane().model().first_selected();
+                    moved_on |= first != Some(expected);
+                    let menu = open_menu_from_the_keyboard(&mut pointer, &test, menu_key);
+                    assert!(!menu.strip_labels().is_empty(), "{case}: the item's menu");
+                    assert_points_at_item(&test, &menu, expected, &case);
+                    escape_closes(&mut pointer, &test, &menu, &case);
+                }
+            }
+        }
+    }
+    assert!(
+        moved_on,
+        "some cases have the keyboard on another item than the first"
+    );
+    if test.context.settings_data().preferences.compact_density {
+        test.activate("compact-density", None);
+    }
+    pointer.move_to(720, 500);
+}
+
+/// The selection's focused item scrolled out of sight comes back into
+/// view first, as a single item does, and the menu points at it there.
+///
+/// parity: CMD-014
+#[gtk::test]
+fn the_keyboards_menu_scrolls_to_the_focused_item_first() {
+    let fixture = Fixture::with_files(150);
+    let mut pointer = Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    choose_menu_style(&test, ContextMenu::Win11);
+    let _theme = ThemeGuard::keep();
+    for (theme, theme_name) in [(Theme::Light, "light"), (Theme::Dark, "dark")] {
+        skin().set_theme(theme);
+        for (view, compact) in [
+            ("details", false),
+            ("list", false),
+            ("tiles", false),
+            ("large", false),
+            ("details", true),
+        ] {
+            test.activate("view", Some(view));
+            if compact != test.context.settings_data().preferences.compact_density {
+                test.activate("compact-density", None);
+            }
+            test.wait_for_listing(view);
+            wait_for_frames(&test.window, 3);
+            for menu_key in [false, true] {
+                let case = format!(
+                    "{theme_name} {view}{}: {}",
+                    if compact { " compact" } else { "" },
+                    if menu_key { "Menu key" } else { "Shift+F10" }
+                );
+                park_pointer(&mut pointer, &test);
+                select_from_the_keyboard(&mut pointer, &test, 2, KeyboardSelection::ShiftDown);
+                let expected = expected_menu_item(&test, &case);
+                assert_ne!(
+                    Some(expected),
+                    test.window.folder_pane().model().first_selected(),
+                    "{case}"
+                );
+                // The list scrolled to its end, away from the selection.
+                let view_widget = test.window.folder_pane().view_widget();
+                let scroller = view_widget
+                    .ancestor(gtk::ScrolledWindow::static_type())
+                    .and_downcast::<gtk::ScrolledWindow>()
+                    .expect("the view scrolls");
+                // The compact list's columns scroll sideways.
+                let vertical = scroller.vadjustment();
+                let adjustment = if vertical.upper() > vertical.page_size() + 1.0 {
+                    vertical
+                } else {
+                    scroller.hadjustment()
+                };
+                adjustment.set_value(adjustment.upper() - adjustment.page_size());
+                wait_for_frames(&test.window, 4);
+                // On screen when a press in the middle of its row or tile
+                // would land on it: GTK keeps the focused row's widget, where
+                // it was, when it scrolls away.
+                let shown = |position: u32| {
+                    let pane = test.window.folder_pane();
+                    let view = pane.input_widget();
+                    pane.owners()
+                        .widget_at(position)
+                        .and_then(|row| row.compute_bounds(&view))
+                        .and_then(|bounds| {
+                            let center = bounds.center();
+                            pane.owners()
+                                .position_at(&view, f64::from(center.x()), f64::from(center.y()))
+                        })
+                        == Some(position)
+                };
+                assert!(!shown(expected), "{case}: the focused item is out of sight");
+
+                let menu = open_menu_from_the_keyboard(&mut pointer, &test, menu_key);
+                assert!(shown(expected), "{case}: the focused item came into view");
+                assert_points_at_item(&test, &menu, expected, &case);
+                escape_closes(&mut pointer, &test, &menu, &case);
+            }
+        }
+    }
+    if test.context.settings_data().preferences.compact_density {
+        test.activate("compact-density", None);
+    }
+    pointer.move_to(720, 500);
 }
