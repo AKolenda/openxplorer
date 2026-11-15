@@ -694,5 +694,5 @@ gallery.files > child.gallery-tile.hidden-item > picture { opacity: .5; }
   border: 1px solid @ox_border;
   border-radius: 4px;
   padding: 5px 8px;
-  box-shadow: 0 2px 6px alpha(black, .14);
+  box-shadow: 0 2px 6px @ox_shadow_key;
 }
