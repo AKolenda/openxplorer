@@ -286,7 +286,7 @@ impl FileItem {
     ///
     /// Sorting 100,000 items into groups compares about two million pairs;
     /// working both items' groups out for each comparison (a title, often
-    /// normalised text) froze the window for about a second.
+    /// normalized text) froze the window for about a second.
     pub(crate) fn group_in(
         &self,
         grouping: Grouping,
