@@ -3837,7 +3837,7 @@ mod tests {
     /// After Confirm Save As closes without saving (No, Escape or its
     /// close button), the keyboard is back in File name with the name
     /// selected, as a Windows dialog gives focus back to the control that
-    /// had it ("Dialog Box Programming Considerations", WM_ACTIVATE), so
+    /// had it ("Dialog Box Programming Considerations", `WM_ACTIVATE`), so
     /// a new name can be typed at once. Before, the file list took it, and
     /// the next Enter opened the first folder there or the file under the
     /// keyboard instead of asking again. Y and N alone answer the question,
@@ -3939,7 +3939,7 @@ mod tests {
     /// Enter that nothing in the dialog takes presses its accept button,
     /// as Windows' common dialogs make Open, Save or Select Folder the
     /// default push button, which Enter chooses ("Dialog Box Programming
-    /// Considerations", DM_GETDEFID). In a folder dialog with the file list
+    /// Considerations", `DM_GETDEFID`). In a folder dialog with the file list
     /// focused and no item under the keyboard, as in an empty folder, Enter
     /// chose nothing before; now it answers with the folder shown. A Save
     /// dialog saves its name.
@@ -5143,6 +5143,10 @@ mod tests {
         let (width, height) = (widget.width(), widget.height());
         paintable.snapshot(&snapshot, f64::from(width), f64::from(height));
         let node = snapshot.to_node().expect("it paints");
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a window is far narrower than 2^23 pixels"
+        )]
         let area = gtk::graphene::Rect::new(0.0, 0.0, width as f32, height as f32);
         let texture = renderer.render_texture(&node, Some(&area));
         let mut downloader = gdk::TextureDownloader::new(&texture);
@@ -5831,6 +5835,10 @@ mod tests {
                 "v13",
             ),
         ];
+        #[expect(
+            clippy::type_complexity,
+            reason = "the portal's choices, as the test builds them"
+        )]
         let choices: Vec<(String, String, Vec<(String, String)>, String)> = choices
             .into_iter()
             .map(|(id, label, options, initial)| {

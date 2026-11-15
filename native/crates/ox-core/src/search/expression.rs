@@ -362,7 +362,7 @@ impl Parser<'_> {
             }
             result = Some(match result {
                 None => part,
-                Some(earlier) if join == Join::Or => or(earlier, part),
+                Some(earlier) if join == Join::Or => or(&earlier, &part),
                 Some(mut earlier) => {
                     earlier.extend(part);
                     earlier.truncate(MAX_CLAUSES);
@@ -468,10 +468,10 @@ fn operator(value: &str) -> (bool, Operator, &str) {
 }
 
 /// `one OR two`: every pair of a clause from each, joined.
-fn or(one: Clauses, two: Clauses) -> Clauses {
+fn or(one: &Clauses, two: &Clauses) -> Clauses {
     let mut clauses = Vec::new();
-    'pairs: for first in &one {
-        for second in &two {
+    'pairs: for first in one {
+        for second in two {
             if clauses.len() == MAX_CLAUSES {
                 break 'pairs;
             }
@@ -500,7 +500,7 @@ fn negated(clauses: Clauses) -> Clauses {
                 })
                 .collect::<Clauses>()
         })
-        .reduce(or)
+        .reduce(|one, two| or(&one, &two))
         .unwrap_or_default()
 }
 
