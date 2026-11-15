@@ -11,6 +11,7 @@ use gtk::prelude::*;
 
 use crate::folder_view::cells::CellOwners;
 use crate::folder_view::details::DetailsView;
+use crate::folder_view::gallery_view::GalleryView;
 use crate::folder_view::grid::{IconSize, IconView};
 use crate::folder_view::keep_top::TopKeeper;
 use crate::folder_view::model::FolderModel;
@@ -29,6 +30,8 @@ pub(super) struct PaneParts {
     pub(super) details: DetailsView,
     /// The icon view.
     pub(super) icon_view: IconView,
+    /// Gallery's justified rows of photos (HOME-026).
+    pub(super) gallery: GalleryView,
     /// The active tab's filtered, sorted and selectable items.
     pub(super) model: FolderModel,
     /// Maps cell widgets to their rows.
@@ -60,8 +63,9 @@ impl PaneParts {
         let details = DetailsView::new(&model, &owners);
         let icon_view = IconView::new(&owners);
         icon_view.share_collapsed_groups(model.collapsed_groups());
-        let views = view_stack(&details, &icon_view);
-        let top_keeper = keep_views_at_their_top(&model, &views, &details, &icon_view);
+        let gallery = GalleryView::new(&owners);
+        let views = view_stack(&details, &icon_view, &gallery);
+        let top_keeper = keep_views_at_their_top(&model, &views, &details, &icon_view, &gallery);
         let empty = EmptyPage::new();
         let (landing, landing_scroll) = landing_page();
         let (stack, empty_area) = page_stack(&views, &empty, &landing_scroll);
@@ -70,6 +74,7 @@ impl PaneParts {
             views,
             details,
             icon_view,
+            gallery,
             model,
             owners,
             empty,
@@ -139,28 +144,34 @@ fn keep_views_at_their_top(
     views: &gtk::Stack,
     details: &DetailsView,
     icon_view: &IconView,
+    gallery: &GalleryView,
 ) -> TopKeeper {
     let grid = icon_view.both_scroll_adjustments();
     let mut adjustments = vec![details.vadjustment()];
     adjustments.extend(grid);
+    adjustments.push(gallery.vadjustment());
     let shown = views.downgrade();
     let details = details.downgrade();
     let icon_view = icon_view.downgrade();
+    let gallery = gallery.downgrade();
     TopKeeper::follow(views, model.selection(), &adjustments, move || {
         let name = shown.upgrade()?.visible_child_name()?;
         if name == FolderView::Details.stack_name() {
             Some(details.upgrade()?.vadjustment())
+        } else if name == super::GALLERY_PAGE {
+            Some(gallery.upgrade()?.vadjustment())
         } else {
             Some(icon_view.upgrade()?.scroll_adjustment())
         }
     })
 }
 
-fn view_stack(details: &DetailsView, icon_view: &IconView) -> gtk::Stack {
+fn view_stack(details: &DetailsView, icon_view: &IconView, gallery: &GalleryView) -> gtk::Stack {
     let views = gtk::Stack::new();
     views.add_named(details, Some(FolderView::Details.stack_name()));
     let icons = FolderView::Icons(IconSize::LARGE);
     views.add_named(icon_view, Some(icons.stack_name()));
+    views.add_named(gallery, Some(super::GALLERY_PAGE));
     views
 }
 

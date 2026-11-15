@@ -45,8 +45,9 @@ use gtk::subclass::prelude::*;
 use ox_core::entry::{Entry, EntryError};
 use ox_core::integration::FOLDER_CONTENT_TYPE;
 use ox_core::location::{
-    is_archive_location, is_smb_location, parent_location, ArchiveLocation, RECENT_LOCATIONS_URI,
+    is_archive_location, is_smb_location, parent_location, ArchiveLocation, GALLERY_URI, RECENT_LOCATIONS_URI,
 };
+use ox_core::search::HiddenItems;
 
 use crate::app_context::add_to_desktop_history;
 use crate::folder_view::item::FileItem;
@@ -133,6 +134,12 @@ impl BrowserWindow {
         let Some(start) = self.begin_load(id, mode) else {
             return;
         };
+        if start.uri != GALLERY_URI {
+            // Leaving Gallery stops watching its photo folders.
+            if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
+                tab.gallery_watch = None;
+            }
+        }
         if Page::drawn_at(&start.uri).is_some() {
             self.finish_page(id);
             return;
@@ -259,6 +266,10 @@ impl BrowserWindow {
         if uri == RECENT_LOCATIONS_URI {
             return;
         }
+        if uri == GALLERY_URI {
+            self.watch_gallery(id);
+            return;
+        }
         let watched = self
             .imp()
             .session
@@ -343,6 +354,27 @@ impl BrowserWindow {
                     #[weak(rename_to = window)]
                     self,
                     move |problem| window.finish_network_listing(&run, problem)
+                ),
+            );
+        }
+        if start.uri == GALLERY_URI {
+            let hidden = if self.folder_pane().model().shows_hidden() {
+                HiddenItems::Include
+            } else {
+                HiddenItems::Skip
+            };
+            return crate::folder_view::gallery::list_gallery(
+                self.gallery_folders(),
+                hidden,
+                glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    move |entries| window.receive_batch(&batch_run, entries)
+                ),
+                glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    move |result| window.finish_load(&run, result)
                 ),
             );
         }

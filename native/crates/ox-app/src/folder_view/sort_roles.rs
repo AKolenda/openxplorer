@@ -31,6 +31,9 @@ pub(crate) enum SortRole {
     Group,
     /// Where a symbolic link points.
     LinkTarget,
+    /// When a photo was taken, else when it was modified: Gallery's sort
+    /// ([`photo_date`]), not offered in the Sort menu.
+    Taken,
 }
 
 impl SortRole {
@@ -55,6 +58,7 @@ impl SortRole {
             SortRole::Owner => "owner",
             SortRole::Group => "group",
             SortRole::LinkTarget => "linkTarget",
+            SortRole::Taken => "taken",
         }
     }
 
@@ -68,6 +72,7 @@ impl SortRole {
             SortRole::Owner => gettext_static("Owner"),
             SortRole::Group => gettext_static("User group"),
             SortRole::LinkTarget => gettext_static("Link destination"),
+            SortRole::Taken => gettext_static("Date taken"),
         }
     }
 
@@ -93,8 +98,15 @@ impl SortRole {
                 text(a.meta.link_target.as_deref()),
                 text(b.meta.link_target.as_deref()),
             ),
+            SortRole::Taken => photo_date(a).cmp(&photo_date(b)),
         }
     }
+}
+
+/// The date Gallery files a photo under: when it was taken, from its
+/// EXIF, else when it was last modified.
+pub(crate) fn photo_date(entry: &ox_core::entry::Entry) -> Option<u64> {
+    entry.meta.taken.or(entry.modified)
 }
 
 /// The extension of a file called `name`; folders and names without a dot
@@ -132,6 +144,7 @@ impl SortBy {
         }
         SortRole::ALL
             .into_iter()
+            .chain([SortRole::Taken])
             .find(|role| role.as_str() == key)
             .map(SortBy::Role)
     }

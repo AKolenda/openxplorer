@@ -26,14 +26,17 @@ columnview.files.keyboard-in > listview > row:focus:not(:focus-visible):not(.fil
 gridview.files.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) { outline: 2px solid @ox_text; outline-offset: -2px; }
 gridview.files.tiles.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) > .item-cell:not(.group-slot),
 gridview.files.content.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) > .item-cell:not(.group-slot) { outline: 2px solid @ox_text; outline-offset: -2px; }
+gridview.files.icon-groups.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) > box:not(.group-slot) { outline: 2px solid @ox_text; outline-offset: -2px; }
 gridview.files.tiles.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active),
-gridview.files.content.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) { outline: none; }
+gridview.files.content.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active),
+gridview.files.icon-groups.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active) { outline: none; }
 .sidebar list.places > row:focus-visible,
 .folder-tree listview > row:focus-visible,
 columnview.files > listview > row:focus-visible,
 gridview.files > child:focus-visible,
 gridview.files.tiles > child:focus-visible > .item-cell:not(.group-slot),
-gridview.files.content > child:focus-visible > .item-cell:not(.group-slot) {
+gridview.files.content > child:focus-visible > .item-cell:not(.group-slot),
+gridview.files.icon-groups > child:focus-visible > box:not(.group-slot) {
   outline: 2px solid @ox_text;
   outline-offset: -2px;
   box-shadow: inset 0 0 0 3px @ox_bg;

@@ -51,6 +51,7 @@
 //! | `policy` | What may be indexed, and network roots | `index_service.py` |
 //! | `mounts` | The kernel's mount table | `mount_support.py` |
 //! | `watch` | inotify watches | `local_watch.py` |
+//! | `tree_watch` | Watching a whole folder tree, for Gallery (HOME-021) | new |
 //! | `reader` | Reading one folder through GIO | `gio_backend.py` |
 //! | `pins` | Indexing pinned folders (SRCH-040) | new |
 //! | `pattern` | The words and wildcards a name must match | `app.js`, Dolphin |
@@ -86,6 +87,7 @@ mod state;
 mod syntax;
 mod text;
 mod tick;
+mod tree_watch;
 mod update;
 mod watch;
 
@@ -117,3 +119,4 @@ pub use scan::ListedItem;
 pub use service::{AutoIndex, IndexService, IndexSettings};
 pub use syntax::TypedQuery;
 pub use text::display_path;
+pub use tree_watch::TreeWatch;
