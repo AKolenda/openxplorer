@@ -252,11 +252,31 @@ impl Picker {
     }
 }
 
+/// How the dialog names `path` to the user: a folder of a share by its
+/// network address (`\\nas\projects\Plans`), never by the `GVfs` FUSE
+/// path the caller gets; a local folder by its path.
+fn shown_path(path: &Path) -> String {
+    let uri = gio::File::for_path(path).uri();
+    if uri.starts_with("file:") {
+        return path.display().to_string();
+    }
+    ox_core::location::LocationContext::default().display_location(&uri)
+}
+
 /// The message for a folder or file on a share that stopped answering.
 fn not_answering(path: &Path) -> String {
     ox_core::i18n::format_message(
         "“{path}” is not answering. Its network share may have stopped responding.",
-        &[("path", &path.display().to_string())],
+        &[("path", &shown_path(path))],
+    )
+}
+
+/// The message for a folder or file that cannot be reached, as on a
+/// share whose server went away.
+fn unavailable(path: &Path) -> String {
+    ox_core::i18n::format_message(
+        "{location} is unavailable. Make sure you are connected to the network and the server is turned on, and then try again.",
+        &[("location", &shown_path(path))],
     )
 }
 
@@ -1131,7 +1151,7 @@ impl BrowserWindow {
         let missing = |folder: &Path| {
             ox_core::i18n::format_message(
                 "The folder “{folder}” does not exist.",
-                &[("folder", &folder.display().to_string())],
+                &[("folder", &shown_path(folder))],
             )
         };
         // A path that ends in a slash names a folder, never a file.
@@ -1144,6 +1164,7 @@ impl BrowserWindow {
         match probe(&folder).await {
             Probe::Folder => {}
             Probe::NoAnswer => return Err(not_answering(&folder)),
+            Probe::Unreachable => return Err(unavailable(&folder)),
             Probe::File | Probe::Missing => return Err(missing(&folder)),
         }
         let written = path
@@ -1176,6 +1197,9 @@ impl BrowserWindow {
         if found == Probe::NoAnswer {
             return Err(not_answering(&folder));
         }
+        if found == Probe::Unreachable {
+            return Err(unavailable(&folder));
+        }
         if found == Probe::Folder {
             name_box.set_text("");
             self.navigate_or_report(&gio::File::for_path(&target).uri());
@@ -1188,6 +1212,7 @@ impl BrowserWindow {
             // look again, and never answer it as a new file.
             match probe(&target).await {
                 Probe::NoAnswer => return Err(not_answering(&folder)),
+                Probe::Unreachable => return Err(unavailable(&folder)),
                 Probe::Folder => {
                     name_box.set_text("");
                     self.navigate_or_report(&gio::File::for_path(&target).uri());
@@ -1337,6 +1362,7 @@ impl BrowserWindow {
             }
             Probe::File => return Some(Ok(vec![path])),
             Probe::NoAnswer => return Some(Err(not_answering(&path))),
+            Probe::Unreachable => return Some(Err(unavailable(&path))),
             Probe::Missing => {}
         }
         Some(Err(ox_core::i18n::format_message(NOT_FOUND, &[("name", &typed)])))
@@ -1762,6 +1788,7 @@ async fn typed_files(picker: &Picker, shown: &Path, names: &[String]) -> Result<
                 continue;
             }
             Probe::NoAnswer => return Err(not_answering(&path)),
+            Probe::Unreachable => return Err(unavailable(&path)),
             Probe::Folder => NOT_A_FILE,
             Probe::Missing => NOT_FOUND,
         };
@@ -2955,6 +2982,50 @@ mod tests {
         });
 
         assert!(accept_waits, "Save waits while the folder is checked");
+        assert!(answer.borrow().is_none(), "nothing is answered");
+        assert!(picker.accept.is_sensitive(), "Save can be pressed again");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
+    /// Saving into a folder whose server went away (the share refuses
+    /// the connection at once, so it is not a share that stopped
+    /// answering) says the folder is unavailable, never that it does not
+    /// exist, and answers nothing, so the caller writes nowhere.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn saving_where_the_server_went_away_says_the_folder_is_unavailable() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let answer = portal.call(
+            "SaveFile",
+            &[
+                (
+                    "current_folder",
+                    path_variant(&fixture.root().display().to_string()),
+                ),
+                ("current_name", "report.txt".to_variant()),
+            ],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        super::probe::stop_reaching(fixture.root());
+
+        picker.accept.emit_clicked();
+        wait_until("the dialog to say so", || !window.shown_message().is_empty());
+        let message = window.shown_message().to_string();
+        // With OX_NATIVE_CAPTURE_DIR set, the dialog with its message, for
+        // review in both themes.
+        let _theme = crate::test_support::harness::ThemeGuard::keep();
+        for theme in ["light", "dark"] {
+            portal.test.activate("theme", Some(theme));
+            window.show_message(&message);
+            capture(window, &format!("network-save-unavailable-{theme}.png"));
+        }
+
+        assert!(message.contains("is unavailable"), "{message}");
+        assert!(!message.contains("does not exist"), "{message}");
         assert!(answer.borrow().is_none(), "nothing is answered");
         assert!(picker.accept.is_sensitive(), "Save can be pressed again");
         window.cancel_picking();

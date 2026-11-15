@@ -12,8 +12,14 @@
 //! [`ox_core::ops::undo`]). The commands are labelled with the operation
 //! they reverse ("Undo Rename"). Before Undo moves copies to the Trash
 //! that were changed after the copy, it asks, as Dolphin does (OPS-030).
+//! Items that cannot go to the Recycle Bin, as on a share, are deleted
+//! permanently only after Delete's own question there (OPS-016).
 
-use ox_core::ops::{changed_copies, reverse, JournalDirection, JournalEntry, STOPPED_TITLE};
+use ox_core::ops::{
+    changed_copies, plan_delete, removed_by_undo, reverse_deleting, JournalDirection, JournalEntry,
+    STOPPED_TITLE,
+};
+use ox_core::transfer::Cancellation;
 
 use super::FileCommand;
 use crate::dialog::{self, Dialog};
@@ -41,9 +47,19 @@ impl BrowserWindow {
         let Some(step) = self.context().take_journal_step(direction) else {
             return;
         };
-        if direction == JournalDirection::Undo && !self.confirm_undoing_changed_copies(&step).await {
-            self.context().put_back_journal_step(direction, step);
-            return;
+        let mut delete_permanently = Vec::new();
+        if direction == JournalDirection::Undo {
+            let Some(without_recycle_bin) = self.confirm_undo_without_recycle_bin(&step).await else {
+                self.context().put_back_journal_step(direction, step);
+                return;
+            };
+            // The permanent delete was just confirmed with the item's
+            // details; the Recycle Bin question is for the others.
+            if without_recycle_bin.is_empty() && !self.confirm_undoing_changed_copies(&step).await {
+                self.context().put_back_journal_step(direction, step);
+                return;
+            }
+            delete_permanently = without_recycle_bin;
         }
         let label = format!("{}…", step.label(direction));
         let Some(context) = self.begin_operation(&label) else {
@@ -51,7 +67,7 @@ impl BrowserWindow {
             return;
         };
         let progress = self.progress_reporter(&context.cancel);
-        let outcome = reverse(&step.record, &context, progress).await;
+        let outcome = reverse_deleting(&step.record, &delete_permanently, &context, progress).await;
         self.end_operation();
         match outcome {
             Ok(reversal) => {
@@ -75,6 +91,29 @@ impl BrowserWindow {
                 .await;
             }
         }
+    }
+
+    /// The items Undo of `step` removes that cannot go to the Recycle
+    /// Bin, as on a share, once the user agreed to delete them
+    /// permanently with Delete's own question there ("Are you sure you
+    /// want to permanently delete this file?"); empty when every item can
+    /// go to the Recycle Bin. `None` when the user answered No.
+    async fn confirm_undo_without_recycle_bin(&self, step: &JournalEntry) -> Option<Vec<String>> {
+        let removed = removed_by_undo(&step.record);
+        if removed.is_empty() {
+            return Some(Vec::new());
+        }
+        // Only a cancellation fails the plan, and nothing cancels it here.
+        let plan = plan_delete(&super::delete::named_items(removed), &Cancellation::new())
+            .await
+            .ok()?;
+        if plan.to_delete.is_empty() {
+            return Some(Vec::new());
+        }
+        let items = super::delete::named_items(plan.to_delete.clone());
+        self.confirms_permanent_delete(&items)
+            .await
+            .then_some(plan.to_delete)
     }
 
     /// True when Undo may move the copies of `step` to the Trash: none
