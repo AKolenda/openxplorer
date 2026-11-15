@@ -64,6 +64,72 @@ pub async fn reverse(
     context: &OperationContext,
     progress: impl FnMut(Progress) + Send + 'static,
 ) -> Result<Reversal, OpsError> {
+    reverse_deleting(record, &[], context, progress).await
+}
+
+/// The items an Undo of `record` removes: the items it created, linked,
+/// copied, duplicated or restored. Where a folder has no Recycle Bin, as
+/// on a share, the window asks before they are deleted permanently and
+/// passes them to [`reverse_deleting`].
+pub fn removed_by_undo(record: &UndoRecord) -> Vec<String> {
+    match record {
+        UndoRecord::Create { uri, .. } => vec![uri.clone()],
+        UndoRecord::Link { links: uris }
+        | UndoRecord::Copy { copies: uris }
+        | UndoRecord::Duplicate { copies: uris }
+        | UndoRecord::Restore { restored: uris } => uris.clone(),
+        _ => Vec::new(),
+    }
+}
+
+/// [`reverse`], except that the items of [`removed_by_undo`] listed in
+/// `delete_permanently` are deleted permanently instead of moved to the
+/// Trash. Pass only items the user agreed to delete permanently, as
+/// Delete asks where a folder has no Recycle Bin: the engine itself never
+/// falls back to a permanent delete (XFER-014). Redo brings back only the
+/// items that went to the Recycle Bin.
+///
+/// # Errors
+///
+/// As [`undo`].
+pub async fn reverse_deleting(
+    record: &UndoRecord,
+    delete_permanently: &[String],
+    context: &OperationContext,
+    progress: impl FnMut(Progress) + Send + 'static,
+) -> Result<Reversal, OpsError> {
+    if !delete_permanently.is_empty() && !removed_by_undo(record).is_empty() {
+        let reversed_since = unix_seconds_now();
+        let record = record.clone();
+        let deleted: Vec<String> = delete_permanently.to_vec();
+        let context = context.clone();
+        return on_worker(move || {
+            let mut engine = gio_transfer_engine(&context, progress);
+            let removed = removed_by_undo(&record);
+            let (gone, trashed): (Vec<String>, Vec<String>) =
+                removed.into_iter().partition(|uri| deleted.contains(uri));
+            let mut result = move_to_trash(&mut engine, &trashed, &context);
+            if !result.cancelled && !gone.is_empty() {
+                let deleted_now = engine
+                    .run(Operation::Delete, &gone, &context.cancel)
+                    .unwrap_or_else(|error| failed_request(&error.into(), &context));
+                merge_results(&mut result, deleted_now);
+            }
+            // Only what went to the Recycle Bin can come back.
+            let in_recycle_bin = TransferResult {
+                done: result
+                    .done
+                    .iter()
+                    .filter(|uri| !gone.contains(uri))
+                    .cloned()
+                    .collect(),
+                ..TransferResult::default()
+            };
+            let inverse = record.inverse(&in_recycle_bin, reversed_since);
+            Ok(Reversal { result, inverse })
+        })
+        .await;
+    }
     // Taken before anything moves, so a Redo restores exactly the items
     // this reversal moves to the Trash.
     let reversed_since = unix_seconds_now();

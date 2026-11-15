@@ -52,7 +52,7 @@ const DETAILS_TIMEOUT: Duration = Duration::from_secs(2);
 const DETAILS_ART_SIZE: i32 = 48;
 
 /// `uris` with the names their confirmations show.
-fn named_items(uris: Vec<String>) -> Vec<DeleteItem> {
+pub(super) fn named_items(uris: Vec<String>) -> Vec<DeleteItem> {
     uris.into_iter()
         .map(|uri| {
             let name = gio::File::for_uri(&uri)
