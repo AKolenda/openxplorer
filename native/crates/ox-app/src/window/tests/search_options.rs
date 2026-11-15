@@ -313,3 +313,114 @@ fn a_saved_search_opens_its_folder_and_searches_again() {
     });
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
 }
+
+/// Fictional files for the Advanced Query Syntax tests, one in a
+/// subfolder, with known sizes and ages.
+fn query_syntax_fixture() -> Fixture {
+    let fixture = Fixture::empty();
+    write_file(&fixture, "Annual report 2026.docx", 20_000, 0);
+    write_file(&fixture, "Report draft.txt", 300, 0);
+    write_file(&fixture, "report final.pdf", 2_000_000, 0);
+    write_file(&fixture, "Invoice 1042.pdf", 3_000, 40);
+    write_file(&fixture, "annual budget.xlsx", 500, 0);
+    fs::create_dir(fixture.path("Archive")).expect("fixture folder");
+    write_file(&fixture, "Archive/report old.pdf", 900, 400);
+    fixture
+}
+
+/// What `text` typed into the search box shows, in name order, once the
+/// search has finished.
+fn found_for(test: &TestWindow, text: &str) -> Vec<String> {
+    test.search_for(text);
+    let mut names = test.names();
+    names.sort_by_key(|name| name.to_lowercase());
+    names
+}
+
+/// The day `days_ago` days before today, as ISO 8601 `2026-01-31`.
+fn iso_day(days_ago: i64) -> String {
+    let day = glib::DateTime::now_local()
+        .and_then(|now| now.add_days(-i32::try_from(days_ago).expect("a few days")))
+        .expect("a local time");
+    day.format("%Y-%m-%d").expect("a date").to_string()
+}
+
+/// The searches of Windows Search's Advanced Query Syntax, typed into
+/// the box: quoted phrases, upper-case `AND`, `OR` and `NOT`, the name
+/// and extension properties, `date:` with dates and ranges, and sizes
+/// with units
+/// (<https://learn.microsoft.com/en-us/windows/win32/search/-search-3x-advancedquerysyntax>).
+fn check_query_syntax(test: &TestWindow) {
+    let found = |text: &str| found_for(test, text);
+    assert_eq!(found("\"annual report\""), ["Annual report 2026.docx"]);
+    assert_eq!(
+        found("report NOT draft"),
+        ["Annual report 2026.docx", "report final.pdf", "report old.pdf"]
+    );
+    assert_eq!(
+        found("budget OR invoice"),
+        ["annual budget.xlsx", "Invoice 1042.pdf"]
+    );
+    assert_eq!(found("report AND annual"), ["Annual report 2026.docx"]);
+    assert_eq!(
+        found("ext:pdf"),
+        ["Invoice 1042.pdf", "report final.pdf", "report old.pdf"]
+    );
+    assert_eq!(found("name:draft"), ["Report draft.txt"]);
+    assert_eq!(found("report size:>1MB"), ["report final.pdf"]);
+    assert_eq!(found("ext:pdf size:1kb..10kb"), ["Invoice 1042.pdf"]);
+    assert_eq!(
+        found("report date:today"),
+        ["Annual report 2026.docx", "Report draft.txt", "report final.pdf"]
+    );
+    assert_eq!(
+        found(&format!("ext:pdf date:<{}", iso_day(30))),
+        ["Invoice 1042.pdf", "report old.pdf"]
+    );
+    assert_eq!(
+        found(&format!("date:{}..{}", iso_day(50), iso_day(30))),
+        ["Invoice 1042.pdf"]
+    );
+}
+
+/// In a folder nobody indexed, the walk of the folder and its subfolders
+/// reads the search as Advanced Query Syntax does.
+///
+/// parity: SRCH-047
+#[gtk::test]
+fn advanced_query_syntax_finds_files_in_a_folder_nobody_indexed() {
+    let fixture = query_syntax_fixture();
+    let test = TestWindow::open(&fixture.uri());
+    check_query_syntax(&test);
+}
+
+/// In an indexed folder, the cache reads the search as the walk does.
+///
+/// parity: SRCH-047
+#[gtk::test]
+fn advanced_query_syntax_finds_files_in_an_indexed_folder() {
+    let fixture = query_syntax_fixture();
+    let test = TestWindow::open(&fixture.uri());
+    test.start_search_cache();
+    test.index_folder(&fixture.uri());
+    check_query_syntax(&test);
+}
+
+/// The names of the results mark the words and phrases searched for, not
+/// the operators or the words a result must lack.
+///
+/// parity: SRCH-047
+#[gtk::test]
+fn the_marks_leave_out_operators_and_excluded_words() {
+    let fixture = query_syntax_fixture();
+    let test = TestWindow::open(&fixture.uri());
+    found_for(&test, "\"annual report\" NOT draft");
+    let position = test.position_of("Annual report 2026.docx");
+    let cell = test
+        .window
+        .folder_pane()
+        .owners()
+        .file_cell_at(position, test.window.folder_pane().details().column_view())
+        .expect("the cell is on screen");
+    assert_eq!(cell.marked_ranges(), [(0, 13)]);
+}
