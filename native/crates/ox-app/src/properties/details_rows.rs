@@ -639,6 +639,7 @@ mod tests {
             dimensions: None,
             custom_icon: None,
             size_on_disk: None,
+            stored_uri: None,
         }
     }
 
