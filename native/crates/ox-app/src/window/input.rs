@@ -93,6 +93,7 @@ impl BrowserWindow {
             self.empty_folder_input(pane);
         }
         self.install_selection_keys();
+        self.install_tooltip_hiding();
         self.install_typing_anywhere();
         self.install_slow_click_rename();
         self.address_bar().connect_cancelled(glib::clone!(

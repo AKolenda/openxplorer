@@ -17,6 +17,14 @@
 //! does: it opens at the size the last dialog was left at, within the same
 //! minimum, and saves it the same way, never maximized and never over the
 //! windows' size ([`BrowserWindow::open_dialog_at_saved_size`]).
+//!
+//! As in Windows, a window never opens larger than the screen's work area,
+//! whatever size was saved or the default asks: on a 1366 × 768 laptop, or
+//! a screen at 150 % or 200 %, it opens fitted to the screen, in logical
+//! pixels, and keeps the saved size for a larger screen. GTK fits a window
+//! to the work area on X11, but on Wayland only to the whole monitor, if at
+//! all: the panels are the compositor's, so there the window leaves them
+//! room ([`PANEL_ROOM`]). A saved size that fits is kept as it is.
 
 use std::time::Duration;
 
@@ -46,7 +54,63 @@ const DIALOG_SIZE: WindowSize = WindowSize {
     maximized: false,
 };
 
+/// The room a window leaves for the desktop's panels and its own
+/// placement on Wayland, in logical pixels, where GTK knows no work area:
+/// a top or bottom panel of about 32 pixels and the compositor's margin.
+const PANEL_ROOM: (i32, i32) = (32, 64);
+
+/// The window's least size, as `window.ui` asks for it
+/// (`set_size_request(670, 470)` in `v2.0.0:desktop/winspace.py`).
+const LEAST_SIZE: (i32, i32) = (670, 470);
+
+/// The room a window has on a monitor `geometry` wide and high, in
+/// logical pixels: all of it where GTK fits windows to the work area
+/// itself, else less [`PANEL_ROOM`].
+fn room_on(geometry: (i32, i32), knows_work_area: bool) -> (i32, i32) {
+    if knows_work_area {
+        geometry
+    } else {
+        (geometry.0 - PANEL_ROOM.0, geometry.1 - PANEL_ROOM.1)
+    }
+}
+
+/// `size` fitted into `room`: each side kept when it fits, else as long
+/// as the room.
+fn fit_into(size: (i32, i32), room: (i32, i32)) -> (i32, i32) {
+    (size.0.min(room.0), size.1.min(room.1))
+}
+
 impl BrowserWindow {
+    /// The room a new window has on the screen, in logical pixels: on the
+    /// monitor of the window in front, else on the first one. `None`
+    /// without a monitor.
+    fn room_on_screen(&self) -> Option<(i32, i32)> {
+        let display = WidgetExt::display(self);
+        let front = self
+            .application()
+            .and_then(|application| application.active_window())
+            .and_then(|window| window.surface());
+        let monitor = front
+            .and_then(|surface| display.monitor_at_surface(&surface))
+            .or_else(|| display.monitors().item(0).and_downcast::<gtk::gdk::Monitor>())?;
+        let geometry = monitor.geometry();
+        let knows_work_area = !display.is::<gdk_wayland::WaylandDisplay>();
+        Some(room_on((geometry.width(), geometry.height()), knows_work_area))
+    }
+
+    /// Gives the window `size`, fitted to the screen ([`fit_into`]), and
+    /// lowers its least size on a screen smaller than it.
+    fn set_fitted_default_size(&self, size: (i32, i32)) {
+        let Some(room) = self.room_on_screen() else {
+            self.set_default_size(size.0, size.1);
+            return;
+        };
+        let (least_width, least_height) = fit_into(LEAST_SIZE, room);
+        self.set_size_request(least_width, least_height);
+        let (width, height) = fit_into(size, room);
+        self.set_default_size(width, height);
+    }
+
     /// Shows a new window at the saved size and saves its size from now
     /// on.
     pub(crate) fn present_as_new_window(&self) {
@@ -56,13 +120,17 @@ impl BrowserWindow {
         self.imp().remembers_session.set(true);
     }
 
-    /// Gives the window the saved size, before it is shown. Returns
-    /// whether it asked to be maximized.
+    /// Gives the window the saved size, else the default one, fitted to
+    /// the screen, before it is shown. Returns whether it asked to be
+    /// maximized.
     fn open_at_saved_size(&self) -> bool {
-        let Some(size) = self.context().settings_data().preferences.window_size else {
-            return false;
-        };
-        self.set_default_size(pixels(size.width), pixels(size.height));
+        let size = self
+            .context()
+            .settings_data()
+            .preferences
+            .window_size
+            .unwrap_or(DEFAULT_SIZE);
+        self.set_fitted_default_size((pixels(size.width), pixels(size.height)));
         if size.maximized {
             self.maximize();
         }
@@ -78,7 +146,7 @@ impl BrowserWindow {
             .preferences
             .dialog_size
             .unwrap_or(DIALOG_SIZE);
-        self.set_default_size(pixels(size.width), pixels(size.height));
+        self.set_fitted_default_size((pixels(size.width), pixels(size.height)));
     }
 
     /// Saves the dialog's size whenever the user changes it, once it is
@@ -415,6 +483,117 @@ mod tests {
         settle();
 
         assert!(!saves_again, "an unchanged size is not saved again");
+    }
+
+    /// A new window fits a 1366 × 768 laptop at 100 % and a 1650 × 1050
+    /// screen at 200 % (825 × 525 logical pixels), also on Wayland, where
+    /// it leaves the panels room; a size that fits is kept.
+    ///
+    /// parity: TAB-054
+    #[test]
+    fn a_window_fits_small_and_scaled_screens() {
+        let default = (1320, 810);
+        assert_eq!(fit_into(default, room_on((1366, 768), true)), (1320, 768));
+        assert_eq!(fit_into(default, room_on((1366, 768), false)), (1320, 704));
+        assert_eq!(fit_into(default, room_on((825, 525), false)), (793, 461));
+        assert_eq!(fit_into(LEAST_SIZE, room_on((825, 525), false)), (670, 461));
+        assert_eq!(fit_into((900, 640), room_on((1920, 1080), false)), (900, 640));
+        assert_eq!(fit_into(default, room_on((2560, 1440), true)), default);
+    }
+
+    /// The room a window has on the private display's only monitor.
+    fn screen_room() -> (i32, i32) {
+        let display = gtk::gdk::Display::default().expect("the private display");
+        let (width, height) = screen_size();
+        room_on((width, height), !display.is::<gdk_wayland::WaylandDisplay>())
+    }
+
+    /// The logical size of the private display's only monitor.
+    fn screen_size() -> (i32, i32) {
+        let display = gtk::gdk::Display::default().expect("the private display");
+        let monitor = display
+            .monitors()
+            .item(0)
+            .and_downcast::<gtk::gdk::Monitor>()
+            .expect("the private display has a monitor");
+        let geometry = monitor.geometry();
+        (geometry.width(), geometry.height())
+    }
+
+    /// A saved size larger than the screen opens fitted to it, never off
+    /// its edges, and that fitted size is not saved over the user's; a
+    /// saved size that fits is kept as it is.
+    ///
+    /// parity: TAB-054
+    #[gtk::test]
+    fn a_saved_size_larger_than_the_screen_opens_fitted_to_it() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let (screen_width, screen_height) = screen_room();
+        let fits_the_screen = |(width, height): (i32, i32)| width <= screen_width && height <= screen_height;
+        assert_eq!(saved_size(&test), None, "nothing saved yet");
+        let window = open_new_window(&test, &fixture);
+        wait_until("the first window to be drawn", || window.width() > 0);
+        let first_size = window.default_size();
+        let drawn = (window.width(), window.height());
+        window.close();
+        assert!(fits_the_screen(drawn), "the first window is drawn at {drawn:?}");
+        settle();
+        assert!(
+            fits_the_screen(first_size),
+            "the first window, {first_size:?}, in {screen_width} × {screen_height} of room"
+        );
+
+        let too_large = WindowSize {
+            width: 4000,
+            height: 3000,
+            maximized: false,
+        };
+        test.window.save_preference(Preference::WindowSize(too_large));
+        wait_until("the size to be saved", || saved_size(&test) == Some(too_large));
+
+        let window = open_new_window(&test, &fixture);
+        wait_until("the window to be drawn", || window.width() > 0);
+        let drawn = (window.width(), window.height());
+        let (width, height) = window.default_size();
+        assert!(
+            fits_the_screen(drawn),
+            "the restored window is drawn at {drawn:?}"
+        );
+        let starts_a_save = window.imp().size_save.borrow().is_some();
+        window.close();
+        settle();
+        assert!(
+            width <= screen_width && height <= screen_height,
+            "{width} × {height} in {screen_width} × {screen_height} of room"
+        );
+        let least = fit_into(LEAST_SIZE, (screen_width, screen_height));
+        assert!(
+            width >= least.0 && height >= least.1,
+            "never under the least size"
+        );
+        assert!(!starts_a_save, "fitting it saves nothing");
+        assert_eq!(saved_size(&test), Some(too_large));
+
+        // 900 × 640, or less on a screen with less room, as long as
+        // the settings keep it.
+        let fits = WindowSize {
+            width: u32::try_from(screen_width.min(900)).unwrap_or(900).max(670),
+            height: u32::try_from(screen_height.min(640)).unwrap_or(640).max(470),
+            maximized: false,
+        };
+        test.window.save_preference(Preference::WindowSize(fits));
+        wait_until("the size that fits", || saved_size(&test) == Some(fits));
+        let window = open_new_window(&test, &fixture);
+        let size = window.default_size();
+        window.close();
+        settle();
+        let kept = (pixels(fits.width), pixels(fits.height));
+        assert_eq!(
+            size,
+            fit_into(kept, (screen_width, screen_height)),
+            "a size that fits is kept"
+        );
     }
 
     /// Maximizing is saved, and so is restoring.
