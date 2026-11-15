@@ -29,9 +29,9 @@ impl BrowserWindow {
             && pane.view() == FolderView::Details
             && !(self.is_active_pane(pane) && self.imp().search.borrow().is_active())
             && pane.model().grouping().is_none();
-        let tree = pane.model().tree();
-        if tree.is_expandable() != expandable {
-            tree.set_expandable(expandable);
+        let model = pane.model();
+        if model.tree().is_expandable() != expandable {
+            model.set_expandable(expandable);
             pane.details().redraw_column(SortColumn::Name);
         }
     }
