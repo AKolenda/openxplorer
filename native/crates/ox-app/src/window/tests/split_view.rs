@@ -232,3 +232,47 @@ fn folders_dropped_beside_the_tabs_open_as_new_tabs() {
     test.activate("next-tab", None);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
 }
+
+/// F6 visits each pane of a split tab, as Tab does: Microsoft's "F6:
+/// Cycle through elements in the window"
+/// (<https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows>,
+/// File Explorer keyboard shortcuts). It reached only the pane in front,
+/// so the other could not be reached with F6 at all.
+///
+/// parity: ACC-015, VIEW-059
+#[gtk::test]
+fn f6_visits_both_panes_of_a_split_tab() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("split-view", None);
+    test.wait_for_listing("the right pane");
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let in_pane = |side: PaneSide| {
+        gtk::prelude::GtkWindowExt::focus(&test.window)
+            .is_some_and(|focus| focus.is_ancestor(test.window.pane_on(side)))
+    };
+    let mut visited = Vec::new();
+    for _ in 0..16 {
+        test.window.focus_next_region(false);
+        for side in [PaneSide::Start, PaneSide::End] {
+            if in_pane(side) && visited.last() != Some(&side) {
+                visited.push(side);
+            }
+        }
+    }
+    assert!(visited.contains(&PaneSide::Start), "F6 reaches the left pane: {visited:?}");
+    assert!(visited.contains(&PaneSide::End), "F6 reaches the right pane: {visited:?}");
+    let mut back = Vec::new();
+    for _ in 0..16 {
+        test.window.focus_next_region(true);
+        for side in [PaneSide::Start, PaneSide::End] {
+            if in_pane(side) && back.last() != Some(&side) {
+                back.push(side);
+            }
+        }
+    }
+    assert!(
+        back.contains(&PaneSide::Start) && back.contains(&PaneSide::End),
+        "Shift+F6 reaches both: {back:?}"
+    );
+}
