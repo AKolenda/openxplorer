@@ -236,6 +236,10 @@ fn gallery_locations_adds_and_removes_folders_and_ok_keeps_them() {
     dialog.select_row(0);
     assert!(!dialog.can_remove(), "Pictures cannot be removed");
 
+    // A folder that does not exist is not added.
+    dialog.add_folder(&file_uri(&home.home.join("Nowhere")));
+    assert_eq!(dialog.rows().len(), 1);
+
     // Cancel drops an added folder.
     dialog.add_folder(&file_uri(&camera));
     assert_eq!(dialog.rows().len(), 2);

@@ -671,12 +671,16 @@ gallery.files > child.gallery-tile {
 }
 gallery.files > child.gallery-tile > picture { margin: 0; }
 gallery.files > child.gallery-tile:hover { outline: 1px solid alpha(@ox_text, .35); outline-offset: -1px; }
-gallery.files > child.gallery-tile:selected { outline: 2px solid @ox_accent; outline-offset: -2px; }
+/* Selected: a frame in the accent colour around the photo; the keyboard's
+   ring sits outside the tile, in the gap, so both show. */
+gallery.files > child.gallery-tile:selected {
+  background-color: @ox_item_selected;
+  box-shadow: inset 0 0 0 2px @ox_accent;
+}
 gallery.files > child.gallery-tile:selected > picture { margin: 4px; }
 gallery.files > child.gallery-tile.keyboard-focus {
   outline: 2px solid @ox_item_focus_outer;
-  outline-offset: -2px;
-  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
+  outline-offset: 1px;
 }
 gallery.files > child.gallery-tile.cut > picture,
 gallery.files > child.gallery-tile.drag-source > picture,

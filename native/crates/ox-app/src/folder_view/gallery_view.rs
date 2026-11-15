@@ -410,6 +410,11 @@ mod imp {
         fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
             self.parent_size_allocate(width, height, baseline);
             self.obj().place_tiles(width);
+            // A menu attached to the canvas (the right-click menu) is laid
+            // out by its parent.
+            for popover in self.obj().popovers() {
+                popover.present();
+            }
         }
 
         fn grab_focus(&self) -> bool {
@@ -687,6 +692,10 @@ impl GalleryCanvas {
             #[upgrade_or]
             false,
             move |tile, _, _, _, tooltip| {
+                // No tooltip over a menu, as in Windows.
+                if canvas.popovers().iter().any(WidgetExt::is_visible) {
+                    return false;
+                }
                 let Some(item) = tile.slot().item() else {
                     return false;
                 };
@@ -782,6 +791,13 @@ impl GalleryCanvas {
             .is_some_and(|window| window.gets_focus_visible());
         let focused = self.has_focus() && visible && self.imp().focus.get() == Some(position);
         crate::window::widget_tree::toggle_class(tile, "keyboard-focus", focused);
+    }
+
+    /// The menus attached to the canvas.
+    fn popovers(&self) -> Vec<gtk::Popover> {
+        std::iter::successors(self.first_child(), WidgetExt::next_sibling)
+            .filter_map(|child| child.downcast::<gtk::Popover>().ok())
+            .collect()
     }
 
     /// The tiles bound to items now.
