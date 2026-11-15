@@ -153,7 +153,7 @@ fn the_details_pane_narrows_with_the_window() {
 /// scrolls sideways to the rest. Before, Name kept 260 pixels in a split
 /// pane while Type and Size were cut off.
 ///
-/// parity: LOOK-022, VIEW-064
+/// parity: LOOK-022, VIEW-059
 #[gtk::test]
 fn in_a_900_pixel_window_name_gives_way_before_the_list_scrolls() {
     let fixture = Fixture::standard();
