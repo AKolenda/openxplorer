@@ -53,6 +53,11 @@ pub(crate) struct FolderPath {
 impl FolderPath {
     /// The folder `entry` is in.
     fn of(entry: &Entry) -> Self {
+        // A Recycle Bin item found by a search is where it was deleted
+        // from, not in the Recycle Bin's own "/".
+        if entry.trash_orig_path.is_some() {
+            return Self::original_of(entry);
+        }
         let folder = parent_location(&entry.uri).unwrap_or_else(|| entry.uri.clone());
         Self::shown_as(display_path(&folder))
     }
@@ -260,4 +265,26 @@ pub(crate) fn store_of_files(names: &[&str]) -> gtk::gio::ListStore {
         store.append(&FileItem::new(crate::test_support::file_entry(name)));
     }
     store
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+
+    /// parity: VIEW-062
+    #[test]
+    fn a_recycle_bin_item_s_folder_path_is_where_it_was_deleted_from() {
+        let mut entry = crate::test_support::file_entry("Budget.ods");
+        entry.uri = String::from("trash:///Budget.ods");
+        entry.trash_orig_path = Some(PathBuf::from("/home/user/Documents/Budget.ods"));
+        let other = crate::test_support::file_entry("Notes.txt");
+
+        assert_eq!(FolderPath::of(&entry).text, "/home/user/Documents");
+        assert_eq!(
+            FolderPath::of(&other).text,
+            FolderPath::shown_as(display_path(&parent_location(&other.uri).unwrap())).text
+        );
+    }
 }

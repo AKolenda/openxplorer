@@ -99,7 +99,15 @@ pub(crate) fn shown_cell_text(
 /// how a measured folder size was counted in Size, else none.
 pub(super) fn cell_tooltip(column: SortColumn) -> CellTooltip {
     match column {
-        SortColumn::FolderPath => |item| Some(display_path(&item.entry().uri)),
+        SortColumn::FolderPath => |item| {
+            let entry = item.entry();
+            Some(
+                entry
+                    .trash_orig_path
+                    .as_ref()
+                    .map_or_else(|| display_path(&entry.uri), |path| path.display().to_string()),
+            )
+        },
         SortColumn::Size => |item| item.folder_size().map(|measured| measured.cell_tooltip()),
         SortColumn::OriginalLocation => |item| {
             item.entry()
