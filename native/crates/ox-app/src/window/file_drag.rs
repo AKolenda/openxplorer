@@ -20,9 +20,10 @@
 //! cancels it as GTK cancels a drag on Escape.
 //!
 //! Safety rule "a drag out never deletes" (DND-008): a drag started
-//! without a modifier offers Copy (and Ask, the drop menu) only, so no app
-//! moves the items unasked; holding Shift or Ctrl+Shift as it starts adds
-//! Move or Link, as those keys do in Windows Explorer. Copy is always
+//! without a modifier offers Copy only, so no app moves the items unasked
+//! and none asks what to do, as no app asks on a plain Windows drag;
+//! holding Shift or Ctrl+Shift as it starts adds Move or Link, as those
+//! keys do in Windows Explorer. Copy is always
 //! offered, so a receiver can always finish the drop as a copy. The window
 //! never deletes what it offered, whatever the receiver answers, and
 //! nothing is mounted or downloaded during the gesture. No drag starts
@@ -198,19 +199,20 @@ pub(crate) fn drag_button(drag: &gdk::Drag) -> DragButton {
 }
 
 /// The actions a file drag with `button` offers, from the modifiers held
-/// as it starts (see the module's safety rule). Copy and Ask are always
-/// offered, so a receiver can finish as a copy and the desktop's "ask"
-/// modifier opens the drop menu. A right-button drag offers only those
-/// two whatever the keys, as its drop asks.
+/// as it starts (see the module's safety rule). Copy is always offered, so
+/// a receiver can finish as a copy. Only a right-button drag offers Ask,
+/// whatever the keys, as its drop asks: a receiver such as Thunar asks on
+/// every drop whose drag offers Ask, which a plain drag must not do.
 fn offered_actions(button: DragButton, modifiers: gdk::ModifierType) -> gdk::DragAction {
     let shift = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
     let control = modifiers.contains(gdk::ModifierType::CONTROL_MASK);
     let chosen = match (button, shift, control) {
-        (DragButton::Secondary, _, _) | (DragButton::Primary, false, _) => gdk::DragAction::empty(),
+        (DragButton::Secondary, _, _) => gdk::DragAction::ASK,
+        (DragButton::Primary, false, _) => gdk::DragAction::empty(),
         (DragButton::Primary, true, true) => gdk::DragAction::LINK,
         (DragButton::Primary, true, false) => gdk::DragAction::MOVE,
     };
-    gdk::DragAction::COPY | gdk::DragAction::ASK | chosen
+    gdk::DragAction::COPY | chosen
 }
 
 /// The button `source`'s gesture is pressed with now, while its drag is
