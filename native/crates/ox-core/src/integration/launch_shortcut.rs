@@ -22,7 +22,19 @@
 //! so Super+E still goes back to the action it was first taken from. Both
 //! packages run in their own processes, so they read and change Super+E
 //! under one lock in that folder. The
-//! service saves the change itself, so it lasts across logins. Nothing
+//! service saves the change itself, so it lasts across logins.
+//!
+//! Uninstalling a package removes its desktop file, but not what KDE's
+//! service saved in the user's `kglobalshortcutsrc`, nor the records in
+//! the user's settings folder, which the package's maintainer scripts
+//! never touch. So the package that remains checks, when it starts and
+//! each time the switch is used, whether the apps those name are still
+//! installed: Super+E on a removed package of `OpenXplorer` goes back to
+//! where that package took it from, never to the package that checks, and
+//! records leading to a removed app lead past it, through the removed
+//! package's record, or are dropped. Turning the switch off never gives
+//! Super+E to a removed app; with no installed app to give it to, Super+E
+//! is left free. Nothing
 //! changes until the user asks (INT-033), other desktops are left alone,
 //! and the Flatpak, which cannot reach the service, does not offer it.
 
@@ -212,6 +224,13 @@ pub trait GlobalShortcuts {
     ///
     /// When the service cannot be reached.
     fn set_keys(&self, action: &ShortcutAction, keys: &[KeySequence]) -> Result<(), ShortcutError>;
+
+    /// False when `action` belongs to an app that was uninstalled, whose
+    /// actions and keys the service still keeps; true for anything else,
+    /// such as a component that is no desktop file.
+    fn is_installed(&self, _action: &ShortcutAction) -> bool {
+        true
+    }
 }
 
 /// KDE's shortcut service on the session bus. Its calls block, so call it
@@ -268,6 +287,48 @@ impl GlobalShortcuts for KdeShortcuts {
             glib::Variant::tuple_from_iter([action.names().to_variant(), sequences_variant(keys)]);
         Self::call("setForeignShortcutKeys", &arguments).map(drop)
     }
+
+    /// A desktop file's component is installed while the desktop file is
+    /// in an `applications` folder of the data folders.
+    fn is_installed(&self, action: &ShortcutAction) -> bool {
+        let mut folders = vec![glib::user_data_dir()];
+        folders.extend(glib::system_data_dirs());
+        // The package's own folders, should the session's list miss them.
+        folders.extend(["/usr/local/share", "/usr/share"].map(PathBuf::from));
+        let applications: Vec<PathBuf> = folders.iter().map(|folder| folder.join("applications")).collect();
+        desktop_file_is_in(&applications, &action.component)
+    }
+}
+
+/// True when `component` is no desktop file name, or a desktop file of
+/// that ID is in one of `applications`. A desktop file ID with dashes may
+/// also be a file in a subfolder (`kde-foo.desktop`, `kde/foo.desktop`).
+fn desktop_file_is_in(applications: &[PathBuf], component: &str) -> bool {
+    let is_desktop_id = component.ends_with(".desktop")
+        && !component.starts_with('.')
+        && !component.contains('/')
+        && !component.contains('\0');
+    if !is_desktop_id {
+        return true;
+    }
+    applications
+        .iter()
+        .any(|folder| desktop_id_is_in(folder, component, 0))
+}
+
+/// True when the desktop file ID `id` names a file under `folder`, with a
+/// dash read as a subfolder at any of the places after `from`.
+fn desktop_id_is_in(folder: &Path, id: &str, from: usize) -> bool {
+    if folder.join(id).is_file() {
+        return true;
+    }
+    id.char_indices()
+        .skip_while(|(index, _)| *index < from)
+        .filter(|(index, character)| *character == '-' && *index > 0)
+        .any(|(index, _)| {
+            let subfolder = folder.join(&id[..index]);
+            subfolder.is_dir() && desktop_id_is_in(&subfolder, &id[index + 1..], 0)
+        })
 }
 
 /// `keys` as the service takes one key sequence: `(ai)`.
@@ -401,6 +462,8 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         }
         match self.shortcuts.owner(SUPER_E) {
             Ok(Some(owner)) if owner.is(&self.ours) => LaunchShortcutStatus::Ours,
+            // A removed app's Super+E opens nothing.
+            Ok(Some(owner)) if self.is_removed(&owner) => LaunchShortcutStatus::Free,
             Ok(Some(owner)) => LaunchShortcutStatus::Other(friendly_name(&owner)),
             Ok(None) => LaunchShortcutStatus::Free,
             Err(error) => LaunchShortcutStatus::Unreachable(error.to_string()),
@@ -433,9 +496,16 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             return Err(ShortcutError::Unsupported);
         }
         let _lock = self.lock()?;
-        let owner = self.shortcuts.owner(SUPER_E)?;
+        self.forget_removed();
+        let mut owner = self.shortcuts.owner(SUPER_E)?;
         if owner.as_ref().is_some_and(|owner| owner.is(&self.ours)) {
             return Ok(());
+        }
+        // A removed app's Super+E is taken but not recorded: turning the
+        // switch off must never give Super+E back to it.
+        if let Some(removed) = owner.as_ref().filter(|owner| self.is_removed(owner)) {
+            self.take_super_e_from(removed)?;
+            owner = None;
         }
         let mut sibling = None;
         let mut kept = None;
@@ -532,6 +602,8 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             return Err(ShortcutError::Unsupported);
         }
         let _lock = self.lock()?;
+        // A record leading to a removed app leads past it, or is dropped.
+        self.forget_removed();
         let owner = self
             .shortcuts
             .owner(SUPER_E)?
@@ -540,7 +612,16 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         // has Super+E.
         let found = self.read_record_and_source(owner.is_some());
         let used_earlier = found.as_ref().is_some_and(|(_, earlier)| *earlier);
-        let record = found.map(|(record, _)| record);
+        // Should mending the record have failed, it still never leads to a
+        // removed app.
+        let record = found.map(|(record, _)| record).and_then(|record| {
+            if self.is_removed(&record.previous) {
+                let previous = self.way_back(record.previous.clone(), false).0?;
+                Some(Record { previous, ..record })
+            } else {
+                Some(record)
+            }
+        });
         let Some(owner) = owner else {
             // Another package of `OpenXplorer` may have taken Super+E from
             // this one; it now gives it back to where this one took it.
@@ -586,6 +667,174 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         // that package's way back, unless this one just used it.
         self.remove_record(used_earlier || !back_to_other_package);
         Ok(restored)
+    }
+
+    /// Tidies up after apps that were uninstalled, as the app starts: when
+    /// a removed package of `OpenXplorer` still has Super+E, Super+E goes
+    /// back to where that package took it from (never to this package,
+    /// whose switch the user has not turned on), or is freed; records that
+    /// lead to a removed app lead past it or are dropped, and the records
+    /// of removed packages are dropped. Off KDE Plasma, in the Flatpak, and
+    /// when no record is kept and no removed package has Super+E, nothing
+    /// is read from the folder or written.
+    ///
+    /// # Errors
+    ///
+    /// [`ShortcutError::Record`] when the lock cannot be taken.
+    pub fn forget_removed_apps(&self) -> Result<(), ShortcutError> {
+        if !self.is_available() {
+            return Ok(());
+        }
+        let removed_has_it = self
+            .shortcuts
+            .owner(SUPER_E)
+            .ok()
+            .flatten()
+            .is_some_and(|owner| self.is_removed_package(&owner));
+        if !removed_has_it && !self.keeps_any_record() {
+            return Ok(());
+        }
+        let _lock = self.lock()?;
+        self.forget_removed();
+        Ok(())
+    }
+
+    /// [`Self::forget_removed_apps`] under the lock, as far as the service
+    /// and the folder let it.
+    fn forget_removed(&self) {
+        // A removed package that still has Super+E gives it back where it
+        // took it from, as turning its switch off would have.
+        if let Ok(Some(owner)) = self.shortcuts.owner(SUPER_E) {
+            if self.is_removed_package(&owner) {
+                let (record, mut used) = self.package_record(&owner.component, true);
+                let (way_back, passed) = match record {
+                    Some(record) => self.way_back(record.previous, true),
+                    None => (None, Vec::new()),
+                };
+                used.extend(passed);
+                if self.take_super_e_from(&owner).is_ok() {
+                    if let Some(way_back) = way_back {
+                        let _ = self.give_super_e_back(&way_back);
+                    }
+                    for path in used {
+                        let _ = std::fs::remove_file(path);
+                    }
+                }
+            }
+        }
+        // This package's record, and the one earlier builds shared, lead
+        // past a removed app, or are dropped.
+        for path in [self.record_path(), self.settings.join(EARLIER_RECORD)] {
+            let Some(record) = read_record_at(&path) else {
+                continue;
+            };
+            if !self.is_removed(&record.previous) {
+                continue;
+            }
+            match self.way_back(record.previous.clone(), false).0 {
+                Some(previous) => {
+                    let text = serde_json::to_string_pretty(&Record { previous, ..record })
+                        .expect("a record serialises");
+                    // Should this fail, the record stays, and turning the
+                    // switch off still passes over the removed app.
+                    let _ = (self.write_file)(&path, ".winspace-", text.as_bytes());
+                }
+                None => {
+                    let _ = std::fs::remove_file(&path);
+                }
+            }
+        }
+        // A removed package's own record is nobody's way back now, unless
+        // it still has Super+E, as when the service did not let go of it.
+        let owner = self.shortcuts.owner(SUPER_E).ok().flatten();
+        for package in PACKAGE_DESKTOP_IDS {
+            let action = ShortcutAction::desktop_action(package, NEW_WINDOW_ACTION, "", "");
+            let holds = owner
+                .as_ref()
+                .is_some_and(|owner| is_super_e_action_of(owner, package));
+            if self.is_removed(&action) && !holds {
+                let _ = std::fs::remove_file(record_path_of(&self.settings, package));
+            }
+        }
+    }
+
+    /// The installed action Super+E should go back to, starting from
+    /// `action` and leading past each removed package of `OpenXplorer`
+    /// through its record (and with `past_ours`, past this package through
+    /// its own record), with the records it led through; `None` when it
+    /// ends at a removed app, at a removed package without a record, or
+    /// goes round.
+    fn way_back(
+        &self,
+        mut action: ShortcutAction,
+        past_ours: bool,
+    ) -> (Option<ShortcutAction>, Vec<PathBuf>) {
+        let mut seen: Vec<String> = Vec::new();
+        let mut used = Vec::new();
+        loop {
+            let ours = is_super_e_action_of(&action, &self.ours.component);
+            if !ours && !self.is_removed(&action) {
+                return (Some(action), used);
+            }
+            let package = ours || self.is_removed_package(&action);
+            if (ours && !past_ours) || !package || seen.contains(&action.component) {
+                return (None, used);
+            }
+            seen.push(action.component.clone());
+            let path = record_path_of(&self.settings, &action.component);
+            let Some(record) = read_record_at(&path) else {
+                return (None, used);
+            };
+            used.push(path);
+            action = record.previous;
+        }
+    }
+
+    /// The record of the package whose desktop file is `component`, with
+    /// the files it was read from; with `holds_super_e`, the record earlier
+    /// builds shared is that package's too.
+    fn package_record(&self, component: &str, holds_super_e: bool) -> (Option<Record>, Vec<PathBuf>) {
+        let own = record_path_of(&self.settings, component);
+        let earlier = self.settings.join(EARLIER_RECORD);
+        let mut paths = vec![own.clone()];
+        if holds_super_e {
+            paths.push(earlier.clone());
+        }
+        let record =
+            read_record_at(&own).or_else(|| holds_super_e.then(|| read_record_at(&earlier)).flatten());
+        (record, paths)
+    }
+
+    /// True for an action of an app that was uninstalled. This package is
+    /// never one, as it runs.
+    fn is_removed(&self, action: &ShortcutAction) -> bool {
+        action.component != self.ours.component && !self.shortcuts.is_installed(action)
+    }
+
+    /// True for the action the switch of a removed package of
+    /// `OpenXplorer` gives Super+E to, or the launch action an earlier
+    /// version gave it to.
+    fn is_removed_package(&self, action: &ShortcutAction) -> bool {
+        self.is_other_package(action)
+            && is_super_e_action_of(action, &action.component)
+            && self.is_removed(action)
+    }
+
+    /// True when the settings folder holds any record of what Super+E was
+    /// taken from.
+    fn keeps_any_record(&self) -> bool {
+        let Ok(entries) = std::fs::read_dir(&self.settings) else {
+            return false;
+        };
+        entries.filter_map(Result::ok).any(|entry| {
+            entry.file_name().to_str().is_some_and(|name| {
+                name == EARLIER_RECORD
+                    || (name.starts_with(RECORD_PREFIX)
+                        && Path::new(name)
+                            .extension()
+                            .is_some_and(|extension| extension == "json"))
+            })
+        })
     }
 
     /// True for an action of the other package of `OpenXplorer`.
@@ -829,6 +1078,13 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
     }
 }
 
+/// The record at `path`, or `None` when there is none or it cannot be
+/// read.
+fn read_record_at(path: &Path) -> Option<Record> {
+    let text = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
 /// Where the package whose desktop file is `component` keeps its own
 /// record in `settings`.
 fn record_path_of(settings: &Path, component: &str) -> PathBuf {
@@ -879,6 +1135,32 @@ mod tests {
         );
         assert!(ShortcutAction::from_names(&names).is_some());
         assert_eq!(ShortcutAction::from_names(&[]), None);
+    }
+
+    /// An app counts as installed while its desktop file is in an
+    /// `applications` folder, also under the subfolder a dash may stand
+    /// for; a component that is no desktop file, such as `KWin`'s, always
+    /// does. Removing the desktop file, as uninstalling the package does,
+    /// makes it a removed app.
+    ///
+    /// parity: INT-033
+    #[test]
+    fn an_app_is_installed_while_its_desktop_file_is() {
+        let data = tempfile::tempdir().unwrap();
+        let applications = data.path().join("applications");
+        std::fs::create_dir_all(applications.join("kde")).unwrap();
+        let dolphin = applications.join("org.kde.dolphin.desktop");
+        std::fs::write(&dolphin, "[Desktop Entry]\n").unwrap();
+        std::fs::write(applications.join("kde/konsole.desktop"), "[Desktop Entry]\n").unwrap();
+        let folders = [data.path().join("missing"), applications];
+
+        assert!(desktop_file_is_in(&folders, "org.kde.dolphin.desktop"));
+        assert!(desktop_file_is_in(&folders, "kde-konsole.desktop"));
+        assert!(desktop_file_is_in(&folders, "kwin"), "no desktop file");
+        assert!(!desktop_file_is_in(&folders, "io.winspace.Development.desktop"));
+        assert!(!desktop_file_is_in(&folders, "kde-missing.desktop"));
+        std::fs::remove_file(dolphin).unwrap();
+        assert!(!desktop_file_is_in(&folders, "org.kde.dolphin.desktop"));
     }
 
     /// Global shortcuts where Super+E belongs to `owner` and nothing

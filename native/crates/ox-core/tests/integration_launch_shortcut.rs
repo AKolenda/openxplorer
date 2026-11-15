@@ -45,6 +45,9 @@ struct Shortcuts {
     /// every later one), as when KDE's service goes away partway.
     set_keys_calls: std::cell::Cell<usize>,
     fail_from_set_keys: std::cell::Cell<Option<usize>>,
+    /// The desktop files uninstalled since: as in KDE's service, their
+    /// actions and keys stay in the shortcuts it saved.
+    removed: RefCell<Vec<String>>,
 }
 
 /// What runs before a `set_keys`.
@@ -71,7 +74,14 @@ impl Shortcuts {
             before_set_keys: RefCell::new(None),
             set_keys_calls: std::cell::Cell::new(0),
             fail_from_set_keys: std::cell::Cell::new(None),
+            removed: RefCell::new(Vec::new()),
         }
+    }
+
+    /// Uninstalls the app of the desktop file `component`; the service
+    /// keeps its actions and their keys.
+    fn uninstall(&self, component: &str) {
+        self.removed.borrow_mut().push(component.to_owned());
     }
 
     /// Fails `call` from now on.
@@ -168,6 +178,10 @@ impl GlobalShortcuts for Shortcuts {
         }
         Ok(())
     }
+
+    fn is_installed(&self, action: &ShortcutAction) -> bool {
+        !self.removed.borrow().contains(&action.component)
+    }
 }
 
 /// The opt-in over `shortcuts` on KDE, with its record in `settings`.
@@ -190,6 +204,9 @@ impl GlobalShortcuts for &Shortcuts {
     }
     fn set_keys(&self, action: &ShortcutAction, keys: &[KeySequence]) -> Result<(), ShortcutError> {
         (*self).set_keys(action, keys)
+    }
+    fn is_installed(&self, action: &ShortcutAction) -> bool {
+        (*self).is_installed(action)
     }
 }
 
@@ -1149,4 +1166,380 @@ fn a_failed_turning_off_forgets_the_shared_copy_of_its_record() {
     assert_eq!(preview.status(), LaunchShortcutStatus::Ours);
     assert_eq!(preview.restore().unwrap(), RestoredShortcut::Freed);
     assert_eq!(preview.status(), LaunchShortcutStatus::Free);
+}
+
+/// Dolphin's desktop file.
+const DOLPHIN: &str = "org.kde.dolphin.desktop";
+
+/// The record the preview package keeps of what it took.
+const PREVIEW_RECORD: &str = "launch-shortcut-io.winspace.Development.Native.desktop.json";
+
+/// The record files left in `settings`, sorted.
+fn records_in(settings: &std::path::Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(settings)
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .filter_map(|entry| entry.file_name().into_string().ok())
+                .filter(|name| {
+                    std::path::Path::new(name)
+                        .extension()
+                        .is_some_and(|extension| extension == "json")
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names
+}
+
+/// True when no record in `settings` names the desktop file `component`.
+fn no_record_names(settings: &std::path::Path, component: &str) -> bool {
+    records_in(settings).iter().all(|name| {
+        !name.contains(component)
+            && !std::fs::read_to_string(settings.join(name))
+                .unwrap_or_default()
+                .contains(component)
+    })
+}
+
+/// With only the preview package installed, turning Super+E on takes it
+/// from Dolphin and turning it off gives it back.
+///
+/// parity: INT-033
+#[test]
+fn the_preview_alone_gives_super_e_back_to_dolphin() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    shortcuts.uninstall(OURS);
+    let preview = preview_shortcut(&shortcuts, settings.path());
+
+    preview.enable().unwrap();
+    assert_eq!(preview.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::GivenBack);
+
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+    assert_eq!(records_in(settings.path()), Vec::<String>::new());
+}
+
+/// The stable package took Super+E from Dolphin and was then
+/// uninstalled while it had it; KDE still gives Super+E to its action.
+/// When the preview starts, Super+E goes back to Dolphin and no record
+/// names the removed package, so the preview's switch is off and turning
+/// it on and off again ends with Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn a_removed_package_that_had_super_e_gives_it_back_when_the_other_starts() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    shortcuts.uninstall(OURS);
+
+    assert_eq!(
+        preview.status(),
+        LaunchShortcutStatus::Free,
+        "a removed app's Super+E opens nothing"
+    );
+    preview.forget_removed_apps().unwrap();
+
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+    assert_eq!(shortcuts.keys_of(OURS), Vec::<KeySequence>::new());
+    assert!(no_record_names(settings.path(), OURS));
+    assert_eq!(
+        preview.status(),
+        LaunchShortcutStatus::Other("Dolphin".to_owned())
+    );
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::NotOurs);
+    preview.enable().unwrap();
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+}
+
+/// The mirror: the preview had Super+E when it was uninstalled.
+///
+/// parity: INT-033
+#[test]
+fn a_removed_preview_that_had_super_e_gives_it_back_when_the_stable_starts() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    preview.enable().unwrap();
+    shortcuts.uninstall(PREVIEW);
+
+    stable.forget_removed_apps().unwrap();
+
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+    assert_eq!(
+        shortcuts.keys_of_action(PREVIEW, NEW_WINDOW_ACTION),
+        Vec::<KeySequence>::new()
+    );
+    assert!(no_record_names(settings.path(), PREVIEW));
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::NotOurs);
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+}
+
+/// The preview took Super+E from Dolphin, then the stable package took
+/// it from the preview, and the stable package was uninstalled. Super+E
+/// goes past the preview, whose switch the user had let go, to Dolphin:
+/// the app that starts never takes Super+E for itself.
+///
+/// parity: INT-033
+#[test]
+fn super_e_skips_the_package_that_starts_on_its_way_back() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    preview.enable().unwrap();
+    stable.enable().unwrap();
+    shortcuts.uninstall(OURS);
+
+    preview.forget_removed_apps().unwrap();
+
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+    assert_ne!(preview.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(records_in(settings.path()), Vec::<String>::new());
+    preview.enable().unwrap();
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+}
+
+/// The stable package took Super+E from Dolphin, the preview took it
+/// from the stable package, and the stable package was uninstalled.
+/// Turning the preview off gives Super+E to Dolphin, never to the
+/// removed package, whether or not the preview started since.
+///
+/// parity: INT-033
+#[test]
+fn turning_it_off_never_gives_super_e_to_a_removed_package() {
+    for started in [false, true] {
+        let settings = tempfile::tempdir().unwrap();
+        let shortcuts = Shortcuts::plasma();
+        let stable = launch_shortcut(&shortcuts, settings.path());
+        let preview = preview_shortcut(&shortcuts, settings.path());
+        stable.enable().unwrap();
+        preview.enable().unwrap();
+        shortcuts.uninstall(OURS);
+        if started {
+            preview.forget_removed_apps().unwrap();
+            assert_eq!(preview.status(), LaunchShortcutStatus::Ours, "it keeps Super+E");
+            assert!(no_record_names(settings.path(), OURS), "started: {started}");
+        }
+
+        assert_eq!(preview.restore().unwrap(), RestoredShortcut::GivenBack);
+
+        assert!(
+            shortcuts.keys_of(DOLPHIN).contains(&SUPER_E),
+            "started: {started}"
+        );
+        assert_eq!(shortcuts.keys_of(OURS), Vec::<KeySequence>::new());
+        assert_eq!(records_in(settings.path()), Vec::<String>::new());
+    }
+}
+
+/// The mirror: the preview took Super+E from Dolphin, the stable package
+/// from the preview, and the preview was uninstalled.
+///
+/// parity: INT-033
+#[test]
+fn turning_the_stable_off_never_gives_super_e_to_a_removed_preview() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    preview.enable().unwrap();
+    stable.enable().unwrap();
+    shortcuts.uninstall(PREVIEW);
+
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::GivenBack);
+
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+    assert_eq!(
+        shortcuts.keys_of_action(PREVIEW, NEW_WINDOW_ACTION),
+        Vec::<KeySequence>::new()
+    );
+    assert_eq!(records_in(settings.path()), Vec::<String>::new());
+}
+
+/// When the removed package's record is gone too, as after the user
+/// cleared the settings folder, turning it off leaves Super+E free.
+///
+/// parity: INT-033
+#[test]
+fn without_a_way_past_the_removed_package_super_e_is_freed() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    preview.enable().unwrap();
+    std::fs::remove_file(settings.path().join(RECORD)).unwrap();
+    shortcuts.uninstall(OURS);
+
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::Freed);
+
+    assert_eq!(shortcuts.owner(SUPER_E).unwrap(), None);
+    assert_eq!(records_in(settings.path()), Vec::<String>::new());
+}
+
+/// Uninstalling a package that never had Super+E changes nothing: the
+/// other package keeps Super+E and its way back to Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn removing_a_package_that_never_had_super_e_changes_nothing() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    let record = std::fs::read_to_string(settings.path().join(RECORD)).unwrap();
+    shortcuts.uninstall(PREVIEW);
+
+    stable.forget_removed_apps().unwrap();
+
+    assert_eq!(stable.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(
+        std::fs::read_to_string(settings.path().join(RECORD)).unwrap(),
+        record
+    );
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+}
+
+/// Reinstalling the stable package after the preview tidied up after it
+/// leaves its switch off; turning it on again works as on a first install.
+///
+/// parity: INT-033
+#[test]
+fn a_reinstalled_package_starts_with_super_e_off() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    shortcuts.uninstall(OURS);
+    preview.forget_removed_apps().unwrap();
+    shortcuts.removed.borrow_mut().clear();
+
+    stable.forget_removed_apps().unwrap();
+
+    assert_eq!(stable.status(), LaunchShortcutStatus::Other("Dolphin".to_owned()));
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::NotOurs);
+    stable.enable().unwrap();
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+}
+
+/// When Dolphin, the app Super+E was taken from, is uninstalled, turning
+/// the switch off leaves Super+E free instead of giving it to Dolphin's
+/// leftover action, and the record of Dolphin is forgotten.
+///
+/// parity: INT-033
+#[test]
+fn turning_it_off_never_gives_super_e_to_a_removed_app() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    shortcuts.uninstall(DOLPHIN);
+
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::Freed);
+
+    assert_eq!(shortcuts.keys_of(DOLPHIN), [CTRL_ALT_D]);
+    assert_eq!(shortcuts.owner(SUPER_E).unwrap(), None);
+    assert_eq!(records_in(settings.path()), Vec::<String>::new());
+}
+
+/// A removed app that still has Super+E in KDE's saved shortcuts is not
+/// recorded when the switch is turned on, so turning it off frees
+/// Super+E.
+///
+/// parity: INT-033
+#[test]
+fn super_e_taken_from_a_removed_app_is_not_recorded() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    shortcuts.uninstall(DOLPHIN);
+    assert_eq!(stable.status(), LaunchShortcutStatus::Free);
+
+    stable.enable().unwrap();
+
+    assert_eq!(stable.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(shortcuts.keys_of(DOLPHIN), [CTRL_ALT_D]);
+    assert!(no_record_names(settings.path(), DOLPHIN));
+    assert_eq!(stable.restore().unwrap(), RestoredShortcut::Freed);
+    assert_eq!(shortcuts.owner(SUPER_E).unwrap(), None);
+}
+
+/// Records an older version left behind for a removed package, or
+/// pointing at one, are cleaned up when the app starts; a record whose
+/// way back leads further, to an app still installed, is kept with that
+/// app. Nothing else changes, and KDE's shortcuts are left alone.
+///
+/// parity: INT-033
+#[test]
+fn stale_records_of_removed_packages_are_cleaned_up_at_start() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let dolphin = format!(
+        "{{\"previous\": {{\"component\": \"{DOLPHIN}\", \"action\": \"_launch\", \
+         \"component_name\": \"Dolphin\", \"action_name\": \"Dolphin\"}}}}"
+    );
+    let preview_action = format!(
+        "{{\"previous\": {{\"component\": \"{PREVIEW}\", \"action\": \"NewWindow\", \
+         \"component_name\": \"OpenXplorer\", \"action_name\": \"New window\"}}}}"
+    );
+    std::fs::write(settings.path().join(PREVIEW_RECORD), &dolphin).unwrap();
+    std::fs::write(settings.path().join(RECORD), &preview_action).unwrap();
+    std::fs::write(settings.path().join(EARLIER), &preview_action).unwrap();
+    shortcuts.uninstall(PREVIEW);
+    let before = shortcuts.actions.borrow().clone();
+
+    stable.forget_removed_apps().unwrap();
+
+    assert!(
+        no_record_names(settings.path(), PREVIEW),
+        "{:?}",
+        records_in(settings.path())
+    );
+    assert_eq!(*shortcuts.actions.borrow(), before, "KDE's shortcuts stay");
+
+    // An old record pointing only at the removed package goes entirely.
+    for name in records_in(settings.path()) {
+        std::fs::remove_file(settings.path().join(name)).unwrap();
+    }
+    std::fs::write(settings.path().join(RECORD), &preview_action).unwrap();
+    stable.forget_removed_apps().unwrap();
+    assert_eq!(records_in(settings.path()), Vec::<String>::new());
+}
+
+/// Off KDE Plasma, cleaning up writes nothing and changes nothing.
+///
+/// parity: INT-033
+#[test]
+fn cleaning_up_off_kde_writes_nothing() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    shortcuts.uninstall(PREVIEW);
+    let gnome = LaunchShortcut::new(
+        &shortcuts,
+        settings.path(),
+        OURS,
+        vec!["gnome".to_owned()],
+        Sandbox::Host,
+    );
+
+    gnome.forget_removed_apps().unwrap();
+    let empty = settings.path().join("empty");
+    let kde = launch_shortcut(&shortcuts, &empty);
+    kde.forget_removed_apps().unwrap();
+
+    assert_eq!(std::fs::read_dir(settings.path()).unwrap().count(), 0);
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
 }
