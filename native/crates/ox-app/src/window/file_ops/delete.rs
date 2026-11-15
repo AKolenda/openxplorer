@@ -51,6 +51,27 @@ const DETAILS_TIMEOUT: Duration = Duration::from_secs(2);
 /// The size of the item's picture beside its details.
 const DETAILS_ART_SIZE: i32 = 48;
 
+#[cfg(test)]
+thread_local! {
+    /// Items tests report as having no Recycle Bin, as a share's: GIO's
+    /// own answer for a local folder depends on who runs the tests (root
+    /// may write even into a read-only folder).
+    static WITHOUT_RECYCLE_BIN: std::cell::RefCell<Vec<gio::File>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Makes the item at `uri` have no Recycle Bin, as on a share, for this
+/// test's thread.
+#[cfg(test)]
+pub(crate) fn report_no_recycle_bin(uri: &str) {
+    WITHOUT_RECYCLE_BIN.with(|items| items.borrow_mut().push(gio::File::for_uri(uri)));
+}
+
+#[cfg(test)]
+fn has_no_recycle_bin(uri: &str) -> bool {
+    let file = gio::File::for_uri(uri);
+    WITHOUT_RECYCLE_BIN.with(|items| items.borrow().iter().any(|item| item.equal(&file)))
+}
+
 /// `uris` with the names their confirmations show.
 pub(super) fn named_items(uris: Vec<String>) -> Vec<DeleteItem> {
     uris.into_iter()
@@ -58,11 +79,11 @@ pub(super) fn named_items(uris: Vec<String>) -> Vec<DeleteItem> {
             let name = gio::File::for_uri(&uri)
                 .basename()
                 .map_or_else(|| uri.clone(), |name| name.to_string_lossy().into_owned());
-            DeleteItem {
-                uri,
-                name,
-                can_trash: None,
-            }
+            #[cfg(test)]
+            let can_trash = has_no_recycle_bin(&uri).then_some(false);
+            #[cfg(not(test))]
+            let can_trash = None;
+            DeleteItem { uri, name, can_trash }
         })
         .collect()
 }

@@ -6,9 +6,6 @@
 //! `network-undo-share-copy-*.png` there, in the light and dark themes.
 //! Without it, they check what each surface says in both themes.
 
-use std::fs;
-use std::os::unix::fs::PermissionsExt;
-
 use gtk::prelude::*;
 use ox_core::transfer::{ByteProgress, ItemCount, Progress, ProgressScope};
 
@@ -113,8 +110,8 @@ fn a_refused_sign_in_is_captured_light_and_dark() {
     }
 }
 
-/// Undo of a copy that cannot go to the Recycle Bin (a share's, here a
-/// folder that became read-only) asks Delete's question about it.
+/// Undo of a copy that cannot go to the Recycle Bin (a share's, here
+/// reported so for the test) asks Delete's question about it.
 #[gtk::test]
 fn undoing_a_copy_without_a_recycle_bin_is_captured_light_and_dark() {
     require_private_trash();
@@ -130,8 +127,7 @@ fn undoing_a_copy_without_a_recycle_bin_is_captured_light_and_dark() {
     let copy = fixture.path("Documents/Notes 2.txt");
     wait_until("the copy", || copy.is_file());
     super::file_ops_support::assert_ended_without_a_message(&test);
-    let documents = fixture.path("Documents");
-    fs::set_permissions(&documents, fs::Permissions::from_mode(0o555)).expect("chmod Documents");
+    crate::window::file_ops::report_no_recycle_bin(&fixture.uri_of("Documents/Notes 2.txt"));
     for theme in THEMES {
         test.activate("theme", Some(theme));
         test.activate("undo", None);
@@ -149,6 +145,5 @@ fn undoing_a_copy_without_a_recycle_bin_is_captured_light_and_dark() {
             "{theme}"
         );
     }
-    fs::set_permissions(&documents, fs::Permissions::from_mode(0o755)).expect("chmod Documents back");
     assert!(copy.is_file(), "No keeps the copy");
 }
