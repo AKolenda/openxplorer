@@ -19,6 +19,10 @@
 //! - `titles-menu=<column>`: opens the details view's column titles'
 //!   menu on the title of `<column>` (`name`, `size`, ...), as a
 //!   right-click on it does;
+//! - `command-menu=<name>`: opens the command bar's menu named `<name>`
+//!   (`New`, `Sort`, `View`, `See more`), as a click on its button does;
+//!   a menu of the bar open already closes, as when that click is made
+//!   while it is open;
 //! - `submenu=<label>`: opens the submenu of the open context menu's
 //!   item `<label>`, such as `Send to`, as Right on its row does;
 //! - `tab=<name>`: shows the tab named `<name>` (`general`, `security`,
@@ -89,6 +93,8 @@ pub(crate) enum SceneStep {
     TabMenu(usize),
     /// Open the column titles' menu on this column's title.
     TitlesMenu(String),
+    /// Open the command bar's menu with this name.
+    CommandMenu(String),
     /// Open the submenu of the open context menu's item with this label.
     Submenu(String),
     /// Show this tab of the Properties window opened last.
@@ -149,6 +155,7 @@ impl SceneStep {
                 .filter(|number| *number > 0)
                 .map(Self::TabMenu),
             "titles-menu" => Some(Self::TitlesMenu(argument.to_owned())),
+            "command-menu" => Some(Self::CommandMenu(argument.to_owned())),
             "tab" => Some(Self::Tab(argument.to_owned())),
             "row" => Some(Self::Row(argument.to_owned())),
             "focus" => Some(Self::Focus(argument.to_owned())),
@@ -207,6 +214,10 @@ impl SceneStep {
                 .open_titles_menu_on(column)
                 .then_some(crate::window::MENU_OPENING_MOTION)
                 .ok_or_else(|| format!("the details view shows no column “{column}”")),
+            Self::CommandMenu(name) => window
+                .open_command_bar_menu(name)
+                .then_some(crate::window::MENU_OPENING_MOTION)
+                .ok_or_else(|| format!("the command bar shows no menu “{name}”")),
             Self::Submenu(label) => (window.open_context_submenu(label)
                 || window.open_search_options_submenu(label))
             .then_some(crate::window::MENU_OPENING_MOTION)
@@ -254,25 +265,7 @@ impl SceneStep {
                 Ok(Duration::ZERO)
             }
             Self::ScrollToEnd => scroll_dialog_to_end(window).map(|()| Duration::ZERO),
-            Self::Type(text) => {
-                let parent: &gtk::Window = window.upcast_ref();
-                let dialog = gtk::Window::list_toplevels()
-                    .into_iter()
-                    .filter_map(|toplevel| toplevel.downcast::<gtk::Window>().ok())
-                    .filter(|other| other.is_visible() && other.transient_for().as_ref() == Some(parent))
-                    .last();
-                let field = GtkWindowExt::focus(dialog.as_ref().unwrap_or(parent))
-                    .and_then(|focus| {
-                        focus
-                            .ancestor(gtk::Entry::static_type())
-                            .and_downcast::<gtk::Editable>()
-                            .or_else(|| focus.downcast::<gtk::Editable>().ok())
-                    })
-                    .ok_or_else(|| "no text field has keyboard focus".to_owned())?;
-                field.set_text(text);
-                field.set_position(-1);
-                Ok(Duration::ZERO)
-            }
+            Self::Type(text) => type_into_focus(window, text).map(|()| Duration::ZERO),
             Self::Search(text) => {
                 window.search_folder(text);
                 Ok(Duration::ZERO)
@@ -287,6 +280,28 @@ impl SceneStep {
                 .ok_or_else(|| format!("the search list “{list}” has no option “{label}”")),
         }
     }
+}
+
+/// Puts `text` in the text field that has keyboard focus, in the dialog
+/// the scene opened last or else in `window`, as typing it does.
+fn type_into_focus(window: &BrowserWindow, text: &str) -> Result<(), String> {
+    let parent: &gtk::Window = window.upcast_ref();
+    let dialog = gtk::Window::list_toplevels()
+        .into_iter()
+        .filter_map(|toplevel| toplevel.downcast::<gtk::Window>().ok())
+        .filter(|other| other.is_visible() && other.transient_for().as_ref() == Some(parent))
+        .last();
+    let field = GtkWindowExt::focus(dialog.as_ref().unwrap_or(parent))
+        .and_then(|focus| {
+            focus
+                .ancestor(gtk::Entry::static_type())
+                .and_downcast::<gtk::Editable>()
+                .or_else(|| focus.downcast::<gtk::Editable>().ok())
+        })
+        .ok_or_else(|| "no text field has keyboard focus".to_owned())?;
+    field.set_text(text);
+    field.set_position(-1);
+    Ok(())
 }
 
 /// Scrolls the body of the dialog the scene opened last to its end, as
@@ -408,6 +423,18 @@ fn triggered(trigger: &gtk::ShortcutTrigger, key: gdk::Key, modifiers: gdk::Modi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_scene_opens_command_bar_menus_by_name() {
+        assert_eq!(
+            SceneStep::parse_scene("command-menu=View; command-menu=See more"),
+            Some(vec![
+                SceneStep::CommandMenu("View".to_owned()),
+                SceneStep::CommandMenu("See more".to_owned()),
+            ])
+        );
+        assert_eq!(SceneStep::parse_scene("command-menu="), None);
+    }
 
     #[test]
     fn a_scene_lists_selections_and_actions_in_order() {

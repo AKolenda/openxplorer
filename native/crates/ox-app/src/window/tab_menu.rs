@@ -30,10 +30,11 @@ pub(super) struct TabMenuFacts {
     pub extra_items: bool,
 }
 
-/// The menu of the tab `id`, which shows `uri`: the app's own with
-/// `facts.extra_items`, else Windows 11's. Close other tabs is disabled
-/// on the only tab and Close tabs to the right on the last one.
-pub(super) fn tab_menu(id: TabId, uri: &str, facts: TabMenuFacts) -> Vec<MenuEntry> {
+/// The menu of the tab `id`: the app's own with `facts.extra_items`, else
+/// Windows 11's. Close other tabs is disabled on the only tab and Close
+/// tabs to the right on the last one. Duplicate tab, in both, copies the
+/// tab right after itself, in front ([`BrowserWindow::duplicate_tab`]).
+pub(super) fn tab_menu(id: TabId, facts: TabMenuFacts) -> Vec<MenuEntry> {
     let tab = id.to_variant();
     let close_tab = MenuItem::with_target(
         &ox_core::i18n::gettext("Close tab"),
@@ -56,11 +57,11 @@ pub(super) fn tab_menu(id: TabId, uri: &str, facts: TabMenuFacts) -> Vec<MenuEnt
         tab.clone(),
     )
     .disabled_when(facts.is_last_tab);
-    let duplicate = MenuItem::with_text_target(
+    let duplicate = MenuItem::with_target(
         &ox_core::i18n::gettext("Duplicate tab"),
         Icon::Copy,
-        WindowAction::OpenTab,
-        uri,
+        WindowAction::DuplicateTab,
+        tab.clone(),
     );
     if !facts.extra_items {
         // Windows 11 draws no icon beside its two Close … tabs rows.
@@ -168,7 +169,7 @@ mod tests {
     /// parity: TAB-059, TAB-060
     #[test]
     fn a_tab_menu_offers_windows_items_in_order() {
-        let entries = tab_menu(tab(), "file:///tmp", middle_tab(false));
+        let entries = tab_menu(tab(), middle_tab(false));
 
         assert_eq!(
             labels(&entries),
@@ -197,7 +198,7 @@ mod tests {
     /// parity: TAB-012, TAB-015, TAB-059, TAB-060
     #[test]
     fn the_extra_items_keep_the_apps_own_menu() {
-        let entries = tab_menu(tab(), "file:///tmp", middle_tab(true));
+        let entries = tab_menu(tab(), middle_tab(true));
 
         assert_eq!(
             labels(&entries),
@@ -222,7 +223,7 @@ mod tests {
     #[test]
     fn close_items_are_disabled_when_there_is_nothing_to_close() {
         let disabled = |facts: TabMenuFacts| -> Vec<String> {
-            tab_menu(tab(), "file:///tmp", facts)
+            tab_menu(tab(), facts)
                 .into_iter()
                 .filter_map(|entry| match entry {
                     MenuEntry::Item(item) if item.availability == ItemAvailability::Disabled => {
