@@ -97,7 +97,11 @@ impl BrowserWindow {
                 if window.dialog_layer().shown().is_some() {
                     return glib::Propagation::Proceed;
                 }
-                window.focus_next_region(backward);
+                // F6 moves the keyboard, so it shows where it went, as
+                // Tab does (focus_ring.rs).
+                if window.focus_next_region(backward).is_some() {
+                    window.set_focus_visible(true);
+                }
                 glib::Propagation::Stop
             });
             let trigger = gtk::ShortcutTrigger::parse_string(keys);

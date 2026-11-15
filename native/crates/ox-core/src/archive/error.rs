@@ -81,6 +81,14 @@ pub enum ArchiveError {
         )
     )]
     NotSeekable,
+    /// ARC-023: the destination cannot seek, which writing a 7z needs.
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "A 7z archive cannot be written here. Create it in a local folder, then copy it here."
+        )
+    )]
+    SevenZipNotSeekable,
 
     // Browsing and previewing: v2.0.0:desktop/archives.py.
     /// The folder to list is not a safe member path.

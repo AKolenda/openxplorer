@@ -32,7 +32,8 @@ use ox_core::versions::snapshot_location;
 use crate::archive_view::{
     archive_browser, archive_dialog, compressed_file_name, compression_failure_text, extract_dialog,
     extraction_failure_text, extraction_success_text, unique_folder_names, ArchiveDialogActions,
-    ArchiveTarget, ExtractDialogSetup, COMPRESSION_STOPPED, EXTRACTION_STOPPED, TAR_ENDING, ZIP_ENDING,
+    ArchiveTarget, ExtractDialogSetup, COMPRESSION_STOPPED, EXTRACTION_STOPPED, SEVEN_ZIP_ENDING, TAR_ENDING,
+    ZIP_ENDING,
 };
 use crate::locations::Page;
 
@@ -66,6 +67,9 @@ impl BrowserWindow {
             plain_action(WindowAction::CompressToTar, |window| {
                 window.compress_selection(TAR_ENDING);
             }),
+            plain_action(WindowAction::CompressToSevenZip, |window| {
+                window.compress_selection(SEVEN_ZIP_ENDING);
+            }),
             plain_action(WindowAction::CompressTo, BrowserWindow::ask_compress_to),
         ]);
     }
@@ -96,7 +100,7 @@ impl BrowserWindow {
     /// Each archive command with why it is disabled, `None` when it is
     /// enabled: the one rule both the enabled state and the explanation
     /// come from.
-    fn archive_command_refusals(&self) -> [(WindowAction, Option<&'static str>); 5] {
+    fn archive_command_refusals(&self) -> [(WindowAction, Option<&'static str>); 6] {
         let busy = self
             .is_writing_files()
             .then_some("Wait for the running file operation to finish.");
@@ -119,6 +123,10 @@ impl BrowserWindow {
             ),
             (
                 WindowAction::CompressToTar,
+                busy.or(nothing_selected).or(read_only),
+            ),
+            (
+                WindowAction::CompressToSevenZip,
                 busy.or(nothing_selected).or(read_only),
             ),
             (WindowAction::CompressTo, busy.or(nothing_selected).or(read_only)),

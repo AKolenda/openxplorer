@@ -28,9 +28,16 @@ pub(in crate::window) use label::DropLabels;
 
 use spot::DropSpot;
 
+use ox_core::location::is_archive_location;
+
 use super::action::OfferedDrop;
 use crate::window::file_drag::DraggedItems;
 use crate::window::BrowserWindow;
+
+/// Why a ZIP opened like a folder takes no drop, in the words of its
+/// disabled Paste.
+const ARCHIVE_IS_READ_ONLY: &str =
+    crate::i18n::message_id("An archive is read-only. Extract it to add items.");
 
 /// A part of the window that takes dropped files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,6 +52,8 @@ pub(crate) enum DropZone {
     Tabs,
     /// A crumb's subfolder menu a drag opened (NAV-021).
     CrumbMenu,
+    /// The navigation pane's folder tree (SIDE-028).
+    FolderTree,
 }
 
 /// The formats a file drop target takes: this process's own dragged
@@ -123,10 +132,18 @@ impl BrowserWindow {
                 self.close_drag_crumb_menu();
                 self.hover_sidebar_during_drag(Some(y));
             }
+            DropZone::FolderTree => {
+                self.close_drag_crumb_menu();
+                let position = self.folder_tree().folder_at(y).map(|(position, _)| position);
+                self.folder_tree().expand_after_drag_hover(position);
+            }
             DropZone::FolderView | DropZone::Tabs => self.close_drag_crumb_menu(),
         }
         // Asked at every motion, even where nothing takes the drop, so the
         // first offer is remembered as the drag reaches the window.
+        if spot.is_none() && zone == DropZone::FolderView {
+            self.explain_refused_drop(drop);
+        }
         let action = self.hover_action(drop);
         self.show_drop_label(drop, spot.as_ref(), self.drop_run(drop));
         match spot {
@@ -138,7 +155,10 @@ impl BrowserWindow {
     /// A drag is at (`x`, `y`) of `widget`, the window's `zone`: scrolls
     /// the zone near its edge, and highlights where a drop would go.
     fn hover_drop_at(&self, zone: DropZone, widget: &gtk::Widget, x: f64, y: f64) -> Option<DropSpot> {
-        if matches!(zone, DropZone::FolderView | DropZone::Sidebar) {
+        if matches!(
+            zone,
+            DropZone::FolderView | DropZone::Sidebar | DropZone::FolderTree
+        ) {
             self.scroll_drag_near_edge(widget, y);
         }
         let spot = self.drop_spot(zone, widget, x, y);
@@ -158,6 +178,7 @@ impl BrowserWindow {
             DropZone::Breadcrumbs => self.leave_crumbs_during_drag(),
             DropZone::CrumbMenu => self.close_drag_crumb_menu(),
             DropZone::Sidebar => self.hover_sidebar_during_drag(None),
+            DropZone::FolderTree => self.folder_tree().expand_after_drag_hover(None),
             // GTK can leave its own drop outline on the strip after a drop,
             // a thin line behind every tab but the one in front. The tab
             // under the drag has the strip's own highlight instead.
@@ -204,6 +225,27 @@ impl BrowserWindow {
 
     /// A drag is at `y` of the sidebar's list, or left it with `None`: a
     /// collapsed section held under it expands.
+    /// Says once per drag why a folder view that shows a ZIP takes no
+    /// drop: Windows adds dropped items to a zipped folder, this app's
+    /// ZIPs are read-only (ARC-026), and GTK delivers no drop to a place
+    /// that takes none, so the window says it while the drag hovers. A
+    /// drag of the ZIP's own items, which starts over it, says nothing.
+    fn explain_refused_drop(&self, drop: &impl OfferedDrop) {
+        let shows_zip = self.current_uri().is_some_and(|uri| is_archive_location(&uri));
+        if !shows_zip || drop.carries_archive_items() {
+            return;
+        }
+        let identity = drop.identity();
+        let said = self
+            .imp()
+            .explained_drop
+            .replace(Some(identity.downgrade()))
+            .and_then(|said| said.upgrade());
+        if said.as_ref() != Some(&identity) {
+            self.show_message(ox_core::i18n::gettext_static(ARCHIVE_IS_READ_ONLY));
+        }
+    }
+
     pub(in crate::window) fn hover_sidebar_during_drag(&self, y: Option<f64>) {
         self.sidebar().expand_after_drag_hover(y);
     }
