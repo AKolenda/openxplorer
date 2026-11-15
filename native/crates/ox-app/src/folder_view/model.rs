@@ -270,7 +270,7 @@ impl FolderModel {
             // Other groups: none of them is collapsed.
             self.collapsed.borrow_mut().clear();
         }
-        if grouping.is_some() && was_grouped {
+        if let (Some(grouping), true) = (&grouping, was_grouped) {
             self.regroup(grouping);
             return;
         }
@@ -300,10 +300,10 @@ impl FolderModel {
     /// sorted the items without their groups while the views still headed
     /// them by the new grouping, so nearly every item headed a group of
     /// its own, which with 100,000 items froze the window for seconds and
-    /// overran GLib's weak references.
-    fn regroup(&self, grouping: Option<(Grouping, GroupClocks)>) {
+    /// overran the weak references one object may have.
+    fn regroup(&self, grouping: &(Grouping, GroupClocks)) {
         let mut options = self.sort_options.get();
-        options.grouping = grouping;
+        options.grouping = Some(*grouping);
         if options == self.sort_options.get() {
             return;
         }
@@ -932,7 +932,7 @@ mod tests {
     /// once. Going through no groups first showed the items sorted by name
     /// under headings of the new grouping, so each item headed a group of
     /// its own: thousands of headings, which with 100,000 items froze the
-    /// window and overran GLib's weak references.
+    /// window and overran the weak references one object may have.
     ///
     /// parity: VIEW-022
     #[gtk::test]
