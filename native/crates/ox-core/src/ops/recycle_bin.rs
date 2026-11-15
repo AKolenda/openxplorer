@@ -25,12 +25,13 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gio::prelude::*;
 
 use super::context::{on_worker, unless_cancelled, OperationContext};
 use super::error::OpsError;
+use super::progress::PROGRESS_INTERVAL;
 use super::recycle_bin_storage::{listed_targets, StoreDeleter, LISTED_FROM};
 use super::results::{AskedItem, ItemQuestions};
 use super::run_transfer::TransferOutcome;
@@ -38,7 +39,10 @@ use super::undo::UndoRecord;
 use crate::entry::{entry_from_info, ATTRIBUTES};
 use crate::gio_node::GioNode;
 use crate::location::TRASH_URI;
-use crate::transfer::{Cancellation, Node, SourceChange, TransferMode, TransferResult};
+use crate::transfer::item_label;
+use crate::transfer::{
+    Cancellation, ItemCount, Node, Progress, ProgressScope, SourceChange, TransferMode, TransferResult,
+};
 
 /// How often Undo of Move to Trash lists the Recycle Bin again when an
 /// item it restores is not listed yet, and how long it waits each time:
@@ -154,9 +158,23 @@ pub async fn delete_from_recycle_bin(
     uris: &[String],
     context: &OperationContext,
 ) -> Result<TransferResult, OpsError> {
+    delete_from_recycle_bin_reporting(uris, context, |_| {}).await
+}
+
+/// [`delete_from_recycle_bin`], reporting to `progress` how many items are
+/// done, as Windows' progress window counts them while it deletes.
+///
+/// # Errors
+///
+/// None for the whole request; each item's failure is in the result.
+pub async fn delete_from_recycle_bin_reporting(
+    uris: &[String],
+    context: &OperationContext,
+    progress: impl FnMut(Progress) + Send + 'static,
+) -> Result<TransferResult, OpsError> {
     let uris = uris.to_vec();
     let context = context.clone();
-    on_worker(move || Ok(delete_items_blocking(&uris, &context))).await
+    on_worker(move || Ok(delete_items_blocking(&uris, &context, progress))).await
 }
 
 /// Deletes everything in the Recycle Bin permanently, after the user
@@ -167,12 +185,24 @@ pub async fn delete_from_recycle_bin(
 /// When the Recycle Bin cannot be listed. Each item's failure is asked
 /// about, as [`delete_from_recycle_bin`] asks, and is in the result.
 pub async fn empty_recycle_bin(context: &OperationContext) -> Result<TransferResult, OpsError> {
+    empty_recycle_bin_reporting(context, |_| {}).await
+}
+
+/// [`empty_recycle_bin`], reporting to `progress` how many items are done.
+///
+/// # Errors
+///
+/// When the Recycle Bin cannot be listed.
+pub async fn empty_recycle_bin_reporting(
+    context: &OperationContext,
+    progress: impl FnMut(Progress) + Send + 'static,
+) -> Result<TransferResult, OpsError> {
     let context = context.clone();
     on_worker(move || {
         let listing =
             |listing: &gio::FileEnumerator, info: &gio::FileInfo| listing.child(info).uri().to_string();
         let uris = listed_blocking(NAME_ATTRIBUTES, &context.cancel, listing)?;
-        Ok(delete_items_blocking(&uris, &context))
+        Ok(delete_items_blocking(&uris, &context, progress))
     })
     .await
 }
@@ -417,7 +447,11 @@ fn name_taken_in_original_folder(original_path: &Path) -> OpsError {
 /// may not delete "File Access Denied", anything else "Interrupted
 /// Action". From [`LISTED_FROM`] items on, where they are kept is read
 /// from one listing first ([`recycle_bin_storage`](super::recycle_bin_storage)).
-fn delete_items_blocking(uris: &[String], context: &OperationContext) -> TransferResult {
+fn delete_items_blocking(
+    uris: &[String],
+    context: &OperationContext,
+    mut progress: impl FnMut(Progress),
+) -> TransferResult {
     let mut result = TransferResult::default();
     // Only a cancellation fails the listing.
     let targets = if uris.len() >= LISTED_FROM {
@@ -431,8 +465,10 @@ fn delete_items_blocking(uris: &[String], context: &OperationContext) -> Transfe
     };
     let mut store = StoreDeleter::with_targets(targets);
     let mut questions = ItemQuestions::new(context, TransferMode::Delete);
+    let mut reports = ItemReports::new(uris.len());
     for (index, uri) in uris.iter().enumerate() {
         let name = GioNode::new(uri).display_name();
+        reports.report(index, &name, &mut progress);
         let item = AskedItem {
             name: &name,
             uri,
@@ -454,6 +490,47 @@ fn delete_items_blocking(uris: &[String], context: &OperationContext) -> Transfe
         forget_removed_items();
     }
     result
+}
+
+/// The progress reports of a run over the Recycle Bin's items: one for
+/// the first item, then at most one per [`PROGRESS_INTERVAL`], so a run
+/// over thousands of items does not flood the window with them.
+struct ItemReports {
+    /// The items of the run.
+    total: usize,
+    /// When the last report went.
+    last: Option<Instant>,
+}
+
+impl ItemReports {
+    fn new(total: usize) -> Self {
+        Self { total, last: None }
+    }
+
+    /// Reports that the item at `index`, called `name`, is under way.
+    fn report(&mut self, index: usize, name: &str, progress: &mut impl FnMut(Progress)) {
+        let now = Instant::now();
+        if self
+            .last
+            .is_some_and(|last| now.duration_since(last) < PROGRESS_INTERVAL)
+        {
+            return;
+        }
+        self.last = Some(now);
+        #[expect(clippy::cast_precision_loss, reason = "a fraction for a progress bar")]
+        let fraction = index as f64 / self.total.max(1) as f64;
+        progress(Progress {
+            label: item_label(TransferMode::Delete, name, index + 1, self.total),
+            fraction,
+            scope: ProgressScope::Batch,
+            bytes: None,
+            items: Some(ItemCount {
+                done: index as u64,
+                total: self.total as u64,
+            }),
+            name: Some(name.to_owned()),
+        });
+    }
 }
 
 /// Deletes the Recycle Bin item `uri` permanently, with everything in a

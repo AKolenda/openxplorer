@@ -12,8 +12,8 @@ use gtk::gio;
 use ox_core::entry::{entry_from_info, Entry, EntryError, ATTRIBUTES};
 use ox_core::location::is_network_filesystem;
 use ox_core::location::{normalise, parent_location};
-use ox_core::ops::is_recycle_bin_item;
 use ox_core::network::{read_mount_table, MountEntry};
+use ox_core::ops::is_recycle_bin_item;
 use ox_core::permissions::Account;
 
 use super::drive_facts::{drive_type, filesystem_name, read_block_facts, DriveType};

@@ -74,6 +74,7 @@ mod error;
 mod guard;
 mod item_failure;
 mod labels;
+pub(crate) use labels::item_label;
 mod limits;
 mod modes;
 mod move_by_copying;

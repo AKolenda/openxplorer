@@ -22,9 +22,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use ox_core::ops::{
-    delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, recycle_bin_item_count,
-    restore_from_recycle_bin, run_transfer, undo, FailureAsker, OperationContext, RecycledItem,
-    TransferRequest, UndoRecord, WriteProtection,
+    delete_from_recycle_bin, empty_recycle_bin, empty_recycle_bin_reporting, list_recycle_bin,
+    recycle_bin_item_count, restore_from_recycle_bin, run_transfer, undo, FailureAsker, OperationContext,
+    RecycledItem, TransferRequest, UndoRecord, WriteProtection,
 };
 use ox_core::transfer::{
     Cancellation, ConflictPolicy, FailedItem, FailureAnswer, FailureCause, TransferMode,
@@ -564,7 +564,8 @@ fn emptying_a_large_recycle_bin_takes_seconds() {
     assert!(result.errors.is_empty(), "{:?}", result.errors);
     assert_eq!(result.done.len(), before.len());
     assert!(
-        took < Duration::from_secs(8),
+        // 22 s before; 2 to 4 s now, and up to 11 s on a busy machine.
+        took < Duration::from_secs(15),
         "emptying {ITEMS} items took {took:?}"
     );
     let trash = glib::user_data_dir().join("Trash");
@@ -655,4 +656,41 @@ fn an_item_emptying_cannot_delete_whole_stays_in_the_recycle_bin() {
     // Cleaned up for the tests that empty the Recycle Bin.
     fs::remove_dir_all(&stored).unwrap();
     fs::remove_file(glib::user_data_dir().join("Trash/info/Deep project.trashinfo")).unwrap();
+}
+
+/// Emptying the Recycle Bin counts its items as it goes, as Windows'
+/// progress window does, without a report per item.
+///
+/// parity: OPS-042
+#[test]
+fn emptying_the_recycle_bin_reports_how_many_items_are_done() {
+    const ITEMS: usize = 300;
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    fill_home_trash(temp.path(), "Counted", ITEMS);
+    let before = wait_for_listed(ITEMS);
+    let temp_root = std::env::temp_dir();
+    assert!(before.iter().all(|item| item
+        .original_path
+        .as_ref()
+        .is_some_and(|path| path.starts_with(&temp_root))));
+    let reports = Arc::new(Mutex::new(Vec::new()));
+    let log = Arc::clone(&reports);
+
+    let result = block_on(empty_recycle_bin_reporting(
+        &OperationContext::default(),
+        move |report| {
+            log.lock().unwrap().push(report);
+        },
+    ))
+    .unwrap();
+
+    assert_eq!(result.done.len(), before.len());
+    let reports = reports.lock().unwrap();
+    let counts: Vec<_> = reports.iter().map(|report| report.items.unwrap()).collect();
+    assert_eq!(counts.first().map(|count| count.done), Some(0));
+    assert!(counts.iter().all(|count| count.total == before.len() as u64));
+    assert!(counts.windows(2).all(|pair| pair[0].done < pair[1].done));
+    assert!(reports.len() < before.len(), "not one report per item");
+    assert!(reports.iter().all(|report| report.label.starts_with("Delete: ")));
 }
