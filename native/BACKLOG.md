@@ -45,6 +45,10 @@ is missing.
   headings; Icons and List currently show grouped order without headings.
   Preview settings offer a fixed large-file limit; folder artwork stays the
   bundled Fluent icon rather than a collage of the folder's contents.
+- **Gallery (2026-11-15).** Set as background and Set as desktop background
+  show grayed in Gallery: the app has no opt-in way to set the desktop's
+  background yet (HOME-030). Rotate left and Rotate right turn JPEG and PNG
+  photos only (HOME-032).
 - **Operation history.** Independent transfers have separate progress and
   cancellation panels, but completed and failed jobs are not retained and
   subsequent jobs are not queued (OPS-033).

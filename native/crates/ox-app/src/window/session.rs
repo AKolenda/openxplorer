@@ -143,6 +143,9 @@ pub(super) struct Tab {
     pub listing: Option<Listing>,
     /// The folder watch, kept while the tab shows the same folder.
     pub watch: Option<Watch>,
+    /// Gallery's watch of the photo folders' whole trees, kept while the
+    /// tab shows Gallery (HOME-021).
+    pub gallery_watch: Option<crate::folder_view::gallery::GalleryWatch>,
     /// An item to scroll into view once the folder is listed, as "Open
     /// file location" asks.
     pub revealed_item: Option<String>,
@@ -192,6 +195,7 @@ impl Tab {
             expand_after_listing: Vec::new(),
             listing: None,
             watch: None,
+            gallery_watch: None,
             revealed_item: None,
             changed_while_hidden: false,
             waits_to_mount: false,

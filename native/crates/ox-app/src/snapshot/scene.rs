@@ -55,10 +55,13 @@
 //!   runs;
 //! - `option=<name>`: opens the search strip's option list `<name>`
 //!   (`Kind`, `Date modified`, `Size`, `Search in`), or with `Search
-//!   options` the command bar's Search options, as a click does; a
+//!   options` the command bar's Search options, or with `Collection`
+//!   Gallery's Collection menu, as a click does; a
 //!   following `submenu=` opens one of its submenus;
 //! - `choose=<name>:<label>`: chooses `<label>` in that list, whether the
-//!   search filter bar shows or not.
+//!   search filter bar shows or not;
+//! - `scrubber=<percent>`: in Gallery, puts the pointer on the date
+//!   scrubber's track that far down, so it names the month there.
 //!
 //! The steps drive the window through the same actions its buttons, menus
 //! and keys use, so the picture shows the app as a user would see it. They
@@ -117,6 +120,8 @@ pub(crate) enum SceneStep {
     Search(String),
     /// Open the search strip's option list with this name.
     Option(String),
+    /// Hover Gallery's date scrubber this many percent down its track.
+    Scrubber(u32),
     /// Choose an option, by its label, in the search strip's list.
     Choose {
         /// The list's name.
@@ -160,6 +165,11 @@ impl SceneStep {
             "focus" => Some(Self::Focus(argument.to_owned())),
             "search" => Some(Self::Search(argument.to_owned())),
             "option" => Some(Self::Option(argument.to_owned())),
+            "scrubber" => argument
+                .parse()
+                .ok()
+                .filter(|percent| *percent <= 100)
+                .map(Self::Scrubber),
             "choose" => {
                 let (list, label) = argument.split_once(':')?;
                 Some(Self::Choose {
@@ -273,6 +283,10 @@ impl SceneStep {
                 .open_search_option(name)
                 .then_some(crate::window::MENU_OPENING_MOTION)
                 .ok_or_else(|| format!("the search strip has no list “{name}”")),
+            Self::Scrubber(percent) => window
+                .hover_gallery_scrubber(f64::from(*percent) / 100.0)
+                .then_some(Duration::from_millis(100))
+                .ok_or_else(|| "the window does not show Gallery's scrubber".to_owned()),
             Self::Choose { list, label } => window
                 .choose_search_option(list, label)
                 .then_some(Duration::ZERO)
