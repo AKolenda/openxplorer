@@ -545,6 +545,7 @@ impl BrowserWindow {
         self.open_start_folder(start_folders);
         self.listen_for_escape();
         self.cancel_on_quit_key();
+        self.new_folder_from_name_box();
         self.keep_one_selected();
         self.present();
         self.remember_dialog_size();
@@ -1546,6 +1547,31 @@ impl BrowserWindow {
             glib::Propagation::Stop
         });
         shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(cancel)));
+        self.add_controller(shortcuts);
+    }
+
+    /// Ctrl+Shift+N makes a new folder from File name too, where the
+    /// window's file keys, which leave a text field its own keys, do
+    /// nothing; the box has no use for the key. As in Windows' dialog,
+    /// the folder keys work from File name.
+    fn new_folder_from_name_box(&self) {
+        let shortcuts = gtk::ShortcutController::new();
+        shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
+        let trigger = gtk::ShortcutTrigger::parse_string("<Primary><Shift>n");
+        let new_folder = gtk::CallbackAction::new(|widget, _| {
+            let Some(window) = widget.downcast_ref::<BrowserWindow>() else {
+                return glib::Propagation::Proceed;
+            };
+            let enabled = window
+                .lookup_action(WindowAction::NewFolder.name())
+                .is_some_and(|action| action.is_enabled());
+            if !window.focus_is_in_picker_name() || window.dialog_in_front() || !enabled {
+                return glib::Propagation::Proceed;
+            }
+            WindowAction::NewFolder.activate_from(window, None);
+            glib::Propagation::Stop
+        });
+        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(new_folder)));
         self.add_controller(shortcuts);
     }
 
