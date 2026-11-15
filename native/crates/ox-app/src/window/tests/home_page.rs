@@ -960,7 +960,10 @@ fn searching_from_home_searches_the_home_folder_and_its_subfolders() {
     assert_eq!(test.active_tab_title(), "zebra - Search Results in Home");
     assert!(!shows_home_page(&test), "the results show, not Home");
     let count = test.status_count();
-    assert!(count.starts_with("1 result"), "the status bar counts the results: {count}");
+    assert!(
+        count.starts_with("1 result"),
+        "the status bar counts the results: {count}"
+    );
 
     test.activate("back", None);
     wait_until("Back to Home", || shows_home_page(&test));
@@ -1033,4 +1036,67 @@ fn the_keyboard_comes_back_to_the_item_whose_menu_closed() {
             || !menu.is_visible() && focus_is_on(&item),
         );
     }
+}
+
+/// A fictional home laid out as a real one: a cached folder (as a pinned
+/// standard folder is), an uncached test tree with the files three levels
+/// down, and a bigger folder beside them. Deleted with the guard.
+fn home_with_cached_and_uncached_folders() -> tempfile::TempDir {
+    let folder = file_in_home_folder("readme.txt");
+    let root = folder.path();
+    fs::create_dir_all(root.join("Documents/Reports")).expect("fixture folder");
+    fs::write(root.join("Documents/Reports/extra_1.txt"), b"x").expect("fixture file");
+    fs::create_dir_all(root.join("OX-Test/Deb32/Logs")).expect("fixture folder");
+    for name in ["extra_2.txt", "extra_3.txt", "extra_30.txt", "extra_31.txt"] {
+        fs::write(root.join("OX-Test/Deb32/Logs").join(name), b"x").expect("fixture file");
+    }
+    fs::create_dir_all(root.join("checkout/src")).expect("fixture folder");
+    for number in 0..400 {
+        fs::write(root.join(format!("checkout/src/module_{number}.rs")), b"x").expect("fixture file");
+    }
+    folder
+}
+
+/// Searching from Home finds files anywhere under the home folder, also
+/// in folders the search cache does not hold, three levels down, while
+/// another folder under home is cached: the Home page has no listing of
+/// its own, so its search walks the home folder. The home folder itself
+/// finds them too.
+///
+/// parity: HOME-017
+#[gtk::test]
+fn searching_from_home_finds_files_deep_in_uncached_folders() {
+    let home = home_with_cached_and_uncached_folders();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.start_search_cache();
+    let cached = ox_core::location::file_uri(&home.path().join("Documents"));
+    test.index_folder(&cached);
+    let expected = [
+        "extra_1.txt",
+        "extra_2.txt",
+        "extra_3.txt",
+        "extra_30.txt",
+        "extra_31.txt",
+    ];
+    let found = |test: &TestWindow| {
+        let mut names = test.names();
+        names.sort();
+        names == expected
+    };
+
+    open_quick_access_on_home(&test, true);
+    test.activate("home", None);
+    wait_until("the Home page", || {
+        test.window.current_uri().as_deref() == Some(HOME_PAGE)
+    });
+    test.search_for("extra");
+    wait_until("every extra file from Home", || found(&test));
+
+    test.activate("close-search", None);
+    open_quick_access_on_home(&test, false);
+    test.activate("home", None);
+    test.wait_for_listing("the home folder");
+    test.search_for("extra");
+    wait_until("every extra file from the home folder", || found(&test));
 }
