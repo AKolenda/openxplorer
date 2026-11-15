@@ -321,7 +321,7 @@ impl BrowserWindow {
     /// keeps showing.
     fn finish_walk(&self, run: &SearchRun, rows: Option<gio::ListStore>, outcome: Result<bool, SearchError>) {
         let is_current = self.imp().search.borrow().is_current(run);
-        let is_same_folder = self.current_uri().as_deref() == Some(run.folder.as_str());
+        let is_same_folder = self.searched_folder().as_deref() == Some(run.folder.as_str());
         if !is_current || !is_same_folder {
             return;
         }
