@@ -330,6 +330,13 @@ fn a_jpeg_keeps_its_aspect_ratio_too() {
     assert!((pier.width / pier.height - 0.5).abs() < 0.05, "{pier:?}");
 }
 
+/// Whole device pixels of `length`.
+fn device_pixels(length: f64) -> i32 {
+    #[expect(clippy::cast_possible_truncation, reason = "tile sizes are small")]
+    let pixels = length.floor() as i32;
+    pixels
+}
+
 /// Every photo on screen is drawn from a picture at least as large as its
 /// tile in device pixels, at every View size, so a screenshot's text stays
 /// readable; the picture is asked at that size.
@@ -353,8 +360,8 @@ fn photos_are_drawn_sharp_at_the_size_of_their_tiles() {
             shown.len() == 3
                 && shown.iter().all(|tile| {
                     let needed = (
-                        (tile.width * scale).floor() as i32,
-                        (tile.height * scale).floor() as i32,
+                        device_pixels(tile.width * scale),
+                        device_pixels(tile.height * scale),
                     );
                     let asked = tile
                         .requested
