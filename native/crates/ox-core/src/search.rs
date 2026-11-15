@@ -54,6 +54,7 @@
 //! | `reader` | Reading one folder through GIO | `gio_backend.py` |
 //! | `pins` | Indexing pinned folders (SRCH-040) | new |
 //! | `pattern` | The words and wildcards a name must match | `app.js`, Dolphin |
+//! | `expression` | Phrases, `AND`, `OR`, `NOT` and the name and extension properties | Windows |
 //! | `text` | Folding, display paths and URI containment | `search_index.py` |
 //! | `error` | The error of every operation | both |
 
@@ -61,6 +62,7 @@ mod commands;
 mod contents;
 mod crawl;
 mod error;
+mod expression;
 mod facets;
 mod frequent;
 mod hit;
@@ -96,7 +98,7 @@ mod service_tests;
 
 pub use contents::SearchIn;
 pub use error::SearchError;
-pub use facets::{DateFacet, FacetMatcher, KindFacet, SearchFacets, SizeFacet};
+pub use facets::{CalendarDay, DateFacet, FacetMatcher, KindFacet, SearchFacets, SizeFacet};
 pub use frequent::FrequentIndexing;
 pub use index::SearchIndex;
 pub use live::{matches_by_contents, walk_search, walks_subfolders, LiveSearch, LiveSearchEnd};

@@ -133,6 +133,83 @@ pub enum DateFacet {
     ThisYear,
     /// During the year before this one.
     LastYear,
+    /// From the first day to the last, both included, as typed dates
+    /// such as `date:>2026-01-31` or `date:1/1/2026..2/1/2026` ask;
+    /// either end may be open.
+    Days {
+        /// The first day, if any.
+        from: Option<CalendarDay>,
+        /// The last day, if any.
+        until: Option<CalendarDay>,
+    },
+}
+
+/// A day of the calendar, counted from 1 January 1970, as typed into the
+/// search box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CalendarDay(i64);
+
+impl CalendarDay {
+    /// The day `day` of `month` (1 to 12) of `year`; `None` when there is
+    /// no such day.
+    pub fn new(year: i32, month: u32, day: u32) -> Option<Self> {
+        let days_in_month = match month {
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+            4 | 6 | 9 | 11 => 30,
+            2 if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) => 29,
+            2 => 28,
+            _ => return None,
+        };
+        if !(1..=days_in_month).contains(&day) || !(1..=9999).contains(&year) {
+            return None;
+        }
+        // Howard Hinnant's days_from_civil.
+        let year = i64::from(year) - i64::from(month <= 2);
+        let era = year.div_euclid(400);
+        let year_of_era = year - era * 400;
+        let month = i64::from(month);
+        let day_of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + i64::from(day) - 1;
+        let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+        Some(Self(era * 146_097 + day_of_era - 719_468))
+    }
+
+    /// The day after this one.
+    pub fn next(self) -> Self {
+        Self(self.0 + 1)
+    }
+
+    /// The day before this one.
+    pub fn previous(self) -> Self {
+        Self(self.0 - 1)
+    }
+
+    /// The start of this day in the time zone of `now`, in seconds since
+    /// the Unix epoch.
+    fn start(self, now: &DateTime) -> Option<i64> {
+        let (year, month, day) = self.civil();
+        DateTime::new(&now.timezone(), year, month, day, 0, 0, 0.0)
+            .ok()
+            .map(|start| start.to_unix())
+    }
+
+    /// The year, month and day (Howard Hinnant's civil_from_days).
+    fn civil(self) -> (i32, i32, i32) {
+        let days = self.0 + 719_468;
+        let era = days.div_euclid(146_097);
+        let day_of_era = days - era * 146_097;
+        let year_of_era = (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+        let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+        let shifted_month = (5 * day_of_year + 2) / 153;
+        let day = day_of_year - (153 * shifted_month + 2) / 5 + 1;
+        let month = if shifted_month < 10 {
+            shifted_month + 3
+        } else {
+            shifted_month - 9
+        };
+        let year = year_of_era + era * 400 + i64::from(month <= 2);
+        let narrow = |value: i64| i32::try_from(value).unwrap_or_default();
+        (narrow(year), narrow(month), narrow(day))
+    }
 }
 
 impl DateFacet {
@@ -163,6 +240,7 @@ impl DateFacet {
             DateFacet::LastMonth => crate::i18n::gettext_static("Last month"),
             DateFacet::ThisYear => crate::i18n::gettext_static("This year"),
             DateFacet::LastYear => crate::i18n::gettext_static("Last year"),
+            DateFacet::Days { .. } => crate::i18n::gettext_static("Date modified"),
         }
     }
 
@@ -182,6 +260,17 @@ impl DateFacet {
         .ok()?;
         let from = match self {
             DateFacet::Any => return None,
+            DateFacet::Days { from, until } => {
+                let from = match from {
+                    Some(day) => day.start(now)?,
+                    None => i64::MIN,
+                };
+                let until = match until {
+                    Some(day) => day.next().start(now)?,
+                    None => i64::MAX,
+                };
+                return Some((from, until));
+            }
             DateFacet::Today => today.clone(),
             DateFacet::Yesterday => {
                 let yesterday = today.add_days(-1).ok()?;
@@ -235,6 +324,9 @@ pub enum SizeFacet {
     Larger(u64),
     /// Fewer than this many bytes, as `size:<500` asks.
     Smaller(u64),
+    /// From the first size to the last in bytes, both included, as
+    /// `size:>=1mb`, `size:=0` or `size:5kb..10kb` ask.
+    Between(u64, u64),
 }
 
 /// The first size of each group after Empty, in bytes (`minValue`).
@@ -264,7 +356,9 @@ impl SizeFacet {
             SizeFacet::Large => crate::i18n::gettext_static("Large (128 MB – 1 GB)"),
             SizeFacet::Huge => crate::i18n::gettext_static("Huge (1 – 4 GB)"),
             SizeFacet::Gigantic => crate::i18n::gettext_static("Gigantic (> 4 GB)"),
-            SizeFacet::Larger(_) | SizeFacet::Smaller(_) => crate::i18n::gettext_static("Size"),
+            SizeFacet::Larger(_) | SizeFacet::Smaller(_) | SizeFacet::Between(..) => {
+                crate::i18n::gettext_static("Size")
+            }
         }
     }
 
@@ -287,6 +381,7 @@ impl SizeFacet {
             SizeFacet::Gigantic => group(5),
             SizeFacet::Larger(bytes) => Some(bytes.checked_add(1).map_or((1, 0), |from| (from, u64::MAX))),
             SizeFacet::Smaller(bytes) => Some(bytes.checked_sub(1).map_or((1, 0), |until| (0, until))),
+            SizeFacet::Between(from, until) => Some((from, until)),
         }
     }
 }
@@ -451,6 +546,35 @@ mod tests {
             4,
             "the folder has no time"
         );
+    }
+
+    /// Typed days count whole days in local time, both ends included.
+    ///
+    /// parity: SRCH-047
+    #[test]
+    fn typed_days_include_both_ends() {
+        let now = local(2026, 9, 16, 12);
+        let day = |year, month, day| CalendarDay::new(year, month, day).expect("a real day");
+        let first = local(2026, 9, 1, 0);
+        let last = local(2026, 9, 2, 23);
+        let after = local(2026, 9, 3, 0);
+        let range = DateFacet::Days {
+            from: Some(day(2026, 9, 1)),
+            until: Some(day(2026, 9, 2)),
+        }
+        .range(&now);
+        assert_eq!(range, Some((first.to_unix(), after.to_unix())));
+        assert!(last.to_unix() < after.to_unix());
+        let open = DateFacet::Days {
+            from: None,
+            until: Some(day(2026, 9, 2)),
+        };
+        assert_eq!(open.range(&now), Some((i64::MIN, after.to_unix())));
+        assert_eq!(day(2024, 2, 29).next(), day(2024, 3, 1));
+        assert_eq!(day(2026, 1, 1).previous(), day(2025, 12, 31));
+        assert_eq!(CalendarDay::new(2025, 2, 29), None);
+        assert_eq!(CalendarDay::new(1970, 1, 1).map(|day| day.0), Some(0));
+        assert_eq!(day(2000, 3, 1).civil(), (2000, 3, 1));
     }
 
     fn sized(name: &str, size: Option<u64>) -> Entry {
