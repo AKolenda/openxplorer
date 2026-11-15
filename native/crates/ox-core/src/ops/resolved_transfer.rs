@@ -296,8 +296,12 @@ impl<'a> Run<'a> {
             if let Some(bytes) = report.bytes.as_mut() {
                 current_step = bytes.batch_written;
                 bytes.batch_written = bytes.batch_written.saturating_add(previous_steps);
-                // The steps' sizes are not the whole job's.
-                bytes.batch_size = None;
+                // Several steps' sizes are not the whole job's; a single
+                // step's is, and it moves the percentage and the time
+                // remaining while one large file is copied (OPS-021).
+                if several_steps {
+                    bytes.batch_size = None;
+                }
             } else if report.scope == ProgressScope::Batch && report.fraction >= 1.0 {
                 previous_steps = previous_steps.saturating_add(current_step);
                 current_step = 0;

@@ -151,5 +151,5 @@ pub use templates::{
     MAX_USER_TEMPLATES,
 };
 pub use undo::{MovedItem, Operation, RenamedPair, UndoRecord};
-pub use undo_apply::{reverse, undo, Reversal};
+pub use undo_apply::{removed_by_undo, reverse, reverse_deleting, undo, Reversal};
 pub use unfinished::{leftovers_message, UnfinishedMark, UnfinishedMarks, UNFINISHED_TITLE};
