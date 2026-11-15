@@ -28,45 +28,104 @@ fn shown_tooltip(test: &TestWindow) -> Option<String> {
         })
 }
 
-/// Moves the pointer onto the middle of `widget`, past its edge first so
-/// GTK sees it arrive, and waits for its tooltip.
+/// The point `at` of `widget` on the screen, and in the window's own
+/// coordinates, where its pointer motion reports it.
+fn points_of(
+    test: &TestWindow,
+    pointer: &mut Pointer,
+    widget: &impl IsA<gtk::Widget>,
+    at: (f64, f64),
+) -> ((i32, i32), (f64, f64)) {
+    let screen = screen_point(pointer, widget, at, (200, 200));
+    #[expect(clippy::cast_possible_truncation, reason = "points in a window are small")]
+    let local = gtk::graphene::Point::new(at.0 as f32, at.1 as f32);
+    let in_window = widget
+        .compute_point(&test.window, &local)
+        .expect("the widget is in the window");
+    (screen, (f64::from(in_window.x()), f64::from(in_window.y())))
+}
+
+/// Moves the real pointer to `screen` and waits until the window has seen
+/// it at `in_window`: GTK merges quick moves, so each move is waited for
+/// rather than timed.
+fn move_and_wait(test: &TestWindow, pointer: &mut Pointer, screen: (i32, i32), in_window: (f64, f64)) {
+    pointer.move_to(screen.0, screen.1);
+    wait_until("the window to see the pointer", || {
+        test.window
+            .pointer_seen_at()
+            .is_some_and(|(x, y)| (x - in_window.0).abs() <= 2.0 && (y - in_window.1).abs() <= 2.0)
+    });
+}
+
+/// Moves the pointer onto the middle of `widget` and waits for its
+/// tooltip. The pointer first rests on the empty part of the file list,
+/// where nothing has a tooltip, until no tooltip shows and tooltips may
+/// show again; so neither where an earlier test left the pointer nor a
+/// tooltip hidden by the last key counts.
 fn hover(test: &TestWindow, pointer: &mut Pointer, widget: &impl IsA<gtk::Widget>, what: &str) {
+    let view = test.window.folder_pane().view_widget();
+    let empty = (f64::from(view.width()) / 2.0, f64::from(view.height()) - 24.0);
+    let (screen, in_window) = points_of(test, pointer, &view, empty);
+    move_and_wait(test, pointer, screen, in_window);
+    wait_until("no tooltip, and tooltips allowed", || {
+        shown_tooltip(test).is_none() && test.window.tooltips_may_show()
+    });
     let middle = (f64::from(widget.width()) / 2.0, f64::from(widget.height()) / 2.0);
-    let (x, y) = screen_point(pointer, widget, middle, (200, 200));
-    pointer.move_to(x - 3, y - 1);
-    pointer.move_to(x, y);
+    let (screen, in_window) = points_of(test, pointer, widget, middle);
+    move_and_wait(test, pointer, screen, in_window);
     wait_until(&format!("the tooltip of {what}"), || {
         shown_tooltip(test).is_some()
     });
 }
 
+/// Whether no menu or other popover of the window is open.
+fn no_menu_open(test: &TestWindow) -> bool {
+    descendants::<gtk::Popover>(&test.window)
+        .iter()
+        .all(|popover| !popover.is_visible())
+}
+
+/// Makes sure real keys reach the window: on a display without a window
+/// manager, the keyboard can be left on the root window once an earlier
+/// test's window closed, and then no key arrives.
+fn keep_keyboard_in(test: &TestWindow) {
+    if !test.window.is_active() {
+        test.window.present();
+    }
+    wait_until("the window to have the keyboard", || test.window.is_active());
+}
+
+/// The first drawn widget of type `T` in the view that `matches`, once
+/// the view has drawn one: the view may still be laying out its rows.
+fn drawn_in_view<T: IsA<gtk::Widget>>(test: &TestWindow, what: &str, matches: impl Fn(&T) -> bool) -> T {
+    let find = || {
+        descendants::<T>(&test.window.folder_pane().view_widget())
+            .into_iter()
+            .find(|widget| widget.is_drawable() && widget.width() > 0 && matches(widget))
+    };
+    wait_until(what, || find().is_some());
+    find().expect("wait_until returned only once it was drawn")
+}
+
 /// The cell of the item called `name` in the view.
 fn cell_of(test: &TestWindow, name: &str) -> FileCell {
-    descendants::<FileCell>(&test.window.folder_pane().view_widget())
-        .into_iter()
-        .find(|cell| {
-            cell.is_drawable()
-                && descendants::<gtk::Label>(cell)
-                    .iter()
-                    .any(|label| label.text() == name)
-        })
-        .unwrap_or_else(|| panic!("the view shows {name}"))
+    drawn_in_view(test, &format!("the view to show {name}"), |cell: &FileCell| {
+        descendants::<gtk::Label>(cell)
+            .iter()
+            .any(|label| label.text() == name)
+    })
 }
 
 /// The Details view's column title that names `column`.
 fn column_title(test: &TestWindow, column: &str) -> gtk::Widget {
-    descendants::<gtk::Widget>(&test.window.folder_pane().view_widget())
-        .into_iter()
-        .find(|widget| {
-            widget.is_drawable()
-                && widget
-                    .tooltip_text()
-                    .is_some_and(|text| text.starts_with("Drag to resize"))
-                && descendants::<gtk::Label>(widget)
-                    .iter()
-                    .any(|label| label.text() == column)
-        })
-        .unwrap_or_else(|| panic!("the Details view has a {column} column"))
+    drawn_in_view(test, &format!("the {column} column"), |widget: &gtk::Widget| {
+        widget
+            .tooltip_text()
+            .is_some_and(|text| text.starts_with("Drag to resize"))
+            && descendants::<gtk::Label>(widget)
+                .iter()
+                .any(|label| label.text() == column)
+    })
 }
 
 /// Presses `key` with Shift held.
@@ -115,6 +174,7 @@ fn no_tooltip_stays_over_a_menu_the_rename_box_or_the_next_folder() {
     let menu_shows = |test: &TestWindow| test.window.context_menu().is_visible();
 
     for way in [MenuWay::ShiftF10, MenuWay::MenuKey, MenuWay::RightClick] {
+        keep_keyboard_in(&test);
         select_names(&test, &["Notes 2.txt"]);
         test.window.folder_pane().focus_view();
         hover(&test, &mut pointer, &cell_of(&test, "Notes 2.txt"), "Notes 2.txt");
@@ -127,6 +187,7 @@ fn no_tooltip_stays_over_a_menu_the_rename_box_or_the_next_folder() {
         wait_until("the menu to close", || !menu_shows(&test));
     }
 
+    keep_keyboard_in(&test);
     hover(
         &test,
         &mut pointer,
@@ -139,7 +200,9 @@ fn no_tooltip_stays_over_a_menu_the_rename_box_or_the_next_folder() {
         shown_tooltip(&test).is_none()
     });
     pointer.tap_key(gdk::Key::Escape);
+    wait_until("the column menu to close", || no_menu_open(&test));
 
+    keep_keyboard_in(&test);
     select_names(&test, &["Notes 2.txt"]);
     test.window.folder_pane().focus_view();
     hover(&test, &mut pointer, &cell_of(&test, "Notes 2.txt"), "Notes 2.txt");
