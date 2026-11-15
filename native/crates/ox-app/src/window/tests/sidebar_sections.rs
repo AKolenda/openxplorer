@@ -101,7 +101,8 @@ fn the_this_pc_chevron_collapses_and_expands_its_section() {
 /// Left on This PC's row collapses the section and Right expands it
 /// again, as in Explorer's navigation pane. As in Windows 11's tree,
 /// Right on the expanded head moves to its first drive and Left on a
-/// drive back to the head; a key with nowhere to go is left to the list.
+/// drive back to the head; a key with nowhere to go keeps the keyboard
+/// where it is.
 ///
 /// parity: SIDE-033, ACC-006
 #[gtk::test]
@@ -115,7 +116,8 @@ fn left_and_right_on_a_section_head_collapse_and_expand_it() {
     assert!(press(&test, gdk::Key::Left), "Left collapses This PC");
     assert!(sidebar.section_is_collapsed("thisPc"));
     assert!(!shows(&test, "Local Disk"));
-    assert!(!press(&test, gdk::Key::Left), "already collapsed");
+    assert!(press(&test, gdk::Key::Left), "already collapsed: taken, nothing changes");
+    assert!(sidebar.section_is_collapsed("thisPc"));
     assert!(press(&test, gdk::Key::Right), "Right expands it");
     assert!(!sidebar.section_is_collapsed("thisPc"));
     assert!(shows(&test, "Local Disk"));
@@ -138,8 +140,10 @@ fn left_and_right_on_a_section_head_collapse_and_expand_it() {
     );
 
     row_named(&test, "Home").grab_focus();
-    assert!(!press(&test, gdk::Key::Left), "Home has nowhere to go");
-    assert!(!press(&test, gdk::Key::Right));
+    let home = row_named(&test, "Home");
+    assert!(press(&test, gdk::Key::Left), "Home has nowhere to go: the key is taken");
+    assert!(press(&test, gdk::Key::Right));
+    assert_eq!(focused(), Some(home), "and the keyboard stays on Home");
 }
 
 /// While the open place is inside a collapsed section, the section's head
