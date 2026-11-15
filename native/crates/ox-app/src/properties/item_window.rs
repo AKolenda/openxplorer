@@ -36,7 +36,9 @@ use super::drive_tab::{drive_general_tab, hardware_rows, DRIVE_ART};
 use super::folder_count::{count_folders, Totals};
 use super::general_tab::{general_tab, GeneralEdits, GeneralRights};
 use super::location_panel::LocationPanel;
-use super::metadata::{drive_keeps_customization, is_mount_point, read_properties, ItemProperties};
+use super::metadata::{
+    drive_keeps_customization, is_in_recycle_bin, is_mount_point, read_properties, ItemProperties,
+};
 use super::security_tab::{fill_security, SecurityContext, SecurityFacts};
 use super::sharing_panel::sharing_panel;
 use super::versions_panel::VersionsPanel;
@@ -114,9 +116,12 @@ pub(crate) fn open_item_properties(
         PropertiesTab::General.label(),
         &general,
     );
+    // An item in the Recycle Bin has only its General tab, as in Windows.
+    let in_bin = is_in_recycle_bin(&target.uri);
     let hardware = is_drive.then(|| add_hardware_tab(&window));
     let mut share_folder = None;
-    if let Some((folder, usershares)) = local_folder.clone().zip(context.usershares.as_ref()) {
+    let usershares = context.usershares.as_ref().filter(|_| !in_bin);
+    if let Some((folder, usershares)) = local_folder.clone().zip(usershares) {
         let (sharing, follow) = sharing_panel(folder, usershares.clone());
         window.add_tab(
             PropertiesTab::Sharing.page_name(),
@@ -126,11 +131,13 @@ pub(crate) fn open_item_properties(
         share_folder = Some(follow);
     }
     let security = page();
-    window.add_tab(
-        PropertiesTab::Security.page_name(),
-        PropertiesTab::Security.label(),
-        &security,
-    );
+    if !in_bin {
+        window.add_tab(
+            PropertiesTab::Security.page_name(),
+            PropertiesTab::Security.label(),
+            &security,
+        );
+    }
     if let Some(folder) = target.known_folder {
         let location = LocationPanel::new(folder, Arc::clone(&context.relocation), context.brave.clone());
         window.add_pending_last(location.pending());
@@ -140,19 +147,23 @@ pub(crate) fn open_item_properties(
             &location,
         );
     }
-    let details = add_details_tab(&window, &target, &context);
+    let details = (!in_bin)
+        .then(|| add_details_tab(&window, &target, &context))
+        .flatten();
     let versions = VersionsPanel::new(&target, Arc::clone(&context.versions), context.locations.clone());
-    window.add_tab(
-        PropertiesTab::PreviousVersions.page_name(),
-        PropertiesTab::PreviousVersions.label(),
-        &versions,
-    );
+    if !in_bin {
+        window.add_tab(
+            PropertiesTab::PreviousVersions.page_name(),
+            PropertiesTab::PreviousVersions.label(),
+            &versions,
+        );
+    }
     let is_read_only =
         context.locations.is_snapshot_location(&target.uri) || is_conventional_snapshot(&target.uri);
     // As in Windows 11, the system drive has no Customize tab; another
     // drive has one where its choice can be kept.
     let can_customize = !is_drive || drive_keeps_customization(&target.uri);
-    let customize = (local_folder.is_some() && !is_read_only && can_customize).then(|| {
+    let customize = (local_folder.is_some() && !is_read_only && can_customize && !in_bin).then(|| {
         let customize = page();
         window.add_tab(
             PropertiesTab::Customize.page_name(),
@@ -377,7 +388,9 @@ impl ItemPages {
         let rights = GeneralRights {
             can_rename: self.can_rename(&properties),
             can_change_permissions: can_edit,
-            can_change_app: !properties.entry.is_dir && !is_read_only,
+            can_change_app: !properties.entry.is_dir
+                && !is_read_only
+                && !is_in_recycle_bin(&properties.entry.uri),
         };
         clear(&self.general);
         let general = general_tab(

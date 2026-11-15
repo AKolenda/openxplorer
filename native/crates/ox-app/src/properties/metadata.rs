@@ -150,9 +150,21 @@ pub(crate) async fn read_properties(uri: String) -> Result<ItemProperties, Entry
     }
 }
 
+/// Whether `uri` is an item in the Recycle Bin (`trash:///<name>`), which
+/// has Properties of its own (PROP-003).
+pub(crate) fn is_in_recycle_bin(uri: &str) -> bool {
+    uri.strip_prefix("trash:///").is_some_and(|name| !name.is_empty())
+}
+
 /// [`read_properties`] on the calling thread.
 fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
-    let file = gio::File::for_uri(&normalise(uri)?);
+    // An item in the Recycle Bin is read where GIO lists it.
+    let uri = if is_in_recycle_bin(uri) {
+        uri.to_owned()
+    } else {
+        normalise(uri)?
+    };
+    let file = gio::File::for_uri(&uri);
     let attributes = format!("{ATTRIBUTES},{PROPERTY_ATTRIBUTES}");
     let info = file.query_info(
         &attributes,

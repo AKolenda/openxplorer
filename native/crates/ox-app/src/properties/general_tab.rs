@@ -104,19 +104,32 @@ pub(super) fn general_tab(
         kind.add(&ox_core::i18n::gettext("Type"), &entry.type_label);
     } else {
         kind.add(&ox_core::i18n::gettext("Type of file"), &type_of_file(entry));
-        let (row, value) = opens_with_row(properties, rights.can_change_app, uri);
-        kind.add_control(&ox_core::i18n::gettext("Opens with"), &row);
-        opens_with = Some(value);
+        // An item in the Recycle Bin opens with nothing until it is
+        // restored.
+        if entry.trash_orig_path.is_none() {
+            let (row, value) = opens_with_row(properties, rights.can_change_app, uri);
+            kind.add_control(&ox_core::i18n::gettext("Opens with"), &row);
+            opens_with = Some(value);
+        }
     }
     page.append(kind.widget());
     page.append(&divider());
 
     let place = Rows::new();
-    let container = properties.parent_uri.as_deref().unwrap_or(&entry.uri);
-    place.add_line(
-        &ox_core::i18n::gettext("Location"),
-        &locations.display_location(container),
-    );
+    if let Some(origin) = &entry.trash_orig_path {
+        // An item in the Recycle Bin names the folder it was deleted from.
+        let folder = origin.parent().unwrap_or(origin);
+        place.add_line(
+            &ox_core::i18n::gettext("Origin"),
+            &locations.display_location(&ox_core::location::file_uri(folder)),
+        );
+    } else {
+        let container = properties.parent_uri.as_deref().unwrap_or(&entry.uri);
+        place.add_line(
+            &ox_core::i18n::gettext("Location"),
+            &locations.display_location(container),
+        );
+    }
     if let Some(target) = &properties.link_target {
         place.add_line(&ox_core::i18n::gettext("Target"), target);
     }
@@ -158,6 +171,12 @@ pub(super) fn general_tab(
         dates.add(
             &ox_core::i18n::gettext("Accessed"),
             &format::long_date_time_text(properties.accessed),
+        );
+    }
+    if entry.trash_orig_path.is_some() {
+        dates.add(
+            &ox_core::i18n::gettext("Deleted"),
+            &format::weekday_date_time_text(entry.trash_deletion_date),
         );
     }
     page.append(dates.widget());

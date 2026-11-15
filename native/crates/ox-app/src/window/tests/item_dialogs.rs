@@ -74,8 +74,9 @@ pub(super) fn tab(window: &PropertiesWindow, name: &str) -> gtk::Widget {
 /// The General tab of `window`, once its rows show.
 pub(super) fn general(window: &PropertiesWindow) -> gtk::Widget {
     let page = tab(window, "general");
+    // An item in the Recycle Bin has Origin where others have Location.
     wait_until("the properties to be read", || {
-        value_after(&page, "Location:").is_some()
+        value_after(&page, "Location:").is_some() || value_after(&page, "Origin:").is_some()
     });
     page
 }
@@ -1306,6 +1307,45 @@ fn the_security_tab_reads_and_changes_the_linux_permissions() {
     check(&advanced, "Set group ID").set_active(true);
     advanced.ok_button().emit_clicked();
     wait_until("the special bit", || mode_of(&path) == 0o2674);
+}
+
+/// An item in the Recycle Bin has Properties too, as in Windows 11: one
+/// General tab with its name, type, where it was deleted from (Origin),
+/// its sizes, its dates and when it was deleted, none of which can be
+/// changed there.
+///
+/// parity: PROP-003
+#[gtk::test]
+fn an_item_in_the_recycle_bin_shows_where_it_came_from_and_when_it_was_deleted() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Draft to delete.txt");
+    gtk::gio::File::for_path(fixture.path("Draft to delete.txt"))
+        .trash(None::<&gtk::gio::Cancellable>)
+        .expect("the private Trash takes the file");
+    let test = TestWindow::open(ox_core::location::TRASH_URI);
+    wait_until("the trashed file to be listed", || {
+        test.names().contains(&"Draft to delete.txt".to_owned())
+    });
+    super::file_ops_support::select_names(&test, &["Draft to delete.txt"]);
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Draft to delete.txt Properties");
+    let page = tab(&window, "general");
+    wait_until("the item to be read", || value_after(&page, "Origin:").is_some());
+
+    assert_eq!(window.tab_labels(), ["General"]);
+    assert_eq!(
+        value_after(&page, "Origin:").as_deref(),
+        Some(fixture.root().to_str().expect("a UTF-8 path"))
+    );
+    assert!(value_after(&page, "Deleted:").is_some_and(|date| !date.is_empty()));
+    let shown = texts(&page);
+    assert!(!shown.iter().any(|text| text == "Opens with:"), "{shown:?}");
+    assert!(!shown.iter().any(|text| text.contains("supported")), "{shown:?}");
+    assert!(!name_field(&window).is_editable());
+    assert!(!check(&page, "Hidden").is_sensitive());
+    assert!(!check(&page, "Read-only").is_sensitive());
+    super::file_ops_support::assert_ended_without_a_message(&test);
 }
 
 /// With several items selected, a link to a folder is a file, as one

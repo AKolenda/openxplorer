@@ -1722,7 +1722,7 @@ msgstr ""
 msgid "Normal"
 msgstr ""
 
-#: crates/ox-app/src/properties/details_rows.rs
+#: crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/general_tab.rs
 msgid "Origin"
 msgstr ""
 
@@ -1977,6 +1977,10 @@ msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs
 msgid "Created"
+msgstr ""
+
+#: crates/ox-app/src/properties/general_tab.rs
+msgid "Deleted"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_attributes.rs
