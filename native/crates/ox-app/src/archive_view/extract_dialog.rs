@@ -5,7 +5,7 @@
 //! and as short: the title names the archive ("Extract tidewater.zip"),
 //! then one field, "Files will be extracted to this folder", filled in
 //! with the archive's folder and its name (`Downloads/tidewater`), with
-//! Browse…, the "Show extracted files when finished" check box, and
+//! Browse…, the "Show extracted files when complete" check box, and
 //! Cancel and Extract. A folder that does not exist yet is created;
 //! deleting the last part extracts straight into an existing folder,
 //! where the usual name-conflict question decides about files already
@@ -105,7 +105,7 @@ pub(crate) fn extract_dialog(
     let suggested = suggested_folder_name(&archive.name).unwrap_or_default();
     let target = target_field(&body, &suggested_target(&setup.shown_destination, &suggested));
     let show = check_row(
-        &ox_core::i18n::gettext("Show extracted files when finished"),
+        &ox_core::i18n::gettext("Show extracted files when complete"),
         true,
     );
     body.append(&show);

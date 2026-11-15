@@ -468,7 +468,7 @@ msgid "Select a destination"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "Show extracted files when finished"
+msgid "Show extracted files when complete"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
