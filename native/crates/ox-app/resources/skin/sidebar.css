@@ -123,6 +123,10 @@ window.ox.compact-density .sidebar button.side-eject { min-height: 20px; }
 window.compact-density .folder-tree listview > row { min-height: 24px; }
 .folder-tree listview > row:hover { background-color: @ox_item_hover; }
 .folder-tree listview > row:selected { background-color: @ox_item_selected; color: @ox_text; }
+/* No frame round the whole pane while a drag is over it (DND-011): GTK's
+   theme draws a green line round a drop target's widget, and Windows
+   outlines only the row a drop would go into. */
+.sidebar list.places:drop(active), .folder-tree listview:drop(active) { box-shadow: none; }
 /* The folder a drop would go into (DND-011), as the places show it. */
 .folder-tree listview > row.file-drop-active {
   background-color: @ox_selected;
