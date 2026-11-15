@@ -85,7 +85,7 @@ pub(crate) trait OfferedDrop {
     fn button(&self) -> DragButton;
     /// Whether the drag carries items out of a ZIP opened like a folder in
     /// this app (ARC-026).
-    fn from_archive(&self) -> bool {
+    fn carries_archive_items(&self) -> bool {
         false
     }
 }
@@ -107,7 +107,7 @@ impl OfferedDrop for gdk::Drop {
         self.drag().map_or(DragButton::Primary, |drag| drag_button(&drag))
     }
 
-    fn from_archive(&self) -> bool {
+    fn carries_archive_items(&self) -> bool {
         self.drag()
             .is_some_and(|drag| drag.content().is::<crate::window::zip_copies::ZipDragContent>())
     }

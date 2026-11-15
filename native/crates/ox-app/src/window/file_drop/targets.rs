@@ -232,7 +232,7 @@ impl BrowserWindow {
     /// drag of the ZIP's own items, which starts over it, says nothing.
     fn explain_refused_drop(&self, drop: &impl OfferedDrop) {
         let shows_zip = self.current_uri().is_some_and(|uri| is_archive_location(&uri));
-        if !shows_zip || drop.from_archive() {
+        if !shows_zip || drop.carries_archive_items() {
             return;
         }
         let identity = drop.identity();
