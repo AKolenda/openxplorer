@@ -1108,6 +1108,8 @@ fn a_quick_access_tiles_menu_draws_no_ring_around_its_rows() {
             ("Tab, then Menu", (true, false)),
         ]
     );
+}
+
 /// A folder in the test's own home with a file only it holds, deleted
 /// with the guard. Only check.py's private session has a disposable
 /// home folder to write to.

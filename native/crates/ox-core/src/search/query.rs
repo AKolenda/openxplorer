@@ -487,7 +487,12 @@ mod tests {
         ]);
         assert_eq!(
             share.found_names("invoice OR budget NOT 015"),
-            ["Invoices", "annual budget.xlsx", "Invoice 1042.pdf", "Invoice 2026-014.pdf"]
+            [
+                "Invoices",
+                "annual budget.xlsx",
+                "Invoice 1042.pdf",
+                "Invoice 2026-014.pdf"
+            ]
         );
     }
 
