@@ -122,6 +122,15 @@ impl FilterState {
         !self.pattern.is_empty()
     }
 
+    /// Whether anything but hidden files leaves items out: a search, the
+    /// search options or a file dialog's narrowing.
+    pub(crate) fn narrows(&self) -> bool {
+        !self.pattern.is_empty()
+            || self.facets != SearchFacets::default()
+            || self.typed != SearchFacets::default()
+            || self.chooser != ChooserListing::default()
+    }
+
     /// True when an item of `visibility` is listed at all, searched or
     /// not: hidden items only while "Show hidden files" is on.
     pub(crate) fn lists(&self, visibility: Visibility) -> bool {

@@ -18,6 +18,7 @@
 //! folder model can sort by group first ([`super::model`]).
 
 use std::cmp::Ordering;
+use std::rc::Rc;
 
 use gtk::glib;
 use ox_core::i18n::{gettext, gettext_static};
@@ -184,8 +185,16 @@ fn local_now() -> Option<glib::DateTime> {
     glib::DateTime::now_local().ok()
 }
 
-/// The group `item` falls in under `grouping`.
-pub(crate) fn group_in(grouping: Grouping, item: &FileItem, clocks: &GroupClocks) -> Group {
+/// The group `item` falls in under `grouping`, kept with the item while
+/// the grouping and the clocks stay the same.
+pub(crate) fn group_in(grouping: Grouping, item: &FileItem, clocks: &GroupClocks) -> Rc<Group> {
+    item.group_in(grouping, clocks, || work_out_group(grouping, item, clocks))
+}
+
+/// The group of `item` under `grouping`, worked out anew.
+fn work_out_group(grouping: Grouping, item: &FileItem, clocks: &GroupClocks) -> Group {
+    #[cfg(test)]
+    GROUPS_WORKED_OUT.with(|count| count.set(count.get() + 1));
     let entry = item.entry();
     let period = |time: Option<u64>| {
         let group = clocks.dates.group_of_time(time);
@@ -331,9 +340,54 @@ fn size_group(item: &FileItem) -> Group {
 }
 
 #[cfg(test)]
+thread_local! {
+    /// How many groups [`work_out_group`] worked out, for tests.
+    static GROUPS_WORKED_OUT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::file_entry;
+
+    /// Grouping sorts the items into their groups, comparing each item
+    /// with many others; its group is worked out once, not once per
+    /// comparison, and again only when the grouping changes.
+    ///
+    /// parity: PERF-004
+    #[gtk::test]
+    fn each_items_group_is_worked_out_once_per_grouping() {
+        let worked_out = || GROUPS_WORKED_OUT.with(std::cell::Cell::get);
+        let items: Vec<FileItem> = (0..2000)
+            .map(|number| {
+                FileItem::new(file_entry(&format!(
+                    "{number}.{}",
+                    ["txt", "png", "pdf"][number % 3]
+                )))
+            })
+            .collect();
+        let sort = SortState {
+            by: SortBy::Column(SortColumn::Name),
+            direction: crate::folder_view::sorting::SortDirection::Ascending,
+        };
+        let by_type = Grouping::of(GroupBy::Type, sort).expect("grouped");
+        let clocks = GroupClocks::now().expect("a clock");
+        let before = worked_out();
+        let mut sorted = items.clone();
+        sorted.sort_by(|a, b| {
+            compare_groups(
+                by_type,
+                &group_in(by_type, a, &clocks),
+                &group_in(by_type, b, &clocks),
+            )
+        });
+        assert_eq!(worked_out() - before, 2000, "once per item");
+        assert_eq!(group_in(by_type, &sorted[0], &clocks).title, "PDF File");
+
+        let by_name = Grouping::of(GroupBy::Name, sort).expect("grouped");
+        let _ = group_in(by_name, &items[0], &clocks);
+        assert_eq!(worked_out() - before, 2001, "another grouping works it out again");
+    }
 
     fn modified_at(seconds: i64) -> FileItem {
         let mut entry = file_entry("a.txt");
