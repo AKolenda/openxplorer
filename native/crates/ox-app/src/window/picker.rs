@@ -1593,7 +1593,7 @@ impl BrowserWindow {
         };
         let name = suggested.map(|suggested| {
             let entry = gtk::Entry::builder().text(suggested).hexpand(true).build();
-            attach_field(&fields, row, "File name:", &entry);
+            attach_field(&fields, row, "File _name:", &entry);
             row += 1;
             entry
         });
@@ -1613,9 +1613,9 @@ impl BrowserWindow {
                 place_open_type_list(&fields, &list);
             } else {
                 let caption = if name.is_some() {
-                    "Save as type:"
+                    "Save as _type:"
                 } else {
-                    "File type:"
+                    "File _type:"
                 };
                 attach_field(&fields, row, caption, &list);
                 row += 1;
@@ -1755,7 +1755,9 @@ fn choice_controls(fields: &gtk::Grid, row: &mut i32, request: &ChooserRequest) 
             let ids: Vec<String> = choice.options.iter().map(|(id, _)| id.clone()).collect();
             let initial = ids.iter().position(|id| *id == choice.initial).unwrap_or(0);
             list.set_selected(u32::try_from(initial).unwrap_or(0));
-            attach_field(fields, *row, &format!("{}:", choice.label), &list);
+            // The caller's words as they are: an underscore is not a key.
+            let caption = format!("{}:", choice.label.replace('_', "__"));
+            attach_field(fields, *row, &caption, &list);
             choices.push(ChoiceControl::List(choice.id.clone(), ids, list));
             *row += 1;
         }
@@ -1764,7 +1766,9 @@ fn choice_controls(fields: &gtk::Grid, row: &mut i32, request: &ChooserRequest) 
 }
 
 /// Puts `caption` and `control` in row `row` of `fields`, labelled for
-/// screen readers.
+/// screen readers. An underscore in `caption` marks the letter that, with
+/// Alt, moves the keyboard to `control`, as Windows' dialog underlines the
+/// N of "File name:" and the T of "Save as type:".
 fn attach_field(
     fields: &gtk::Grid,
     row: i32,
@@ -1773,9 +1777,18 @@ fn attach_field(
 ) {
     let label = gtk::Label::builder()
         .label(caption)
+        .use_underline(true)
+        .mnemonic_widget(control)
         .xalign(1.0)
         .css_classes(["picker-label"])
         .build();
+    // A list takes the keyboard on its button, not on itself.
+    if let Some(button) = control
+        .dynamic_cast_ref::<gtk::DropDown>()
+        .and_then(WidgetExt::first_child)
+    {
+        label.set_mnemonic_widget(Some(&button));
+    }
     control.update_relation(&[gtk::accessible::Relation::LabelledBy(&[label.upcast_ref()])]);
     fields.attach(&label, 0, row, 1, 1);
     fields.attach(control, 1, row, 1, 1);
@@ -5779,7 +5792,7 @@ mod tests {
             focus == *types.upcast_ref::<gtk::Widget>() || focus.is_ancestor(&types),
             "Alt+T reaches the type list"
         );
-        assert_eq!(name.text(), "notes.txt");
+        assert_eq!(picker.named(&name.text()), "notes.txt", "the name is kept");
     }
 
     /// The Properties window of the item called `name`, opened from the
