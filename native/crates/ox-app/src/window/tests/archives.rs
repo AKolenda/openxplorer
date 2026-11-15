@@ -224,6 +224,11 @@ fn extract_all_unpacks_into_a_new_folder_and_shows_it() {
     assert!(texts(&frame)
         .iter()
         .any(|text| text == "Files will be extracted to this folder"));
+    let show = descendants::<gtk::CheckButton>(&frame)
+        .into_iter()
+        .find_map(|check| check.label())
+        .expect("the check box");
+    assert_eq!(show, "Show extracted files when complete", "Windows' words");
     capture(&test.window, "native-extract-dialog.png");
     press(&frame, "Extract");
 
@@ -253,30 +258,49 @@ pub(super) fn mark_encrypted(path: &Path) {
     fs::write(path, bytes).expect("the ZIP rewritten");
 }
 
-/// A password-protected ZIP says so under the field at once, offers the
-/// archive manager in the footer, and Extract repeats the reason.
+/// Marks every member of the ZIP at `path` as AES-encrypted (method 99 of
+/// the `WinZip` specification), which the built-in reader cannot decrypt.
+fn mark_aes_encrypted(path: &Path) {
+    let mut bytes = fs::read(path).expect("the ZIP");
+    for at in 0..bytes.len().saturating_sub(12) {
+        let flags = match &bytes[at..at + 4] {
+            b"PK\x03\x04" => at + 6,
+            b"PK\x01\x02" => at + 8,
+            _ => continue,
+        };
+        bytes[flags] |= 1;
+        bytes[flags + 2..flags + 4].copy_from_slice(&99u16.to_le_bytes());
+    }
+    fs::write(path, bytes).expect("the ZIP rewritten");
+}
+
+/// An AES-encrypted ZIP, which the app cannot decrypt, says so under the
+/// field at once, offers the archive manager in the footer, and Extract
+/// repeats the reason. (The traditional ZIP password asks for the
+/// password instead: `tests/archive_passwords.rs`.)
 ///
 /// parity: ARC-009
 #[gtk::test]
 fn a_password_zip_says_so_and_offers_the_archive_manager() {
     let fixture = fixture_with_zip();
-    mark_encrypted(&fixture.path("Bundle.zip"));
+    mark_aes_encrypted(&fixture.path("Bundle.zip"));
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Bundle.zip");
     test.activate("extract-all", None);
     let frame = test.wait_for_dialog("the Extract dialog");
 
-    wait_until("the refusal", || frame.error_text().contains("password"));
+    wait_until("the refusal", || frame.error_text().contains("encryption"));
+    crate::test_support::harness::capture_in_both_themes(&test.window, "native-zip-aes-refused");
     assert_eq!(
         frame.error_text(),
-        "This ZIP has a password, so OpenXplorer cannot extract it. Open it in the archive manager instead."
+        "This ZIP uses an encryption method OpenXplorer cannot open. Use an archive manager."
     );
     let fallback = descendants::<gtk::Button>(&frame)
         .into_iter()
         .find(|button| button.label().as_deref() == Some("Open in archive manager") && button.is_visible())
         .expect("the archive manager in the footer");
     press(&frame, "Extract");
-    assert!(frame.error_text().contains("password"));
+    assert!(frame.error_text().contains("encryption"));
     assert_eq!(test.shown_dialog().as_ref(), Some(&frame));
 
     fallback.emit_clicked();
