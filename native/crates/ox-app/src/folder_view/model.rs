@@ -394,6 +394,12 @@ impl FolderModel {
                 if needs_filter(&state.borrow(), true) {
                     filter_model.set_filter(Some(&filter));
                 }
+            } else if hidden.get() && store.n_items() == 0 {
+                // Emptied to list another folder in the same tab.
+                hidden.set(false);
+                if !needs_filter(&state.borrow(), false) {
+                    filter_model.set_filter(None::<&gtk::Filter>);
+                }
             }
         });
         self.hidden_watch.replace(Some((store.downgrade(), handler)));
@@ -413,6 +419,12 @@ impl FolderModel {
             self.hidden.set(true);
             self.apply_filter_need();
         }
+    }
+
+    /// Whether the items pass through a filter now.
+    #[cfg(test)]
+    pub(crate) fn is_filtering(&self) -> bool {
+        self.filter_model.filter().is_some()
     }
 
     /// Gives the filter model its filter while items must be left out, and

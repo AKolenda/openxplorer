@@ -634,3 +634,27 @@ fn a_folder_that_may_not_be_read_keeps_the_tab_where_it_was() {
     assert!(!tab.history.can_go_forward(), "the folder is not in the history");
     assert!(tab.error.is_none(), "no unavailable page");
 }
+
+/// A folder with no hidden items lists without a filter, also after a
+/// folder with hidden items was shown in the same tab, so looking its items
+/// up costs no search of GTK's filter bitset.
+///
+/// parity: PERF-004
+#[gtk::test]
+fn a_folder_without_hidden_items_is_shown_unfiltered() {
+    let with_hidden = Fixture::standard();
+    let without = Fixture::with_files(300);
+    let test = TestWindow::open(&with_hidden.uri());
+    let model = test.window.folder_model();
+    assert!(model.is_filtering(), "the hidden .private file is left out");
+    assert_eq!(test.names(), STANDARD_NAMES);
+
+    test.window.navigate(&without.uri()).expect("a listed folder");
+    test.wait_for_listing("the folder of 300 files");
+    assert_eq!(model.n_items(), 300);
+    assert!(!model.is_filtering());
+
+    test.activate("back", None);
+    test.wait_for_listing("the folder with a hidden file");
+    assert_eq!(test.names(), STANDARD_NAMES);
+}
