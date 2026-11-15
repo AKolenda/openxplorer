@@ -619,26 +619,37 @@ mod tests {
         offered: gdk::DragAction,
     }
 
+    /// A plain drag offers Copy, never Ask, so another app finishes it as
+    /// a copy without asking: Thunar asks on every drop whose drag offers
+    /// Ask ("when the option to ask the user is set, make it the preferred
+    /// action", `thunar_file_accepts_drop`), which a plain Windows drag
+    /// never does. Shift or Ctrl+Shift held as it starts adds Move or
+    /// Link.
+    ///
     /// parity: DND-008, DND-017
     #[test]
-    fn a_plain_drag_offers_copy_and_modifiers_as_it_starts_add_move_or_link() {
-        let copy_or_ask = gdk::DragAction::COPY | gdk::DragAction::ASK;
+    fn a_plain_drag_offers_copy_without_asking_and_modifiers_add_move_or_link() {
+        let copy = gdk::DragAction::COPY;
         let cases = [
             ModifierCase {
                 held: gdk::ModifierType::empty(),
-                offered: copy_or_ask,
+                offered: copy,
             },
             ModifierCase {
                 held: gdk::ModifierType::CONTROL_MASK,
-                offered: copy_or_ask,
+                offered: copy,
+            },
+            ModifierCase {
+                held: gdk::ModifierType::ALT_MASK,
+                offered: copy,
             },
             ModifierCase {
                 held: gdk::ModifierType::SHIFT_MASK,
-                offered: copy_or_ask | gdk::DragAction::MOVE,
+                offered: copy | gdk::DragAction::MOVE,
             },
             ModifierCase {
                 held: gdk::ModifierType::SHIFT_MASK | gdk::ModifierType::CONTROL_MASK,
-                offered: copy_or_ask | gdk::DragAction::LINK,
+                offered: copy | gdk::DragAction::LINK,
             },
         ];
 
