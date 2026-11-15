@@ -12,7 +12,7 @@ use ox_core::settings::{RecentEntry, Settings};
 
 use super::file_ops_support::select_names;
 use super::view_styles::{close_folder_options, open_folder_options, option_check, tab_button};
-use crate::test_support::harness::{wait_until, Fixture, OpenedWindows, TestWindow};
+use crate::test_support::harness::{descendants, wait_until, Fixture, OpenedWindows, TestWindow};
 
 /// Whether the saved settings hide the navigation pane's place `uri`.
 fn hides_place(test: &TestWindow, uri: &str) -> bool {
@@ -470,4 +470,120 @@ fn folder_options_holds_back_its_own_window_alone_under_real_clicks() {
     // gdk_surface_request_motion when a later test closes a menu under a
     // pointer left over its windows.
     pointer.move_to(720, 500);
+}
+
+/// While Folder Options is open, a preference saved elsewhere (Settings,
+/// View > Show, Ctrl+H or another window) shows in every choice the user
+/// has not changed here, the start place too; a choice the user changed
+/// keeps the change, and OK saves it without undoing the others.
+///
+/// parity: VIEW-020, VIEW-023, TAB-055
+#[gtk::test]
+fn folder_options_follows_preferences_changed_while_it_is_open() {
+    use ox_core::settings::PreferencesUpdate;
+
+    use super::view_styles::{change_preferences, options_tab};
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let options = open_folder_options(&test);
+    let view = |label: &str| option_check(&options, "View", label);
+    let start = descendants::<gtk::DropDown>(&options_tab(&options, "General")).remove(0);
+    assert!(view("Don't show hidden files, folders, or drives").is_active());
+    assert!(!view("Display the full path in the title bar").is_active());
+    view("Show status bar").set_active(false);
+
+    change_preferences(
+        &test,
+        &PreferencesUpdate {
+            show_hidden: Some(true),
+            full_path_in_title: Some(true),
+            hide_status_bar: Some(false),
+            startup_folder: Some(fixture.uri_of("Documents")),
+            ..PreferencesUpdate::default()
+        },
+    );
+    wait_until("Folder Options to show the saved choices", || {
+        view("Show hidden files, folders, and drives").is_active()
+            && view("Display the full path in the title bar").is_active()
+    });
+    assert!(
+        !view("Show status bar").is_active(),
+        "the choice changed here keeps the user's change"
+    );
+    wait_until("the folder chosen in Settings to be the start place", || {
+        start.selected() == 2
+    });
+
+    close_folder_options(&test, &options, "OK");
+    wait_until("the status bar choice to be saved", || {
+        test.context.settings_data().preferences.hide_status_bar
+    });
+    let preferences = test.context.settings_data().preferences;
+    assert!(preferences.show_hidden, "OK keeps what was saved elsewhere");
+    assert!(preferences.full_path_in_title);
+    assert!(preferences
+        .startup_folder
+        .is_some_and(|folder| folder.ends_with("Documents")));
+}
+
+/// The mnemonic key of `widget`'s label, a check box's or a push
+/// button's, if it has one, in lower case, as Alt and the letter press it.
+fn access_key(widget: &gtk::Widget) -> Option<gtk::gdk::Key> {
+    let label = descendants::<gtk::Label>(widget).into_iter().next()?;
+    let key = label.mnemonic_keyval();
+    // A label without one answers VoidSymbol, or 0 in some GTK versions.
+    let key = key.to_lower();
+    (key.to_unicode().is_some_and(char::is_alphanumeric)).then_some(key)
+}
+
+/// Folder Options' choices and push buttons have Windows' access keys:
+/// Alt and the underlined letter choose an option or press a button, and
+/// no two controls of a tab share a letter. Click items as follows has
+/// none, as only its chosen Double-click can be used.
+///
+/// parity: VIEW-020, ACC-006
+#[gtk::test]
+fn folder_options_choices_and_buttons_have_access_keys() {
+    use gtk::gdk::Key;
+
+    use super::view_styles::options_tab;
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let options = open_folder_options(&test);
+    let general = |label: &str| option_check(&options, "General", label).upcast::<gtk::Widget>();
+    let button = |tab: &str, label: &str| tab_button(&options, tab, label).upcast::<gtk::Widget>();
+    let expected = [
+        (general("Open each folder in the same window"), Key::a),
+        (general("Open each folder in its own window"), Key::w),
+        (button("General", "Clear"), Key::l),
+        (button("General", "Restore Defaults"), Key::d),
+        (button("View", "Apply to Folders"), Key::o),
+        (button("View", "Reset Folders"), Key::r),
+        (button("View", "Restore Defaults"), Key::d),
+        (button("Search", "Restore Defaults"), Key::d),
+    ];
+    for (widget, key) in &expected {
+        assert_eq!(access_key(widget), Some(*key), "{widget:?}");
+    }
+    for tab in ["General", "View", "Search"] {
+        let page = options_tab(&options, tab);
+        let mut keys: Vec<_> = descendants::<gtk::Widget>(&page)
+            .iter()
+            .filter(|widget| widget.is::<gtk::CheckButton>() || widget.is::<gtk::Button>())
+            .filter(|widget| widget.is_sensitive())
+            .filter_map(access_key)
+            .collect();
+        let count = keys.len();
+        keys.sort_by_key(|key| key.to_unicode());
+        keys.dedup();
+        assert_eq!(keys.len(), count, "the {tab} tab's access keys are distinct");
+    }
+
+    // An access key chooses its option, as Alt and the letter do.
+    let own_window = option_check(&options, "General", "Open each folder in its own window");
+    own_window.mnemonic_activate(false);
+    assert!(own_window.is_active());
+    close_folder_options(&test, &options, "Cancel");
 }

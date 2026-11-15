@@ -1074,3 +1074,99 @@ fn default_apps_reads_which_app_opens_each_route() {
         card.title()
     );
 }
+
+/// The words a Windows user types for a folder option find the setting
+/// or Folder Options: Windows' own labels ("Show hidden files, folders,
+/// and drives", "Hide extensions for known file types", "Display the
+/// full path in the title bar"), shorter words such as "file extensions",
+/// and Folder Options' other choices, which its row lists.
+///
+/// parity: SET-019, SET-004
+#[gtk::test]
+fn windows_folder_option_words_find_their_settings() {
+    let settings = SettingsTest::open();
+    let cases: [(&str, &str); 16] = [
+        ("hidden files", "Show hidden files, folders, and drives"),
+        (
+            "show hidden files, folders, and drives",
+            "Show hidden files, folders, and drives",
+        ),
+        ("file extensions", "Hide extensions for known file types"),
+        (
+            "hide extensions for known file types",
+            "Hide extensions for known file types",
+        ),
+        (
+            "display the full path in the title bar",
+            "Display the full path in the title bar",
+        ),
+        (
+            "remember each folder's view settings",
+            "Remember each folder's view settings",
+        ),
+        ("open file explorer to", "Open OpenXplorer to"),
+        ("this pc", "Open OpenXplorer to"),
+        (
+            "restore previous folder windows",
+            "Reopen my tabs when OpenXplorer starts",
+        ),
+        ("folder options", "Folder Options"),
+        ("status bar", "Folder Options"),
+        ("open each folder in its own window", "Folder Options"),
+        ("single-click", "Folder Options"),
+        ("clear file explorer history", "Folder Options"),
+        ("preview pane", "Folder Options"),
+        ("always search file names and contents", "Folder Options"),
+    ];
+    for (typed, row) in cases {
+        settings.page.search(typed);
+        let shown = settings.shown_rows();
+        assert!(shown.contains(&row), "{typed:?} finds {row:?}: {shown:?}");
+    }
+}
+
+/// Files & folders > Folder views shows and changes the hidden files and
+/// the file name extensions that Ctrl+H, View > Show and Folder Options
+/// change, in step with them, and its Open Folder Options button opens
+/// Folder Options.
+///
+/// parity: VIEW-023, VIEW-069, VIEW-020
+#[gtk::test]
+fn folder_views_rows_follow_hidden_files_and_extensions_and_open_folder_options() {
+    let settings = SettingsTest::open();
+    let hidden = switch_of(&settings.row("Show hidden files, folders, and drives"));
+    let extensions = switch_of(&settings.row("Hide extensions for known file types"));
+    assert!(!hidden.is_active(), "hidden files are not shown by default");
+    assert!(extensions.is_active(), "known extensions are hidden by default");
+
+    hidden.set_active(true);
+    extensions.set_active(false);
+    wait_until("both choices to be saved", || {
+        let saved = settings.saved_preferences();
+        saved.show_hidden && saved.show_extensions
+    });
+    let window = &settings.test.window;
+    wait_until("the window to follow", || {
+        window.lookup_action("hidden").and_then(|action| action.state()) == Some(true.to_variant())
+    });
+
+    // Ctrl+H and View > Show > File name extensions, elsewhere.
+    settings.test.activate("hidden", None);
+    settings.test.activate("file-name-extensions", None);
+    wait_until("the rows to follow the window", || {
+        !hidden.is_active() && extensions.is_active()
+    });
+
+    let open = settings
+        .row("Folder Options")
+        .controls()
+        .into_iter()
+        .find_map(|control| control.downcast::<gtk::Button>().ok())
+        .expect("the row has a button");
+    open.emit_clicked();
+    wait_until("Folder Options to open", || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .any(|toplevel| toplevel.is_visible() && toplevel.has_css_class("ox-folder-options"))
+    });
+}
