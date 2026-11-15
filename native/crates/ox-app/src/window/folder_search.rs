@@ -236,7 +236,7 @@ impl BrowserWindow {
     /// The folder the search box searches: the active tab's folder, or
     /// from Windows 11's Home the home folder, with its subfolders, as
     /// Windows 11 searches from Home ("To find relevant files from your PC
-    /// and the cloud, search from File Explorer Home", HOME-017); no
+    /// and the cloud, search from File Explorer Home", HOME-033); no
     /// other landing page.
     pub(super) fn searched_folder(&self) -> Option<String> {
         let uri = self.current_uri()?;

@@ -300,7 +300,7 @@ impl BrowserWindow {
         self.render_address(uri);
         let search = self.search_box();
         search.set_folder_title(&title);
-        // Windows 11's Home searches the home folder (HOME-017); the other
+        // Windows 11's Home searches the home folder (HOME-033); the other
         // pages search nothing.
         let searches_home = Page::from_uri(uri) == Some(Page::Home);
         search.set_enabled((!on_page || searches_home) && !in_zip && !is_device_location(uri));

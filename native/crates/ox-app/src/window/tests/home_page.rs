@@ -1137,7 +1137,7 @@ fn shows_home_page(test: &TestWindow) -> bool {
 /// home folder and its subfolders with the usual results: "<query> -
 /// Search Results in Home". Back and Close search return to Home.
 ///
-/// parity: HOME-017
+/// parity: HOME-033
 #[gtk::test]
 fn searching_from_home_searches_the_home_folder_and_its_subfolders() {
     let _home_files = file_in_home_folder("Quarterly zebra plan.txt");
@@ -1183,7 +1183,7 @@ fn searching_from_home_searches_the_home_folder_and_its_subfolders() {
 /// With "Open Quick access on Home" off, Home is the home folder, which
 /// is searched as any folder is, with its subfolders.
 ///
-/// parity: HOME-017, NAV-038
+/// parity: HOME-033, NAV-038
 #[gtk::test]
 fn searching_the_home_folder_finds_files_in_its_subfolders() {
     let _home_files = file_in_home_folder("Quarterly zebra plan.txt");
@@ -1266,7 +1266,7 @@ fn home_with_cached_and_uncached_folders() -> tempfile::TempDir {
 /// its own, so its search walks the home folder. The home folder itself
 /// finds them too.
 ///
-/// parity: HOME-017
+/// parity: HOME-033
 #[gtk::test]
 fn searching_from_home_finds_files_deep_in_uncached_folders() {
     let home = home_with_cached_and_uncached_folders();

@@ -1335,7 +1335,7 @@ native_note = "native/crates/ox-app/src/window/home_page.rs (set_folded, connect
 
 
 [[feature]]
-id = "HOME-017"
+id = "HOME-033"
 area = "HOME"
 title = "Search from Home"
 behaviour = "With 'Open Quick access on Home' on, the search box works on the Home page as in any folder: it reads 'Search Home', Ctrl+E, Ctrl+F, F3 and a click reach it, and typing searches the home folder and its subfolders with the usual results view, titled '<words> - Search Results in Home'. Back and Close search return to the Home page. With the option off, Home is the home folder and is searched as any folder is."
