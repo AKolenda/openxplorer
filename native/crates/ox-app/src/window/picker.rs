@@ -5725,6 +5725,63 @@ mod tests {
         );
     }
 
+    /// Alt+N moves the keyboard to File name and Alt+T to the type list
+    /// from anywhere in the dialog, as Windows' dialog underlines the N of
+    /// "File name:" and the T of "Save as type:" ("Alt + underlined
+    /// letter", Keyboard shortcuts in Windows). Before, neither label had
+    /// a key, so Alt+N did nothing and Enter then acted on whatever had the
+    /// keyboard, such as a check box of the caller's.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn alt_n_and_alt_t_reach_file_name_and_the_type_list() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![
+                ("current_name", "notes.txt".to_variant()),
+                ("filters", two_text_types()),
+            ],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        let types = picker.types.clone().expect("a type list");
+        let labels: Vec<gtk::Label> = crate::test_support::harness::descendants(window)
+            .into_iter()
+            .filter(|label: &gtk::Label| label.has_css_class("picker-label"))
+            .collect();
+        let label_for = |key: gdk::Key| {
+            labels
+                .iter()
+                .find(|label| label.mnemonic_keyval() == key)
+                .unwrap_or_else(|| panic!("a label with {key:?}"))
+                .clone()
+        };
+
+        window.folder_pane().focus_view();
+        let file_name = label_for(gdk::Key::n);
+        assert_eq!(file_name.text(), "File name:");
+        assert!(file_name.mnemonic_activate(false));
+        settle();
+        assert!(window.focus_is_in_picker_name(), "Alt+N reaches File name");
+
+        let save_as_type = label_for(gdk::Key::t);
+        assert_eq!(save_as_type.text(), "Save as type:");
+        assert!(save_as_type.mnemonic_activate(false));
+        settle();
+        let focus = gtk::prelude::GtkWindowExt::focus(window).expect("a focus");
+        assert!(
+            focus == *types.upcast_ref::<gtk::Widget>() || focus.is_ancestor(&types),
+            "Alt+T reaches the type list"
+        );
+        assert_eq!(name.text(), "notes.txt");
+    }
+
     /// The Properties window of the item called `name`, opened from the
     /// dialog `test` shows, as its Details pane's Properties button and
     /// its context menu open it.
