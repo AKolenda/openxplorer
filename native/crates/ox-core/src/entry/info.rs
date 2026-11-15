@@ -183,11 +183,18 @@ fn deletion_date(info: &gio::FileInfo) -> Option<u64> {
 }
 
 /// `standard::icon` in a thread-safe form; see [`Entry::icon`].
+///
+/// The variant is laid out in memory here, where the row is built (on the
+/// listing's reader thread), so that comparing two rows' icons, as a reload
+/// does for every row, is a comparison of bytes: otherwise the first
+/// comparison laid it out on the main loop, about a microsecond a row.
 fn serialized_icon(info: &gio::FileInfo) -> Option<glib::Variant> {
     if !info.has_attribute("standard::icon") {
         return None;
     }
-    info.icon()?.serialize()
+    let icon = info.icon()?.serialize()?;
+    let _ = icon.data();
+    Some(icon)
 }
 
 #[cfg(test)]
