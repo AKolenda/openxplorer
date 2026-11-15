@@ -29,6 +29,10 @@ pub struct EntryMeta {
     /// name is a hash of it. Kept only when it normalises to a real
     /// location, never a virtual one.
     pub recent_target: Option<String>,
+    /// For a photo listed in Gallery, when it was taken: its EXIF
+    /// `DateTimeOriginal` in local time, seconds since the Unix epoch.
+    /// `None` everywhere else, and for a photo without one.
+    pub taken: Option<u64>,
 }
 
 impl EntryMeta {
@@ -50,6 +54,7 @@ impl EntryMeta {
                 .flatten()
                 .map(|target| target.display().to_string()),
             recent_target: None,
+            taken: None,
         }
     }
 

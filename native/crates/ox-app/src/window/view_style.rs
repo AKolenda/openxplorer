@@ -197,11 +197,17 @@ impl BrowserWindow {
     /// the groups of Downloads, which is grouped by date modified until the
     /// user chooses otherwise there (VIEW-022).
     pub(super) fn follow_folder_style(&self, store: &gio::ListStore, uri: &str) {
+        if uri == ox_core::location::GALLERY_URI {
+            self.show_gallery_style(self.folder_pane(), store);
+            return;
+        }
+        self.folder_pane().icon_view().set_icon_groups(false);
         let preferences = self.context().settings_data().preferences;
         let downloads = self.downloads_location();
         let style = preferences.view_in(uri, downloads.as_deref());
         self.folder_pane().set_styled_for(store, uri);
-        if preferences.per_folder_views {
+        // Gallery's own style never stays on a folder (HOME-019).
+        if preferences.per_folder_views || super::gallery::shows_gallery_style(self.folder_pane()) {
             self.apply_style(&style);
             return;
         }
@@ -223,11 +229,16 @@ impl BrowserWindow {
     /// beside the active one of a split tab is shown this way whenever the
     /// tab is shown, so Downloads there keeps its date groups.
     pub(super) fn follow_folder_style_in(&self, pane: &FolderPane, store: &gio::ListStore, uri: &str) {
+        if uri == ox_core::location::GALLERY_URI {
+            self.show_gallery_style(pane, store);
+            return;
+        }
+        pane.icon_view().set_icon_groups(false);
         let preferences = self.context().settings_data().preferences;
         let downloads = self.downloads_location();
         let style = preferences.view_in(uri, downloads.as_deref());
         pane.set_styled_for(store, uri);
-        if preferences.per_folder_views {
+        if preferences.per_folder_views || super::gallery::shows_gallery_style(pane) {
             self.apply_style_to(pane, &style);
             return;
         }
@@ -263,7 +274,8 @@ impl BrowserWindow {
     /// A delayed header resize belongs to the pane that emitted it, even
     /// if focus has moved to its neighbour.
     pub(super) fn remember_pane_style(&self, pane: &FolderPane) {
-        if self.imp().applying_style.get() {
+        // Gallery's style is its own and never saved (HOME-019).
+        if self.imp().applying_style.get() || super::gallery::shows_gallery_style(pane) {
             return;
         }
         let mut style = Self::style_of_pane(pane);

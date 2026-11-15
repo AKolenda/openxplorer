@@ -425,6 +425,13 @@ pub(crate) enum WindowAction {
     /// Opens the folder of the item in the string target with the item
     /// selected (Home's Open file location).
     OpenFileLocationOf,
+    /// Gallery's Collection: shows the photos of every folder of the
+    /// collection ("all") or of the one in the string target (HOME-025).
+    GalleryCollection,
+    /// Gallery's Collection > Add folder…: asks for a folder to add.
+    GalleryAddFolder,
+    /// Removes the folder in the string target from Gallery's collection.
+    GalleryRemoveFolder,
     /// Save search: adds the search shown to the sidebar (SRCH-038).
     SaveSearch,
     /// Opens the saved search whose `(folder, text)` is the target.
@@ -707,6 +714,9 @@ impl WindowAction {
             WindowAction::RemoveFromFavorites => "remove-from-favorites",
             WindowAction::OpenItemAt => "open-item-at",
             WindowAction::OpenFileLocationOf => "open-file-location-of",
+            WindowAction::GalleryCollection => "gallery-collection",
+            WindowAction::GalleryAddFolder => "gallery-add-folder",
+            WindowAction::GalleryRemoveFolder => "gallery-remove-folder",
             WindowAction::SaveSearch => "save-search",
             WindowAction::OpenSavedSearch => "open-saved-search",
             WindowAction::ForgetSavedSearch => "forget-saved-search",

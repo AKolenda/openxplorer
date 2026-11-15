@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The sidebar's rows as data, in the order of Windows 11's navigation
-//! pane: Home; a divider; the pinned folders (the standard folders and
+//! pane: Home and Gallery; a divider; the pinned folders (the standard folders and
 //! the user's pins, each with the pin glyph); a divider; This PC with
 //! Local Disk and the drives and devices, then Network with the merged
 //! network locations, in one group as Windows 11 lists them. The places
@@ -8,8 +8,8 @@
 //! Network: the searches saved to the sidebar (SRCH-038), then Recent
 //! files, Recent locations and the Recycle Bin
 //! ([`recent_and_bin_entries`]). Mounted SMB shares appear once, under
-//! Network. Windows 11's Gallery is not listed: the app has no Gallery
-//! view yet.
+//! Network. Gallery, the photos of the Pictures folder (HOME-017), comes
+//! right under Home, in Home's group.
 //!
 //! [`sidebar_entries`] turns composed [`Places`] into rows without GTK, so
 //! the order is tested on its own. Drives and network locations carry
@@ -17,8 +17,8 @@
 //! eject button (DEV-007).
 
 use ox_core::location::{
-    is_server_location, LocationContext, HOME_URI, NETWORK_URI, PC_URI, RECENT_LOCATIONS_URI, RECENT_URI,
-    TRASH_URI,
+    is_server_location, LocationContext, GALLERY_URI, HOME_URI, NETWORK_URI, PC_URI, RECENT_LOCATIONS_URI,
+    RECENT_URI, TRASH_URI,
 };
 use ox_core::places::{NetworkLocation, Place};
 use ox_core::search::SavedSearch;
@@ -349,6 +349,12 @@ pub(in crate::window) fn sidebar_entries(
     } else {
         locations.display_location(&home_uri)
     };
+    let gallery = fixed_entry(
+        Section::Home,
+        message_id("Gallery"),
+        Art::Glyph(Icon::Image),
+        GALLERY_URI,
+    );
     let this_pc_icon = Art::TintedGlyph(Page::ThisPc.icon(), Tint::ThisPc);
     let this_pc = fixed_entry(Section::ThisPc, message_id("This PC"), this_pc_icon, PC_URI);
     let network_icon = Art::TintedGlyph(Page::Network.icon(), Tint::Network);
@@ -362,7 +368,7 @@ pub(in crate::window) fn sidebar_entries(
     let saved = searches
         .iter()
         .map(|search| saved_search_entry(search, locations));
-    let mut entries = vec![home];
+    let mut entries = vec![home, gallery];
     entries.extend(quick_access);
     if places.quick_access.is_empty() {
         entries.push(pin_drop_tail());
@@ -480,6 +486,7 @@ mod tests {
             labels(&entries),
             [
                 "Home",
+                "Gallery",
                 "Work",
                 "This PC",
                 "Local Disk",
@@ -533,6 +540,7 @@ mod tests {
             labels(&entries),
             [
                 "Home",
+                "Gallery",
                 "Projects",
                 "This PC",
                 "Local Disk",
@@ -561,7 +569,7 @@ mod tests {
     fn an_empty_quick_access_keeps_a_drop_tail_to_pin_into() {
         let entries = entries_for(&SettingsData::default(), &[]);
 
-        let tail = &entries[1];
+        let tail = &entries[2];
         assert_eq!(tail.label, "Pin to Quick access");
         assert_eq!(tail.target, RowTarget::PinDropTail);
         assert_eq!(tail.section, Section::QuickAccess);

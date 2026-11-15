@@ -598,7 +598,12 @@ impl FileCell {
         self.add_controller(motion);
         // The keyboard on a heading rings its whole row; the grid gives it
         // to the item widget around the cell.
-        self.append(&HeadingSpan::new(&row, imp.is_details_row.get()));
+        let span = HeadingSpan::new(&row, imp.is_details_row.get());
+        if imp.is_tile.get() {
+            // An icon tile is too narrow for a month's name (HOME-019).
+            span.span_grid();
+        }
+        self.append(&span);
         imp.slot_row.replace(Some(row.clone()));
         row
     }

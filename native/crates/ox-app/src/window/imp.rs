@@ -252,6 +252,9 @@ pub(crate) struct BrowserWindow {
     /// Set while the window shows a folder's saved display style, so
     /// showing it is not saved as the user's change.
     pub(super) applying_style: Cell<bool>,
+    /// The folders of Gallery's collection as last seen, so a change made
+    /// in another window or process lists Gallery again (HOME-025).
+    pub(super) gallery_collection: RefCell<Vec<(String, String)>>,
     /// The rubber band being drawn, while one is (SEL-012).
     pub(super) rubber_band: super::rubber_band::BandState,
     /// Set until the file list takes keyboard focus in a new window or

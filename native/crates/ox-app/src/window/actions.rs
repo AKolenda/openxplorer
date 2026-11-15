@@ -160,6 +160,7 @@ impl BrowserWindow {
         self.install_integration_actions();
         self.install_context_menu_actions();
         self.install_home_page_actions();
+        self.install_gallery_actions();
         let [journal, clipboard] = self.install_file_actions();
         let mut handlers = self.imp().handlers.borrow_mut();
         handlers.journal = Some(journal);
@@ -367,6 +368,8 @@ impl BrowserWindow {
             self.update_beside_pane();
             // The folder's item count changes with it.
             self.update_details_pane();
+            // Gallery walks hidden folders only while they are shown.
+            self.reload_gallery_tabs();
         }
     }
 

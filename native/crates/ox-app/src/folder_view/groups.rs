@@ -25,7 +25,7 @@ use ox_core::i18n::{gettext, gettext_static};
 use ox_core::grouping::{Calendar, DateRanges, GroupBy, NameGroup};
 
 use crate::folder_view::item::FileItem;
-use crate::folder_view::sort_roles::{extension, SortBy, SortRole, SortState};
+use crate::folder_view::sort_roles::{extension, photo_date, SortBy, SortRole, SortState};
 use crate::folder_view::sorting::{SortColumn, SortKey};
 use crate::i18n::message_id;
 
@@ -201,6 +201,7 @@ pub(crate) fn group_in(grouping: Grouping, item: &FileItem, clocks: &GroupClocks
         GroupBy::Created => period(entry.meta.created),
         GroupBy::Type => Group::texted(&entry.type_label, 1),
         GroupBy::Size => size_group(item),
+        GroupBy::Month => month_group(photo_date(entry)),
     }
 }
 
@@ -275,6 +276,7 @@ pub(crate) fn group_of(by: SortBy, item: &FileItem, clock: &GroupClock) -> Group
         SortBy::Column(SortColumn::Permissions) => group_of(SortBy::Role(SortRole::Permissions), item, clock),
         SortBy::Role(SortRole::Created) => clock.period(entry.meta.created),
         SortBy::Role(SortRole::Accessed) => clock.period(entry.meta.accessed),
+        SortBy::Role(SortRole::Taken) => clock.period(photo_date(entry)),
         SortBy::Role(SortRole::Extension) => {
             let extension = extension(&entry.name, entry.is_dir).map(str::to_uppercase);
             text_or(extension.as_deref(), &gettext("No extension"))
@@ -294,6 +296,23 @@ pub(crate) fn group_of(by: SortBy, item: &FileItem, clock: &GroupClock) -> Group
             text_or(entry.meta.link_target.as_deref(), &gettext("Not a link"))
         }
     }
+}
+
+/// Gallery's group of a photo dated `seconds`: its month in local time,
+/// headed with the month's full name and year ("March 2026"), the newest
+/// month first; photos with no date last.
+fn month_group(seconds: Option<u64>) -> Group {
+    let date = seconds
+        .and_then(|seconds| i64::try_from(seconds).ok())
+        .and_then(|seconds| glib::DateTime::from_unix_local(seconds).ok());
+    let Some(date) = date else {
+        return Group::numbered(&gettext("Unknown date"), i64::MAX);
+    };
+    let title = date
+        .format("%B %Y")
+        .map_or_else(|_| date.year().to_string(), |title| title.to_string());
+    let month = i64::from(date.year()) * 12 + i64::from(date.month());
+    Group::numbered(&title, -month)
 }
 
 /// The first letter of the name, "0 – 9" for a digit, "#" for anything
@@ -370,6 +389,36 @@ mod tests {
         let older = group_of(by_date, &modified_at(today - 400 * DAY), &clock);
         let newer = group_of(by_date, &modified_at(today), &clock);
         assert_eq!(older.compare(&newer), Ordering::Less);
+    }
+
+    /// Gallery's months: a photo falls in the month it was taken, else the
+    /// month it was modified, headed with the month's name and year;
+    /// newer months come first, and a photo with no date last.
+    ///
+    /// parity: HOME-019
+    #[gtk::test]
+    fn photos_group_by_the_month_taken_newest_first() {
+        let local = |year, month, day| {
+            let date = glib::DateTime::from_local(year, month, day, 12, 0, 0.0).expect("a date");
+            u64::try_from(date.to_unix()).expect("after 1970")
+        };
+        let mut taken = file_entry("taken.jpg");
+        taken.modified = Some(local(2026, 3, 1));
+        taken.meta.taken = Some(local(2024, 12, 24));
+        let mut modified = file_entry("scan.png");
+        modified.modified = Some(local(2025, 7, 2));
+        let undated = file_entry("odd.png");
+        let groups: Vec<Group> = [taken, modified, undated]
+            .into_iter()
+            .map(|entry| month_group(photo_date(&entry)))
+            .collect();
+        let december = glib::DateTime::from_local(2024, 12, 1, 12, 0, 0.0)
+            .and_then(|date| date.format("%B %Y"))
+            .expect("a month");
+        assert_eq!(groups[0].title, december.as_str());
+        assert_eq!(groups[1].compare(&groups[0]), Ordering::Less, "July 2025 first");
+        assert_eq!(groups[2].title, "Unknown date");
+        assert_eq!(groups[0].compare(&groups[2]), Ordering::Less, "no date last");
     }
 
     /// Group boundaries follow calendar days through daylight-saving changes.

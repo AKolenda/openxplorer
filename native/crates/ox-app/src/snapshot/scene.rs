@@ -55,7 +55,8 @@
 //!   runs;
 //! - `option=<name>`: opens the search strip's option list `<name>`
 //!   (`Kind`, `Date modified`, `Size`, `Search in`), or with `Search
-//!   options` the command bar's Search options, as a click does; a
+//!   options` the command bar's Search options, or with `Collection`
+//!   Gallery's Collection menu, as a click does; a
 //!   following `submenu=` opens one of its submenus;
 //! - `choose=<name>:<label>`: chooses `<label>` in that list, whether the
 //!   search filter bar shows or not.

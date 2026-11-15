@@ -426,6 +426,11 @@ impl BrowserWindow {
         self.command_bar().show_delete_label(self.delete_label());
         self.command_bar()
             .show_recycle_bin_commands(self.recycle_bin_restore_target());
+        let collection = self.shows_gallery().then(|| {
+            let key = format!("{:?}", self.gallery_collection());
+            (key, self.gallery_collection_entries())
+        });
+        self.command_bar().show_collection(collection);
         // "…" lists Undo and Redo only while each can run.
         self.update_more_menu();
     }

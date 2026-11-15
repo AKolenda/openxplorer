@@ -96,6 +96,7 @@ mod folder_search;
 mod folder_size_scan;
 mod folder_tree;
 mod full_screen;
+mod gallery;
 mod gestures;
 mod grid_keys;
 mod group_day;

@@ -20,6 +20,7 @@ pub(crate) mod column_titles;
 pub(crate) mod column_widths;
 pub(crate) mod details;
 pub(crate) mod filter;
+pub(crate) mod gallery;
 pub(crate) mod grid;
 pub(crate) mod group_slots;
 pub(crate) mod groups;

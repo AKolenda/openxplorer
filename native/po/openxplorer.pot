@@ -808,6 +808,10 @@ msgstr ""
 msgid "Select all"
 msgstr ""
 
+#: crates/ox-app/src/folder_view/gallery.rs
+msgid "Gallery could not start reading your photos."
+msgstr ""
+
 #: crates/ox-app/src/folder_view/groups.rs crates/ox-core/src/grouping.rs
 msgid "0 – 9"
 msgstr ""
@@ -914,6 +918,10 @@ msgstr ""
 
 #: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-core/src/grouping.rs
 msgid "Date created"
+msgstr ""
+
+#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/properties/details_rows.rs
+msgid "Date taken"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs
@@ -1569,10 +1577,6 @@ msgstr ""
 
 #: crates/ox-app/src/properties/details_rows.rs
 msgid "Data rate"
-msgstr ""
-
-#: crates/ox-app/src/properties/details_rows.rs
-msgid "Date taken"
 msgstr ""
 
 #: crates/ox-app/src/properties/details_rows.rs
@@ -4747,6 +4751,10 @@ msgstr ""
 msgid "Close search"
 msgstr ""
 
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/folder_search.rs
+msgid "Collection"
+msgstr ""
+
 #: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
 msgid "Copy"
 msgstr ""
@@ -5433,7 +5441,15 @@ msgid "No matching items"
 msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
+msgid "No photos to show"
+msgstr ""
+
+#: crates/ox-app/src/window/empty_page.rs
 msgid "No shared folders found"
+msgstr ""
+
+#: crates/ox-app/src/window/empty_page.rs
+msgid "Photos in your Pictures folder show here."
 msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
@@ -6252,6 +6268,27 @@ msgstr ""
 msgid "Show hidden folders"
 msgstr ""
 
+#: crates/ox-app/src/window/gallery.rs
+msgid "Add a folder to Gallery"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery.rs
+msgid "Add folder…"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery.rs
+msgid "All folders"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/gallery.rs
+msgid "Could not save Gallery's folders: {error}"
+msgstr ""
+
+#: crates/ox-app/src/window/gallery.rs
+msgid "Remove folder"
+msgstr ""
+
 #: crates/ox-app/src/window/group_headings.rs
 msgid "Collapse all groups"
 msgstr ""
@@ -6942,6 +6979,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs
 msgid "Empty"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/entries.rs crates/ox-core/src/location/virtual_place.rs
+msgid "Gallery"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/entries.rs
@@ -8241,6 +8282,10 @@ msgstr ""
 
 #: crates/ox-core/src/grouping.rs
 msgid "Later this year"
+msgstr ""
+
+#: crates/ox-core/src/grouping.rs
+msgid "Month"
 msgstr ""
 
 #: crates/ox-core/src/grouping.rs

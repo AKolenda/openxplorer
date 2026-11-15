@@ -82,6 +82,11 @@ impl BrowserWindow {
         if let Some(page) = Page::from_uri(typed) {
             return Ok(page.uri().to_owned());
         }
+        // Gallery's own address (HOME-018); its title is matched below,
+        // after a folder of that name.
+        if VirtualPlace::from_uri(typed) == Some(VirtualPlace::Gallery) {
+            return Ok(VirtualPlace::Gallery.uri().to_owned());
+        }
         // Recent locations, which the app lists itself (SIDE-026).
         let recent_locations = VirtualPlace::RecentLocations;
         if [VirtualPlace::from_uri(typed), VirtualPlace::from_title(typed)].contains(&Some(recent_locations))
@@ -707,13 +712,16 @@ fn path_through_zip(uri: &str) -> Option<String> {
 
 /// The URI of `place` when it is one the app lists like a folder and the
 /// navigation pane may leave out (SIDE-034): the Recycle Bin, Recent or
-/// Recent locations.
+/// Recent locations, and Gallery (HOME-018).
 pub(super) fn listed_place(place: Option<VirtualPlace>) -> Option<String> {
     place
         .filter(|place| {
             matches!(
                 place,
-                VirtualPlace::RecycleBin | VirtualPlace::Recent | VirtualPlace::RecentLocations
+                VirtualPlace::RecycleBin
+                    | VirtualPlace::Recent
+                    | VirtualPlace::RecentLocations
+                    | VirtualPlace::Gallery
             )
         })
         .map(|place| place.uri().to_owned())

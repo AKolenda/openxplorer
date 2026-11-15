@@ -4,7 +4,9 @@
 //! its right, over the other columns, as Windows 11 draws it whatever the
 //! Name column's width (VIEW-022). It asks only for the heading's least
 //! room, so the heading never widens Name; the other columns' cells in
-//! the row draw nothing (`skin/folder-views.css`).
+//! the row draw nothing (`skin/folder-views.css`). In an icon grid
+//! (Gallery's months, HOME-019) it lays the heading out from its cell to
+//! the grid's right edge, as a tile is too narrow for a month's name.
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -22,6 +24,9 @@ mod imp {
         pub(super) child: RefCell<Option<gtk::Widget>>,
         /// Whether the heading spans its row (Details).
         pub(super) spans_row: Cell<bool>,
+        /// Whether the heading runs on to the grid's right edge (icon
+        /// tiles).
+        pub(super) spans_grid: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -45,7 +50,8 @@ mod imp {
                 return (0, 0, -1, -1);
             };
             let (minimum, natural, _, _) = child.measure(orientation, for_size);
-            if self.spans_row.get() && orientation == gtk::Orientation::Horizontal {
+            let spans = self.spans_row.get() || self.spans_grid.get();
+            if spans && orientation == gtk::Orientation::Horizontal {
                 // The row gives the heading its room, not the column.
                 return (minimum, minimum, -1, -1);
             }
@@ -59,6 +65,8 @@ mod imp {
             if let Some((start, row_width)) = self.row_span() {
                 let at = gsk::Transform::new().translate(&graphene::Point::new(-start, 0.0));
                 child.allocate(row_width.max(width), height, -1, Some(at));
+            } else if let Some(room) = self.grid_room() {
+                child.allocate(room.max(width), height, baseline, None);
             } else {
                 child.allocate(width, height, baseline, None);
             }
@@ -66,6 +74,22 @@ mod imp {
     }
 
     impl HeadingSpan {
+        /// The room from the span's left edge to its grid's right edge,
+        /// while the heading runs on there.
+        fn grid_room(&self) -> Option<i32> {
+            if !self.spans_grid.get() {
+                return None;
+            }
+            let span = self.obj();
+            let grid = std::iter::successors(span.parent(), WidgetExt::parent)
+                .find(|widget| widget.css_name() == "gridview")?;
+            let start = span.compute_point(&grid, &graphene::Point::zero())?;
+            // Stops short of the grid's right padding, where the tiles end.
+            let end = grid.width() - 24;
+            #[allow(clippy::cast_possible_truncation)]
+            Some(end - start.x() as i32)
+        }
+
         /// Where the span starts in its row, and the row's width, while
         /// the heading spans its row.
         fn row_span(&self) -> Option<(f32, i32)> {
@@ -93,10 +117,18 @@ impl HeadingSpan {
     pub(crate) fn new(heading: &impl IsA<gtk::Widget>, spans_row: bool) -> Self {
         let span: Self = glib::Object::new();
         span.imp().spans_row.set(spans_row);
+        span.set_overflow(gtk::Overflow::Visible);
         heading.set_parent(&span);
         span.imp().child.replace(Some(heading.clone().upcast()));
         span.set_hexpand(true);
         span
+    }
+
+    /// Has the heading run on from its cell to the grid's right edge, as
+    /// an icon tile's heading does.
+    pub(crate) fn span_grid(&self) {
+        self.imp().spans_grid.set(true);
+        self.queue_resize();
     }
 
     /// Lays the heading out across its row again: another column's width

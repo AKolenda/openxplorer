@@ -55,12 +55,12 @@ fn with_two_pins(fixture: &Fixture) -> TestWindow {
 
 /// The pinned folders are rows like Home and This PC, full width on the
 /// 32-pixel pitch, as in Windows 11's navigation pane; a divider 24
-/// pixels tall separates Home, the pins and This PC with Network, and
+/// pixels tall separates Home and Gallery, the pins and This PC with Network, and
 /// none separates This PC from Network. Every top-level icon sits in one
 /// column, 28 pixels into the pane, a chevron's room after the edge, and
 /// the drives' icons a 16-pixel level further in.
 ///
-/// parity: LOOK-014, SIDE-001
+/// parity: LOOK-014, SIDE-001, HOME-017
 #[gtk::test]
 fn pinned_rows_line_up_with_home_on_the_32_pixel_pitch() {
     let fixture = Fixture::standard();
@@ -78,7 +78,10 @@ fn pinned_rows_line_up_with_home_on_the_32_pixel_pitch() {
         .collect();
     assert!(pinned.len() >= 2, "the known folders and two pins");
     let divider = 12 + 1 + 11;
-    assert_eq!(pinned[0], Bounds::new(7, home.y + 31 + divider + 1, 196, 31));
+    // Gallery follows Home in its group, a row further down (HOME-017).
+    let gallery = bounds(&test, &row_named(&test, "Gallery"));
+    assert_eq!(gallery, Bounds::new(7, home.y + 32, 196, 31));
+    assert_eq!(pinned[0], Bounds::new(7, gallery.y + 31 + divider + 1, 196, 31));
     for pair in pinned.windows(2) {
         assert_eq!(pair[1].y - pair[0].y, 32, "pins are 32 apart, as every row");
     }

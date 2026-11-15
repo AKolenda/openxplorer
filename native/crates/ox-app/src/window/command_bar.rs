@@ -178,6 +178,10 @@ mod imp {
         pub(super) recycle_bin: OnceCell<super::RecycleBinCommands>,
         /// Search options and Close search, shown while searching.
         pub(super) search_commands: OnceCell<super::SearchCommands>,
+        /// Gallery's Collection menu, shown in Gallery (HOME-025).
+        pub(super) collection: OnceCell<(gtk::MenuButton, crate::window::menu_popover::MenuPopover)>,
+        /// What the Collection menu lists now, to build it only on change.
+        pub(super) collection_key: RefCell<String>,
         /// The "…" menu, which offers Map network drive only in This
         /// PC and Network.
         pub(super) more_menu: OnceCell<crate::window::menu_popover::MenuPopover>,
@@ -294,6 +298,20 @@ impl CommandBar {
             "view-command",
             view_menu(),
         ));
+        let collection_menu = MenuPopover::new(Vec::new());
+        let collection_label = ox_core::i18n::gettext("Collection");
+        let collection = gtk::MenuButton::builder()
+            .child(&text_menu_content(&collection_label, Icon::Image))
+            .popover(&collection_menu)
+            .valign(gtk::Align::Center)
+            .css_classes(["command", "text-command", "collection-command"])
+            .visible(false)
+            .build();
+        name_menu_button(&collection, &collection_label);
+        group.append(&collection);
+        imp.collection
+            .set((collection, collection_menu))
+            .expect("constructed runs once per object");
         let recycle_bin = RecycleBinCommands::new();
         group.append(&recycle_bin.separator);
         group.append(&recycle_bin.empty);
@@ -497,6 +515,31 @@ impl CommandBar {
                 commands.options.popdown();
             }
         }
+    }
+
+    /// Shows Gallery's Collection menu with `entries` while the window
+    /// shows Gallery, or hides it for `None` (HOME-025).
+    /// `key` names what `entries` list; the menu is rebuilt only when it
+    /// changes.
+    pub(super) fn show_collection(&self, shown: Option<(String, Vec<MenuEntry>)>) {
+        let Some((button, menu)) = self.imp().collection.get() else {
+            return;
+        };
+        button.set_visible(shown.is_some());
+        match shown {
+            Some((key, entries)) => {
+                if *self.imp().collection_key.borrow() != key {
+                    menu.set_entries(entries);
+                    self.imp().collection_key.replace(key);
+                }
+            }
+            None => button.popdown(),
+        }
+    }
+
+    /// The Collection button, for the snapshot hook's scenes and tests.
+    pub(super) fn collection_button(&self) -> Option<gtk::MenuButton> {
+        self.imp().collection.get().map(|(button, _)| button.clone())
     }
 
     /// Shows Empty Recycle Bin and Restore with what Restore restores

@@ -154,6 +154,7 @@ fn listed_place_glyph(uri: &str) -> Option<Icon> {
         VirtualPlace::RecycleBin => Some(Icon::Delete),
         VirtualPlace::Recent => Some(Icon::History),
         VirtualPlace::RecentLocations => Some(Icon::Clock),
+        VirtualPlace::Gallery => Some(Icon::Image),
         VirtualPlace::Home | VirtualPlace::ThisPc | VirtualPlace::Network | VirtualPlace::Settings => None,
     }
 }
@@ -605,6 +606,12 @@ mod tests {
                 uri: RECENT_LOCATIONS_URI,
                 tab: Art::Glyph(Icon::Clock),
                 address: Icon::Clock,
+            },
+            // Gallery shows its navigation pane row's photo glyph (HOME-017).
+            IconCase {
+                uri: ox_core::location::GALLERY_URI,
+                tab: Art::Glyph(Icon::Image),
+                address: Icon::Image,
             },
             IconCase {
                 uri: Page::Network.uri(),

@@ -47,6 +47,7 @@ mod focus_ring;
 mod folder_location;
 mod folder_options;
 mod folder_tree;
+mod gallery;
 mod geometry;
 mod group_by;
 mod group_heading_look;

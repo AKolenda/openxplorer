@@ -460,7 +460,14 @@ fn tile_rule(icon_size: IconSize, text_size: TextSize) -> String {
     let height = cell.height - TILE_VERTICAL_CHROME;
     let width = icon_size.pixels();
     let class = icon_size.css_class();
-    format!("gridview.files.{class} > child {{ min-width: {width}px; min-height: {height}px; }}")
+    // Gallery's months (HOME-019): the tile's height and padding move onto
+    // the item's own box, so a heading's row is a line of text tall.
+    format!(
+        "gridview.files.{class} > child {{ min-width: {width}px; min-height: {height}px; }}\n\
+         gridview.files.icon-groups.{class} > child {{ min-height: 0; padding: 0; }}\n\
+         gridview.files.icon-groups.{class} > child > box:not(.group-slot) \
+         {{ min-height: {height}px; padding: 12px 10px; }}"
+    )
 }
 
 /// The height of the List layout's items at `text_size`
