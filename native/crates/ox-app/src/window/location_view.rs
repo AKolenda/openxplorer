@@ -17,7 +17,6 @@ use ox_core::location::{
 use ox_core::ops::JournalDirection;
 use ox_core::places::{KnownFolder, NetworkLocation, Place};
 
-use crate::folder_view::shown_name::shown_name;
 use crate::icons::{Art, Icon, Storage, Tint};
 use crate::locations::Page;
 

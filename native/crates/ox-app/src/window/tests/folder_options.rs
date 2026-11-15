@@ -576,7 +576,7 @@ fn folder_options_choices_and_buttons_have_access_keys() {
             .filter_map(access_key)
             .collect();
         let count = keys.len();
-        keys.sort_by_key(|key| key.to_unicode());
+        keys.sort_by_key(gtk::gdk::Key::to_unicode);
         keys.dedup();
         assert_eq!(keys.len(), count, "the {tab} tab's access keys are distinct");
     }
