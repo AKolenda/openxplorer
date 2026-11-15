@@ -12,7 +12,7 @@
 
 use super::error::{Zip64Field, ZipFormatError};
 use super::member::ZipMember;
-use super::names::cut_at_nul;
+use super::names::{cut_at_nul, with_forward_slashes};
 use super::records::Fields;
 
 /// The header id of the ZIP64 extended information field.
@@ -83,7 +83,7 @@ fn apply_unicode_path(member: &mut ZipMember, data: &[u8], name_checksum: u32) -
     }
     let unicode_name = std::str::from_utf8(fields.rest()).map_err(|_| ZipFormatError::InvalidUnicodePath)?;
     if !unicode_name.is_empty() {
-        member.name = cut_at_nul(unicode_name);
+        member.name = cut_at_nul(&with_forward_slashes(unicode_name));
     }
     Ok(())
 }

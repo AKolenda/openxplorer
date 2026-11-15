@@ -72,10 +72,11 @@ is missing.
 - **Terminal.** View → Terminal opens the configured external terminal in the
   current folder. An embedded VTE terminal is not available across the current
   supported build targets and Flatpak configuration.
-- **Archives.** Browsing and extraction support ZIP and compressed TAR. 7z,
-  RAR, encrypted ZIP and ZIP64 still need additional codecs or format support.
-  Compress to › 7z File writes 7z archives (sevenz-rust2); browsing and
-  extracting 7z is not supported yet.
+- **Archives.** Browsing and extraction support ZIP and compressed TAR, and
+  ZIPs with the traditional ZIP password, which ask for it. 7z, RAR and
+  AES-encrypted ZIPs still need additional codecs. Compress to › 7z File
+  writes 7z archives (sevenz-rust2); browsing and extracting 7z is not
+  supported yet.
 - **Flatpak:** "Show in folder" answers only while OpenXplorer runs unless the
   desktop's Background portal starts it at login (native/packaging/README.md,
   "Differences inside the Flatpak"). Flathub publication needs the owner.

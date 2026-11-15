@@ -46,6 +46,9 @@ const OPENED: &str =
 /// The size of a row's picture (`fileIcon(item, 25)`).
 const ROW_ART_SIZE: i32 = 25;
 
+/// Opens a member: the URI of its private copy, or its name.
+type MemberOpener = Rc<dyn Fn(String)>;
+
 /// What the dialog's buttons and rows ask the window to do.
 pub(crate) struct ArchiveDialogActions {
     /// Extract all…: closes this dialog and opens the Extract dialog.
@@ -56,6 +59,9 @@ pub(crate) struct ArchiveDialogActions {
     /// Opens the private copy of a member at the URI with its
     /// application.
     pub open_copy: Rc<dyn Fn(String)>,
+    /// Opens the member named by the string through the window, which
+    /// asks for the password of a password-protected ZIP.
+    pub open_protected: Rc<dyn Fn(String)>,
 }
 
 /// The "<name> — Compressed folder" dialog for `archive`, showing its
@@ -71,7 +77,12 @@ pub(crate) fn archive_dialog(
         DialogWidth::Archive,
     );
     frame.set_message(ox_core::i18n::gettext_static(BROWSE_MESSAGE));
-    let view = ArchiveBrowserView::new(archive.clone(), browser, shown_path, actions.open_copy);
+    let view = ArchiveBrowserView::new(
+        archive.clone(),
+        browser,
+        shown_path,
+        (actions.open_copy, actions.open_protected),
+    );
     frame.body().append(&view);
     frame.add_closing_button(
         &ox_core::i18n::gettext("Extract all…"),
@@ -113,6 +124,9 @@ mod imp {
         pub(super) browser: OnceCell<ArchiveBrowser>,
         /// Opens a member's private copy; set by `new`.
         pub(super) open_copy: OnceCell<Rc<dyn Fn(String)>>,
+        /// Opens an encrypted member through the window, which asks for
+        /// its password; set by `new`.
+        pub(super) open_protected: OnceCell<Rc<dyn Fn(String)>>,
         /// The archive's location as the path line shows it.
         pub(super) shown_path: RefCell<String>,
         /// The folder shown: empty for the top, else ending with `/`.
@@ -167,12 +181,13 @@ glib::wrapper! {
 }
 
 impl ArchiveBrowserView {
-    /// The browser of `archive`, which `open_copy` opens members of.
+    /// The browser of `archive`, which `open_copy` opens members of;
+    /// `open_protected` opens those that need a password.
     fn new(
         archive: ArchiveTarget,
         browser: ArchiveBrowser,
         shown_path: &str,
-        open_copy: Rc<dyn Fn(String)>,
+        (open_copy, open_protected): (MemberOpener, MemberOpener),
     ) -> Self {
         let view: Self = glib::Object::new();
         let imp = view.imp();
@@ -180,6 +195,10 @@ impl ArchiveBrowserView {
         imp.browser.set(browser).expect("a new view has no reader yet");
         assert!(
             imp.open_copy.set(open_copy).is_ok(),
+            "a new view has no opener yet"
+        );
+        assert!(
+            imp.open_protected.set(open_protected).is_ok(),
             "a new view has no opener yet"
         );
         imp.shown_path.replace(shown_path.to_owned());
@@ -347,6 +366,7 @@ impl ArchiveBrowserView {
             #[weak(rename_to = view)]
             self,
             async move {
+                let member_name = member.clone();
                 match browser.preview_member_in_background(uri, member, cancel).await {
                     Ok(copy) => {
                         let open_copy = view.imp().open_copy.get().expect("new sets the opener");
@@ -354,6 +374,12 @@ impl ArchiveBrowserView {
                         view.imp().status.set_text(ox_core::i18n::gettext_static(OPENED));
                     }
                     Err(ArchiveError::Cancelled) => {}
+                    // The window asks for the password and opens it.
+                    Err(ArchiveError::PasswordRequired | ArchiveError::WrongPassword) => {
+                        view.imp().status.set_text("");
+                        let open_protected = view.imp().open_protected.get().expect("new sets the opener");
+                        open_protected(member_name);
+                    }
                     Err(error) => view.imp().status.set_text(&error.to_string()),
                 }
             }

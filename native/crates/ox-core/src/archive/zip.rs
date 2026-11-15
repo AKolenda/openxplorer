@@ -20,6 +20,7 @@
 //! | `records` | The fixed-size ZIP records and their fields |
 //! | `error` | [`ZipFormatError`]: damaged or unsupported archives |
 
+mod crypto;
 mod directory;
 mod error;
 mod extra;
@@ -32,10 +33,10 @@ mod records;
 use std::io::{Read, Seek};
 
 pub use error::{Zip64Field, ZipFormatError};
-pub(crate) use member::{CompressionMethod, DosDateTime, MemberFileType, ZipMember};
+pub(crate) use member::{CompressionMethod, DosDateTime, Encryption, MemberFileType, ZipMember};
 pub(crate) use reader::MemberReader;
 
-use crate::archive::ArchiveError;
+use crate::archive::{ArchiveError, ArchivePassword};
 use crate::transfer::Cancellation;
 use directory::read_directory;
 
@@ -75,7 +76,8 @@ impl<S: Read + Seek> ZipArchive<S> {
     }
 
     /// Starts reading the data of the member at `index` in
-    /// [`Self::members`].
+    /// [`Self::members`], decrypting it with `password` when it is
+    /// encrypted.
     ///
     /// # Errors
     ///
@@ -85,10 +87,14 @@ impl<S: Read + Seek> ZipArchive<S> {
     /// # Panics
     ///
     /// When `index` is not an index of [`Self::members`].
-    pub(crate) fn open_member(&mut self, index: usize) -> Result<MemberReader<'_>, ArchiveError> {
+    pub(crate) fn open_member(
+        &mut self,
+        index: usize,
+        password: Option<&ArchivePassword>,
+    ) -> Result<MemberReader<'_>, ArchiveError> {
         let member = &self.members[index];
         let position = i128::from(member.header_offset) + self.shift;
         let header_position = u64::try_from(position).map_err(|_| ZipFormatError::BadHeaderSignature)?;
-        MemberReader::open(&mut self.source, member, header_position, &self.cancel)
+        MemberReader::open(&mut self.source, member, header_position, password, &self.cancel)
     }
 }

@@ -18,7 +18,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::archive::{
-    lift_single_folder, ArchiveError, CompressionRequest, CreatedArchive, ExtractionRequest,
+    lift_single_folder, ArchiveError, ArchivePassword, CompressionRequest, CreatedArchive, ExtractionRequest,
     GioArchiveOpener, GioExtractionOutput, ZipCompressor, ZipExtractor,
 };
 use ox_core::entry::Entry;
@@ -183,6 +183,13 @@ impl BrowserWindow {
                     }
                 }
             )),
+            open_protected: Rc::new(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[strong(rename_to = uri)]
+                archive.uri,
+                move |member: String| window.open_archive_member(uri.clone(), member)
+            )),
         };
         let frame = archive_dialog(&archive, browser, &shown_path, actions);
         self.present_window_dialog(&frame);
@@ -316,7 +323,9 @@ impl BrowserWindow {
             self,
             async move {
                 let extracted = window
-                    .extract_into_free_name(&archive, &folder, &base_name, &cancel)
+                    .with_archive_password(&archive.uri, |password| {
+                        window.extract_into_free_name(&archive, &folder, &base_name, &cancel, password)
+                    })
                     .await;
                 window.finish_archive_operation();
                 // Windows Explorer says nothing after Cancel.
@@ -334,13 +343,15 @@ impl BrowserWindow {
     }
 
     /// Extracts `archive` into `folder` under the first free name based on
-    /// `base_name`; the extractor refuses a taken name without writing.
+    /// `base_name`, decrypting with `password`; the extractor refuses a
+    /// taken name without writing.
     async fn extract_into_free_name(
         &self,
         archive: &ArchiveTarget,
         folder: &str,
         base_name: &str,
         cancel: &Cancellation,
+        password: Option<ArchivePassword>,
     ) -> Result<String, ArchiveError> {
         for name in unique_folder_names(base_name) {
             let request = ExtractionRequest {
@@ -348,7 +359,10 @@ impl BrowserWindow {
                 destination_uri: folder.to_owned(),
                 folder_name: name,
             };
-            let extractor = self.zip_extractor().with_progress(self.progress_reporter(cancel));
+            let mut extractor = self.zip_extractor().with_progress(self.progress_reporter(cancel));
+            if let Some(password) = password.clone() {
+                extractor = extractor.with_password(password);
+            }
             self.describe_extraction(cancel, &request);
             match extractor.extract_in_background(request, cancel.clone()).await {
                 Err(ArchiveError::DestinationExists) => {}

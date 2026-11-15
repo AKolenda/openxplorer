@@ -15,7 +15,7 @@ use super::gio_reader::GioArchiveReader;
 use super::member_names::has_tar_name;
 use super::tar::{TarArchive, TarCompression, TarMemberReader};
 use super::zip::{MemberReader, ZipArchive, ZipMember};
-use super::ArchiveError;
+use super::{ArchiveError, ArchivePassword};
 use crate::location::normalise;
 use crate::network::local_path;
 use crate::private_storage::KernelOpenFlags;
@@ -109,14 +109,20 @@ impl OpenedArchive {
         }
     }
 
-    /// Starts reading the data of the member at `index`.
+    /// Starts reading the data of the member at `index`, decrypting an
+    /// encrypted ZIP member with `password`.
     ///
     /// # Errors
     ///
-    /// Damaged data or the source's read error.
-    pub(super) fn open_member(&mut self, index: usize) -> Result<MemberData<'_>, ArchiveError> {
+    /// Damaged data, the source's read error, or a missing or wrong
+    /// password.
+    pub(super) fn open_member(
+        &mut self,
+        index: usize,
+        password: Option<&ArchivePassword>,
+    ) -> Result<MemberData<'_>, ArchiveError> {
         Ok(match self {
-            Self::Zip(archive) => MemberData::Zip(archive.open_member(index)?),
+            Self::Zip(archive) => MemberData::Zip(archive.open_member(index, password)?),
             Self::Tar(archive) => MemberData::Tar(archive.open_member(index)?),
         })
     }

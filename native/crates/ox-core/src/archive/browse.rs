@@ -15,8 +15,8 @@ use super::member_names::{is_previewable, is_safe_member};
 use super::preview::MAX_PREVIEW_BYTES;
 use super::source::{open_archive, ArchiveOpener};
 use super::worker::on_worker;
-use super::zip::{MemberFileType, ZipMember};
-use super::ArchiveError;
+use super::zip::{Encryption, MemberFileType, ZipMember};
+use super::{ArchiveError, ArchivePassword};
 use crate::transfer::Cancellation;
 
 /// ARC-003: a listing shows at most this many rows.
@@ -30,6 +30,8 @@ pub struct ArchiveBrowser {
     pub(super) opener: Arc<dyn ArchiveOpener>,
     /// Where opened members are copied to.
     pub(super) preview_root: PathBuf,
+    /// The password encrypted members are opened with.
+    pub(super) password: Option<ArchivePassword>,
 }
 
 impl fmt::Debug for ArchiveBrowser {
@@ -98,7 +100,18 @@ impl ArchiveBrowser {
     /// into new private folders under `preview_root`, which is created when
     /// needed. The app uses [`default_preview_root`].
     pub fn new(opener: Arc<dyn ArchiveOpener>, preview_root: PathBuf) -> Self {
-        Self { opener, preview_root }
+        Self {
+            opener,
+            preview_root,
+            password: None,
+        }
+    }
+
+    /// This browser, opening encrypted members with `password` (ARC-006).
+    #[must_use]
+    pub fn with_password(mut self, password: ArchivePassword) -> Self {
+        self.password = Some(password);
+        self
     }
 
     /// Lists the folder `prefix` (empty for the top) of the archive at
@@ -245,7 +258,10 @@ fn entry_for(prefix: &str, relative: &str, member: &ZipMember) -> ArchiveEntry {
         }
     };
     // ARC-006: the same rules `preview_member` applies before opening.
-    let is_openable_file = !is_folder && !member.is_encrypted() && member.size <= MAX_PREVIEW_BYTES;
+    // An encrypted member asks for its password when it is opened, unless
+    // its encryption is one the reader cannot decrypt.
+    let is_decryptable = member.encryption() != Encryption::Unsupported;
+    let is_openable_file = !is_folder && is_decryptable && member.size <= MAX_PREVIEW_BYTES;
     let folder_slash = if is_folder { "/" } else { "" };
     ArchiveEntry {
         name: name.to_owned(),

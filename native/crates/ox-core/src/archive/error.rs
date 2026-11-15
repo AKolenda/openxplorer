@@ -111,12 +111,6 @@ pub enum ArchiveError {
         crate::i18n::gettext("This archive member is missing or duplicated. Use an archive manager.")
     )]
     MissingOrDuplicatedMember,
-    /// The member to open is encrypted.
-    #[error(
-        "{}",
-        crate::i18n::gettext("Encrypted ZIP members require an archive manager.")
-    )]
-    EncryptedMember,
     /// The member to open is a link or special file, has an altered name,
     /// is over 256 MiB or compressed more than 1,000 times.
     #[error(
@@ -193,12 +187,25 @@ pub enum ArchiveError {
         )
     )]
     LinkIntoExistingFolder(String),
-    /// ARC-016: a member is encrypted.
+    /// A member to open or extract is encrypted and no password was
+    /// given: the window asks for it and tries again.
     #[error(
         "{}",
-        crate::i18n::gettext("Password-protected ZIPs need an external archive manager in this release.")
+        crate::i18n::gettext("This archive is password protected. Enter its password to open it.")
     )]
-    PasswordProtected,
+    PasswordRequired,
+    /// The password given does not decrypt an encrypted member.
+    #[error("{}", crate::i18n::gettext("The password is incorrect. Try again."))]
+    WrongPassword,
+    /// ARC-016: a member is encrypted with AES or the PKWARE strong
+    /// encryption, which the built-in reader cannot decrypt.
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "This ZIP uses an encryption method OpenXplorer cannot open. Use an archive manager."
+        )
+    )]
+    UnsupportedEncryption,
     /// ARC-016: a member uses a method other than stored, deflate, bzip2
     /// or LZMA.
     #[error(
@@ -296,11 +303,13 @@ pub enum ArchiveError {
     /// Compress was given nothing it can put in a ZIP.
     #[error("{}", crate::i18n::gettext("Select files or folders to compress."))]
     NothingToCompress,
-    /// ARC-023: the new ZIP would need ZIP64, which the writer does not
-    /// write.
+    /// ARC-023: the selection holds more than 1,000,000 items, or a file
+    /// grew past 4 GiB after the compression planned it smaller.
     #[error(
         "{}",
-        crate::i18n::gettext("ZIP files over 4 GiB or with more than 65,535 items need an archive manager.")
+        crate::i18n::gettext(
+            "OpenXplorer cannot compress more than 1,000,000 items or a file that grows while it is compressed. Use an archive manager."
+        )
     )]
     TooLargeToCompress,
     /// ARC-023: two selected items have the same name, which one ZIP folder
