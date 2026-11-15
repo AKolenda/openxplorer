@@ -3668,6 +3668,158 @@ mod tests {
         assert_eq!(uris, [fixture.uri_of("extra_2.txt")]);
     }
 
+    /// After Confirm Save As closes without saving (No, Escape or its
+    /// close button), the keyboard is back in File name with the name
+    /// selected, as a Windows dialog gives focus back to the control that
+    /// had it ("Dialog Box Programming Considerations", WM_ACTIVATE), so
+    /// a new name can be typed at once. Before, the file list took it, and
+    /// the next Enter opened the first folder there or the file under the
+    /// keyboard instead of asking again. Y and N alone answer the question,
+    /// as the app's other Windows message boxes take them.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn after_confirm_save_as_the_keyboard_is_back_in_file_name() {
+        let fixture = Fixture::empty();
+        fs::write(fixture.path("notes.txt"), "old").expect("a file");
+        std::fs::create_dir(fixture.path("Archive")).expect("a folder");
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "notes.txt".to_variant())],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let name = window
+            .picker()
+            .expect("a picker")
+            .name
+            .clone()
+            .expect("a name box");
+        let back_in_name = |how: &str| {
+            wait_until("the question to close", || {
+                window.dialog_layer().shown().is_none()
+            });
+            settle();
+            assert!(
+                window.focus_is_in_picker_name(),
+                "{how}: File name has the keyboard"
+            );
+            assert_eq!(name.text(), "notes.txt", "{how}: the name is kept");
+            assert_eq!(
+                name.selection_bounds(),
+                Some((0, 5)),
+                "{how}: the name is selected"
+            );
+        };
+
+        enter(&name);
+        press_in(&replace_question(&portal.test), "No");
+        back_in_name("No");
+
+        enter(&name);
+        replace_question(&portal.test).close();
+        back_in_name("Escape");
+
+        enter(&name);
+        assert!(
+            press_letter(&replace_question(&portal.test), gdk::Key::n),
+            "N alone answers No"
+        );
+        back_in_name("N");
+        assert!(answer.borrow().is_none(), "nothing was saved");
+        assert_eq!(
+            fs::read_to_string(fixture.path("notes.txt")).expect("kept"),
+            "old"
+        );
+
+        enter(&name);
+        assert!(
+            press_letter(&replace_question(&portal.test), gdk::Key::y),
+            "Y alone answers Yes"
+        );
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("notes.txt")]);
+    }
+
+    /// Presses the letter `key` without Alt in `frame`, through its
+    /// shortcuts: whether one took it.
+    fn press_letter(frame: &crate::dialog::DialogFrame, key: gdk::Key) -> bool {
+        frame
+            .observe_controllers()
+            .iter::<glib::Object>()
+            .filter_map(Result::ok)
+            .filter_map(|controller| controller.downcast::<gtk::ShortcutController>().ok())
+            .flat_map(|controller| {
+                (0..controller.n_items())
+                    .filter_map(|position| controller.item(position).and_downcast::<gtk::Shortcut>())
+                    .collect::<Vec<_>>()
+            })
+            .filter(|shortcut| {
+                shortcut
+                    .trigger()
+                    .is_some_and(|trigger| is_triggered_by(&trigger, key, gdk::ModifierType::empty()))
+            })
+            .any(|shortcut| {
+                shortcut
+                    .action()
+                    .is_some_and(|action| action.activate(gtk::ShortcutActionFlags::empty(), frame, None))
+            })
+    }
+
+    /// Enter that nothing in the dialog takes presses its accept button,
+    /// as Windows' common dialogs make Open, Save or Select Folder the
+    /// default push button, which Enter chooses ("Dialog Box Programming
+    /// Considerations", DM_GETDEFID). In a folder dialog with the file list
+    /// focused and nothing selected, Enter chose nothing before; now it
+    /// answers with the folder shown. A Save dialog saves its name.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn enter_that_nothing_takes_presses_the_accept_button() {
+        let fixture = Fixture::empty();
+        std::fs::create_dir(fixture.path("Photos")).expect("a folder");
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "OpenFile",
+            vec![("directory", true.to_variant())],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        let accept = window.picker().expect("a picker").accept.clone();
+        assert_eq!(
+            window.default_widget().as_ref(),
+            Some(accept.upcast_ref::<gtk::Widget>()),
+            "the accept button is the default button"
+        );
+        window.folder_pane().focus_view();
+        assert!(window.selected_entries().is_empty());
+        window.emit_by_name::<()>("activate-default", &[]);
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri()], "the folder shown");
+
+        let portal = Portal::new();
+        let answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "list.txt".to_variant())],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        window.folder_pane().focus_view();
+        window.emit_by_name::<()>("activate-default", &[]);
+        let (response, uris) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_SUCCESS);
+        assert_eq!(uris, [fixture.uri_of("list.txt")]);
+    }
+
     /// A long name wraps in Confirm Save As, which stays a compact box
     /// rather than growing to the dialog's width.
     ///
