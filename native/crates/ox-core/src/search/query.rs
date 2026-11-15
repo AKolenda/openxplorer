@@ -12,8 +12,9 @@ use rusqlite::types::Value;
 use rusqlite::{Connection, Row};
 
 use super::error::{check_cancelled, SearchError};
+use super::expression::Clauses;
 use super::index::SearchIndex;
-use super::pattern::{is_wildcard, wildcard_in_name, word_in_name};
+use super::pattern::NamePattern;
 use super::root::{HiddenItems, RootStatus, SearchEngine};
 use super::text::{display_path, fold, folder_prefix, whole_seconds};
 use crate::entry::EntryKind;
@@ -28,7 +29,8 @@ pub const DEFAULT_RESULT_LIMIT: usize = 500;
 /// Most results one search can return.
 pub const MAX_RESULT_LIMIT: usize = 2000;
 
-/// Most distinct words of a query that are matched.
+/// Most distinct words of a query that are matched: the terms of its
+/// clauses, counted as typed.
 const MAX_QUERY_WORDS: usize = 20;
 
 /// Words this long use the trigram index; shorter ones are too short for
@@ -41,7 +43,9 @@ const STEPS_PER_CANCEL_CHECK: i32 = 4000;
 /// What to search for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchQuery {
-    /// Words that must all occur in an item's name or parent path.
+    /// Words that must all occur in an item's name or parent path, with
+    /// the quoted phrases, `AND`, `OR`, `NOT` and the name and extension
+    /// properties of Advanced Query Syntax ([`NamePattern`]).
     pub text: String,
     /// Only this folder and its subfolders; `None` for every cached folder
     /// ("All cached folders").
@@ -139,8 +143,8 @@ impl SearchIndex {
         let scope = query.scope.as_deref().map(normalise).transpose()?;
         let limit = query.limit.clamp(1, MAX_RESULT_LIMIT);
         let started = Instant::now();
-        let words = query_words(&query.text);
-        if words.is_empty() {
+        let pattern = query_pattern(&query.text);
+        if pattern.is_empty() {
             return Ok(SearchResults {
                 hits: Vec::new(),
                 is_truncated: false,
@@ -148,10 +152,15 @@ impl SearchIndex {
                 elapsed: Duration::ZERO,
             });
         }
-        let plan = QueryPlan::new(&words, scope.as_deref(), query.hidden_items, self.engine(), limit);
+        let plan = QueryPlan::new(
+            &pattern,
+            scope.as_deref(),
+            query.hidden_items,
+            self.engine(),
+            limit,
+        );
         let mut connection = self.connect()?;
-        add_name_pattern_function(&connection)?;
-        add_name_word_function(&connection)?;
+        add_match_function(&connection, pattern)?;
         let mut hits = run_cancellable(&mut connection, &plan, cancellable)?;
         let is_truncated = hits.len() > limit;
         hits.truncate(limit);
@@ -164,25 +173,14 @@ impl SearchIndex {
     }
 }
 
-/// The folded, distinct words of `text`, at most [`MAX_QUERY_WORDS`]
-/// (`list(dict.fromkeys(fold(text).split()))[:20]` in Python).
-fn query_words(text: &str) -> Vec<String> {
-    let folded = fold(text);
-    let mut words: Vec<String> = Vec::new();
-    for word in folded.split(is_python_space).filter(|word| !word.is_empty()) {
-        if !words.iter().any(|known| known == word) {
-            words.push(word.to_owned());
-        }
-    }
-    words.truncate(MAX_QUERY_WORDS);
-    words
-}
-
-/// Whether Python's `str.split()` splits at `character`: Unicode
-/// `White_Space` plus the information separators U+001C to U+001F, which
-/// Rust's `split_whitespace` keeps.
-fn is_python_space(character: char) -> bool {
-    character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
+/// The folded pattern of `text`, keeping at most [`MAX_QUERY_WORDS`]
+/// terms (`list(dict.fromkeys(fold(text).split()))[:20]` in Python, for
+/// plain words). Operators keep their case, since only upper-case `AND`,
+/// `OR` and `NOT` are operators.
+fn query_pattern(text: &str) -> NamePattern {
+    let mut pattern = NamePattern::normalised(text, &fold);
+    pattern.keep_terms(MAX_QUERY_WORDS);
+    pattern
 }
 
 /// The SQL of one search and the values bound to it.
@@ -193,9 +191,12 @@ struct QueryPlan {
 
 impl QueryPlan {
     /// Builds the statement. Every word and path is bound as a value, never
-    /// written into the SQL.
+    /// written into the SQL. The words every match must hold narrow the
+    /// rows through the trigram index and `search_text`; then
+    /// [`MATCH_FUNCTION`] applies the whole pattern, by the rules the
+    /// folder's filter uses.
     fn new(
-        words: &[String],
+        pattern: &NamePattern,
         scope: Option<&str>,
         hidden_items: HiddenItems,
         engine: SearchEngine,
@@ -205,26 +206,16 @@ impl QueryPlan {
             sql: String::new(),
             values: Vec::new(),
         };
+        let required = required_words(pattern.clauses());
         let mut conditions = vec!["r.enabled=1".to_owned()];
         if engine == SearchEngine::Trigram {
-            conditions.extend(plan.trigram_condition(words));
+            conditions.extend(plan.trigram_condition(&required));
         }
-        for word in words {
-            // A wildcard word is found within the folded name (SRCH-004),
-            // by the rules the folder's filter uses.
-            if is_wildcard(word) {
-                conditions.push(format!("{NAME_PATTERN_FUNCTION}(?, e.name)"));
-                plan.values.push(Value::Text(word.clone()));
-            } else {
-                // The folder may hold the word; in the name, the word
-                // must not be found only in the extension.
-                conditions.push(format!(
-                    "instr(e.search_text, ?)>0 AND {NAME_WORD_FUNCTION}(?, e.name, e.parent)"
-                ));
-                plan.values.push(Value::Text(word.clone()));
-                plan.values.push(Value::Text(word.clone()));
-            }
+        for word in &required {
+            conditions.push("instr(e.search_text, ?)>0".to_owned());
+            plan.values.push(Value::Text(word.clone()));
         }
+        conditions.push(format!("{MATCH_FUNCTION}(e.name, e.parent)"));
         if let Some(scope) = scope {
             conditions.push(plan.scope_condition(scope));
         }
@@ -255,7 +246,7 @@ impl QueryPlan {
     fn trigram_condition(&mut self, words: &[String]) -> Option<String> {
         let quoted: Vec<String> = words
             .iter()
-            .filter(|word| !is_wildcard(word) && word.chars().count() >= MIN_TRIGRAM_WORD_CHARS)
+            .filter(|word| word.chars().count() >= MIN_TRIGRAM_WORD_CHARS)
             .map(|word| format!("\"{}\"", word.replace('"', "\"\"")))
             .collect();
         if quoted.is_empty() {
@@ -277,37 +268,36 @@ impl QueryPlan {
     }
 }
 
-/// The SQL function that tells whether a wildcard word is in a name.
-const NAME_PATTERN_FUNCTION: &str = "ox_name_matches";
-
-/// Adds [`NAME_PATTERN_FUNCTION`] to `connection`: whether the folded
-/// wildcard word is found within the folded name, as the folder's filter
-/// decides.
-/// `SQLite`'s own `lower()` and `GLOB` fold ASCII only and read an unclosed
-/// `[` differently, so `über*` would miss `Überblick.pdf`.
-fn add_name_pattern_function(connection: &Connection) -> rusqlite::Result<()> {
-    let flags = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
-    connection.create_scalar_function(NAME_PATTERN_FUNCTION, 2, flags, |context| {
-        let word = context.get_raw(0).as_str().unwrap_or_default();
-        let name = context.get_raw(1).as_str().unwrap_or_default();
-        Ok(wildcard_in_name(word, &fold(name)))
-    })
+/// The text every match holds in its name or folder: the one term of
+/// each clause that has a single positive word, phrase or name value.
+fn required_words(clauses: &Clauses) -> Vec<String> {
+    let mut words: Vec<String> = Vec::new();
+    for clause in clauses {
+        if let [term] = clause.as_slice() {
+            if let Some(word) = term.required_text() {
+                if !words.iter().any(|known| known == word) {
+                    words.push(word.to_owned());
+                }
+            }
+        }
+    }
+    words
 }
 
-/// The SQL function that tells whether a plain word is in a name, by the
-/// folder's filter rules, or in the folder that holds it (SRCH-008).
-const NAME_WORD_FUNCTION: &str = "ox_word_matches";
+/// The SQL function that tells whether a cached item matches the search.
+const MATCH_FUNCTION: &str = "ox_matches";
 
-/// Adds [`NAME_WORD_FUNCTION`] to `connection`: whether the folded word is
-/// in the folded name, not only in its extension, or in the folded path of
-/// the parent folder, as `search_text` holds it.
-fn add_name_word_function(connection: &Connection) -> rusqlite::Result<()> {
+/// Adds [`MATCH_FUNCTION`] to `connection`: whether the folded name, with
+/// the folded path of the folder that holds it as `search_text` holds it
+/// (SRCH-008), matches `pattern`, as the folder's filter decides.
+/// `SQLite`'s own `lower()` and `GLOB` fold ASCII only and read an unclosed
+/// `[` differently, so `über*` would miss `Überblick.pdf`.
+fn add_match_function(connection: &Connection, pattern: NamePattern) -> rusqlite::Result<()> {
     let flags = FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC;
-    connection.create_scalar_function(NAME_WORD_FUNCTION, 3, flags, |context| {
-        let word = context.get_raw(0).as_str().unwrap_or_default();
-        let name = context.get_raw(1).as_str().unwrap_or_default();
-        let parent = context.get_raw(2).as_str().unwrap_or_default();
-        Ok(word_in_name(word, &fold(name)) || fold(&display_path(parent)).contains(word))
+    connection.create_scalar_function(MATCH_FUNCTION, 2, flags, move |context| {
+        let name = context.get_raw(0).as_str().unwrap_or_default();
+        let parent = context.get_raw(1).as_str().unwrap_or_default();
+        Ok(pattern.matches_lowercase(&fold(name), &fold(&display_path(parent))))
     })
 }
 
@@ -427,10 +417,11 @@ mod tests {
     /// parity: SRCH-008
     #[test]
     fn query_words_are_folded_distinct_and_limited() {
-        assert_eq!(query_words("Bank  bank BANK Report"), ["bank", "report"]);
-        assert_eq!(query_words("a\u{1f}b"), ["a", "b"]);
+        let words = |text: &str| required_words(query_pattern(text).clauses());
+        assert_eq!(words("Bank  bank BANK Report"), ["bank", "report"]);
+        assert_eq!(words("a\u{1f}b"), ["a", "b"]);
         let many: Vec<String> = (0..30).map(|number| format!("w{number}")).collect();
-        assert_eq!(query_words(&many.join(" ")).len(), MAX_QUERY_WORDS);
+        assert_eq!(words(&many.join(" ")).len(), MAX_QUERY_WORDS);
     }
 
     /// parity: SRCH-008
@@ -448,6 +439,61 @@ mod tests {
 
         assert_eq!(in_reports, ["q3-bank.pdf"]);
         assert_eq!(everywhere, ["bank.pdf", "q3-bank.pdf"]);
+    }
+
+    /// The cache reads a search as the folder's filter does: quoted
+    /// phrases, `AND`, `OR`, `NOT` and the name and extension properties
+    /// of Advanced Query Syntax.
+    ///
+    /// parity: SRCH-047
+    #[test]
+    fn the_cache_follows_advanced_query_syntax() {
+        let share = ScannedShare::new();
+        let reports = format!("{SHARE}/Reports");
+        share.store(&[
+            listed_file(&reports, "Annual report 2026.docx"),
+            listed_file(&reports, "Report draft.txt"),
+            listed_file(SHARE, "report final.pdf"),
+            listed_file(SHARE, "Invoice 1042.pdf"),
+            listed_file(SHARE, "annual budget.xlsx"),
+        ]);
+
+        assert_eq!(
+            share.found_names("\"annual report\""),
+            ["Annual report 2026.docx"]
+        );
+        assert_eq!(
+            share.found_names("report NOT draft"),
+            ["Annual report 2026.docx", "report final.pdf"]
+        );
+        assert_eq!(
+            share.found_names("budget OR invoice"),
+            ["annual budget.xlsx", "Invoice 1042.pdf"]
+        );
+        assert_eq!(
+            share.found_names("ext:pdf"),
+            ["Invoice 1042.pdf", "report final.pdf"]
+        );
+        assert_eq!(share.found_names("name:reports"), Vec::<String>::new());
+        assert_eq!(share.found_names("reports NOT ext:docx"), ["Report draft.txt"]);
+        assert_eq!(share.found_names("\"\" OR *; DROP TABLE"), Vec::<String>::new());
+        assert_eq!(share.found_names("NOT"), Vec::<String>::new());
+
+        let invoices = format!("{SHARE}/Invoices");
+        share.store(&[
+            listed_folder(SHARE, "Invoices"),
+            listed_file(&invoices, "Invoice 2026-014.pdf"),
+            listed_file(&invoices, "Invoice 2026-015.pdf"),
+        ]);
+        assert_eq!(
+            share.found_names("invoice OR budget NOT 015"),
+            [
+                "Invoices",
+                "annual budget.xlsx",
+                "Invoice 1042.pdf",
+                "Invoice 2026-014.pdf"
+            ]
+        );
     }
 
     /// parity: SRCH-004
@@ -696,8 +742,13 @@ mod tests {
             .map(|number| listed_file(SHARE, &format!("{number}.pdf")))
             .collect();
         share.store(&items);
-        let words = vec!["pd".to_owned()];
-        let plan = QueryPlan::new(&words, None, HiddenItems::Skip, SearchEngine::Trigram, 2000);
+        let plan = QueryPlan::new(
+            &query_pattern("pd"),
+            None,
+            HiddenItems::Skip,
+            SearchEngine::Trigram,
+            2000,
+        );
         let mut connection = share.index.connect().unwrap();
         let cancellable = gio::Cancellable::new();
 
@@ -711,9 +762,13 @@ mod tests {
     /// parity: SRCH-010
     #[test]
     fn short_words_skip_the_trigram_prefilter() {
-        let words = vec!["ab".to_owned(), "a\"b\"c".to_owned()];
-
-        let plan = QueryPlan::new(&words, None, HiddenItems::Skip, SearchEngine::Trigram, 10);
+        let plan = QueryPlan::new(
+            &query_pattern("ab a\"\"\"b\"\"\"c"),
+            None,
+            HiddenItems::Skip,
+            SearchEngine::Trigram,
+            10,
+        );
 
         assert_eq!(plan.values[0], Value::Text("\"a\"\"b\"\"c\"".to_owned()));
         assert_eq!(plan.sql.matches("MATCH ?").count(), 1);
@@ -722,10 +777,8 @@ mod tests {
     /// parity: SRCH-010
     #[test]
     fn the_substring_fallback_never_uses_the_full_text_table() {
-        let words = vec!["report".to_owned()];
-
         let plan = QueryPlan::new(
-            &words,
+            &query_pattern("report"),
             None,
             HiddenItems::Include,
             SearchEngine::SubstringFallback,

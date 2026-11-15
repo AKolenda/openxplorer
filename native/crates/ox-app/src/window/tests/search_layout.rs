@@ -83,6 +83,70 @@ fn a_search_shows_search_options_and_close_search_and_no_filter_bar() {
     assert!(!shows_command(&test, "Close search"));
 }
 
+/// Each new search names its own words in the tab and the window title,
+/// not the first search's: three searches in a row, then Back and
+/// Forward between them, and the same in a split pane's tab.
+///
+/// parity: SRCH-046
+#[gtk::test]
+fn every_new_search_names_its_own_words_in_the_tab_and_title() {
+    let fixture = Fixture::standard();
+    let test = window_with_notes(&fixture);
+    let root = root_title(&fixture);
+    let titles = |test: &TestWindow| {
+        let window = test.window.title().map(|title| title.to_string());
+        (test.active_tab_title(), window)
+    };
+    let expected = |query: &str| {
+        let tab = format!("{query} - Search Results in {root}");
+        let window = Some(format!("{tab} — OpenXplorer"));
+        (tab, window)
+    };
+
+    // Typed on, as a user types, so the box never empties between them.
+    test.search_for("notes");
+    assert_eq!(titles(&test), expected("notes"));
+    for query in ["notes 1", "notes 10"] {
+        test.type_on_in_search_box(query);
+        assert_eq!(titles(&test), expected(query), "once {query} is searched");
+    }
+    test.activate("back", None);
+    wait_until("Back to the folder", || test.names() == STANDARD_NAMES);
+    test.activate("forward", None);
+    wait_until("Forward to the last search", || {
+        titles(&test) == expected("notes 10")
+    });
+
+    test.activate("split-view", None);
+    test.search_for("notes");
+    test.type_on_in_search_box("notes 2");
+    let (tab, window) = titles(&test);
+    let named = "notes 2 - Search Results in ";
+    assert!(tab.starts_with(named), "the split pane's tab: {tab}");
+    assert!(
+        window.is_some_and(|window| window.starts_with(named)),
+        "the split pane's title"
+    );
+}
+
+impl TestWindow {
+    /// Types the rest of `query` after the search box's text, which
+    /// `query` starts with, and waits until its search has run.
+    fn type_on_in_search_box(&self, query: &str) {
+        let entry = self.window.search_box().entry();
+        let typed = entry.text().to_string();
+        let rest = query
+            .strip_prefix(typed.as_str())
+            .expect("the query goes on from the text");
+        let mut position = -1;
+        entry.insert_text(rest, &mut position);
+        assert_eq!(entry.text(), query);
+        wait_until("the search to run", || {
+            !self.status_count().starts_with("Searching")
+        });
+    }
+}
+
 /// Search options lists Windows 11's items in its order, with the date,
 /// kind and size choices in submenus.
 ///

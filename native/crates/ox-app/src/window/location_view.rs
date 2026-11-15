@@ -285,6 +285,9 @@ impl BrowserWindow {
         let uri = location.uri.as_str();
         let on_page = Page::from_uri(uri).is_some();
         let title = self.imp().locations.borrow().title_for(uri);
+        // No tooltip of the place left stays over the one shown now
+        // (VIEW-073).
+        self.hide_tooltip();
         self.render_title();
         self.set_action_enabled(WindowAction::Back, location.can_go_back);
         self.set_action_enabled(WindowAction::Forward, location.can_go_forward);
@@ -297,7 +300,10 @@ impl BrowserWindow {
         self.render_address(uri);
         let search = self.search_box();
         search.set_folder_title(&title);
-        search.set_enabled(!on_page && !in_zip && !is_device_location(uri));
+        // Windows 11's Home searches the home folder (HOME-033); the other
+        // pages search nothing.
+        let searches_home = Page::from_uri(uri) == Some(Page::Home);
+        search.set_enabled((!on_page || searches_home) && !in_zip && !is_device_location(uri));
         self.show_extract_button();
         self.update_more_menu();
         let tab = self.imp().session.borrow().active_id();

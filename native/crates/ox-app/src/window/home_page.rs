@@ -245,11 +245,35 @@ impl Item {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let pointing_to = gtk::gdk::Rectangle::new(point.x() as i32, point.y() as i32, 1, 1);
         popover.set_pointing_to(Some(&pointing_to));
-        popover.connect_closed(|popover| {
+        let opener = self.child.downgrade();
+        popover.connect_closed(move |popover| {
             let closed = popover.clone();
-            glib::idle_add_local_once(move || closed.unparent());
+            let opener = opener.clone();
+            glib::idle_add_local_once(move || {
+                let window = closed.root().and_downcast::<gtk::Window>();
+                closed.unparent();
+                if let (Some(window), Some(opener)) = (window, opener.upgrade()) {
+                    give_focus_back(&window, &opener);
+                }
+            });
         });
         popover.popup();
+    }
+}
+
+/// Gives the keyboard back to `opener`, the tile or row whose menu just
+/// closed, unless what the menu chose took it elsewhere or left Home: so
+/// the arrows and Enter go on from there, as with the navigation pane's
+/// menus. Focus left nowhere, on a hidden widget or on a container of
+/// `opener` counts as lost.
+fn give_focus_back(window: &gtk::Window, opener: &gtk::FlowBoxChild) {
+    if !opener.is_drawable() {
+        return;
+    }
+    let focus = GtkWindowExt::focus(window);
+    let lost = focus.is_none_or(|focus| !focus.is_drawable() || opener.is_ancestor(&focus));
+    if lost {
+        opener.grab_focus();
     }
 }
 
@@ -1814,7 +1838,7 @@ fn item_name(child: &gtk::FlowBoxChild) -> Option<String> {
 
 /// The item named `name`, tile or row, for tests.
 #[cfg(test)]
-fn item_named(page: &gtk::Box, name: &str) -> gtk::FlowBoxChild {
+pub(crate) fn item_named(page: &gtk::Box, name: &str) -> gtk::FlowBoxChild {
     descendants_of_type::<gtk::FlowBoxChild>(page)
         .into_iter()
         .filter(|child| {
