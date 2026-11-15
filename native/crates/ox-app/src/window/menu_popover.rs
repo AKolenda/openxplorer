@@ -203,7 +203,17 @@ mod imp {
             // before that it cannot take focus.
             // A submenu gets the keyboard from the row that opened it,
             // and only when the keyboard opened it.
-            popover.connect_show(super::MenuPopover::redraw);
+            popover.connect_show(|popover| {
+                popover.redraw();
+                // GTK moves the keyboard into a menu that holds the
+                // pointer (autohide) itself; a top-level menu without that
+                // grab, as the command bar's (command_bar/menu_group.rs),
+                // takes it here once its rows are built: when it is first
+                // mapped, it has none yet.
+                if !popover.is_autohide() && !popover.imp().is_submenu.get() && popover.is_mapped() {
+                    popover.focus_first_item();
+                }
+            });
             popover.connect_map(|popover| {
                 if !popover.imp().is_submenu.get() {
                     popover.focus_first_item();
@@ -493,7 +503,7 @@ impl MenuPopover {
     /// Replaces the menu's entries.
     pub(super) fn set_entries(&self, entries: Vec<MenuEntry>) {
         self.imp().entries.replace(entries);
-        self.redraw();
+        self.redraw_keeping_the_keyboard();
     }
 
     /// Shows the menu in `style`, with `strip_items` as the compact
@@ -501,7 +511,68 @@ impl MenuPopover {
     pub(super) fn set_style_and_strip(&self, style: MenuStyle, strip_items: Vec<MenuItem>) {
         self.imp().strip_items.replace(strip_items);
         self.set_style(style);
+        self.redraw_keeping_the_keyboard();
+    }
+
+    /// Rebuilds the rows of a menu that may be open, as when the New
+    /// menu's templates are read again just after it opened. Removing
+    /// the row the keyboard is on leaves the window's keyboard nowhere
+    /// in the menu, and an open menu gets no new `show` or `map` to take
+    /// it again, so it takes it back here: on the row at the same place,
+    /// else the first item that can be chosen.
+    fn redraw_keeping_the_keyboard(&self) {
+        let focus = self.root().and_then(|root| root.focus());
+        let had_keyboard = self.is_mapped() && focus.as_ref().is_some_and(|focus| focus.is_ancestor(self));
+        let place = focus
+            .and_then(|focus| focus.ancestor(gtk::ListBoxRow::static_type()))
+            .and_downcast::<gtk::ListBoxRow>()
+            .filter(|row| row.parent().as_ref() == Some(self.list().upcast_ref()))
+            .map(|row| row.index());
         self.redraw();
+        if !had_keyboard {
+            return;
+        }
+        let same_place = place
+            .and_then(|index| self.list().row_at_index(index))
+            .filter(WidgetExt::is_sensitive);
+        match same_place {
+            Some(row) => {
+                row.grab_focus();
+            }
+            None => self.focus_first_item(),
+        }
+    }
+
+    /// Scrolls the rows as GTK's scrolled window does for `scroll`, a
+    /// wheel or touchpad scroll over the menu that GTK sent to the window
+    /// under it (`command_bar/menu_group.rs`): a wheel notch moves them
+    /// by the page's height to the power of 2/3, a touchpad by its
+    /// pixels.
+    pub(super) fn scroll_rows_for(&self, scroll: &gdk::ScrollEvent) {
+        let Some(rows) = self
+            .list()
+            .ancestor(gtk::ScrolledWindow::static_type())
+            .and_downcast::<gtk::ScrolledWindow>()
+        else {
+            return;
+        };
+        let adjustment = rows.vadjustment();
+        let notch = adjustment.page_size().powf(2.0 / 3.0);
+        let delta = match scroll.direction() {
+            gdk::ScrollDirection::Up => -notch,
+            gdk::ScrollDirection::Down => notch,
+            gdk::ScrollDirection::Smooth => {
+                let (_, dy) = scroll.deltas();
+                if scroll.unit() == gdk::ScrollUnit::Surface {
+                    dy
+                } else {
+                    dy * notch
+                }
+            }
+            _ => 0.0,
+        };
+        let last = (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
+        adjustment.set_value((adjustment.value() + delta).clamp(adjustment.lower(), last));
     }
 
     /// Draws the menu in `style` and names it for screen readers.
@@ -1076,26 +1147,41 @@ impl MenuPopover {
 /// in it but on a menu. A menu normally closes itself on such a press, but
 /// on KDE Plasma a press in the app's own window is the app's to handle,
 /// and the Sort menu once stayed on screen until a window of another app
-/// was clicked. The press goes on to whatever it is on.
+/// was clicked; the command bar's menus never close themselves so (see
+/// `command_bar/menu_group.rs`). The press goes on to whatever it is on.
+/// A primary press on the button a menu drops down from is left to that
+/// button, which closes the menu when clicked: closed here first, the
+/// click would open it again. A right or middle press there closes the
+/// menu here, as the button toggles only on the primary button.
 pub(super) fn close_menus_on_press(window: &impl IsA<gtk::Widget>) {
     let gesture = gtk::GestureClick::new();
     gesture.set_button(0);
     gesture.set_propagation_phase(gtk::PropagationPhase::Capture);
-    gesture.connect_pressed(|gesture, _, _, _| {
+    gesture.connect_pressed(|gesture, _, x, y| {
         // Only watching: the press is not taken from the widgets under it.
         gesture.set_state(gtk::EventSequenceState::Denied);
         let pressed = gesture.current_event().and_then(|event| event.surface());
         if let Some(window) = gesture.widget() {
-            close_menus_in(&window, pressed.as_ref());
+            // A touch counts as the primary button.
+            let primary = gesture.current_button() == gdk::BUTTON_PRIMARY;
+            let on_widget = primary
+                .then(|| window.pick(x, y, gtk::PickFlags::DEFAULT))
+                .flatten();
+            close_menus_in(&window, pressed.as_ref(), on_widget.as_ref());
         }
     });
     window.as_ref().add_controller(gesture);
 }
 
 /// Closes the menus of `root` for a press on `pressed`: all of them,
-/// unless the press is on one of them. A menu that is closed but whose
-/// surface is still on screen is taken off it.
-pub(super) fn close_menus_in(root: &gtk::Widget, pressed: Option<&gdk::Surface>) {
+/// unless the press is on one of them, but for a menu whose own menu
+/// button holds `on_widget`, where a primary press was made. A menu that is closed but
+/// whose surface is still on screen is taken off it.
+pub(super) fn close_menus_in(
+    root: &gtk::Widget,
+    pressed: Option<&gdk::Surface>,
+    on_widget: Option<&gtk::Widget>,
+) {
     let mut menus = Vec::new();
     collect_menus(root, &mut menus);
     let on_a_menu = pressed.is_some_and(|pressed| {
@@ -1106,8 +1192,16 @@ pub(super) fn close_menus_in(root: &gtk::Widget, pressed: Option<&gdk::Surface>)
     if on_a_menu {
         return;
     }
+    let on_own_button = |menu: &MenuPopover| {
+        let button = menu.parent().and_downcast::<gtk::MenuButton>();
+        button.is_some_and(|button| {
+            on_widget.is_some_and(|widget| {
+                widget == button.upcast_ref::<gtk::Widget>() || widget.is_ancestor(&button)
+            })
+        })
+    };
     for menu in &menus {
-        if menu.is_visible() {
+        if menu.is_visible() && !on_own_button(menu) {
             menu.popdown();
         }
     }

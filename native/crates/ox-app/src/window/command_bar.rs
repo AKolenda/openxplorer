@@ -20,8 +20,10 @@
 //! [`CommandBar`] is a `GtkBox` subclass. The template
 //! `resources/ui/command-bar.ui` lays out the bar and the three controls at
 //! its right; the file commands come from [`EDIT_COMMANDS`] and the menus
-//! of [`menus`].
+//! of [`menus`]. Its menus work as one group ([`menu_group`]): while one
+//! is open, one click on another menu button opens that one.
 
+mod menu_group;
 pub(in crate::window) mod menus;
 
 use gtk::glib;
@@ -182,6 +184,25 @@ mod imp {
         /// What the "…" menu shows now: Map network drive or not, Pin
         /// or Unpin.
         pub(super) more_state: RefCell<super::MoreMenuState>,
+        /// The menu button whose menu is open (`menu_group.rs`).
+        pub(super) open_menu: RefCell<Option<gtk::MenuButton>>,
+        /// The window whose going inactive closes the open menu.
+        pub(super) watched_window: glib::WeakRef<gtk::Window>,
+        /// The surface that last had the pointer's motion.
+        pub(super) pointer_surface: glib::WeakRef<gtk::gdk::Surface>,
+        /// A press on the open menu taken from the window, until its
+        /// release (`menu_group.rs`).
+        pub(super) held_press: RefCell<Option<super::menu_group::HeldPress>>,
+        /// Whether a pointer button or a touch is down in the window.
+        pub(super) pointer_down: Cell<bool>,
+        /// The menu button whose menu was open when the last press began
+        /// (`menu_group.rs`).
+        pub(super) pressed_with_menu_open: RefCell<Option<gtk::MenuButton>>,
+        /// Where the keyboard is in the window (`menu_group.rs`).
+        pub(super) keyboard_on: glib::WeakRef<gtk::Widget>,
+        /// The tab and location the window showed when it last told the
+        /// bar.
+        pub(super) shown_location: RefCell<Option<(Option<crate::window::session::TabId>, String)>>,
     }
 
     #[glib::object_subclass]
@@ -206,6 +227,7 @@ mod imp {
             let bar = self.obj();
             bar.add_file_commands();
             bar.finish_right_commands();
+            bar.group_menus();
         }
     }
 
