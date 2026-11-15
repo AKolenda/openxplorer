@@ -788,11 +788,11 @@ impl FakeDrop {
         }
     }
 
-    /// A plain drag of this app's own items, which offers Copy and Ask.
+    /// A plain drag of this app's own items, which offers Copy.
     fn of_own_items() -> Self {
         Self {
             origin: DragOrigin::ThisApp,
-            ..Self::from_another_app(gdk::DragAction::COPY | gdk::DragAction::ASK)
+            ..Self::from_another_app(gdk::DragAction::COPY)
         }
     }
 }
@@ -931,5 +931,8 @@ fn a_folder_of_the_folder_tree_takes_drops_and_opens_under_a_held_drag() {
         Some(DropDestination::Folder(fixture.uri_of("Shelf")))
     );
     assert!(outlined, "the folder under the drag is outlined");
-    assert!(!tree.is_drop_row(shelf_row), "no outline stays once the drag leaves");
+    assert!(
+        !tree.is_drop_row(shelf_row),
+        "no outline stays once the drag leaves"
+    );
 }

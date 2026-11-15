@@ -83,6 +83,11 @@ pub(crate) trait OfferedDrop {
     /// The button a drag of this app was made with; another app's drag
     /// counts as [`DragButton::Primary`], as it applies its own rules.
     fn button(&self) -> DragButton;
+    /// Whether the drag carries items out of a ZIP opened like a folder in
+    /// this app (ARC-026).
+    fn from_archive(&self) -> bool {
+        false
+    }
 }
 
 impl OfferedDrop for gdk::Drop {
@@ -100,6 +105,11 @@ impl OfferedDrop for gdk::Drop {
 
     fn button(&self) -> DragButton {
         self.drag().map_or(DragButton::Primary, |drag| drag_button(&drag))
+    }
+
+    fn from_archive(&self) -> bool {
+        self.drag()
+            .is_some_and(|drag| drag.content().is::<crate::window::zip_copies::ZipDragContent>())
     }
 }
 

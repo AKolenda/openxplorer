@@ -51,7 +51,10 @@ fn tree_list(test: &TestWindow) -> gtk::ListView {
         if let Ok(list) = widget.clone().downcast::<gtk::ListView>() {
             return list;
         }
-        pending.extend(std::iter::successors(widget.first_child(), gtk::Widget::next_sibling));
+        pending.extend(std::iter::successors(
+            widget.first_child(),
+            gtk::Widget::next_sibling,
+        ));
     }
     panic!("the folder tree has a list of rows");
 }
@@ -71,7 +74,10 @@ fn tree_row_middle(list: &gtk::ListView, name: &str) -> (f64, f64) {
                 f64::from(bounds.y() + bounds.height() / 2.0),
             );
         }
-        pending.extend(std::iter::successors(widget.first_child(), gtk::Widget::next_sibling));
+        pending.extend(std::iter::successors(
+            widget.first_child(),
+            gtk::Widget::next_sibling,
+        ));
     }
     panic!("the folder tree shows {name}");
 }
@@ -83,8 +89,8 @@ fn tree_row_middle(list: &gtk::ListView, name: &str) -> (f64, f64) {
 /// parity: DND-011, SIDE-028
 #[gtk::test]
 fn a_real_drag_onto_a_folder_of_the_folder_tree_goes_into_it() {
-    use crate::test_support::pointer::{screen_point, Button, Pointer};
     use super::right_drag::{item_on_screen, HOLD, PROBE};
+    use crate::test_support::pointer::{screen_point, Button, Pointer};
 
     let fixture = Fixture::standard();
     let reports = fixture.path("Documents").join("Reports");
@@ -103,7 +109,12 @@ fn a_real_drag_onto_a_folder_of_the_folder_tree_goes_into_it() {
     let list = tree_list(&test);
 
     let from = item_on_screen(&mut pointer, &test, "Draft.txt");
-    let onto = screen_point(&mut pointer, &list, tree_row_middle(&list, "Example projects"), PROBE);
+    let onto = screen_point(
+        &mut pointer,
+        &list,
+        tree_row_middle(&list, "Example projects"),
+        PROBE,
+    );
     pointer.move_to(from.0, from.1);
     pointer.press(Button::Primary);
     pointer.glide(from, (from.0 + 12, from.1 + 12), 4);
@@ -111,6 +122,11 @@ fn a_real_drag_onto_a_folder_of_the_folder_tree_goes_into_it() {
     crate::test_support::harness::wait_for(HOLD);
     pointer.release(Button::Primary);
 
-    wait_until("the move into the tree's folder", || fixture.path("Draft.txt").is_file());
-    assert!(!reports.join("Draft.txt").exists(), "a plain drag within a drive moves");
+    wait_until("the move into the tree's folder", || {
+        fixture.path("Draft.txt").is_file()
+    });
+    assert!(
+        !reports.join("Draft.txt").exists(),
+        "a plain drag within a drive moves"
+    );
 }
