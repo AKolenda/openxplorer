@@ -45,9 +45,6 @@ pub enum GroupBy {
     /// The key the folder is sorted by, in that key's own groups
     /// (Dolphin's "Show in groups").
     SortKey,
-    /// The month a photo was taken, else modified, newest first: Gallery's
-    /// groups only, never offered in the Group by menu or saved.
-    Month,
 }
 
 impl GroupBy {
@@ -72,7 +69,6 @@ impl GroupBy {
             GroupBy::Size => "size",
             GroupBy::Created => "created",
             GroupBy::SortKey => "sort",
-            GroupBy::Month => "month",
         }
     }
 
@@ -91,7 +87,6 @@ impl GroupBy {
             GroupBy::Size => message_id("Size"),
             GroupBy::Created => message_id("Date created"),
             GroupBy::SortKey => message_id("Same as sort"),
-            GroupBy::Month => message_id("Month"),
         }
     }
 

@@ -67,7 +67,10 @@ fn gallery_lists_photos_newest_first_without_month_headings() {
     photo(&pictures.join("f.png"), 64, 48, "2025-07-04");
     let test = gallery_window(&home);
 
-    assert_eq!(test.names(), ["a.png", "b.png", "c.png", "d.png", "e.png", "f.png"]);
+    assert_eq!(
+        test.names(),
+        ["a.png", "b.png", "c.png", "d.png", "e.png", "f.png"]
+    );
     assert!(month_groups(&test).is_empty(), "no month headings");
     assert!(test.window.folder_pane().grouped().is_none());
     let (count, _) = test.window.status_bar().texts();
@@ -98,7 +101,12 @@ fn photos_fill_justified_rows_that_keep_their_aspect_ratios() {
         ("tall.png", 500, 1200),
     ];
     for (day, (name, width, height)) in shapes.iter().enumerate() {
-        photo(&pictures.join(name), *width, *height, &format!("2026-05-{:02}", 28 - day));
+        photo(
+            &pictures.join(name),
+            *width,
+            *height,
+            &format!("2026-05-{:02}", 28 - day),
+        );
     }
     let test = gallery_window(&home);
     test.window.set_default_size(1100, 800);
@@ -115,6 +123,9 @@ fn photos_fill_justified_rows_that_keep_their_aspect_ratios() {
         );
     }
     assert!(tile(&shown, "narrow.png").width < tile(&shown, "wide.png").width / 2.0);
+    wait_until("the thumbnails", || {
+        test.window.gallery_tiles().iter().all(|tile| tile.thumbnail)
+    });
 
     let view_width = test.window.gallery_content_width();
     let mut rows: Vec<Vec<&ShownTile>> = Vec::new();
@@ -141,7 +152,10 @@ fn photos_fill_justified_rows_that_keep_their_aspect_ratios() {
             "rows fill the width {view_width}: {row:?}"
         );
         for tile in row {
-            assert!((tile.height - first.height).abs() <= 1.0, "one height a row: {row:?}");
+            assert!(
+                (tile.height - first.height).abs() <= 1.0,
+                "one height a row: {row:?}"
+            );
         }
         assert!(
             (120.0..=200.0).contains(&first.height),
@@ -149,7 +163,11 @@ fn photos_fill_justified_rows_that_keep_their_aspect_ratios() {
         );
     }
     let rows_gap = rows[1][0].y - (rows[0][0].y + rows[0][0].height);
-    assert!((rows_gap - gaps[0]).abs() <= 1.0, "rows {rows_gap} apart, tiles {}", gaps[0]);
+    assert!(
+        (rows_gap - gaps[0]).abs() <= 1.0,
+        "rows {rows_gap} apart, tiles {}",
+        gaps[0]
+    );
 
     // Larger icons, taller rows.
     test.activate("view", Some("extra-large"));
@@ -182,7 +200,12 @@ fn the_heading_shows_the_dates_on_screen_and_follows_the_scrolling() {
     ];
     for (index, date) in months.iter().enumerate() {
         for copy in 0..12 {
-            photo(&pictures.join(format!("Roll {index}/frame {copy}.png")), 640, 480, date);
+            photo(
+                &pictures.join(format!("Roll {index}/frame {copy}.png")),
+                640,
+                480,
+                date,
+            );
         }
     }
     let test = gallery_window(&home);
@@ -214,10 +237,21 @@ fn the_heading_shows_the_dates_on_screen_and_follows_the_scrolling() {
 fn the_date_scrubber_marks_years_names_months_and_jumps_there() {
     let home = PicturesHome::new();
     let pictures = home.pictures();
-    let dates = ["2026-11-10", "2026-04-10", "2025-09-10", "2025-02-10", "2024-05-10"];
+    let dates = [
+        "2026-11-10",
+        "2026-04-10",
+        "2025-09-10",
+        "2025-02-10",
+        "2024-05-10",
+    ];
     for (index, date) in dates.iter().enumerate() {
         for copy in 0..20 {
-            photo(&pictures.join(format!("Roll {index}/frame {copy}.png")), 640, 480, date);
+            photo(
+                &pictures.join(format!("Roll {index}/frame {copy}.png")),
+                640,
+                480,
+                date,
+            );
         }
     }
     let test = gallery_window(&home);
@@ -246,10 +280,14 @@ fn the_date_scrubber_marks_years_names_months_and_jumps_there() {
     });
     let top = test.window.folder_pane().scroll_position();
     scrubber.step(false);
-    wait_until("a step down", || test.window.folder_pane().scroll_position() > top);
+    wait_until("a step down", || {
+        test.window.folder_pane().scroll_position() > top
+    });
     let lower = test.window.folder_pane().scroll_position();
     scrubber.step(true);
-    wait_until("a step up", || test.window.folder_pane().scroll_position() < lower);
+    wait_until("a step up", || {
+        test.window.folder_pane().scroll_position() < lower
+    });
 }
 
 /// A photo's tooltip says where it is, its type, its date and its size,

@@ -61,13 +61,21 @@ const EXIF_TYPES: [&str; 8] = [
     "image/x-adobe-dng",
 ];
 
-/// What is remembered of a photo's date: the size and date modified it
-/// was read at, and the date taken found then.
+/// What is remembered of a photo: the size and date modified it was read
+/// at, and the date taken and shown pixel size found then.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct KnownDate {
     size: Option<u64>,
     modified: Option<u64>,
-    taken: Option<u64>,
+    facts: PhotoFacts,
+}
+
+/// What Gallery reads of a photo itself: when it was taken, and its width
+/// and height as shown, after its EXIF orientation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct PhotoFacts {
+    pub(crate) taken: Option<u64>,
+    pub(crate) pixel_size: Option<(u32, u32)>,
 }
 
 /// The dates taken read this session, by location.
@@ -164,7 +172,9 @@ fn walk_folders(
                 if cancellable.is_cancelled() {
                     return;
                 }
-                entry.meta.taken = date_taken_of(entry);
+                let facts = photo_facts_of(entry);
+                entry.meta.taken = facts.taken;
+                entry.meta.pixel_size = facts.pixel_size;
             }
             let _ = sender.send_blocking(batch);
         });
@@ -174,9 +184,9 @@ fn walk_folders(
     }
 }
 
-/// The date `entry` was taken, from the session's memory while its size
+/// What Gallery reads of `entry`, from the session's memory while its size
 /// and date modified are unchanged, else read from the file now.
-fn date_taken_of(entry: &Entry) -> Option<u64> {
+fn photo_facts_of(entry: &Entry) -> PhotoFacts {
     let dates = DATES.get_or_init(Mutex::default);
     let known = dates
         .lock()
@@ -184,55 +194,100 @@ fn date_taken_of(entry: &Entry) -> Option<u64> {
         .get(&entry.uri)
         .copied();
     if let Some(known) = known.filter(|known| known.size == entry.size && known.modified == entry.modified) {
-        return known.taken;
+        return known.facts;
     }
-    let taken = read_date_taken(entry);
+    let facts = read_photo_facts(entry);
     dates.lock().unwrap_or_else(PoisonError::into_inner).insert(
         entry.uri.clone(),
         KnownDate {
             size: entry.size,
             modified: entry.modified,
-            taken,
+            facts,
         },
     );
-    taken
+    facts
 }
 
-/// Reads `entry`'s EXIF date taken, for a local file of a type that may
-/// carry EXIF.
-fn read_date_taken(entry: &Entry) -> Option<u64> {
-    let content_type = entry.content_type.as_deref()?;
-    if !EXIF_TYPES.contains(&content_type) {
-        return None;
+/// Reads `entry`'s EXIF date taken and orientation, for a local file of a
+/// type that may carry EXIF, and its pixel size from its header.
+fn read_photo_facts(entry: &Entry) -> PhotoFacts {
+    let Some(path) = gio::File::for_uri(&entry.uri).path() else {
+        return PhotoFacts::default();
+    };
+    let exif = entry
+        .content_type
+        .as_deref()
+        .filter(|content_type| EXIF_TYPES.contains(content_type))
+        .and_then(|_| {
+            let mut head = Vec::new();
+            std::fs::File::open(&path)
+                .ok()?
+                .take(EXIF_HEAD)
+                .read_to_end(&mut head)
+                .ok()?;
+            Some(exif_facts_in(&head))
+        })
+        .unwrap_or_default();
+    // The header only: gdk-pixbuf reads as little as it needs for the size.
+    let pixel_size = gtk::gdk_pixbuf::Pixbuf::file_info(&path).and_then(|(_, width, height)| {
+        let (width, height) = (u32::try_from(width).ok()?, u32::try_from(height).ok()?);
+        let turned = matches!(exif.orientation, Some(5..=8));
+        (width > 0 && height > 0).then_some(if turned { (height, width) } else { (width, height) })
+    });
+    PhotoFacts {
+        taken: exif.taken,
+        pixel_size,
     }
-    let path = gio::File::for_uri(&entry.uri).path()?;
-    let mut head = Vec::new();
-    std::fs::File::open(path)
-        .ok()?
-        .take(EXIF_HEAD)
-        .read_to_end(&mut head)
-        .ok()?;
-    date_taken_in(&head)
+}
+
+/// What a photo's EXIF says: when it was taken and how it is turned.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct ExifFacts {
+    pub(crate) taken: Option<u64>,
+    pub(crate) orientation: Option<u32>,
+}
+
+/// The EXIF date taken and orientation in `head`, the start of a picture.
+pub(crate) fn exif_facts_in(head: &[u8]) -> ExifFacts {
+    // The bytes are untrusted: a reader that panics on them leaves the
+    // photo without a date rather than ending the walk.
+    let read = std::panic::catch_unwind(|| {
+        let mut cursor = std::io::Cursor::new(head);
+        let exif = exif::Reader::new().read_from_container(&mut cursor).ok()?;
+        let text = exif
+            .get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY)
+            .and_then(|field| match &field.value {
+                exif::Value::Ascii(parts) => parts
+                    .first()
+                    .map(|bytes| String::from_utf8_lossy(bytes).into_owned()),
+                _ => None,
+            });
+        let orientation = exif
+            .get_field(exif::Tag::Orientation, exif::In::PRIMARY)
+            .and_then(|field| field.value.get_uint(0));
+        Some((text, orientation))
+    })
+    .ok()
+    .flatten();
+    let Some((text, orientation)) = read else {
+        return ExifFacts::default();
+    };
+    ExifFacts {
+        taken: text.as_deref().and_then(local_seconds_of),
+        orientation,
+    }
 }
 
 /// The EXIF date taken in `head`, the start of a picture, as seconds
 /// since the Unix epoch, read as the local time it names.
 pub(crate) fn date_taken_in(head: &[u8]) -> Option<u64> {
-    // The bytes are untrusted: a reader that panics on them leaves the
-    // photo without a date rather than ending the walk.
-    let text = std::panic::catch_unwind(|| {
-        let mut cursor = std::io::Cursor::new(head);
-        let exif = exif::Reader::new().read_from_container(&mut cursor).ok()?;
-        let field = exif.get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY)?;
-        match &field.value {
-            exif::Value::Ascii(parts) => parts
-                .first()
-                .map(|bytes| String::from_utf8_lossy(bytes).into_owned()),
-            _ => None,
-        }
-    })
-    .ok()??;
-    let date = crate::media_details::NaiveDateTime::parse_exif(&text)?;
+    exif_facts_in(head).taken
+}
+
+/// The seconds since the Unix epoch of EXIF's `text` date, read as the
+/// local time it names.
+fn local_seconds_of(text: &str) -> Option<u64> {
+    let date = crate::media_details::NaiveDateTime::parse_exif(text)?;
     let local = glib::DateTime::from_local(
         date.year,
         date.month,

@@ -201,13 +201,14 @@ impl BrowserWindow {
             self.show_gallery_style(self.folder_pane(), store);
             return;
         }
-        self.folder_pane().icon_view().set_icon_groups(false);
+        // Gallery's own style never stays on a folder (HOME-019).
+        let from_gallery = super::gallery::shows_gallery_style(self.folder_pane());
+        self.folder_pane().set_gallery(false);
         let preferences = self.context().settings_data().preferences;
         let downloads = self.downloads_location();
         let style = preferences.view_in(uri, downloads.as_deref());
         self.folder_pane().set_styled_for(store, uri);
-        // Gallery's own style never stays on a folder (HOME-019).
-        if preferences.per_folder_views || super::gallery::shows_gallery_style(self.folder_pane()) {
+        if preferences.per_folder_views || from_gallery {
             self.apply_style(&style);
             return;
         }
@@ -233,12 +234,13 @@ impl BrowserWindow {
             self.show_gallery_style(pane, store);
             return;
         }
-        pane.icon_view().set_icon_groups(false);
+        let from_gallery = super::gallery::shows_gallery_style(pane);
+        pane.set_gallery(false);
         let preferences = self.context().settings_data().preferences;
         let downloads = self.downloads_location();
         let style = preferences.view_in(uri, downloads.as_deref());
         pane.set_styled_for(store, uri);
-        if preferences.per_folder_views || super::gallery::shows_gallery_style(pane) {
+        if preferences.per_folder_views || from_gallery {
             self.apply_style_to(pane, &style);
             return;
         }

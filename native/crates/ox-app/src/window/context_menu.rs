@@ -272,6 +272,10 @@ impl BrowserWindow {
                 )
             }
             (Some(_), true) => recycle_bin_item_menu(items.len() == 1),
+            (Some(first), false) if style == MenuStyle::Compact && self.shows_gallery() => {
+                let facts = self.item_facts(first.entry(), items.len() == 1);
+                return entries::gallery_photo_menu(&facts);
+            }
             (Some(first), false) => {
                 let mut facts = self.item_facts(first.entry(), items.len() == 1);
                 let two_files = items.len() == 2 && items.iter().all(|item| !item.entry().is_dir);
@@ -345,7 +349,9 @@ impl BrowserWindow {
     /// (HOME-014): the real file, a Recent row's included, and whether it
     /// is one already.
     fn favorite_fact(&self, entry: &Entry, is_single: bool) -> Option<(String, bool)> {
-        if !is_single || entry.is_dir || !self.context().settings_data().preferences.home_quick_access {
+        // Gallery's photo menu always offers it, as Windows 11's does.
+        let offered = self.context().settings_data().preferences.home_quick_access || self.shows_gallery();
+        if !is_single || entry.is_dir || !offered {
             return None;
         }
         let uri = entry.meta.recent_target.as_deref().unwrap_or(&entry.uri);
@@ -582,7 +588,12 @@ impl BrowserWindow {
     #[cfg(test)]
     fn point_on_item(&self, view: &gtk::Widget, position: u32) -> Option<(f64, f64)> {
         let owners = self.folder_pane().owners();
-        let bounds = owners.file_cell_at(position, view)?.compute_bounds(view)?;
+        let cell: gtk::Widget = match owners.file_cell_at(position, view) {
+            Some(cell) => cell.upcast(),
+            // Gallery's tiles are pictures, not icon-and-name cells.
+            None => owners.widget_at(position).filter(|cell| cell.is_ancestor(view))?,
+        };
+        let bounds = cell.compute_bounds(view)?;
         let (x, y) = (
             f64::from(bounds.x()) + 4.0,
             f64::from(bounds.y() + bounds.height() / 2.0),

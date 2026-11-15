@@ -40,7 +40,9 @@ use super::window_action::WindowAction;
 
 use menus::{appearance_items, more_menu};
 pub(super) use menus::{disconnect_network_drive, FolderPin, MoreMenuState, MorePlace, NetworkDrive};
-pub(super) use menus::{group_by_menu, new_menu, search_options_menu, sort_menu, view_menu};
+pub(super) use menus::{
+    gallery_view_menu, group_by_menu, new_menu, search_options_menu, sort_menu, view_menu,
+};
 
 /// The glyph of an icon-only command: 16 pixels, as Windows 11 draws its
 /// command bar (ui-spec.md I01; the web app's were 18).
@@ -182,6 +184,15 @@ mod imp {
         pub(super) collection: OnceCell<(gtk::MenuButton, crate::window::menu_popover::MenuPopover)>,
         /// What the Collection menu lists now, to build it only on change.
         pub(super) collection_key: RefCell<String>,
+        /// Sort ▾, grayed in Gallery, and View ▾, whose menu Gallery has
+        /// its own of (HOME-030, HOME-031).
+        pub(super) sort_button: OnceCell<gtk::MenuButton>,
+        pub(super) view_popover: OnceCell<crate::window::menu_popover::MenuPopover>,
+        /// Whether View shows Gallery's menu now.
+        pub(super) gallery_menus: Cell<bool>,
+        /// Set as background, Rotate left and Rotate right after a
+        /// separator, shown in Gallery while photos are selected.
+        pub(super) photo_commands: OnceCell<Vec<gtk::Widget>>,
         /// The "…" menu, which offers Map network drive only in This
         /// PC and Network.
         pub(super) more_menu: OnceCell<crate::window::menu_popover::MenuPopover>,
@@ -286,18 +297,30 @@ impl CommandBar {
         imp.extract_button
             .set(extract)
             .expect("constructed runs once per object");
-        group.append(&text_menu_button(
+        let sort = text_menu_button(
             &ox_core::i18n::gettext("Sort"),
             Icon::ArrowSort,
             "sort-command",
             sort_menu(),
-        ));
-        group.append(&text_menu_button(
+        );
+        group.append(&sort);
+        imp.sort_button
+            .set(sort)
+            .expect("constructed runs once per object");
+        let view = text_menu_button(
             &ox_core::i18n::gettext("View"),
             Icon::Grid,
             "view-command",
             view_menu(),
-        ));
+        );
+        group.append(&view);
+        imp.view_popover
+            .set(
+                view.popover()
+                    .and_downcast::<MenuPopover>()
+                    .expect("View has its menu"),
+            )
+            .expect("constructed runs once per object");
         let collection_menu = MenuPopover::new(Vec::new());
         let collection_label = ox_core::i18n::gettext("Collection");
         let collection = gtk::MenuButton::builder()
@@ -311,6 +334,41 @@ impl CommandBar {
         group.append(&collection);
         imp.collection
             .set((collection, collection_menu))
+            .expect("constructed runs once per object");
+        let photo_separator = separator();
+        let (background, _) = text_button(
+            &ox_core::i18n::gettext("Set as background"),
+            Icon::Image,
+            WindowAction::SetAsBackground,
+            "set-background-command",
+        );
+        background.set_tooltip_text(Some(&ox_core::i18n::gettext(
+            "Setting the desktop background is not available yet.",
+        )));
+        let (rotate_left, _) = text_button(
+            &ox_core::i18n::gettext("Rotate left"),
+            Icon::ArrowCounterclockwise,
+            WindowAction::RotateLeft,
+            "rotate-left-command",
+        );
+        let (rotate_right, _) = text_button(
+            &ox_core::i18n::gettext("Rotate right"),
+            Icon::ArrowClockwise,
+            WindowAction::RotateRight,
+            "rotate-right-command",
+        );
+        let photo_commands: Vec<gtk::Widget> = vec![
+            photo_separator.upcast(),
+            background.upcast(),
+            rotate_left.upcast(),
+            rotate_right.upcast(),
+        ];
+        for command in &photo_commands {
+            command.set_visible(false);
+            group.append(command);
+        }
+        imp.photo_commands
+            .set(photo_commands)
             .expect("constructed runs once per object");
         let recycle_bin = RecycleBinCommands::new();
         group.append(&recycle_bin.separator);
@@ -545,14 +603,30 @@ impl CommandBar {
         crate::window::widget_tree::children(&*self.imp().file_commands)
             .filter(|widget| widget.has_css_class("command") && widget.is_visible())
             .filter_map(|widget| {
-                let label = crate::window::widget_tree::descendants::<gtk::Label>(&widget)
-                    .first()
-                    .map(|label| label.text().to_string())
+                // A menu button's own content, not its menu's.
+                let content = widget
+                    .downcast_ref::<gtk::MenuButton>()
+                    .and_then(gtk::MenuButton::child)
+                    .or_else(|| widget.downcast_ref::<gtk::Button>().and_then(ButtonExt::child));
+                let tooltip = widget.tooltip_text().map(|tooltip| tooltip.to_string());
+                let named = EDIT_COMMANDS
+                    .iter()
+                    .find(|command| {
+                        tooltip.as_deref() == Some(ox_core::i18n::gettext(command.tooltip).as_str())
+                    })
+                    .map(|command| ox_core::i18n::gettext(command.name));
+                let label = named
                     .or_else(|| {
-                        let tooltip = widget.tooltip_text()?;
-                        let name = tooltip.split(" (").next().unwrap_or_default();
-                        Some(name.to_owned())
-                    })?;
+                        content
+                            .as_ref()
+                            .and_then(|content| {
+                                crate::window::widget_tree::descendants::<gtk::Label>(content)
+                                    .first()
+                                    .cloned()
+                            })
+                            .map(|label| label.text().to_string())
+                    })
+                    .or(tooltip)?;
                 let usable = widget.is_sensitive()
                     && widget
                         .downcast_ref::<gtk::Actionable>()
@@ -569,6 +643,36 @@ impl CommandBar {
                 Some((label, usable))
             })
             .collect()
+    }
+
+    /// Shows Gallery's View menu and grays Sort while the window shows
+    /// Gallery (`in_gallery`), or the folders' (HOME-030, HOME-031).
+    pub(super) fn show_gallery_menus(&self, in_gallery: bool) {
+        let imp = self.imp();
+        if let Some(sort) = imp.sort_button.get() {
+            sort.set_sensitive(!in_gallery);
+            if in_gallery {
+                sort.popdown();
+            }
+        }
+        if imp.gallery_menus.replace(in_gallery) == in_gallery {
+            return;
+        }
+        if let Some(view) = imp.view_popover.get() {
+            view.set_entries(if in_gallery {
+                gallery_view_menu()
+            } else {
+                view_menu()
+            });
+        }
+    }
+
+    /// Shows Set as background, Rotate left and Rotate right, or hides
+    /// them (HOME-030).
+    pub(super) fn show_photo_commands(&self, shown: bool) {
+        for command in self.imp().photo_commands.get().into_iter().flatten() {
+            command.set_visible(shown);
+        }
     }
 
     /// The Collection button, for the snapshot hook's scenes and tests.

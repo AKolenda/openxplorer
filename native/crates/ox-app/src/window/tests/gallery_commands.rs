@@ -58,7 +58,8 @@ fn one_photo() -> (PicturesHome, TestWindow) {
 #[gtk::test]
 fn the_command_bar_grays_sort_and_offers_photo_commands_for_a_photo() {
     let (_home, test) = one_photo();
-    let names = |test: &TestWindow| -> Vec<String> { commands(test).into_iter().map(|(name, _)| name).collect() };
+    let names =
+        |test: &TestWindow| -> Vec<String> { commands(test).into_iter().map(|(name, _)| name).collect() };
     let shown = commands(&test);
     let labels = names(&test);
     let at = |label: &str| {
@@ -72,10 +73,21 @@ fn the_command_bar_grays_sort_and_offers_photo_commands_for_a_photo() {
     assert!(!at("Sort"), "Sort is grayed: {shown:?}");
     assert!(at("View"));
     assert!(at("Collection"));
-    let order: Vec<&str> = ["New", "Cut", "Copy", "Paste", "Rename", "Delete", "Sort", "View", "Collection", "See more"]
-        .into_iter()
-        .filter(|label| labels.iter().any(|shown| shown == label))
-        .collect();
+    let order: Vec<&str> = [
+        "New",
+        "Cut",
+        "Copy",
+        "Paste",
+        "Rename",
+        "Delete",
+        "Sort",
+        "View",
+        "Collection",
+        "See more",
+    ]
+    .into_iter()
+    .filter(|label| labels.iter().any(|shown| shown == label))
+    .collect();
     let positions: Vec<usize> = order
         .iter()
         .map(|label| labels.iter().position(|shown| shown == label).expect("shown"))
@@ -91,15 +103,32 @@ fn the_command_bar_grays_sort_and_offers_photo_commands_for_a_photo() {
         names(&test).iter().any(|label| label == "Rotate right")
     });
     let labels = names(&test);
-    let collection = labels.iter().position(|label| label == "Collection").expect("Collection");
-    let rotate_left = labels.iter().position(|label| label == "Rotate left").expect("Rotate left");
-    let rotate_right = labels.iter().position(|label| label == "Rotate right").expect("Rotate right");
-    let background = labels.iter().position(|label| label == "Set as background").expect("background");
-    assert!(collection < background && background < rotate_left && rotate_left < rotate_right, "{labels:?}");
+    let collection = labels
+        .iter()
+        .position(|label| label == "Collection")
+        .expect("Collection");
+    let rotate_left = labels
+        .iter()
+        .position(|label| label == "Rotate left")
+        .expect("Rotate left");
+    let rotate_right = labels
+        .iter()
+        .position(|label| label == "Rotate right")
+        .expect("Rotate right");
+    let background = labels
+        .iter()
+        .position(|label| label == "Set as background")
+        .expect("background");
+    assert!(
+        collection < background && background < rotate_left && rotate_left < rotate_right,
+        "{labels:?}"
+    );
 
     test.window.navigate(&file_uri(&_home.home)).expect("home");
     test.wait_for_listing("the home folder");
-    assert!(commands(&test).iter().any(|(label, usable)| label == "Sort" && *usable));
+    assert!(commands(&test)
+        .iter()
+        .any(|(label, usable)| label == "Sort" && *usable));
 }
 
 /// Gallery's View menu offers the four icon sizes, Medium icons chosen,
@@ -159,18 +188,30 @@ fn gallery_locations_adds_and_removes_folders_and_ok_keeps_them() {
     let (home, test) = one_photo();
     let camera = home.home.join("Camera imports");
     fs::create_dir_all(&camera).expect("a folder");
-    fs::write(camera.join("dune.jpg"), jpeg_bytes(0x0022_4466, Some("2026:10:01 10:00:00"))).expect("a photo");
+    fs::write(
+        camera.join("dune.jpg"),
+        jpeg_bytes(0x0022_4466, Some("2026:10:01 10:00:00")),
+    )
+    .expect("a photo");
 
     let dialog = locations_dialog(&test);
     assert_eq!(dialog.title().as_deref(), Some("Gallery Locations"));
     assert_eq!(dialog.heading_text(), "Choose which folders to see in Gallery");
-    assert!(dialog.body_text().starts_with("Manage your Gallery by adding or removing folders"));
-    assert!(dialog.body_text().contains("will still be stored in their original locations"));
+    assert!(dialog
+        .body_text()
+        .starts_with("Manage your Gallery by adding or removing folders"));
+    assert!(dialog
+        .body_text()
+        .contains("will still be stored in their original locations"));
     assert_eq!(dialog.list_label(), "Gallery locations");
     let pictures = home.pictures().display().to_string();
     assert_eq!(
         dialog.rows(),
-        [("Pictures".to_owned(), pictures.clone(), "Default save location".to_owned())]
+        [(
+            "Pictures".to_owned(),
+            pictures.clone(),
+            "Default save location".to_owned()
+        )]
     );
     dialog.select_row(0);
     assert!(!dialog.can_remove(), "Pictures cannot be removed");
@@ -179,7 +220,9 @@ fn gallery_locations_adds_and_removes_folders_and_ok_keeps_them() {
     dialog.add_folder(&file_uri(&camera));
     assert_eq!(dialog.rows().len(), 2);
     dialog.cancel();
-    wait_until("the dialog to close", || test.window.gallery_locations().is_none());
+    wait_until("the dialog to close", || {
+        test.window.gallery_locations().is_none()
+    });
     assert_eq!(test.names(), ["a.png"]);
 
     // OK keeps it, in Gallery and in the settings file.
@@ -188,8 +231,11 @@ fn gallery_locations_adds_and_removes_folders_and_ok_keeps_them() {
     dialog.add_folder(&file_uri(&camera));
     dialog.ok();
     wait_until("the added folder's photo", || test.names().len() == 2);
-    let saved = fs::read_to_string(test.settings_directory().join("settings.json")).unwrap_or_default();
-    assert!(saved.contains("Camera imports"), "{saved}");
+    wait_until("the folder saved", || {
+        fs::read_to_string(test.settings_directory().join("settings.json"))
+            .unwrap_or_default()
+            .contains("Camera%20imports")
+    });
     let menu = open_menu(&test, "collection-command");
     assert_eq!(
         menu.items_labels(),
@@ -217,7 +263,11 @@ fn choosing_a_location_shows_only_its_photos() {
     let (home, test) = one_photo();
     let camera = home.home.join("Camera imports");
     fs::create_dir_all(&camera).expect("a folder");
-    fs::write(camera.join("dune.jpg"), jpeg_bytes(0x0022_4466, Some("2026:10:01 10:00:00"))).expect("a photo");
+    fs::write(
+        camera.join("dune.jpg"),
+        jpeg_bytes(0x0022_4466, Some("2026:10:01 10:00:00")),
+    )
+    .expect("a photo");
     let dialog = locations_dialog(&test);
     dialog.add_folder(&file_uri(&camera));
     dialog.ok();
@@ -259,14 +309,25 @@ fn a_photos_menu_is_windows_galleries() {
         "Properties",
         "Show more options",
     ];
+    // Without applications for PNG files, Open with asks for one.
     let shown: Vec<&str> = labels
         .iter()
-        .map(String::as_str)
+        .map(|label| {
+            if label == "Open with…" {
+                "Open with"
+            } else {
+                label.as_str()
+            }
+        })
         .filter(|label| *label != "Share with")
         .collect();
     assert_eq!(shown, expected, "{labels:?}");
     let strip = menu.strip_labels();
-    let strip: Vec<&str> = strip.iter().map(String::as_str).filter(|label| *label != "Share").collect();
+    let strip: Vec<&str> = strip
+        .iter()
+        .map(String::as_str)
+        .filter(|label| *label != "Share")
+        .collect();
     assert_eq!(strip, ["Cut", "Copy", "Delete"]);
 }
 
@@ -298,7 +359,10 @@ fn rotate_turns_jpegs_by_their_orientation_and_pngs_by_their_pixels() {
     let test = gallery_window(&home);
     let scan_bytes = |path: &std::path::Path| {
         let bytes = fs::read(path).expect("the file");
-        let start = bytes.windows(2).position(|pair| pair == [0xff, 0xda]).expect("a scan");
+        let start = bytes
+            .windows(2)
+            .position(|pair| pair == [0xff, 0xda])
+            .expect("a scan");
         bytes[start..].to_vec()
     };
     let scan = scan_bytes(&jpeg);
@@ -335,7 +399,9 @@ fn set_as_background_shows_grayed() {
     let (_home, test) = one_photo();
     test.select_named("a.png");
     wait_until("the photo commands", || {
-        commands(&test).iter().any(|(label, _)| label == "Set as background")
+        commands(&test)
+            .iter()
+            .any(|(label, _)| label == "Set as background")
     });
     let shown = commands(&test);
     let (_, usable) = shown
@@ -343,6 +409,9 @@ fn set_as_background_shows_grayed() {
         .find(|(label, _)| label == "Set as background")
         .expect("Set as background");
     assert!(!usable, "{shown:?}");
-    let rotate = shown.iter().find(|(label, _)| label == "Rotate right").expect("Rotate right");
+    let rotate = shown
+        .iter()
+        .find(|(label, _)| label == "Rotate right")
+        .expect("Rotate right");
     assert!(rotate.1);
 }

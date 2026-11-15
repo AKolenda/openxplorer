@@ -90,6 +90,8 @@ impl BrowserWindow {
             let grid = pane.icon_view().grid().clone();
             self.folder_input(details.upcast_ref());
             self.folder_input(grid.upcast_ref());
+            let gallery = pane.gallery().canvas().clone();
+            self.folder_input(gallery.upcast_ref());
             self.empty_folder_input(pane);
         }
         self.install_selection_keys();
@@ -262,6 +264,11 @@ impl BrowserWindow {
                         window.activate_from_view(position);
                     }
                 }
+            ));
+            pane.gallery().canvas().connect_activate(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |position| window.activate_from_view(position)
             ));
             let icons = pane.icon_view();
             icons.grid().connect_activate(glib::clone!(

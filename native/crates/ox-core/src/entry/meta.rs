@@ -33,6 +33,10 @@ pub struct EntryMeta {
     /// `DateTimeOriginal` in local time, seconds since the Unix epoch.
     /// `None` everywhere else, and for a photo without one.
     pub taken: Option<u64>,
+    /// For a photo listed in Gallery, its width and height in pixels as
+    /// it is shown, after its EXIF orientation; `None` everywhere else,
+    /// and for a picture whose size could not be read.
+    pub pixel_size: Option<(u32, u32)>,
 }
 
 impl EntryMeta {
@@ -55,6 +59,7 @@ impl EntryMeta {
                 .map(|target| target.display().to_string()),
             recent_target: None,
             taken: None,
+            pixel_size: None,
         }
     }
 
