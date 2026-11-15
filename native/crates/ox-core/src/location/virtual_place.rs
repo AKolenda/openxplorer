@@ -10,6 +10,7 @@
 //! | Place | URI | Title |
 //! |---|---|---|
 //! | Home page (Quick access, recent files) | `ox:home` | Home |
+//! | Gallery (the photos of Pictures) | `ox:gallery` | Gallery |
 //! | This PC (drives, devices, network) | `ox:pc` | This PC |
 //! | Settings page | `ox:settings` | Settings |
 //! | Network | `network:///` | Network |
@@ -39,6 +40,9 @@ use super::{normalise_location, LocationError};
 
 /// URI of the Home page: Quick access, shares and recently opened files.
 pub const HOME_URI: &str = "ox:home";
+/// URI of Gallery: the photos of the Pictures folder and its
+/// subfolders, newest first.
+pub const GALLERY_URI: &str = "ox:gallery";
 /// URI of This PC: drives, connected devices and network locations.
 pub const PC_URI: &str = "ox:pc";
 /// URI of the full-page Settings.
@@ -58,6 +62,8 @@ pub const RECENT_LOCATIONS_URI: &str = "ox:recent-locations";
 pub enum VirtualPlace {
     /// The landing page.
     Home,
+    /// The photos of the Pictures folder, listed like a folder.
+    Gallery,
     /// Drives, devices and network locations.
     ThisPc,
     /// Servers on the local network.
@@ -74,8 +80,9 @@ pub enum VirtualPlace {
 
 impl VirtualPlace {
     /// Every place, in sidebar order.
-    pub const ALL: [VirtualPlace; 7] = [
+    pub const ALL: [VirtualPlace; 8] = [
         VirtualPlace::Home,
+        VirtualPlace::Gallery,
         VirtualPlace::ThisPc,
         VirtualPlace::Network,
         VirtualPlace::RecycleBin,
@@ -88,6 +95,7 @@ impl VirtualPlace {
     pub fn uri(self) -> &'static str {
         match self {
             VirtualPlace::Home => HOME_URI,
+            VirtualPlace::Gallery => GALLERY_URI,
             VirtualPlace::ThisPc => PC_URI,
             VirtualPlace::Network => NETWORK_URI,
             VirtualPlace::RecycleBin => TRASH_URI,
@@ -106,6 +114,7 @@ impl VirtualPlace {
     const fn title_id(self) -> &'static str {
         match self {
             VirtualPlace::Home => crate::i18n::message_id("Home"),
+            VirtualPlace::Gallery => crate::i18n::message_id("Gallery"),
             VirtualPlace::ThisPc => crate::i18n::message_id("This PC"),
             VirtualPlace::Network => crate::i18n::message_id("Network"),
             VirtualPlace::RecycleBin => crate::i18n::message_id("Recycle Bin"),
@@ -128,6 +137,7 @@ impl VirtualPlace {
             VirtualPlace::RecycleBin => Some("trash"),
             VirtualPlace::Recent => Some("recent"),
             VirtualPlace::Home
+            | VirtualPlace::Gallery
             | VirtualPlace::ThisPc
             | VirtualPlace::RecentLocations
             | VirtualPlace::Settings => None,
@@ -174,6 +184,7 @@ impl VirtualPlace {
             PC_URI | "pc:" => Some(VirtualPlace::ThisPc),
             SETTINGS_URI | "settings:" => Some(VirtualPlace::Settings),
             RECENT_LOCATIONS_URI => Some(VirtualPlace::RecentLocations),
+            GALLERY_URI => Some(VirtualPlace::Gallery),
             _ => None,
         }
     }

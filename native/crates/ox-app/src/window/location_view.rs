@@ -154,6 +154,7 @@ fn listed_place_glyph(uri: &str) -> Option<Icon> {
         VirtualPlace::RecycleBin => Some(Icon::Delete),
         VirtualPlace::Recent => Some(Icon::History),
         VirtualPlace::RecentLocations => Some(Icon::Clock),
+        VirtualPlace::Gallery => Some(Icon::Image),
         VirtualPlace::Home | VirtualPlace::ThisPc | VirtualPlace::Network | VirtualPlace::Settings => None,
     }
 }
@@ -191,6 +192,10 @@ fn tab_icon(
         Some(page @ (Page::Home | Page::Network | Page::Settings)) => return Art::Glyph(page.icon()),
         Some(Page::ThisPc) => return Art::TintedGlyph(Page::ThisPc.icon(), Tint::ThisPc),
         None => {}
+    }
+    if VirtualPlace::from_uri(uri) == Some(VirtualPlace::Gallery) {
+        // In its navigation pane row's blue (HOME-017).
+        return Art::TintedGlyph(Icon::Image, Tint::Home);
     }
     if let Some(glyph) = listed_place_glyph(uri) {
         return Art::Glyph(glyph);
@@ -607,6 +612,13 @@ mod tests {
                 uri: RECENT_LOCATIONS_URI,
                 tab: Art::Glyph(Icon::Clock),
                 address: Icon::Clock,
+            },
+            // Gallery shows its navigation pane row's blue photo glyph
+            // (HOME-017).
+            IconCase {
+                uri: ox_core::location::GALLERY_URI,
+                tab: Art::TintedGlyph(Icon::Image, Tint::Home),
+                address: Icon::Image,
             },
             IconCase {
                 uri: Page::Network.uri(),
