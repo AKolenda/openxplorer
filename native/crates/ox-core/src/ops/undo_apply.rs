@@ -34,7 +34,7 @@ use super::folder_groups::{FolderGroup, FolderGroups};
 use super::recycle_bin::{find_trashed_since, restore_found, restore_trashed_since};
 use super::rename::rename_back;
 use super::results::{merge_results, AskedItem, ItemQuestions};
-use super::run_transfer::{gio_transfer_engine, unix_seconds_now};
+use super::run_transfer::{gio_transfer_engine, recycling_order, unix_seconds_now};
 use super::undo::{MovedItem, RenamedPair, UndoRecord};
 use crate::gio_node::GioNode;
 use crate::transfer::{
@@ -306,7 +306,7 @@ fn move_to_trash(engine: &mut TransferEngine, uris: &[String], context: &Operati
         return TransferResult::default();
     }
     engine
-        .run(Operation::Trash, uris, &context.cancel)
+        .run(Operation::Trash, &recycling_order(uris.to_vec()), &context.cancel)
         .unwrap_or_else(|error| failed_request(&error.into(), context))
 }
 
