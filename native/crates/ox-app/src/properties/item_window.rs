@@ -439,12 +439,10 @@ impl ItemPages {
             if is_smb_server(&properties.entry.uri) {
                 rows.show(Totals::zero());
             } else {
-                count_folders(
-                    vec![properties.entry.uri.clone()],
-                    Totals::zero(),
-                    rows,
-                    &self.count,
-                );
+                // A trashed folder is counted where its Trash folder keeps
+                // it, which the Recycle Bin's backend does not list sizes of.
+                let counted = properties.stored_uri.as_ref().unwrap_or(&properties.entry.uri);
+                count_folders(vec![counted.clone()], Totals::zero(), rows, &self.count);
             }
         }
         if let Some(opens_with) = general.opens_with {

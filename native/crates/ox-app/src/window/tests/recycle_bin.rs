@@ -658,6 +658,7 @@ fn opening_an_item_in_the_recycle_bin_shows_its_properties() {
     let fixture = Fixture::standard();
     fixture.write("Opened from the bin.txt");
     std::fs::create_dir(fixture.path("Opened folder")).expect("a fixture folder");
+    fixture.write("Opened folder/inside.txt");
     trash(&fixture.path("Opened from the bin.txt"));
     trash(&fixture.path("Opened folder"));
     let test = TestWindow::open(TRASH_URI);
@@ -692,6 +693,11 @@ fn opening_an_item_in_the_recycle_bin_shows_its_properties() {
     assert_eq!(super::item_dialogs::value_after(&general, "Location:"), None);
     let deleted = super::item_dialogs::value_after(&general, "Deleted:").unwrap_or_default();
     assert!(!deleted.is_empty(), "the date it was deleted shows");
+    // A trashed folder's contents are counted where the Trash keeps them.
+    let folder_page = super::item_dialogs::tab(&folder, "general");
+    wait_until("the trashed folder to be counted", || {
+        super::item_dialogs::value_after(&folder_page, "Contains:").as_deref() == Some("1 Files, 0 Folders")
+    });
     file.close();
     folder.close();
 }

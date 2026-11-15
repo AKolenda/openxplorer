@@ -62,6 +62,10 @@ pub(crate) struct ItemProperties {
     pub default_app: Option<String>,
     /// What is mounted at the item, when a folder is a mount point.
     pub mount: Option<MountFacts>,
+    /// For an item in the Recycle Bin, where its Trash folder keeps it,
+    /// as the backend reports it: a trashed folder's size is counted
+    /// there.
+    pub stored_uri: Option<String>,
     /// The width and height of a local image, read from its header
     /// (PROP-013).
     pub dimensions: Option<(i32, i32)>,
@@ -199,6 +203,9 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
         size_on_disk: info
             .has_attribute("standard::allocated-size")
             .then(|| info.attribute_uint64("standard::allocated-size")),
+        stored_uri: is_recycle_bin_item(uri)
+            .then(|| optional_string(&info, "standard::target-uri"))
+            .flatten(),
         entry,
     })
 }
@@ -384,6 +391,7 @@ mod tests {
             dimensions: None,
             custom_icon: None,
             size_on_disk: None,
+            stored_uri: None,
         };
 
         assert_eq!(properties.mode_text().as_deref(), Some("0o644"));
