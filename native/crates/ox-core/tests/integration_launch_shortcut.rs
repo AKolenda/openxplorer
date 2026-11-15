@@ -35,9 +35,10 @@ struct Shortcuts {
     /// The desktop files the service can launch.
     launchable: Vec<String>,
     /// The calls that fail, as when the service restarts: `owner`,
-    /// `register`, `set_keys` of `OpenXplorer`'s actions, or `give_back`, a
+    /// `register`, `set_keys` of `OpenXplorer`'s actions, `give_back`, a
     /// `set_keys` that adds Super+E to any action but the New window
-    /// action.
+    /// action, or `give_back_to_an_app`, one that adds it to an action
+    /// that is no package's New window action.
     failing: RefCell<Vec<&'static str>>,
     /// Runs before each `set_keys`, with its action, as another process
     /// could act at that moment.
@@ -164,6 +165,9 @@ impl GlobalShortcuts for Shortcuts {
         }
         if keys.contains(&SUPER_E) && !(action.component == OURS && action.action == NEW_WINDOW_ACTION) {
             self.check("give_back")?;
+        }
+        if keys.contains(&SUPER_E) && action.action != NEW_WINDOW_ACTION {
+            self.check("give_back_to_an_app")?;
         }
         let mut actions = self.actions.borrow_mut();
         let free: Vec<KeySequence> = keys
@@ -1504,6 +1508,36 @@ fn a_failed_give_back_at_start_keeps_the_way_back() {
     shortcuts.failing.borrow_mut().clear();
     preview.forget_removed_apps().unwrap();
 
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+    assert!(no_record_names(settings.path(), OURS));
+}
+
+/// The stable package took Super+E from Dolphin and was uninstalled while
+/// it had it. When turning the preview's switch on cannot first give
+/// Super+E back to Dolphin, as when KDE's service restarts just then, the
+/// switch stays off and says so, rather than taking Super+E without the
+/// way back to Dolphin; once the service answers, turning it on and off
+/// again ends with Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn turning_it_on_stops_while_a_removed_package_cannot_give_super_e_back() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    shortcuts.uninstall(OURS);
+    shortcuts.fail("give_back_to_an_app");
+
+    assert!(preview.enable().is_err());
+
+    assert_ne!(preview.status(), LaunchShortcutStatus::Ours);
+    assert!(settings.path().join(RECORD).is_file(), "the way back stays");
+    shortcuts.failing.borrow_mut().clear();
+    preview.enable().unwrap();
+    assert_eq!(preview.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::GivenBack);
     assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
     assert!(no_record_names(settings.path(), OURS));
 }

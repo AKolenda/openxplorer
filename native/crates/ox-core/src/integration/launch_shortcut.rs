@@ -496,7 +496,9 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             return Err(ShortcutError::Unsupported);
         }
         let _lock = self.lock()?;
-        self.forget_removed();
+        // While a removed package still has Super+E because it could not
+        // give it back, taking it now would lose its way back.
+        self.forget_removed()?;
         let mut owner = self.shortcuts.owner(SUPER_E)?;
         if owner.as_ref().is_some_and(|owner| owner.is(&self.ours)) {
             return Ok(());
@@ -603,7 +605,9 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         }
         let _lock = self.lock()?;
         // A record leading to a removed app leads past it, or is dropped.
-        self.forget_removed();
+        // A removed package that keeps Super+E is not this package's to
+        // give back, so turning the switch off goes on.
+        let _ = self.forget_removed();
         let owner = self
             .shortcuts
             .owner(SUPER_E)?
@@ -695,7 +699,8 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             return Ok(());
         }
         let _lock = self.lock()?;
-        self.forget_removed();
+        // What could not be done is tried again at the next start.
+        let _ = self.forget_removed();
         Ok(())
     }
 
@@ -703,9 +708,15 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
     /// and the folder let it. A record that is still a way back stays
     /// until what made it one is done: giving Super+E back, rewriting the
     /// record that leads through it, or learning who has Super+E.
-    fn forget_removed(&self) {
+    ///
+    /// # Errors
+    ///
+    /// The service's failure when a removed package of `OpenXplorer`
+    /// still has Super+E, because taking it or giving it back failed.
+    fn forget_removed(&self) -> Result<(), ShortcutError> {
         // The records still needed as a way back.
         let mut needed: Vec<PathBuf> = Vec::new();
+        let mut unfinished = Ok(());
         // A removed package that still has Super+E gives it back where it
         // took it from, as turning its switch off would have.
         if let Ok(Some(owner)) = self.shortcuts.owner(SUPER_E) {
@@ -717,21 +728,28 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
                 };
                 used.extend(passed);
                 let keys = self.shortcuts.keys(&owner);
-                if self.take_super_e_from(&owner).is_ok() {
-                    let given = way_back
+                let given = self.take_super_e_from(&owner).and_then(|()| {
+                    way_back
                         .as_ref()
-                        .map_or(Ok(()), |way_back| self.give_super_e_back(way_back));
-                    if given.is_ok() {
+                        .map_or(Ok(()), |way_back| self.give_super_e_back(way_back))
+                        .inspect_err(|_| {
+                            // Super+E goes back on the removed package,
+                            // which keeps its records, so the next try
+                            // gives it back.
+                            if let Ok(keys) = &keys {
+                                let _ = self.shortcuts.set_keys(&owner, keys);
+                            }
+                        })
+                });
+                match given {
+                    Ok(()) => {
                         for path in used {
                             let _ = std::fs::remove_file(path);
                         }
-                    } else {
-                        // Super+E goes back on the removed package, which
-                        // keeps its records, so the next start tries again.
-                        if let Ok(keys) = keys {
-                            let _ = self.shortcuts.set_keys(&owner, &keys);
-                        }
+                    }
+                    Err(error) => {
                         needed.extend(used);
+                        unfinished = Err(error);
                     }
                 }
             }
@@ -766,7 +784,7 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         // When the service cannot say who has Super+E, every record stays
         // for the next start.
         let Ok(owner) = self.shortcuts.owner(SUPER_E) else {
-            return;
+            return unfinished;
         };
         for package in PACKAGE_DESKTOP_IDS {
             let action = ShortcutAction::desktop_action(package, NEW_WINDOW_ACTION, "", "");
@@ -778,6 +796,7 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
                 let _ = std::fs::remove_file(path);
             }
         }
+        unfinished
     }
 
     /// The installed action Super+E should go back to, starting from
