@@ -224,6 +224,11 @@ fn extract_all_unpacks_into_a_new_folder_and_shows_it() {
     assert!(texts(&frame)
         .iter()
         .any(|text| text == "Files will be extracted to this folder"));
+    let show = descendants::<gtk::CheckButton>(&frame)
+        .into_iter()
+        .find_map(|check| check.label())
+        .expect("the check box");
+    assert_eq!(show, "Show extracted files when complete", "Windows' words");
     capture(&test.window, "native-extract-dialog.png");
     press(&frame, "Extract");
 
