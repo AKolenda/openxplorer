@@ -182,7 +182,8 @@ impl Verb {
 }
 
 /// The name a location is shown by: its display name, or for a root
-/// such as a share, its URI.
+/// such as a share or a server, the name its tab shows ("media" for
+/// `smb://nas/media/`, "nas" for `sftp://sam@nas/`), never its address.
 pub(crate) fn location_name(uri: &str) -> String {
     let file = gio::File::for_uri(uri);
     if file.has_uri_scheme("trash") && file.parent().is_none() {
@@ -191,7 +192,7 @@ pub(crate) fn location_name(uri: &str) -> String {
     file.basename()
         .filter(|name| file.parent().is_some() && !name.as_os_str().is_empty())
         .map_or_else(
-            || file.parse_name().to_string(),
+            || ox_core::location::LocationContext::default().base_name(uri),
             |name| name.to_string_lossy().into_owned(),
         )
 }
@@ -290,6 +291,32 @@ mod tests {
         assert!(copy
             .markup()
             .contains(&format!("<a href=\"{backup}\">Backup</a>")));
+    }
+
+    /// The top folder of a share or a server is named as its tab is,
+    /// never by its address: "from media to Documents", not "from
+    /// `smb://nas/media/` to Documents".
+    ///
+    /// parity: OPS-019
+    #[test]
+    fn a_share_or_server_top_folder_is_named_not_spelled_out() {
+        let documents = "file:///home/sample/Documents";
+        let from_share = Action::of(Verb::Copying, &uris("smb://nas/media", 1), Some(documents)).unwrap();
+        let to_share = Action::of(Verb::Moving, &uris(documents, 2), Some("smb://nas/media/")).unwrap();
+        let from_server = Action::of(Verb::Copying, &uris("sftp://sam@nas", 3), Some(documents)).unwrap();
+
+        assert_eq!(
+            text(&from_share.markup()),
+            "Copying 1 item from media to Documents"
+        );
+        assert_eq!(text(&to_share.markup()), "Moving 2 items from Documents to media");
+        assert_eq!(
+            text(&from_server.markup()),
+            "Copying 3 items from nas to Documents"
+        );
+        assert!(to_share
+            .markup()
+            .contains("<a href=\"smb://nas/media/\">media</a>"));
     }
 
     /// A name with markup characters, or one that looks like a
