@@ -19,10 +19,11 @@
 
 use ox_core::location::TRASH_URI;
 use ox_core::ops::{
-    delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, permanent_delete_confirmation,
-    restore_answered_items, restore_free_items, restore_questions, restores_into_one_folder,
-    scan_drag_out_conflicts, scan_restore_conflicts, starting_label, tell_taken_items, ConflictScan,
-    DeleteItem, OperationContext, OpsError, Resolution, RestoreSoFar, TransferOutcome,
+    delete_from_recycle_bin_reporting, empty_recycle_bin_reporting, list_recycle_bin, list_recycle_bin_names,
+    permanent_delete_confirmation, restore_answered_items, restore_free_items, restore_questions,
+    restores_into_one_folder, scan_drag_out_conflicts, scan_restore_conflicts, starting_label,
+    tell_taken_items, ConflictScan, DeleteItem, OperationContext, OpsError, Resolution, RestoreSoFar,
+    TransferOutcome,
 };
 use ox_core::transfer::{Cancellation, TransferMode};
 
@@ -220,7 +221,8 @@ impl BrowserWindow {
         };
         // "Deleting 2 items from Recycle Bin", as Windows reads it.
         self.describe_operation(&context.cancel, Action::of(Verb::Deleting, &uris, None));
-        let outcome = delete_from_recycle_bin(&uris, &context).await;
+        let progress = self.progress_reporter(&context.cancel);
+        let outcome = delete_from_recycle_bin_reporting(&uris, &context, progress).await;
         self.end_operation();
         let finished = outcome.map(|_| FinishedOperation {
             undo: None,
@@ -258,12 +260,14 @@ impl BrowserWindow {
         let Some(context) = self.begin_operation(starting_label(TransferMode::Delete)) else {
             return;
         };
+        // The progress window counts the items as Windows' does.
+        let progress = self.progress_reporter(&context.cancel);
         let outcome = match confirmed {
             Some(uris) => {
                 self.describe_operation(&context.cancel, Action::of(Verb::Deleting, &uris, None));
-                delete_from_recycle_bin(&uris, &context).await
+                delete_from_recycle_bin_reporting(&uris, &context, progress).await
             }
-            None => empty_recycle_bin(&context).await,
+            None => empty_recycle_bin_reporting(&context, progress).await,
         };
         self.end_operation();
         let finished = outcome.map(|_| FinishedOperation {
@@ -285,7 +289,7 @@ impl BrowserWindow {
     ///
     /// The Recycle Bin could not be listed, so nothing was asked.
     async fn confirm_emptying(&self) -> Result<Option<Vec<String>>, OpsError> {
-        let items = list_recycle_bin(&Cancellation::new()).await?;
+        let items = list_recycle_bin_names(&Cancellation::new()).await?;
         if items.is_empty() {
             return Ok(None);
         }

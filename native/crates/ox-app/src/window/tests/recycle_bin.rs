@@ -215,7 +215,10 @@ fn the_recycle_bin_shows_and_sorts_by_original_location_and_date_deleted() {
     });
 
     assert!(shown(SortColumn::OriginalLocation) && shown(SortColumn::Deleted));
-    assert!(!shown(SortColumn::Modified), "Date deleted takes its place");
+    assert!(
+        shown(SortColumn::Modified),
+        "Date modified shows too, as in Windows 11"
+    );
     assert_eq!(ours(), ["Budget.txt", "Agenda.txt"], "Alpha before Zeta");
     let model = test.window.folder_model();
     let budget = (0..model.n_items())
@@ -642,4 +645,83 @@ fn undoing_a_copy_that_changed_since_asks_and_cancel_keeps_it() {
 
     assert!(copy.is_file(), "the copy stays");
     assert_eq!(test.window.journal_label(JournalDirection::Undo), "Undo Copy");
+}
+
+/// As in Windows, an item in the Recycle Bin is not opened: a
+/// double-click on a file or a folder shows its Properties, and nothing
+/// is launched or browsed.
+///
+/// parity: OPS-040
+#[gtk::test]
+fn opening_an_item_in_the_recycle_bin_shows_its_properties() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Opened from the bin.txt");
+    std::fs::create_dir(fixture.path("Opened folder")).expect("a fixture folder");
+    trash(&fixture.path("Opened from the bin.txt"));
+    trash(&fixture.path("Opened folder"));
+    let test = TestWindow::open(TRASH_URI);
+    wait_until("the trashed items to be listed", || {
+        let names = test.names();
+        names.contains(&"Opened from the bin.txt".to_owned()) && names.contains(&"Opened folder".to_owned())
+    });
+
+    test.window
+        .activate_item(test.position_of("Opened from the bin.txt"));
+    let file = test.wait_for_properties("Opened from the bin.txt Properties");
+    test.window.activate_item(test.position_of("Opened folder"));
+    let folder = test.wait_for_properties("Opened folder Properties");
+
+    assert!(test.context.recorded_launches().is_empty(), "nothing opened");
+    assert_eq!(
+        test.window.current_uri().as_deref(),
+        Some(TRASH_URI),
+        "still in the Recycle Bin"
+    );
+    // As Windows shows it: where the item came from and when it was
+    // deleted, not the Recycle Bin as its location.
+    let general = super::item_dialogs::tab(&file, "general");
+    wait_until("the properties to be read", || {
+        super::item_dialogs::value_after(&general, "Origin:").is_some()
+    });
+    let origin = super::item_dialogs::value_after(&general, "Origin:");
+    assert_eq!(
+        origin.as_deref(),
+        Some(fixture.root().display().to_string().as_str())
+    );
+    assert_eq!(super::item_dialogs::value_after(&general, "Location:"), None);
+    let deleted = super::item_dialogs::value_after(&general, "Deleted:").unwrap_or_default();
+    assert!(!deleted.is_empty(), "the date it was deleted shows");
+    file.close();
+    folder.close();
+}
+
+/// Properties, from the menu of an item in the Recycle Bin, describes the
+/// item instead of saying that its address is not supported.
+///
+/// parity: OPS-040
+#[gtk::test]
+fn properties_of_an_item_in_the_recycle_bin_shows_where_it_came_from() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fixture.write("Described in the bin.txt");
+    trash(&fixture.path("Described in the bin.txt"));
+    let test = TestWindow::open(TRASH_URI);
+    wait_until("the trashed file to be listed", || {
+        test.names().contains(&"Described in the bin.txt".to_owned())
+    });
+    select_names(&test, &["Described in the bin.txt"]);
+
+    test.activate("properties", None);
+
+    let window = test.wait_for_properties("Described in the bin.txt Properties");
+    let general = super::item_dialogs::tab(&window, "general");
+    wait_until("the properties to be read", || {
+        super::item_dialogs::value_after(&general, "Origin:").is_some()
+    });
+    assert_eq!(
+        super::item_dialogs::value_after(&general, "Origin:").as_deref(),
+        Some(fixture.root().display().to_string().as_str())
+    );
+    window.close();
 }

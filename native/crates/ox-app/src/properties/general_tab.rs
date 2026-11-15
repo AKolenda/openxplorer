@@ -118,20 +118,7 @@ pub(super) fn general_tab(
     page.append(&divider());
 
     let place = Rows::new();
-    if let Some(origin) = &entry.trash_orig_path {
-        // An item in the Recycle Bin names the folder it was deleted from.
-        let folder = origin.parent().unwrap_or(origin);
-        place.add_line(
-            &ox_core::i18n::gettext("Origin"),
-            &locations.display_location(&ox_core::location::file_uri(folder)),
-        );
-    } else {
-        let container = properties.parent_uri.as_deref().unwrap_or(&entry.uri);
-        place.add_line(
-            &ox_core::i18n::gettext("Location"),
-            &locations.display_location(container),
-        );
-    }
+    place_row(&place, properties, locations);
     if let Some(target) = &properties.link_target {
         place.add_line(&ox_core::i18n::gettext("Target"), target);
     }
@@ -193,6 +180,30 @@ pub(super) fn general_tab(
         folder_rows,
         opens_with,
         edits,
+    }
+}
+
+/// The row that says where the item is: its folder's Location, or, for an
+/// item in the Recycle Bin, the folder it was deleted from, as Windows'
+/// Origin does, instead of the Recycle Bin.
+fn place_row(place: &Rows, properties: &ItemProperties, locations: &LocationContext) {
+    let entry = &properties.entry;
+    let origin = entry
+        .trash_orig_path
+        .as_deref()
+        .and_then(std::path::Path::parent)
+        .map(|folder| gtk::gio::File::for_path(folder).uri().to_string());
+    if let Some(origin) = &origin {
+        place.add_line(
+            &ox_core::i18n::gettext("Origin"),
+            &locations.display_location(origin),
+        );
+    } else {
+        let container = properties.parent_uri.as_deref().unwrap_or(&entry.uri);
+        place.add_line(
+            &ox_core::i18n::gettext("Location"),
+            &locations.display_location(container),
+        );
     }
 }
 

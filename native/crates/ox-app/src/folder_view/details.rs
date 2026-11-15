@@ -229,7 +229,9 @@ pub(crate) enum DetailsListing {
 /// Whether `listing` has `column` at all, whatever the room.
 pub(crate) const fn lists_column(listing: DetailsListing, column: SortColumn) -> bool {
     match column {
-        SortColumn::Modified => matches!(listing, DetailsListing::Folder),
+        // The Recycle Bin shows Date modified too, after its own columns,
+        // as Windows 11 does.
+        SortColumn::Modified => matches!(listing, DetailsListing::Folder | DetailsListing::RecycleBin),
         SortColumn::FolderPath => matches!(listing, DetailsListing::SearchResults),
         SortColumn::OriginalLocation | SortColumn::Deleted => matches!(listing, DetailsListing::RecycleBin),
         _ => true,
@@ -237,8 +239,9 @@ pub(crate) const fn lists_column(listing: DetailsListing, column: SortColumn) ->
 }
 
 /// Whether settings save `column`'s width while the view lists
-/// `listing`: of the columns sharing a saved width, the one the listing
-/// has, else the first.
+/// `listing`: of the columns sharing a saved width, the listing's own
+/// (Date deleted in the Recycle Bin, which lists Date modified too), else
+/// the one the listing has, else the first.
 fn saves_width(column: SortColumn, listing: DetailsListing) -> bool {
     let shared = column_widths::settings_column(column);
     let sharing = || {
@@ -247,7 +250,8 @@ fn saves_width(column: SortColumn, listing: DetailsListing) -> bool {
             .filter(move |other| column_widths::settings_column(*other) == shared)
     };
     let owner = sharing()
-        .find(|other| lists_column(listing, *other))
+        .find(|other| *other != SortColumn::Modified && lists_column(listing, *other))
+        .or_else(|| sharing().find(|other| lists_column(listing, *other)))
         .or_else(|| sharing().next());
     owner == Some(column)
 }
@@ -452,6 +456,9 @@ impl DetailsView {
             column_view.append_column(&new_view_column(column, &cells));
         }
         view.imp().chosen.replace(column_choice::default_chosen());
+        // The listings' own columns follow Name from the start, before the
+        // first change of the chosen columns arranges them.
+        view.arrange_columns();
         view.imp()
             .cells
             .set(cells)

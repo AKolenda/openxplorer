@@ -28,6 +28,7 @@ use ox_core::folder_locations::FolderRelocation;
 use ox_core::integration::BraveIntegration;
 use ox_core::location::{is_smb_location, is_smb_server, is_smb_share_root, ItemKind, LocationContext};
 use ox_core::network::Usershares;
+use ox_core::ops::is_recycle_bin_item;
 use ox_core::transfer::Cancellation;
 use ox_core::versions::{is_conventional_snapshot, PreviousVersions};
 
@@ -36,9 +37,7 @@ use super::drive_tab::{drive_general_tab, hardware_rows, DRIVE_ART};
 use super::folder_count::{count_folders, Totals};
 use super::general_tab::{general_tab, GeneralEdits, GeneralRights};
 use super::location_panel::LocationPanel;
-use super::metadata::{
-    drive_keeps_customization, is_in_recycle_bin, is_mount_point, read_properties, ItemProperties,
-};
+use super::metadata::{drive_keeps_customization, is_mount_point, read_properties, ItemProperties};
 use super::security_tab::{fill_security, SecurityContext, SecurityFacts};
 use super::sharing_panel::sharing_panel;
 use super::shortcut_tab::{ShortcutKind, ShortcutPanel};
@@ -120,7 +119,7 @@ pub(crate) fn open_item_properties(
         &general,
     );
     // An item in the Recycle Bin has only its General tab, as in Windows.
-    let in_bin = is_in_recycle_bin(&target.uri);
+    let in_bin = is_recycle_bin_item(&target.uri);
     let hardware = is_drive.then(|| add_hardware_tab(&window));
     let shortcut = add_shortcut_tab(&window, &target);
     let usershares = context.usershares.as_ref().filter(|_| !in_bin);
@@ -420,9 +419,10 @@ impl ItemPages {
         let rights = GeneralRights {
             can_rename: self.can_rename(&properties),
             can_change_permissions: can_edit,
+            // An item in the Recycle Bin is not opened (OPS-040).
             can_change_app: !properties.entry.is_dir
                 && !is_read_only
-                && !is_in_recycle_bin(&properties.entry.uri),
+                && !is_recycle_bin_item(&properties.entry.uri),
         };
         clear(&self.general);
         let general = general_tab(
