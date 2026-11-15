@@ -313,6 +313,42 @@ fn a_rejected_known_credential_shows_the_dialog_instead_of_looping() {
     });
 }
 
+/// After the server refused a typed account, the dialog asks again with
+/// the user name that was typed (and its domain, when one was typed),
+/// so only the password needs typing again, as Windows' sign-in keeps
+/// the user name after "The user name or password is incorrect".
+///
+/// parity: NET-007, NET-014
+#[test]
+fn a_rejected_sign_in_asks_again_with_the_typed_user_name() {
+    with_prompts(|fixture| {
+        for (typed, shown_again) in [("sam", "sam"), ("OFFICE\\sam", "OFFICE\\sam")] {
+            let (operation, _replies) = operation(fixture, "smb://nas/a");
+            let shown_before = fixture.prompter.shown_count();
+            ask_password(&operation, SIGN_IN_FLAGS);
+            fixture.wait_until("the sign-in dialog", || {
+                fixture.prompter.shown_count() > shown_before
+            });
+            let id = fixture.prompter.last_shown().id;
+            let answer = Answer::SignIn(SignIn {
+                username: typed.into(),
+                password: Password::from("wrong"),
+                scope: CredentialScope::Session,
+            });
+            fixture.prompts.answer(id, answer).expect("a valid answer");
+
+            ask_password(&operation, SIGN_IN_FLAGS);
+
+            let ChallengeKind::Password(dialog) = fixture.prompter.last_shown().kind else {
+                panic!("a sign-in dialog");
+            };
+            assert!(dialog.is_retry);
+            assert_eq!(dialog.username, shown_again, "typed {typed:?}");
+            fixture.prompts.finish(&operation, MountOutcome::Failed);
+        }
+    });
+}
+
 /// Ported from `v2.0.0:desktop/tests/test_v05.py::AuthTests::test_password_not_sent_back_to_ui`
 ///
 /// parity: NET-008, NET-011, SAFE-011

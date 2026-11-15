@@ -336,6 +336,50 @@ fn a_paste_run_as_one_group_counts_its_items() {
     assert_eq!(last, Some(ItemCount { done: 1, total: 1 }));
 }
 
+/// A paste without name conflicts runs as one step, so its byte reports
+/// carry what the whole paste writes: one large file moves the action's
+/// percentage and gives a time remaining while it is copied, as Windows'
+/// progress window does, instead of staying at 0% until it is done.
+///
+/// parity: OPS-021
+#[test]
+fn a_paste_of_one_large_file_reports_how_much_it_writes() {
+    let folders = Folders::new();
+    let big = folders.source().join("big.bin");
+    fs::write(&big, vec![7_u8; 3 * 1024 * 1024]).unwrap();
+    let reports: Arc<Mutex<Vec<Progress>>> = Arc::default();
+    let sink = Arc::clone(&reports);
+    let scan = block_on(scan_name_conflicts(
+        TransferMode::Copy,
+        &[file_uri(&big)],
+        &file_uri(&folders.destination()),
+        &Cancellation::new(),
+    ))
+    .unwrap();
+    assert!(!scan.has_conflicts());
+
+    block_on(run_resolved_transfer(
+        &scan,
+        &[],
+        &OperationContext::default(),
+        move |progress| sink.lock().unwrap().push(progress),
+    ))
+    .unwrap();
+
+    let sizes: Vec<Option<u64>> = reports
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|report| report.bytes)
+        .map(|bytes| bytes.batch_size)
+        .collect();
+    assert!(!sizes.is_empty(), "byte reports");
+    assert!(
+        sizes.iter().all(|size| *size == Some(3 * 1024 * 1024)),
+        "{sizes:?}"
+    );
+}
+
 /// Each item's batch report reaches the panel, even right after the
 /// previous file's full bar.
 ///
