@@ -1355,6 +1355,10 @@ msgstr ""
 msgid "Sharing"
 msgstr ""
 
+#: crates/ox-app/src/properties.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
+msgid "Shortcut"
+msgstr ""
+
 #: crates/ox-app/src/properties/change_icon.rs
 msgid "Browse..."
 msgstr ""
@@ -2027,7 +2031,7 @@ msgstr ""
 msgid "Size on disk"
 msgstr ""
 
-#: crates/ox-app/src/properties/general_tab.rs
+#: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/shortcut_tab.rs
 msgid "Target"
 msgstr ""
 
@@ -2512,6 +2516,51 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/properties/sharing_panel.rs
 msgid "\\\\{value1}\\{name}"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "Address"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs crates/ox-core/src/entry/type_label.rs
+msgid "Application"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "Comment"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "Open File Location"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "Start in"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "Target location"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "Target type"
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "The shortcut could not be changed."
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "The target cannot be found."
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "Type the target the shortcut opens."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "{name} could not be changed."
 msgstr ""
 
 #: crates/ox-app/src/properties/size_scan_strip.rs
@@ -4919,10 +4968,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Select none"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/entry/type_label.rs
-msgid "Shortcut"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs
@@ -7950,10 +7995,6 @@ msgstr ""
 
 #: crates/ox-core/src/entry/error.rs
 msgid "Only folders and network shares can be pinned to Quick access."
-msgstr ""
-
-#: crates/ox-core/src/entry/type_label.rs
-msgid "Application"
 msgstr ""
 
 #: crates/ox-core/src/entry/type_label.rs

@@ -41,6 +41,7 @@ use super::metadata::{
 };
 use super::security_tab::{fill_security, SecurityContext, SecurityFacts};
 use super::sharing_panel::sharing_panel;
+use super::shortcut_tab::{ShortcutKind, ShortcutPanel};
 use super::versions_panel::VersionsPanel;
 use super::window::{page, PropertiesWindow};
 use super::{PropertiesTab, PropertiesTarget, READING};
@@ -82,6 +83,8 @@ struct ItemPages {
     general: gtk::Box,
     /// A drive's Hardware tab.
     hardware: Option<gtk::Box>,
+    /// A link's or a launcher's Shortcut tab.
+    shortcut: Option<ShortcutPanel>,
     /// The General tab's edits, once it is filled; a drive's has none.
     general_edits: RefCell<Option<Rc<GeneralEdits>>>,
     security: gtk::Box,
@@ -119,17 +122,12 @@ pub(crate) fn open_item_properties(
     // An item in the Recycle Bin has only its General tab, as in Windows.
     let in_bin = is_in_recycle_bin(&target.uri);
     let hardware = is_drive.then(|| add_hardware_tab(&window));
-    let mut share_folder = None;
+    let shortcut = add_shortcut_tab(&window, &target);
     let usershares = context.usershares.as_ref().filter(|_| !in_bin);
-    if let Some((folder, usershares)) = local_folder.clone().zip(usershares) {
-        let (sharing, follow) = sharing_panel(folder, usershares.clone());
-        window.add_tab(
-            PropertiesTab::Sharing.page_name(),
-            PropertiesTab::Sharing.label(),
-            &sharing,
-        );
-        share_folder = Some(follow);
-    }
+    let share_folder = local_folder
+        .clone()
+        .zip(usershares)
+        .map(|(folder, usershares)| add_sharing_tab(&window, folder, usershares));
     let security = page();
     if !in_bin {
         window.add_tab(
@@ -188,6 +186,7 @@ pub(crate) fn open_item_properties(
         context,
         general,
         hardware,
+        shortcut,
         general_edits: RefCell::new(None),
         security,
         customize,
@@ -207,6 +206,34 @@ pub(crate) fn open_item_properties(
         kept.take();
     });
     window
+}
+
+/// A link's or a launcher's Shortcut tab, after General as a shortcut has
+/// it in Windows; `None` for any other item.
+fn add_shortcut_tab(window: &PropertiesWindow, target: &PropertiesTarget) -> Option<ShortcutPanel> {
+    let panel = ShortcutPanel::new(window, ShortcutKind::of(&target.uri)?);
+    window.add_tab(
+        PropertiesTab::Shortcut.page_name(),
+        PropertiesTab::Shortcut.label(),
+        panel.page(),
+    );
+    Some(panel)
+}
+
+/// The Sharing tab of the local folder `folder`; returns what points it
+/// at the folder once renamed.
+fn add_sharing_tab(
+    window: &PropertiesWindow,
+    folder: std::path::PathBuf,
+    usershares: &Usershares,
+) -> Rc<dyn Fn(std::path::PathBuf)> {
+    let (sharing, follow) = sharing_panel(folder, usershares.clone());
+    window.add_tab(
+        PropertiesTab::Sharing.page_name(),
+        PropertiesTab::Sharing.label(),
+        &sharing,
+    );
+    follow
 }
 
 /// A drive's Hardware tab, in Windows' order: General, Tools, Hardware,
@@ -278,7 +305,11 @@ fn local_folder(target: &PropertiesTarget) -> Option<std::path::PathBuf> {
     if target.kind != ItemKind::Folder || !target.uri.starts_with("file:") {
         return None;
     }
-    gtk::gio::File::for_uri(&target.uri).path()
+    // A link to a folder is a shortcut, which is neither shared nor
+    // customized, as in Windows.
+    gtk::gio::File::for_uri(&target.uri)
+        .path()
+        .filter(|path| !std::fs::symlink_metadata(path).is_ok_and(|facts| facts.file_type().is_symlink()))
 }
 
 impl ItemPages {
@@ -365,6 +396,7 @@ impl ItemPages {
         if let Some(details) = &self.details {
             details.show_properties(&properties);
         }
+        self.fill_shortcut(window, &properties);
         if !first {
             if let Some(edits) = self.general_edits.borrow().as_ref() {
                 edits.follow_mode(properties.mode);
@@ -419,6 +451,24 @@ impl ItemPages {
             follow_default_app(window, &opens_with, properties.entry.content_type.clone());
         }
         self.fill_customize(window, &properties);
+    }
+
+    /// Fills a link's or a launcher's Shortcut tab, which can be changed
+    /// outside previous versions where the user may change the item: a
+    /// link is pointed elsewhere by replacing it, as a rename does, and a
+    /// launcher is written in place.
+    fn fill_shortcut(&self, window: &PropertiesWindow, properties: &ItemProperties) {
+        let Some(shortcut) = &self.shortcut else {
+            return;
+        };
+        let uri = &properties.entry.uri;
+        let is_read_only = self.context.locations.is_snapshot_location(uri) || is_conventional_snapshot(uri);
+        let may_change = if properties.link_target.is_some() {
+            properties.entry.can_rename != Some(false)
+        } else {
+            properties.access.writable != Some(false)
+        };
+        shortcut.fill(window, properties, may_change && !is_read_only);
     }
 
     fn fill_customize(&self, window: &PropertiesWindow, properties: &ItemProperties) {

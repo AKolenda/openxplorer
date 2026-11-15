@@ -106,7 +106,9 @@ pub(super) fn general_tab(
         kind.add(&ox_core::i18n::gettext("Type of file"), &type_of_file(entry));
         // An item in the Recycle Bin opens with nothing until it is
         // restored.
-        if entry.trash_orig_path.is_none() {
+        // Nor does a shortcut, which opens its target.
+        let is_shortcut = entry.is_symlink || entry.content_type.as_deref() == Some("application/x-desktop");
+        if entry.trash_orig_path.is_none() && !is_shortcut {
             let (row, value) = opens_with_row(properties, rights.can_change_app, uri);
             kind.add_control(&ox_core::i18n::gettext("Opens with"), &row);
             opens_with = Some(value);

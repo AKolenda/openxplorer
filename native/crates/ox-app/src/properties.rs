@@ -30,6 +30,7 @@
 //! | `folder_count` | A folder's size and content, counting up |
 //! | `security_tab` | The Security tab and its Edit and Advanced dialogs |
 //! | `security_model` | Windows' permission names over Linux bits |
+//! | `shortcut_tab` | The Shortcut tab of a link or a launcher |
 //! | `details_tab` | The Details tab of a file: its list, keys and reader |
 //! | `details_rows` | The Details tab's headings, rows and value wording |
 //! | `permissions_editor` | Changing several items' permissions together |
@@ -67,6 +68,7 @@ mod security_tab;
 mod selection_attributes;
 mod selection_view;
 mod sharing_panel;
+mod shortcut_tab;
 mod size_scan_strip;
 mod snapshot_banner;
 mod snapshot_source;
@@ -135,6 +137,8 @@ impl PropertiesTarget {
 pub(crate) enum PropertiesTab {
     /// Name, type, location, sizes, dates and attributes.
     General,
+    /// What a link or a launcher opens (shortcuts only).
+    Shortcut,
     /// Where a drive is mounted and what is mounted there (drives only).
     Hardware,
     /// Sharing a local folder on the network (local folders only).
@@ -157,6 +161,7 @@ impl PropertiesTab {
     pub(crate) fn label(self) -> &'static str {
         match self {
             PropertiesTab::General => ox_core::i18n::gettext_static("General"),
+            PropertiesTab::Shortcut => ox_core::i18n::gettext_static("Shortcut"),
             PropertiesTab::Hardware => ox_core::i18n::gettext_static("Hardware"),
             PropertiesTab::Sharing => ox_core::i18n::gettext_static("Sharing"),
             PropertiesTab::Security => ox_core::i18n::gettext_static("Security"),
@@ -171,6 +176,7 @@ impl PropertiesTab {
     pub(crate) const fn page_name(self) -> &'static str {
         match self {
             PropertiesTab::General => "general",
+            PropertiesTab::Shortcut => "shortcut",
             PropertiesTab::Hardware => "hardware",
             PropertiesTab::Sharing => "sharing",
             PropertiesTab::Security => "security",

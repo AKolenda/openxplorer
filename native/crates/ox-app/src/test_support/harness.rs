@@ -665,23 +665,6 @@ pub(crate) fn wait_for_frames(window: &impl IsA<gtk::Widget>, count: u32) {
     wait_until("the window to draw", || frames.get() >= count);
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[gtk::test]
-    fn teardown_unregisters_a_window_that_was_never_presented() {
-        let window = {
-            let test = TestWindow::without_tabs();
-            test.window.clone()
-        };
-        assert!(
-            !application().windows().contains(window.upcast_ref()),
-            "an unpresented fixture must not survive into the next test"
-        );
-    }
-}
-
 /// `label` as it reads, without the underscore that marks a control's
 /// access key (`_Read-only` reads "Read-only"; `__` is one underscore).
 pub(crate) fn without_mnemonic(label: &str) -> String {
@@ -697,4 +680,21 @@ pub(crate) fn without_mnemonic(label: &str) -> String {
         }
     }
     text
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[gtk::test]
+    fn teardown_unregisters_a_window_that_was_never_presented() {
+        let window = {
+            let test = TestWindow::without_tabs();
+            test.window.clone()
+        };
+        assert!(
+            !application().windows().contains(window.upcast_ref()),
+            "an unpresented fixture must not survive into the next test"
+        );
+    }
 }
