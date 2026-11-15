@@ -178,7 +178,7 @@ pub(crate) fn f4_shows_a_list() -> gtk::ShortcutController {
                 .cloned()
                 .or_else(|| focus.ancestor(gtk::DropDown::static_type()).and_downcast())
         });
-        let Some(drop_down) = drop_down.filter(|drop_down| drop_down.is_sensitive()) else {
+        let Some(drop_down) = drop_down.filter(WidgetExt::is_sensitive) else {
             return glib::Propagation::Proceed;
         };
         show_items(&drop_down);

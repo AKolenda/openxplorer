@@ -118,7 +118,7 @@ fn shows_its_list(drop_down: &gtk::DropDown) -> bool {
 /// F4 on a drop-down list shows its items, as Microsoft lists for dialog
 /// boxes ("F4: Display the items in the active list",
 /// <https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows>):
-/// in Folder Options, a window of its own, on "Open OpenXplorer to:".
+/// in Folder Options, a window of its own, on "Open `OpenXplorer` to:".
 ///
 /// parity: ACC-004
 #[gtk::test]
