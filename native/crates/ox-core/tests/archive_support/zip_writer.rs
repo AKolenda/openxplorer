@@ -129,6 +129,9 @@ pub struct TestMember {
     pub declared_compressed_size: Option<u64>,
     /// The ZIP version needed to extract, times ten.
     pub version_needed: u16,
+    /// The password the data is encrypted with (traditional PKWARE
+    /// encryption), when it is.
+    pub password: Option<Vec<u8>>,
 }
 
 impl TestMember {
@@ -144,6 +147,7 @@ impl TestMember {
             declared_size: None,
             declared_compressed_size: None,
             version_needed: VERSION_NEEDED,
+            password: None,
         }
     }
 
@@ -215,6 +219,31 @@ impl TestMember {
         self
     }
 
+    /// This member, encrypted with `password` the way Info-ZIP's
+    /// `zip -P` encrypts it (traditional PKWARE encryption), with the
+    /// encrypted flag set.
+    #[must_use]
+    pub fn encrypted_with(mut self, password: &str) -> Self {
+        self.password = Some(password.as_bytes().to_vec());
+        self.flags |= ENCRYPTED_FLAG;
+        self
+    }
+
+    /// The data as stored: compressed, then encrypted behind its 12-byte
+    /// header when the member has a password.
+    fn stored_data(&self, crc32: u32) -> Vec<u8> {
+        let compressed = self.compression.compress(&self.data);
+        let Some(password) = &self.password else {
+            return compressed;
+        };
+        // Eleven arbitrary bytes, then the check byte: the CRC's high byte.
+        let mut plain = vec![0x5a, 0x13, 0xc4, 0x7e, 0x01, 0x99, 0x2b, 0xe0, 0x46, 0x8d, 0x31];
+        plain.push(crc32.to_le_bytes()[3]);
+        plain.extend(compressed);
+        let mut keys = TraditionalKeys::new(password);
+        plain.iter().map(|&byte| keys.encrypt(byte)).collect()
+    }
+
     /// The flags as stored, with the UTF-8 flag for a UTF-8 name that is
     /// not ASCII.
     fn stored_flags(&self) -> u16 {
@@ -225,6 +254,48 @@ impl TestMember {
             self.flags
         }
     }
+}
+
+/// The keys of traditional PKWARE encryption (APPNOTE.TXT 6.1), written
+/// here from the specification apart from the app's own decryption.
+struct TraditionalKeys([u32; 3]);
+
+impl TraditionalKeys {
+    /// The keys after `password`.
+    fn new(password: &[u8]) -> Self {
+        let mut keys = Self([0x1234_5678, 0x2345_6789, 0x3456_7890]);
+        for &byte in password {
+            keys.update(byte);
+        }
+        keys
+    }
+
+    /// Mixes the plain byte `byte` into the keys.
+    fn update(&mut self, byte: u8) {
+        self.0[0] = crc_step(self.0[0], byte);
+        self.0[1] = self.0[1]
+            .wrapping_add(self.0[0] & 0xff)
+            .wrapping_mul(134_775_813)
+            .wrapping_add(1);
+        self.0[2] = crc_step(self.0[2], self.0[1].to_be_bytes()[0]);
+    }
+
+    /// Encrypts the plain byte `byte`.
+    fn encrypt(&mut self, byte: u8) -> u8 {
+        let temp = (self.0[2] | 2) & 0xffff;
+        let stream = (temp.wrapping_mul(temp ^ 1) >> 8).to_le_bytes()[0];
+        self.update(byte);
+        byte ^ stream
+    }
+}
+
+/// One byte of the CRC-32 without its final inversion.
+fn crc_step(crc: u32, byte: u8) -> u32 {
+    let mut value = (crc ^ u32::from(byte)) & 0xff;
+    for _ in 0..8 {
+        value = if value & 1 == 1 { (value >> 1) ^ 0xedb8_8320 } else { value >> 1 };
+    }
+    (crc >> 8) ^ value
 }
 
 /// A member's records, ready to write.
@@ -341,7 +412,7 @@ pub fn zip_bytes_with(members: &[TestMember], layout: &ArchiveLayout) -> Vec<u8>
     for member in members {
         let record = MemberRecord {
             member,
-            compressed: member.compression.compress(&member.data),
+            compressed: member.stored_data(crc32fast::hash(&member.data)),
             crc32: crc32fast::hash(&member.data),
             header_offset: small(archive.len() as u64),
         };

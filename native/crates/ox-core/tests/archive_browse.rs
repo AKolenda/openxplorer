@@ -383,8 +383,8 @@ fn an_unsafe_folder_is_not_listed() {
     }
 }
 
-/// ARC-006: encrypted members, and members too large or compressed too
-/// much, are listed but cannot be opened.
+/// ARC-006: members too large or compressed too much are listed but
+/// cannot be opened; an encrypted member can, once its password is given.
 ///
 /// parity: ARC-006
 #[test]
@@ -395,11 +395,16 @@ fn encrypted_and_oversized_members_are_listed_but_not_opened() {
 
     let listing = fixture.list("").expect("the archive lists");
 
-    assert!(listing.entries.iter().all(|entry| !entry.can_open));
+    let openable: Vec<(&str, bool)> = listing
+        .entries
+        .iter()
+        .map(|entry| (entry.name.as_str(), entry.can_open))
+        .collect();
+    assert_eq!(openable, [("bomb.txt", false), ("secret.txt", true)]);
     assert!(listing.entries.iter().any(|entry| entry.is_encrypted));
     assert_eq!(
         fixture.preview("secret.txt").unwrap_err(),
-        ArchiveError::EncryptedMember
+        ArchiveError::PasswordRequired
     );
     assert_eq!(
         fixture.preview("bomb.txt").unwrap_err(),
