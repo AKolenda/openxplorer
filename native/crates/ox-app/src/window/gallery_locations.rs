@@ -391,6 +391,14 @@ impl GalleryLocations {
         };
         if removed {
             self.show_rows();
+            // The keyboard goes back to the list, on the row that took the
+            // removed one's place, as Remove is grayed now.
+            let count = i32::try_from(self.locations.borrow().len()).unwrap_or(1);
+            let index = i32::try_from(index).unwrap_or(0).min(count - 1);
+            if let Some(row) = self.list.row_at_index(index) {
+                self.list.select_row(Some(&row));
+                row.grab_focus();
+            }
         }
     }
 

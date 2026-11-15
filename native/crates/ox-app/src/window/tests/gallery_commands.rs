@@ -274,6 +274,7 @@ fn gallery_locations_adds_and_removes_folders_and_ok_keeps_them() {
     assert!(dialog.can_remove());
     dialog.remove_selected();
     assert_eq!(dialog.rows().len(), 1);
+    assert!(!dialog.can_remove(), "Pictures, selected now, cannot be removed");
     dialog.ok();
     wait_until("the removed folder to leave", || test.names() == ["a.png"]);
 }
