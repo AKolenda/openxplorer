@@ -2961,6 +2961,42 @@ mod tests {
         assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
     }
 
+    /// Saving into a folder whose server went away (the share refuses
+    /// the connection at once, so it is not a share that stopped
+    /// answering) says the folder is unavailable, never that it does not
+    /// exist, and answers nothing, so the caller writes nowhere.
+    ///
+    /// parity: INT-032
+    #[gtk::test]
+    fn saving_where_the_server_went_away_says_the_folder_is_unavailable() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let answer = portal.call(
+            "SaveFile",
+            &[
+                (
+                    "current_folder",
+                    path_variant(&fixture.root().display().to_string()),
+                ),
+                ("current_name", "report.txt".to_variant()),
+            ],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        super::probe::stop_reaching(fixture.root());
+
+        picker.accept.emit_clicked();
+        wait_until("the dialog to say so", || !window.shown_message().is_empty());
+        let message = window.shown_message().to_string();
+
+        assert!(message.contains("is unavailable"), "{message}");
+        assert!(!message.contains("does not exist"), "{message}");
+        assert!(answer.borrow().is_none(), "nothing is answered");
+        assert!(picker.accept.is_sensitive(), "Save can be pressed again");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
     /// A file opened from a share that stopped answering is answered as
     /// read-only: whether it may be written is not known.
     ///

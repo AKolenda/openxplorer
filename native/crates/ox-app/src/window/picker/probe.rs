@@ -381,6 +381,10 @@ async fn query_within(path: &Path, attributes: &str, timeout: Duration) -> Answe
         glib::timeout_future(timeout).await;
         return Answer::TimedOut;
     }
+    #[cfg(test)]
+    if NOT_REACHED.with(|folders| folders.borrow().iter().any(|folder| path.starts_with(folder))) {
+        return Answer::Failed;
+    }
     let file = gio::File::for_path(path);
     let asking = file.query_info_future(attributes, gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT);
     match glib::future_with_timeout(timeout, asking).await {
@@ -401,6 +405,20 @@ thread_local! {
 #[cfg(test)]
 pub(super) fn stop_answering(folder: &Path) {
     NOT_ANSWERING.with(|folders| folders.borrow_mut().push(folder.to_path_buf()));
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Folders whose paths, and everything below them, fail at once as a
+    /// share whose server went away does.
+    static NOT_REACHED: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Makes `folder` and everything in it behave like a share whose server
+/// went away, for this test's thread.
+#[cfg(test)]
+pub(super) fn stop_reaching(folder: &Path) {
+    NOT_REACHED.with(|folders| folders.borrow_mut().push(folder.to_path_buf()));
 }
 
 #[cfg(test)]
