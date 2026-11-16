@@ -1331,3 +1331,68 @@ fn searching_from_home_finds_files_deep_in_uncached_folders() {
     test.search_for("extra");
     wait_until("every extra file from the home folder", || found(&test));
 }
+
+/// What the active pane shows of a search from Home, sampled once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SearchSample {
+    rows: u32,
+    searching: bool,
+    empty_page: bool,
+}
+
+/// Searching from Home in a big home folder with a cached folder in it:
+/// the files are listed as the walk finds them, and the pane never says "No matching items" while
+/// the search still runs or while it has rows; at the end every match is
+/// shown. Before, the empty page stayed up until the whole home folder
+/// had been walked, which on a real home can take minutes.
+///
+/// parity: HOME-017, SRCH-035
+#[gtk::test]
+fn searching_from_a_big_home_shows_matches_as_they_are_found() {
+    let home = home_with_cached_and_uncached_folders();
+    for folder in 0..1500 {
+        let path = home.path().join(format!("snap/part{}/dir{folder}", folder / 50));
+        fs::create_dir_all(&path).expect("fixture folder");
+        for file in 0..4 {
+            fs::write(path.join(format!("item_{file}.dat")), b"").expect("fixture file");
+        }
+    }
+    let fixture = Fixture::standard();
+    let test = home_window(&fixture);
+    test.start_search_cache();
+    test.index_folder(&ox_core::location::file_uri(&home.path().join("Documents")));
+    let tooltip = test.window.search_box().entry().tooltip_text();
+    assert_eq!(
+        tooltip.as_deref(),
+        Some("Search names in this folder and its subfolders. Folders cached in Settings → Search are searched faster."),
+        "the box does not claim to search cached names only"
+    );
+    let pane = test.window.folder_pane();
+    let sample = || SearchSample {
+        rows: test.window.folder_model().n_items(),
+        searching: test.status_count().starts_with("Searching"),
+        empty_page: pane.page() == Some(crate::window::folder_pane::PanePage::Empty),
+    };
+    let samples = std::cell::RefCell::new(Vec::new());
+
+    test.window.search_box().entry().set_text("extra");
+    wait_until("the search to end with every match", || {
+        let now = sample();
+        samples.borrow_mut().push(now);
+        !now.searching && now.rows == 5
+    });
+    let samples = samples.into_inner();
+
+    let wrong: Vec<_> = samples
+        .iter()
+        .filter(|sample| sample.empty_page && (sample.searching || sample.rows > 0))
+        .collect();
+    assert!(
+        wrong.is_empty(),
+        "no empty page while searching or with rows: {wrong:?}"
+    );
+    assert!(
+        samples.iter().any(|sample| sample.searching),
+        "the search was seen running"
+    );
+}

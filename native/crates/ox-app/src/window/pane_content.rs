@@ -47,6 +47,8 @@ pub(super) struct PaneState {
     slow: bool,
     /// Why its last listing failed.
     error: Option<String>,
+    /// A search of it still runs: its matches may still come.
+    searching: bool,
 }
 
 impl PaneState {
@@ -64,7 +66,13 @@ impl PaneState {
             opening: tab.opening.is_some(),
             slow: tab.is_slow(),
             error: tab.error.as_ref().map(ToString::to_string),
+            searching: false,
         }
+    }
+
+    /// This state, with a search of the location still running or not.
+    pub(super) fn searching(self, searching: bool) -> Self {
+        Self { searching, ..self }
     }
 }
 
@@ -84,13 +92,17 @@ pub(super) fn show_pane_state(
         opening,
         slow,
         error,
+        searching,
     } = state;
     pane.hide_rows(false);
     // VIEW-068: once the tab's location has taken a moment (see
     // `slow_delay.rs`), the file area says "Working on it..." in place of
     // the previous folder, as Windows Explorer does. A reload keeps its
     // rows, and a location that answers sooner shows nothing.
-    let loading = listing != Listing::Idle;
+    // A search that still runs is waited for as a listing is: the blank
+    // list, never "No matching items" before the walk of the folder and
+    // its subfolders has ended (HOME-017, SRCH-035).
+    let loading = listing != Listing::Idle || searching;
     let is_first_listing = listing == Listing::First && page.is_none() && error.is_none();
     if slow && (opening || (is_first_listing && pane.model().n_items() == 0)) {
         pane.show_page(PanePage::Listing);
@@ -137,6 +149,8 @@ impl BrowserWindow {
             let Some(tab) = session.active() else { return };
             (tab.id, PaneState::of(tab))
         };
+        let searching = self.is_searching() && self.imp().search.borrow().is_running();
+        let state = state.searching(searching);
         self.redraw_when_slow(id);
         self.folder_pane()
             .details()

@@ -304,6 +304,19 @@ impl BrowserWindow {
         }
     }
 
+    /// Whether no reason keeps tooltips off now, for tests.
+    #[cfg(test)]
+    pub(super) fn tooltips_may_show(&self) -> bool {
+        !self.imp().tooltips_off.get().any()
+    }
+
+    /// Where the window last saw the pointer, in its coordinates, for
+    /// tests.
+    #[cfg(test)]
+    pub(super) fn pointer_seen_at(&self) -> Option<(f64, f64)> {
+        self.imp().pointer_now.get()
+    }
+
     /// Whether a tooltip shows over the window: GTK draws it in a popup
     /// of its own, a child of the window.
     fn shows_tooltip(&self) -> bool {
