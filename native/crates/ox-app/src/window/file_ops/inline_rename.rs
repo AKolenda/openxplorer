@@ -12,12 +12,16 @@
 //! refusal, such as a taken name, shows in the toast and editing goes on,
 //! so the typed name is not lost. While the rename runs the field is
 //! disabled, so a second commit cannot start it again. A name that would
-//! hide the item asks first ([`super::hide_confirm`]). As in Dolphin, Tab
+//! hide the item asks first ([`super::hide_confirm`]). No to the question
+//! about a changed extension ([`super::extension_confirm`]) ends the
+//! rename with the old name, as in Windows 11. As in Dolphin, Tab
 //! and Shift+Tab, and Down and Up in the details view, commit and go on
 //! to rename the next or previous item (OPS-012). With several items
 //! selected, the field edits one of them and Enter gives the typed name to
 //! all of them with a number (OPS-050, [`super::numbered_rename`]); Tab and
-//! the arrows are then the field's own keys.
+//! the arrows are then the field's own keys. Ctrl+A selects the whole
+//! name in the field and nothing else: GTK 4.14's text field selects its
+//! text but lets the key go on to the view, which selected every item too.
 //!
 //! As in Windows, a character Windows forbids in names is refused as it
 //! is typed or pasted, with Windows' balloon ([`super::name_balloon`]),
@@ -86,29 +90,15 @@ fn rename_step(key: gdk::Key, modifiers: gdk::ModifierType, in_details: bool) ->
     }
 }
 
-/// Ctrl+A in `editor` selects its whole text and goes no further, as in
-/// Windows: the list or grid around it would otherwise take the key for
-/// its own Select all and select every item in the folder, which Escape
-/// then left selected (SEL-004).
-fn keep_select_all_in_field(editor: &gtk::Entry) {
-    let keys = gtk::EventControllerKey::new();
-    keys.connect_key_pressed(glib::clone!(
-        #[weak]
-        editor,
-        #[upgrade_or]
-        glib::Propagation::Proceed,
-        move |_, key, _, modifiers| {
-            let modifiers = modifiers & gtk::accelerator_get_default_mod_mask();
-            let is_select_all =
-                matches!(key.to_lower(), gdk::Key::a) && modifiers == gdk::ModifierType::CONTROL_MASK;
-            if !is_select_all {
-                return glib::Propagation::Proceed;
-            }
-            editor.select_region(0, -1);
-            glib::Propagation::Stop
-        }
-    ));
-    editor.add_controller(keys);
+/// Whether `key` with `modifiers` is Ctrl+A, with Caps Lock or not.
+fn is_select_all(key: gdk::Key, modifiers: gdk::ModifierType) -> bool {
+    let others = gdk::ModifierType::SHIFT_MASK
+        | gdk::ModifierType::ALT_MASK
+        | gdk::ModifierType::SUPER_MASK
+        | gdk::ModifierType::META_MASK;
+    key.to_lower() == gdk::Key::a
+        && modifiers.contains(gdk::ModifierType::CONTROL_MASK)
+        && !modifiers.intersects(others)
 }
 
 impl BrowserWindow {
@@ -135,7 +125,6 @@ impl BrowserWindow {
             hidden_extension: hidden_extension.clone(),
         };
         self.connect_name_editor(cell, &editor, &target);
-        keep_select_all_in_field(&editor);
         // Added last, its key handler runs before the field's other ones.
         refuse_forbidden_characters(&editor);
         cell.show_name_editor(&editor);
@@ -201,8 +190,9 @@ impl BrowserWindow {
     }
 
     /// Escape in the field ends the rename and leaves the name as it was;
-    /// Tab and Shift+Tab, and Down and Up in the details view, commit and
-    /// go on to rename the next or previous item (OPS-012).
+    /// Ctrl+A selects the whole name; Tab and Shift+Tab, and Down and Up
+    /// in the details view, commit and go on to rename the next or
+    /// previous item (OPS-012).
     fn rename_keys(
         &self,
         cell: &FileCell,
@@ -226,6 +216,12 @@ impl BrowserWindow {
             move |_, key, _, modifiers| {
                 if key == gdk::Key::Escape {
                     window.end_rename_in_place(&cell);
+                    return glib::Propagation::Stop;
+                }
+                // Selected here and stopped: the field's own Ctrl+A goes on
+                // to the view in GTK 4.14, which then selects every item.
+                if is_select_all(key, modifiers) {
+                    editor.select_region(0, -1);
                     return glib::Propagation::Stop;
                 }
                 // Several items get one name: there is no next one to
@@ -376,11 +372,17 @@ impl BrowserWindow {
             self.show_message(&error.to_string());
             return;
         }
-        let confirmed = self
+        // No to the extension question ends the rename with the old name,
+        // the name box closed, as in Windows 11 File Explorer.
+        if !self
             .confirm_extension_change(&target.name, name, target.has_no_extension)
             .await
-            && self.confirm_hiding_rename(&target.name, name).await;
-        if !confirmed {
+        {
+            self.take_rename_next();
+            self.close_name_editor(cell);
+            return;
+        }
+        if !self.confirm_hiding_rename(&target.name, name).await {
             self.take_rename_next();
             editor.set_sensitive(true);
             editor.grab_focus();
