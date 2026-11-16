@@ -499,6 +499,8 @@ fn the_ring_stands_still_while_animations_are_off() {
     .next()
     .expect("the tab's progress ring");
     wait_until("the ring to be shown", || ring.is_mapped());
+    let first = ring.shown_frame();
+    wait_until("the arc to turn", || ring.shown_frame() != first);
     let turning = ring.is_turning();
 
     settings.set_gtk_enable_animations(false);

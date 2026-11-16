@@ -250,7 +250,8 @@ impl ProgressRing {
         let started = std::cell::Cell::new(None::<i64>);
         let tick = self.add_tick_callback(move |ring, clock| {
             let now = clock.frame_time();
-            let first = *started.get().get_or_insert(now);
+            let first = started.get().unwrap_or(now);
+            started.set(Some(first));
             let elapsed = Duration::from_micros(u64::try_from(now - first).unwrap_or_default());
             ring.show_frame(frame_at(elapsed));
             glib::ControlFlow::Continue
