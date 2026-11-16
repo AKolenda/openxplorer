@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.17
+Version:        2.0.18
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -142,6 +142,12 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Mon Nov 16 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.18-1
+- OpenXplorer 2.0.18: thumbnails in network folders by default, one-click
+  switching between command bar menus, the keyboard menu at the focused
+  item, No ending a rename, Ctrl+A selecting only the name being renamed,
+  and duplicated tabs next to the original.
+
 * Tue Nov 10 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.17-1
 - OpenXplorer 2.0.17: TAR archives browsed like folders and made from
   Compress to, resizing from inside a window's edges, resize cursors on
