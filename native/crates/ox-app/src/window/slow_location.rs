@@ -245,7 +245,8 @@ impl BrowserWindow {
     }
 
     /// Shows whether the tab in front is busy: progress in the address
-    /// bar and Stop in place of Refresh, at once.
+    /// bar and Stop in place of Refresh, at once, and whether each tab is,
+    /// with a progress ring on it while it lists or searches.
     pub(super) fn show_busy_state(&self) {
         let busy = self.is_busy();
         let bar = self.address_bar();
@@ -256,5 +257,7 @@ impl BrowserWindow {
         }
         bar.update_state(&[gtk::accessible::State::Busy(busy)]);
         self.show_stop_or_refresh();
+        // The tabs show a progress ring while they are busy (SRCH-048).
+        self.render_tabs();
     }
 }

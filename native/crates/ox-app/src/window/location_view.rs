@@ -232,6 +232,7 @@ fn tab_view(
     locations: &LocationContext,
     places: (&[NetworkLocation], &[Place]),
     names_query: bool,
+    busy: bool,
 ) -> TabView {
     let (network, known_folders) = places;
     let uri = tab.uri();
@@ -252,6 +253,7 @@ fn tab_view(
         },
         active: session.is_active(tab.id),
         previous_version: None,
+        busy,
     }
 }
 
@@ -483,13 +485,22 @@ impl BrowserWindow {
         let network = self.network_locations();
         let known_folders = self.context().known_folders();
         let names_query = !self.shows_search_filter_bar();
+        let searching = self.is_searching() && self.imp().search.borrow().is_running();
         let mut views: Vec<TabView> = {
             let session = self.imp().session.borrow();
             let locations = self.imp().locations.borrow();
-            let tab_views = session
-                .tabs()
-                .iter()
-                .map(|tab| tab_view(tab, &session, &locations, (&network, &known_folders), names_query));
+            let tab_views = session.tabs().iter().map(|tab| {
+                // A search runs in the tab in front (SRCH-048).
+                let busy = tab.is_busy() || (searching && session.is_active(tab.id));
+                tab_view(
+                    tab,
+                    &session,
+                    &locations,
+                    (&network, &known_folders),
+                    names_query,
+                    busy,
+                )
+            });
             tab_views.collect()
         };
         self.mark_snapshot_tabs(&mut views);
@@ -732,7 +743,7 @@ mod tests {
             let mut session = Session::default();
             let id = session.add(case.uri, super::super::session::TabPlacement::Foreground);
             let tab = session.tab(id).expect("the tab was added");
-            let view = tab_view(tab, &session, &locations, (&[], &[]), true);
+            let view = tab_view(tab, &session, &locations, (&[], &[]), true, false);
             assert_eq!(view.title, case.title, "{}", case.uri);
             assert_eq!(view.tooltip, case.tooltip, "{}", case.uri);
             assert!(view.active);

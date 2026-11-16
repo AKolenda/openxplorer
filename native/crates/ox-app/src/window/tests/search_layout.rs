@@ -437,7 +437,10 @@ fn the_tab_shows_a_progress_ring_while_the_search_runs() {
     test.window.search_box().entry().set_text("notes");
     assert_eq!(tab_progress_rings(&test), 1, "the search has started");
 
-    wait_until("the search to finish", || !test.window.is_search_running());
+    wait_until("the search to finish", || {
+        let (count, _) = test.window.status_bar().texts();
+        !count.starts_with("Searching")
+    });
     wait_until("the ring to give way to the magnifier", || {
         tab_progress_rings(&test) == 0
     });
@@ -475,4 +478,33 @@ fn a_tab_listing_a_folder_shows_the_ring_until_it_is_listed() {
 
     wait_until("the listing", || !test.window.is_loading());
     wait_until("the ring to go", || tab_progress_rings(&test) == 0);
+}
+
+/// The ring turns while the desktop's animations are on and stands still,
+/// at its first picture, while they are off (ACC-010).
+///
+/// parity: SRCH-048, ACC-010
+#[gtk::test]
+fn the_ring_stands_still_while_animations_are_off() {
+    let settings = gtk::Settings::default().expect("a display");
+    let before = settings.is_gtk_enable_animations();
+    settings.set_gtk_enable_animations(true);
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.search_box().entry().set_text("notes");
+    let ring = crate::window::widget_tree::descendants::<crate::progress_ring::ProgressRing>(
+        test.window.tab_strip(),
+    )
+    .into_iter()
+    .next()
+    .expect("the tab's progress ring");
+    wait_until("the ring to be shown", || ring.is_mapped());
+    let turning = ring.is_turning();
+
+    settings.set_gtk_enable_animations(false);
+    let still = !ring.is_turning() && ring.shown_frame() == 0;
+    settings.set_gtk_enable_animations(before);
+
+    assert!(turning, "the ring turns with animations on");
+    assert!(still, "the ring stands still with animations off");
 }

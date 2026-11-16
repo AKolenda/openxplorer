@@ -39,6 +39,7 @@ mod operation_session;
 mod photo_rotate;
 mod picture_guard;
 mod places;
+mod progress_ring;
 mod properties;
 mod resize_edges;
 mod resizer_control;
