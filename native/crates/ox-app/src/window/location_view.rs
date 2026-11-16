@@ -17,7 +17,6 @@ use ox_core::location::{
 use ox_core::ops::JournalDirection;
 use ox_core::places::{NetworkLocation, Place};
 
-use crate::folder_view::shown_name::shown_name;
 use crate::icons::{Art, Icon, Tint};
 use crate::locations::Page;
 
@@ -409,24 +408,16 @@ impl BrowserWindow {
     }
 
     /// Draws the crumbs and the address of `uri`. The crumb of an opened
-    /// archive is a file's name, so it hides a known extension while
-    /// names do, as Windows' does for a ZIP folder; folders keep theirs.
-    /// Search results add their own crumb and icon.
+    /// archive is its real file name, as its tab and the window's title
+    /// name it, so the archive has one name wherever it is shown. Search
+    /// results add their own crumb and icon.
     pub(super) fn render_address_of(&self, uri: &str) {
         let full_path = self.shows_full_path();
-        let extensions = self.file_name_extensions();
         let is_search = self.current_uri().as_deref() == Some(uri) && self.shows_search_step();
         let locations = self.imp().locations.borrow();
         let mut crumbs = crumb_buttons(&locations, uri, full_path);
         if is_search {
             crumbs.push(search_crumb(&locations, uri));
-        }
-        if let Some(archive) = crumbs
-            .iter_mut()
-            .find(|crumb| is_archive_location(&crumb.crumb.uri))
-        {
-            let shown = shown_name(&archive.crumb.label, false, extensions).to_owned();
-            archive.crumb.label = shown;
         }
         let address = locations.display_location(uri);
         let icon = step_icon(uri, &locations.home_uri(), is_search);

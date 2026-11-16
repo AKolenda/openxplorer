@@ -117,6 +117,70 @@ fn ask_window_for_password(
     (operation, replies, dialog)
 }
 
+/// Connect as guest looks like the link it is, in the accent colour, and
+/// stands apart from the keyring note above it, not like more of the
+/// note's text.
+///
+/// parity: NET-011
+#[gtk::test]
+fn connect_as_guest_is_a_link_set_apart_from_the_note() {
+    let test = TestWindow::open(Page::Network.uri());
+    let operation = test
+        .window
+        .network()
+        .prompts()
+        .create("smb://nas/share")
+        .expect("an SMB share");
+    let flags = gtk::gio::AskPasswordFlags::NEED_USERNAME
+        | gtk::gio::AskPasswordFlags::NEED_PASSWORD
+        | gtk::gio::AskPasswordFlags::SAVING_SUPPORTED
+        | gtk::gio::AskPasswordFlags::ANONYMOUS_SUPPORTED;
+    operation.emit_by_name::<()>("ask-password", &[&"", &"sam", &"WORKGROUP", &flags]);
+    let sign_in = Rc::clone(test.window.network().sign_in());
+    wait_until("the sign-in dialog", || sign_in.shown_dialog().is_some());
+    let dialog = sign_in.shown_dialog().expect("the sign-in dialog");
+    wait_until("the dialog drawn", || dialog.is_mapped() && dialog.width() > 0);
+    wait_for(Duration::from_millis(200));
+
+    let guest = descendants::<gtk::Button>(&dialog)
+        .into_iter()
+        .find(|button| button.label().as_deref() == Some("Connect as guest"))
+        .expect("Connect as guest");
+    assert!(guest.is_visible());
+    let note = descendants::<gtk::Box>(&dialog)
+        .into_iter()
+        .find(|widget| widget.has_css_class("sign-in-note"))
+        .expect("the keyring note");
+    let text = descendants::<gtk::Label>(&note)
+        .into_iter()
+        .next()
+        .expect("the note's text");
+    let link = descendants::<gtk::Label>(&guest)
+        .into_iter()
+        .next()
+        .expect("the button's text");
+    let heading = descendants::<gtk::Label>(&dialog)
+        .into_iter()
+        .find(|label| label.has_css_class("dialog-title"))
+        .expect("the dialog's heading");
+    assert_ne!(link.color(), text.color(), "the link is not drawn as the note");
+    assert_ne!(link.color(), heading.color(), "the link is not drawn as text");
+    let note_bottom = note
+        .compute_bounds(&dialog)
+        .map(|bounds| bounds.y() + bounds.height())
+        .expect("the note is laid out");
+    let guest_top = guest
+        .compute_bounds(&dialog)
+        .map(|bounds| bounds.y())
+        .expect("the button is laid out");
+    assert!(
+        guest_top - note_bottom >= 12.0,
+        "Connect as guest is {} px under the note",
+        guest_top - note_bottom
+    );
+    dialog.close();
+}
+
 /// A credential that worked is kept for the window; when the keyring
 /// cannot save it, the window says so.
 ///
@@ -335,6 +399,73 @@ fn an_unmounted_share_is_mounted_once_then_listed_again() {
     wait_until("the failed mount", || {
         test.window.load_error().as_deref() == Some("This location is not a folder.")
     });
+}
+
+/// A share the server refuses, or that dropped off the network, says so
+/// in plain words that name it, as Windows Explorer does, with the
+/// system's own message only under Details. Nothing on the page is
+/// selected when it shows or takes the keyboard, and Try again stays.
+/// The share is on a host that does not exist, and the mount is the
+/// test's.
+///
+/// parity: NET-003, OPS-037
+#[gtk::test]
+fn an_offline_share_says_so_plainly_and_names_it() {
+    const RAW: &str = "Failed to mount Windows share: Connection refused";
+    let test = TestWindow::open(Page::Network.uri());
+    test.window.network().answer_mounts_with(|| {
+        Err(NetworkError::Gio(gtk::glib::Error::new(
+            gtk::gio::IOErrorEnum::Failed,
+            RAW,
+        )))
+    });
+
+    test.window
+        .navigate("smb://example.invalid/Studio/Photos")
+        .expect("an SMB share");
+    wait_until("the failed mount", || {
+        test.window.load_error().as_deref() == Some(RAW)
+    });
+    test.wait_for_listing("the failed listing");
+
+    let pane = test.window.folder_pane();
+    assert_eq!(pane.page(), Some(PanePage::Empty));
+    let page = pane.empty_page();
+    assert_eq!(page.title(), "This location is unavailable");
+    let message = page.message();
+    assert!(
+        message.contains("\\\\example.invalid\\Studio\\Photos"),
+        "the message names the share: {message:?}"
+    );
+    assert!(
+        !message.contains(RAW),
+        "the raw error is not the message: {message:?}"
+    );
+    assert!(page.offers_try_again(), "Try again stays");
+    let details = descendants::<gtk::Expander>(&page.root)
+        .into_iter()
+        .find(|expander| expander.is_visible() && expander.label().as_deref() == Some("Details"))
+        .expect("the system's error is under Details");
+    let detail = details.child().and_downcast::<gtk::Label>();
+    assert!(
+        detail.is_some_and(|label| label.text().contains(RAW)),
+        "the raw error stays under Details"
+    );
+    details.set_expanded(true);
+    let labels = descendants::<gtk::Label>(&page.root);
+    // The message keeps its place in Tab's order, but taking the keyboard
+    // selects none of its text.
+    for label in labels.iter().filter(|label| label.is_focusable()) {
+        label.child_focus(gtk::DirectionType::TabForward);
+        wait_for(Duration::from_millis(50));
+    }
+    for label in &labels {
+        assert!(
+            label.selection_bounds().is_none(),
+            "{:?} is not selected",
+            label.text()
+        );
+    }
 }
 
 /// Any program on the session bus may ask to show a location
