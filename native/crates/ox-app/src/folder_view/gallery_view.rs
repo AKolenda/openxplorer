@@ -62,6 +62,39 @@ pub(crate) fn nearest_named(size: IconSize) -> IconSize {
         .unwrap_or(IconSize::MEDIUM)
 }
 
+/// The edge of the square a photo of `aspect` (width over height, when
+/// known) is decoded to fit, so it covers a tile `width` by `height`
+/// pixels at `scale` device pixels each: the longest edge it needs.
+pub(crate) fn sharp_edge(width: i32, height: i32, aspect: Option<f64>, scale: i32) -> i32 {
+    let (width, height) = (f64::from(width * scale.max(1)), f64::from(height * scale.max(1)));
+    let aspect = aspect
+        .filter(|aspect| aspect.is_finite() && *aspect > 0.0)
+        .unwrap_or(width / height.max(1.0));
+    let needed = width.max(height * aspect).max(height).max(width / aspect);
+    #[expect(clippy::cast_possible_truncation, reason = "edges are small")]
+    let edge = needed.ceil() as i32;
+    edge.max(1)
+}
+
+/// What a tile on screen shows, for tests.
+#[cfg(test)]
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TileState {
+    /// A picture is drawn.
+    pub(crate) thumbnail: bool,
+    /// The device pixels its sharp picture was asked at.
+    pub(crate) requested: Option<(i32, i32)>,
+    /// The size of the picture drawn, in pixels.
+    pub(crate) drawn: Option<(i32, i32)>,
+}
+
+/// The aspect ratio (width over height) of `item`'s photo as shown, if
+/// its size was read.
+fn aspect_of(item: Option<&FileItem>) -> Option<f64> {
+    let (width, height) = item?.entry().meta.pixel_size?;
+    (height > 0).then(|| f64::from(width) / f64::from(height))
+}
+
 /// A month's name and year, as Gallery's heading and scrubber name it
 /// ("November 2026").
 pub(crate) fn month_text(seconds: Option<u64>) -> Option<String> {
@@ -189,6 +222,11 @@ mod tile {
             pub(super) preview: RefCell<Option<glib::JoinHandle<()>>>,
             /// The item, version and size the preview was asked for.
             pub(super) asked: RefCell<Option<(String, Option<u64>, i32)>>,
+            /// The sharp picture being decoded for the tile on screen.
+            pub(super) sharp: RefCell<Option<glib::JoinHandle<()>>>,
+            /// The item and edge the sharp picture was asked for, decoded
+            /// or still being decoded.
+            pub(super) sharp_asked: RefCell<Option<(String, i32)>>,
             pub(super) selected: Cell<bool>,
         }
 
@@ -222,6 +260,9 @@ mod tile {
                 if let Some(preview) = self.preview.take() {
                     preview.abort();
                 }
+                if let Some(sharp) = self.sharp.take() {
+                    sharp.abort();
+                }
                 if let Some(picture) = self.picture.get() {
                     picture.unparent();
                 }
@@ -245,10 +286,34 @@ mod tile {
             self.queue_draw();
         }
 
+        /// Draws `texture` unless the picture drawn has more pixels: a
+        /// cached thumbnail that comes late never replaces the sharp one.
+        pub(crate) fn offer(&self, texture: gdk::Texture) {
+            let area = |texture: &gdk::Texture| i64::from(texture.width()) * i64::from(texture.height());
+            let sharper = self
+                .imp()
+                .texture
+                .borrow()
+                .as_ref()
+                .is_some_and(|drawn| area(drawn) > area(&texture));
+            if !sharper {
+                self.show(Some(texture));
+            }
+        }
+
         /// Whether a thumbnail is drawn, for tests.
         #[cfg(test)]
         pub(crate) fn shows_thumbnail(&self) -> bool {
             self.imp().texture.borrow().is_some()
+        }
+
+        /// The size of the picture drawn, for tests.
+        #[cfg(test)]
+        pub(crate) fn texture_pixels(&self) -> Option<(i32, i32)> {
+            let texture = self.imp().texture.borrow();
+            texture
+                .as_ref()
+                .map(|texture| (texture.width(), texture.height()))
         }
     }
 
@@ -282,6 +347,45 @@ mod tile {
         /// What the preview was last asked for.
         pub(crate) fn asked(&self) -> &RefCell<Option<(String, Option<u64>, i32)>> {
             &self.imp().asked
+        }
+
+        /// The device pixels the sharp picture was asked at, for tests: a
+        /// square of the edge the photo is decoded to fit.
+        #[cfg(test)]
+        pub(crate) fn requested_pixels(&self) -> Option<(i32, i32)> {
+            self.imp()
+                .sharp_asked
+                .borrow()
+                .as_ref()
+                .map(|(_, edge)| (*edge, *edge))
+        }
+
+        /// The item and edge of the sharp picture asked for.
+        pub(crate) fn sharp_asked(&self) -> &RefCell<Option<(String, i32)>> {
+            &self.imp().sharp_asked
+        }
+
+        /// The sharp picture's decode, which a new one or `None` cancels.
+        pub(crate) fn set_sharp(&self, task: Option<glib::JoinHandle<()>>) {
+            if let Some(previous) = self.imp().sharp.replace(task) {
+                previous.abort();
+            }
+        }
+
+        /// Forgets the sharp picture's decode, which has finished.
+        pub(crate) fn finish_sharp(&self) {
+            drop(self.imp().sharp.take());
+        }
+
+        /// Cancels a sharp picture still being decoded; one decoded stays.
+        pub(crate) fn cancel_pending_sharp(&self) {
+            let pending = self.imp().sharp.take();
+            if let Some(pending) = pending {
+                // A finished task is gone already; an unfinished one is
+                // asked again once the tile is back on screen.
+                pending.abort();
+                self.imp().sharp_asked.replace(None);
+            }
         }
 
         /// Shows the tile selected or not.
@@ -341,6 +445,8 @@ mod imp {
         pub(super) tooltip_text: RefCell<Option<TooltipText>>,
         /// Runs when what is on screen changed: the heading follows.
         pub(super) on_shown: RefCell<Vec<Box<dyn Fn()>>>,
+        /// The view is told of a change once GTK is idle again.
+        pub(super) shown_pending: Cell<bool>,
         pub(super) _item: std::marker::PhantomData<FileItem>,
     }
 
@@ -401,6 +507,11 @@ mod imp {
         fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
             self.parent_size_allocate(width, height, baseline);
             self.obj().place_tiles(width);
+            // A menu attached to the canvas (the right-click menu) is laid
+            // out by its parent.
+            for popover in self.obj().popovers() {
+                popover.present();
+            }
         }
 
         fn grab_focus(&self) -> bool {
@@ -513,30 +624,46 @@ impl GalleryCanvas {
         };
         imp.focus.set(moved(imp.focus.get()));
         imp.anchor.set(moved(imp.anchor.get()));
-        self.read_aspects();
+        // Only the items that changed are read: a listing arrives in many
+        // small changes, and every one of them reading all 10,000 photos
+        // would hold the window up.
+        let Some(model) = self.model() else {
+            return;
+        };
+        let new: Vec<Option<f64>> = (position..position + added)
+            .map(|position| aspect_of(model.item(position).and_downcast::<FileItem>().as_ref()))
+            .collect();
+        {
+            let mut aspects = imp.aspects.borrow_mut();
+            let start = (position as usize).min(aspects.len());
+            let end = (start + removed as usize).min(aspects.len());
+            aspects.splice(start..end, new);
+        }
+        self.relayout();
+    }
+
+    /// Lays the tiles out again once GTK lays the canvas out, every tile
+    /// bound anew, as positions moved.
+    fn relayout(&self) {
+        let imp = self.imp();
+        imp.laid_for.set((0, 0));
+        for tile in imp.tiles.borrow().iter() {
+            tile.slot().show(None);
+        }
+        self.queue_resize();
+        self.notify_shown();
     }
 
     /// Reads each item's aspect ratio and lays the tiles out again.
     fn read_aspects(&self) {
         let aspects: Vec<Option<f64>> = match self.model() {
             Some(model) => (0..model.n_items())
-                .map(|position| {
-                    let item = model.item(position).and_downcast::<FileItem>()?;
-                    let (width, height) = item.entry().meta.pixel_size?;
-                    (height > 0).then(|| f64::from(width) / f64::from(height))
-                })
+                .map(|position| aspect_of(model.item(position).and_downcast::<FileItem>().as_ref()))
                 .collect(),
             None => Vec::new(),
         };
-        let imp = self.imp();
-        imp.aspects.replace(aspects);
-        imp.laid_for.set((0, 0));
-        for tile in imp.tiles.borrow().iter() {
-            // Every tile is bound again: positions moved.
-            tile.slot().show(None);
-        }
-        self.queue_resize();
-        self.notify_shown();
+        self.imp().aspects.replace(aspects);
+        self.relayout();
     }
 
     /// Sets the rows' height for `size`.
@@ -545,12 +672,7 @@ impl GalleryCanvas {
         imp.icon_size.set(Some(nearest_named(size)));
         let height = row_height(size);
         if imp.row_height.replace(height) != height {
-            imp.laid_for.set((0, 0));
-            for tile in imp.tiles.borrow().iter() {
-                tile.slot().show(None);
-            }
-            self.queue_resize();
-            self.notify_shown();
+            self.relayout();
         }
     }
 
@@ -633,6 +755,14 @@ impl GalleryCanvas {
             let transform =
                 gtk::gsk::Transform::new().translate(&graphene::Point::new(x as f32, place.y as f32));
             tile.allocate(place.width, place.height, -1, Some(transform));
+            // Only tiles on screen get sharp pictures; those beside it
+            // stop decoding (HOME-033).
+            let on_screen = f64::from(place.y + place.height) > top && f64::from(place.y) < top + page;
+            if on_screen {
+                self.ask_sharp(&tile, place.width, place.height);
+            } else {
+                tile.cancel_pending_sharp();
+            }
             tiles.push(tile);
         }
         for tile in free {
@@ -667,6 +797,10 @@ impl GalleryCanvas {
             #[upgrade_or]
             false,
             move |tile, _, _, _, tooltip| {
+                // No tooltip over a menu, as in Windows.
+                if canvas.popovers().iter().any(WidgetExt::is_visible) {
+                    return false;
+                }
                 let Some(item) = tile.slot().item() else {
                     return false;
                 };
@@ -703,6 +837,8 @@ impl GalleryCanvas {
     fn unbind_tile(tile: &GalleryTile) {
         tile.slot().show(None);
         tile.set_preview(None);
+        tile.set_sharp(None);
+        tile.sharp_asked().replace(None);
         tile.asked().replace(None);
         tile.picture().show(None);
         CellOwners::unstyle_cell(tile.picture());
@@ -717,8 +853,20 @@ impl GalleryCanvas {
         if tile.asked().borrow().as_ref() == Some(&key) {
             return;
         }
+        let same_photo = tile
+            .asked()
+            .borrow()
+            .as_ref()
+            .is_some_and(|(uri, modified, _)| *uri == entry.uri && *modified == entry.modified);
         tile.asked().replace(Some(key));
-        tile.picture().show(None);
+        if !same_photo {
+            // Another photo: its own pictures, small and sharp, from the
+            // start. The same photo at another size keeps what it draws,
+            // so a View change never blanks or blurs it.
+            tile.picture().show(None);
+            tile.set_sharp(None);
+            tile.sharp_asked().replace(None);
+        }
         let Some(request) = self.owners().previews().request(entry, pixels) else {
             tile.set_preview(None);
             return;
@@ -726,11 +874,48 @@ impl GalleryCanvas {
         let picture = tile.picture().downgrade();
         let task = glib::spawn_future_local(async move {
             let texture = crate::thumbnails::preview(request).await;
-            if let Some(picture) = picture.upgrade() {
-                picture.show(texture);
+            if let (Some(picture), Some(texture)) = (picture.upgrade(), texture) {
+                picture.offer(texture);
             }
         });
         tile.set_preview(Some(task));
+    }
+
+    /// Asks for `tile`'s photo decoded at least as large as the tile,
+    /// `width` by `height` pixels, is drawn on this display (HOME-033):
+    /// the cache's thumbnails are 128 or 256 pixels, which a tile of
+    /// Medium icons and up draws blurred. A tile that grew asks again.
+    fn ask_sharp(&self, tile: &GalleryTile, width: i32, height: i32) {
+        let Some(item) = tile.slot().item() else {
+            return;
+        };
+        let entry = item.entry();
+        let edge = sharp_edge(width, height, aspect_of(Some(&item)), self.scale_factor());
+        let asked_enough = tile
+            .sharp_asked()
+            .borrow()
+            .as_ref()
+            .is_some_and(|(uri, asked)| *uri == entry.uri && *asked >= edge);
+        if asked_enough {
+            return;
+        }
+        let Some(request) = self.owners().previews().request(entry, edge) else {
+            return;
+        };
+        tile.sharp_asked().replace(Some((entry.uri.clone(), edge)));
+        let weak = tile.downgrade();
+        let task = glib::spawn_future_local(async move {
+            let texture = crate::thumbnails::sharp_picture(request).await;
+            let Some(tile) = weak.upgrade() else {
+                return;
+            };
+            // Done: nothing is left to cancel.
+            tile.finish_sharp();
+            if let Some(texture) = texture {
+                tile.picture().offer(texture);
+            }
+        });
+        tile.set_sharp(Some(task));
     }
 
     /// Shows the selection on every tile on screen.
@@ -762,6 +947,13 @@ impl GalleryCanvas {
             .is_some_and(|window| window.gets_focus_visible());
         let focused = self.has_focus() && visible && self.imp().focus.get() == Some(position);
         crate::window::widget_tree::toggle_class(tile, "keyboard-focus", focused);
+    }
+
+    /// The menus attached to the canvas.
+    fn popovers(&self) -> Vec<gtk::Popover> {
+        std::iter::successors(self.first_child(), WidgetExt::next_sibling)
+            .filter_map(|child| child.downcast::<gtk::Popover>().ok())
+            .collect()
     }
 
     /// The tiles bound to items now.
@@ -897,11 +1089,16 @@ impl GalleryCanvas {
     }
 
     fn notify_shown(&self) {
-        // Once GTK has laid the canvas out at its new size.
+        // Once GTK has laid the canvas out at its new size, and once for
+        // many changes.
+        if self.imp().shown_pending.replace(true) {
+            return;
+        }
         glib::idle_add_local_once(glib::clone!(
             #[weak(rename_to = canvas)]
             self,
             move || {
+                canvas.imp().shown_pending.set(false);
                 for shown in canvas.imp().on_shown.borrow().iter() {
                     shown();
                 }
@@ -1345,7 +1542,9 @@ impl GalleryView {
         if heading.text() != text {
             heading.set_text(&text);
         }
-        heading.set_visible(!text.is_empty());
+        // The heading keeps its row while photos show, even when none on
+        // screen has a date, so the photos never jump up and down.
+        heading.set_visible(canvas.n_items() > 0);
         let timeline = canvas.timeline();
         let adjustment = self.vadjustment();
         let span = adjustment.upper() - adjustment.page_size();
@@ -1362,7 +1561,7 @@ impl GalleryView {
     /// The tiles on screen with the names they show and their places in
     /// the canvas, for tests.
     #[cfg(test)]
-    pub(crate) fn shown_tiles(&self) -> Vec<(String, graphene::Rect, bool)> {
+    pub(crate) fn shown_tiles(&self) -> Vec<(String, graphene::Rect, TileState)> {
         let canvas = self.canvas();
         let (top, page) = canvas.shown_span();
         canvas
@@ -1376,7 +1575,11 @@ impl GalleryView {
                     (
                         item.entry().name.clone(),
                         bounds,
-                        tile.picture().shows_thumbnail(),
+                        TileState {
+                            thumbnail: tile.picture().shows_thumbnail(),
+                            requested: tile.requested_pixels(),
+                            drawn: tile.picture().texture_pixels(),
+                        },
                     )
                 })
             })
@@ -1417,5 +1620,23 @@ mod tests {
         assert_eq!(row_height(IconSize::MEDIUM), 160);
         let heights: Vec<i32> = IconSize::NAMED.into_iter().map(row_height).collect();
         assert!(heights.windows(2).all(|pair| pair[0] > pair[1]), "{heights:?}");
+    }
+
+    /// The decoded square covers the tile in device pixels, whatever the
+    /// photo's shape, at 1x and 2x.
+    ///
+    /// parity: HOME-033
+    #[test]
+    fn the_sharp_picture_covers_its_tile_in_device_pixels() {
+        // A 2:1 photo in a 320 by 160 tile: 320 across at 1x, 640 at 2x.
+        assert_eq!(sharp_edge(320, 160, Some(2.0), 1), 320);
+        assert_eq!(sharp_edge(320, 160, Some(2.0), 2), 640);
+        // A phone screenshot, cropped to a wider tile: its height decides.
+        let edge = sharp_edge(100, 160, Some(0.2), 1);
+        assert!(f64::from(edge) * 0.2 >= 100.0, "{edge}");
+        // A panorama cropped to a narrower tile: its width decides.
+        let edge = sharp_edge(800, 160, Some(10.0), 2);
+        assert!(f64::from(edge) / 10.0 >= 320.0, "{edge}");
+        assert_eq!(sharp_edge(160, 160, None, 1), 160);
     }
 }

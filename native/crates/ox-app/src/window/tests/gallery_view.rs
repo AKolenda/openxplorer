@@ -329,3 +329,89 @@ fn a_jpeg_keeps_its_aspect_ratio_too() {
     let pier = tile(&shown, "pier.jpg");
     assert!((pier.width / pier.height - 0.5).abs() < 0.05, "{pier:?}");
 }
+
+/// Whole device pixels of `length`.
+fn device_pixels(length: f64) -> i32 {
+    #[expect(clippy::cast_possible_truncation, reason = "tile sizes are small")]
+    let pixels = length.floor() as i32;
+    pixels
+}
+
+/// Every photo on screen is drawn from a picture at least as large as its
+/// tile in device pixels, at every View size, so a screenshot's text stays
+/// readable; the picture is asked at that size.
+///
+/// parity: HOME-033
+#[gtk::test]
+fn photos_are_drawn_sharp_at_the_size_of_their_tiles() {
+    let home = PicturesHome::new();
+    let pictures = home.pictures();
+    photo(&pictures.join("wide screenshot.png"), 2400, 1200, "2026-10-02");
+    photo(&pictures.join("phone screenshot.png"), 900, 1950, "2026-10-01");
+    fs::write(pictures.join("camera.jpg"), jpeg_sized(3000, 2000, 0x0033_5577)).expect("a photo");
+    set_modified(&pictures.join("camera.jpg"), "2026-09-30");
+    let test = gallery_window(&home);
+    test.window.set_default_size(1200, 800);
+    let scale = f64::from(test.window.gallery_scale());
+    for size in ["medium", "extra-large", "small", "large"] {
+        test.activate("view", Some(size));
+        let sharp = || {
+            let shown = test.window.gallery_tiles();
+            shown.len() == 3
+                && shown.iter().all(|tile| {
+                    let needed = (
+                        device_pixels(tile.width * scale),
+                        device_pixels(tile.height * scale),
+                    );
+                    let asked = tile
+                        .requested
+                        .is_some_and(|(w, h)| w >= needed.0 && h >= needed.1);
+                    let drawn = tile
+                        .drawn
+                        .is_some_and(|(w, h)| w >= needed.0 - 1 && h >= needed.1 - 1);
+                    asked && drawn
+                })
+        };
+        for _ in 0..200 {
+            if sharp() {
+                break;
+            }
+            crate::test_support::harness::wait_for(std::time::Duration::from_millis(50));
+        }
+        assert!(sharp(), "{size} at {scale}x: {:?}", test.window.gallery_tiles());
+    }
+}
+
+/// While Gallery is being listed the address bar's progress has no end to
+/// pretend to: it sweeps, and the status bar counts the photos found so
+/// far and says it is loading; once listed, both stop.
+///
+/// parity: HOME-034
+#[gtk::test]
+fn listing_gallery_shows_honest_progress() {
+    let home = PicturesHome::new();
+    photo(&home.pictures().join("a.png"), 64, 48, "2026-11-02");
+    let test = TestWindow::open_with_standard_folders(
+        &ox_core::location::file_uri(&home.home),
+        home.locations(),
+        |_| {},
+    );
+    let held = crate::test_support::held::hold(super::gallery::GALLERY);
+    test.window
+        .navigate(super::gallery::GALLERY)
+        .expect("Gallery opens");
+    wait_until("the indeterminate progress", || {
+        let bar = test.window.address_bar();
+        bar.has_css_class("loading") && bar.has_css_class("indeterminate")
+    });
+    wait_until("a count that says it is loading", || {
+        test.window.status_bar().texts().0.ends_with("Loading…")
+    });
+    drop(held);
+    test.wait_for_listing("Gallery");
+    wait_until("progress to stop", || {
+        let bar = test.window.address_bar();
+        !bar.has_css_class("loading") && !bar.has_css_class("indeterminate")
+    });
+    assert_eq!(test.window.status_bar().texts().0, "1 item");
+}

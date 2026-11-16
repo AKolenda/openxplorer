@@ -170,7 +170,9 @@ impl BrowserWindow {
         } else {
             StatusSubject::Folder {
                 shown,
-                loading: self.is_busy() && self.is_slow(),
+                // Gallery's walk has no end it can know: its count says
+                // it is loading from the start (HOME-034).
+                loading: self.is_busy() && (self.is_slow() || self.lists_gallery()),
             }
         };
         let selected = self.folder_pane().model().summary();
