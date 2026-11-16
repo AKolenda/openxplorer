@@ -406,6 +406,11 @@ impl BrowserWindow {
         tiles
     }
 
+    /// The RGBA pixels the tile of `name` draws, with their size.
+    pub(crate) fn gallery_tile_pixels(&self, name: &str) -> Option<(i32, i32, Vec<u8>)> {
+        self.folder_pane().gallery().rendered_tile(name)
+    }
+
     /// The device pixels per pixel Gallery draws at.
     pub(crate) fn gallery_scale(&self) -> i32 {
         self.folder_pane().gallery().canvas().scale_factor()

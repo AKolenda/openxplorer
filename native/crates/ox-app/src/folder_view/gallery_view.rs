@@ -1558,6 +1558,37 @@ impl GalleryView {
         scrubber.show_timeline(&timeline, position);
     }
 
+    /// The pixels the tile of the photo called `name` draws, rendered by
+    /// the window's renderer at the display's scale, as RGBA rows, with
+    /// their width and height; for tests.
+    #[cfg(test)]
+    pub(crate) fn rendered_tile(&self, name: &str) -> Option<(i32, i32, Vec<u8>)> {
+        let canvas = self.canvas();
+        let tile = canvas
+            .tiles()
+            .into_iter()
+            .find(|tile| tile.slot().item().is_some_and(|item| item.entry().name == name))?;
+        let picture = tile.picture();
+        let scale = picture.scale_factor();
+        let (width, height) = (picture.width() * scale, picture.height() * scale);
+        let paintable = gtk::WidgetPaintable::new(Some(picture));
+        let snapshot = gtk::Snapshot::new();
+        paintable.snapshot(&snapshot, f64::from(width), f64::from(height));
+        let node = snapshot.to_node()?;
+        let renderer = picture.native()?.renderer()?;
+        let bounds = graphene::Rect::new(0.0, 0.0, width as f32, height as f32);
+        let texture = renderer.render_texture(node, Some(&bounds));
+        let mut downloader = gdk::TextureDownloader::new(&texture);
+        downloader.set_format(gdk::MemoryFormat::R8g8b8a8);
+        let (bytes, stride) = downloader.download_bytes();
+        let mut rows = Vec::with_capacity(usize::try_from(width * height * 4).ok()?);
+        for row in 0..usize::try_from(height).ok()? {
+            let start = row * stride;
+            rows.extend_from_slice(&bytes[start..start + usize::try_from(width * 4).ok()?]);
+        }
+        Some((width, height, rows))
+    }
+
     /// The tiles on screen with the names they show and their places in
     /// the canvas, for tests.
     #[cfg(test)]
