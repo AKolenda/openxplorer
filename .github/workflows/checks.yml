@@ -108,6 +108,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The image's runtimes sit in a lower layer of the container's
+      # overlay file system, where updating them to Flathub's newer
+      # commits fails with "Invalid cross-device link" and the build then
+      # crashes (flatpak/flatpak-github-actions#267). A copy on the
+      # runner's own disk, linked in place of the original, updates
+      # normally.
+      - name: Move the Flatpak installation off the container's overlay
+        run: |
+          mkdir "$RUNNER_TEMP/flatpak"
+          cp -a /var/lib/flatpak/. "$RUNNER_TEMP/flatpak/"
+          rm -rf /var/lib/flatpak
+          ln -s "$RUNNER_TEMP/flatpak" /var/lib/flatpak
       - name: Build the stable Flatpak bundle offline
         uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6.8
         with:

@@ -1,3 +1,33 @@
+# 2.0.18 — 2026-11-16
+
+Pictures and PDFs in network folders show thumbnails by default, as in Windows. The command bar's menus switch with one click, the keyboard menu opens at the item the keyboard is on, No in the Rename question ends the rename, Duplicate tab puts the copy next to the original, and Ctrl+A while renaming selects just the name. Much of this release is the work of @addition-official.
+
+## Updating from 2.0.17
+* In the Debian package, **Check for updates** installs 2.0.18 without asking for a password when **Settings › About › Install updates without asking for a password** is on (the default). As before, that holds for an administrator in an active session at the computer; anyone else, and any remote or inactive session, is asked for an administrator's password.
+* Network folders now show thumbnails unless you turned **Settings › Files and folders › Also in network folders** off before. A choice you saved is kept.
+
+## What's Changed
+* **Network folders:** pictures, PDFs and every other type that gets a thumbnail locally get one on shares, servers and phones too, as in Windows File Explorer. With **Skip very large files** on, files over 50 MB stay icons, and **Settings › Files and folders › Also in network folders** turns network thumbnails off.
+* **Command bar:** while one of its menus (New, Sort, View, Search options or See more) is open, one click on another menu button opens that menu, as in Windows 11. A click on a file, the address bar or the navigation pane closes the menu and does what it does there, instead of only closing the menu.
+* **Keyboard menu:** Shift+F10 and the Menu key with several items selected open the menu at the selected item the keyboard is on, not at the first selected item.
+* **Renaming:** No in the Rename question about a changed extension ends the rename and keeps the old name, as do Escape, N and Alt+N; plain Y and N answer it. In Properties, No puts the old name back without a message. Ctrl+A while renaming in place selects the whole name and no longer selects every item in the folder too, which happened with GTK 4.14 (Zorin OS 18, Ubuntu 24.04).
+* **Tabs:** Duplicate tab, and a double-click on a tab, put the copy right after the original and in front, with the same folder, view and Back and Forward history.
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.18_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.18-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.18-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.18-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.18-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.17...v2.0.18
+
 # 2.0.17 — 2026-11-10
 
 TAR archives open like folders and can be made from Compress to, windows resize from just inside their edges and corners, and the resize cursors show on Wayland desktops whose cursor theme is missing. More of Windows 11's File Explorer comes across: its message boxes for renaming and saving, the column titles' menu and Choose Details, and its Shift+F10, Ctrl+T, Ctrl+W and Esc keys. Windows 11's Home page, tab menu and navigation pane are new settings to turn on, and the command bar's Update button can be hidden. Much of this release is the work of @addition-official.
