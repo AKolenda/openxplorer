@@ -264,13 +264,24 @@ pub(crate) async fn preview(request: PreviewRequest) -> Option<gdk::Texture> {
 const SHARP_KEPT_COUNT: usize = 48;
 
 /// The photo at `request`'s item, a file on this computer's own disks,
-/// decoded to fit `request.pixels` square and turned upright: Gallery's
-/// sharp picture of a tile on screen, which the 128- and 256-pixel
-/// thumbnails of the cache would draw blurred (HOME-033). `None` for an
-/// item on a network or not a local file, or one the picture limits
-/// refuse; it keeps its thumbnail. Dropping the future cancels the decode.
-pub(crate) async fn sharp_picture(request: PreviewRequest) -> Option<gdk::Texture> {
-    let key = request.key();
+/// turned upright and shrunk to cover exactly `width` by `height` device
+/// pixels, cut to them from the middle: Gallery's sharp picture of a tile
+/// on screen, drawn pixel for pixel (HOME-033). The 128- and 256-pixel
+/// thumbnails of the cache, and gdk-pixbuf's own shrinking while it
+/// decodes (one bilinear step, which smears small print when it shrinks
+/// a screenshot five times), would draw it blurred; so a picture is
+/// decoded at full size, or a JPEG at no less than twice the size, by
+/// its decoder's own exact halving, and shrunk once with gdk-pixbuf's
+/// best filter. `request.pixels` is the edge of the square the photo must
+/// cover. `None` for an item on a network or not a local file, or one the
+/// picture limits refuse; it keeps its thumbnail. Dropping the future
+/// cancels the decode.
+pub(crate) async fn sharp_picture(request: PreviewRequest, width: i32, height: i32) -> Option<gdk::Texture> {
+    let key = (
+        request.uri.clone(),
+        request.modified,
+        (width << 16) | (height & 0xffff),
+    );
     let kept = SHARP_KEPT.with_borrow(|kept| {
         kept.iter()
             .find(|(seen, _)| *seen == key)
@@ -284,14 +295,22 @@ pub(crate) async fn sharp_picture(request: PreviewRequest) -> Option<gdk::Textur
         return None;
     }
     let uri = request.uri.clone();
-    let pixels = request.pixels;
+    // A JPEG's decoder halves it exactly and cheaply; its last step to the
+    // size asked is a short bilinear one, so it is asked for twice the size.
+    let decode_edge = if request.content_type == "image/jpeg" {
+        request.pixels.saturating_mul(2)
+    } else {
+        SHARP_FULL_SIZE
+    };
     let texture = DECODING
         .with(Rc::clone)
         .blocking(move |cancel| {
             let file = gio::File::for_uri(&uri);
-            picture_guard::decode_to_fit(&file, pixels, pixels, Limits::DISPLAY, Some(cancel))
-                .ok()
-                .map(|decoded| gdk::Texture::for_pixbuf(&decoded.pixbuf))
+            let decoded =
+                picture_guard::decode_to_fit(&file, decode_edge, decode_edge, Limits::DISPLAY, Some(cancel))
+                    .ok()?;
+            let shrunk = shrink_to_cover(&decoded.pixbuf, width, height)?;
+            Some(gdk::Texture::for_pixbuf(&shrunk))
         })
         .await
         .flatten()?;
@@ -302,6 +321,34 @@ pub(crate) async fn sharp_picture(request: PreviewRequest) -> Option<gdk::Textur
         kept.push((key, texture.clone()));
     });
     Some(texture)
+}
+
+/// The edge a picture other than a JPEG is decoded within for Gallery's
+/// sharp picture: its own size, under the picture limits.
+const SHARP_FULL_SIZE: i32 = 16_384;
+
+/// `picture` shrunk with gdk-pixbuf's best filter until it just covers
+/// `width` by `height`, then cut to that from the middle; a picture smaller
+/// than that is kept at its own size, cut to the tile's shape.
+pub(crate) fn shrink_to_cover(picture: &Pixbuf, width: i32, height: i32) -> Option<Pixbuf> {
+    let (own_width, own_height) = (f64::from(picture.width()), f64::from(picture.height()));
+    let factor = (f64::from(width) / own_width).max(f64::from(height) / own_height);
+    let shrunk = if factor < 1.0 {
+        #[expect(clippy::cast_possible_truncation, reason = "picture sizes are small")]
+        let (cover_width, cover_height) = (
+            ((own_width * factor).round() as i32).max(width).max(1),
+            ((own_height * factor).round() as i32).max(height).max(1),
+        );
+        picture.scale_simple(cover_width, cover_height, gtk::gdk_pixbuf::InterpType::Hyper)?
+    } else {
+        picture.clone()
+    };
+    let (cut_width, cut_height) = (width.min(shrunk.width()), height.min(shrunk.height()));
+    let (left, top) = (
+        (shrunk.width() - cut_width) / 2,
+        (shrunk.height() - cut_height) / 2,
+    );
+    shrunk.new_subpixbuf(left, top, cut_width, cut_height).copy()
 }
 
 /// Whether the item at `uri`, or the file `target` it stands for, is on a

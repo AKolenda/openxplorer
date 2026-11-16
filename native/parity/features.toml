@@ -1603,7 +1603,7 @@ native_note = "native/crates/ox-app/src/photo_rotate.rs (rotate_file, turn_jpeg,
 id = "HOME-033"
 area = "HOME"
 title = "Gallery's photos are sharp at every size"
-behaviour = "Each photo on screen in Gallery is drawn from a picture at least as large as its tile in device pixels (at 1x and 2x, at Extra large to Small icons), so text in a screenshot stays readable, as Windows draws it. A tile first shows the desktop's cached thumbnail; once it is on screen, the photo on this computer's disks is decoded at the tile's size off the main thread (a few at a time, within the app's picture limits, turned upright) and replaces it. Leaving the screen cancels a decode not done yet; a larger tile (a larger View size or a wider window) asks again. A photo elsewhere keeps the cached thumbnail."
+behaviour = "Each photo on screen in Gallery is drawn from a picture of exactly its tile's device pixels, so text in a screenshot is as sharp as the screenshot shrunk straight to the tile (at 1x and 2x, at Extra large to Small icons), as Windows draws it. A tile first shows the desktop's cached thumbnail (128 or 256 pixels, which would blur); once it is on screen, the photo on this computer's disks is decoded off the main thread (at full size, or a JPEG at no less than twice the size by its decoder's exact halving), shrunk once with gdk-pixbuf's best filter to cover the tile, cut to it and drawn pixel for pixel as a plain texture node: GTK's software renderer draws a scaled texture node through a surface of the widget's logical size, which halves the picture at a scale of 2. A few decode at a time; leaving the screen cancels a decode not done; a tile of another size asks again; a View change keeps the picture drawn until the new one is ready. A photo elsewhere keeps the cached thumbnail."
 origin = ["openxplorer"]
 priority = "could"
 openxplorer = "missing"
@@ -1613,7 +1613,7 @@ sources = [
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/folder_view/gallery_view.rs (GalleryCanvas::ask_sharp, sharp_pixels); native/crates/ox-app/src/thumbnails.rs (sharp_picture). Test: native/crates/ox-app/src/window/tests/gallery_view.rs (photos_are_drawn_sharp_at_the_size_of_their_tiles)."
+native_note = "native/crates/ox-app/src/folder_view/gallery_view.rs (GalleryCanvas::ask_sharp, GalleryPicture snapshot); native/crates/ox-app/src/thumbnails.rs (sharp_picture, shrink_to_cover). Tests: native/crates/ox-app/src/window/tests/gallery_view.rs (small_print_is_drawn_as_sharp_as_the_original_shrunk_to_the_tile: the window's rendered tile against an area-average of the original, with a 128-pixel thumbnail cached, at Medium and Large, run at 1x and GDK_SCALE=2; photos_are_drawn_sharp_at_the_size_of_their_tiles); native/crates/ox-app/src/folder_view/gallery_view.rs (the_sharp_picture_covers_its_tile_in_device_pixels)."
 
 [[feature]]
 id = "HOME-034"

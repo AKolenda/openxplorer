@@ -199,6 +199,18 @@ mod tile {
                 // narrower or wider than the layout allows is cropped.
                 #[expect(clippy::cast_precision_loss, reason = "texture sizes are small")]
                 let (texture_width, texture_height) = (texture.width() as f32, texture.height() as f32);
+                #[expect(clippy::cast_precision_loss, reason = "scales are small")]
+                let device = widget.scale_factor() as f32;
+                if (texture_width - width * device).abs() < 0.5
+                    && (texture_height - height * device).abs() < 0.5
+                {
+                    // The tile's own pixels, drawn one for one (HOME-033).
+                    let bounds = graphene::Rect::new(0.0, 0.0, width, height);
+                    snapshot.push_rounded_clip(&gsk::RoundedRect::from_rect(bounds, 4.0));
+                    snapshot.append_texture(&texture, &bounds);
+                    snapshot.pop();
+                    return;
+                }
                 let scale = (width / texture_width).max(height / texture_height);
                 let drawn = graphene::Rect::new(
                     (width - texture_width * scale) / 2.0,
@@ -208,7 +220,11 @@ mod tile {
                 );
                 let bounds = graphene::Rect::new(0.0, 0.0, width, height);
                 snapshot.push_rounded_clip(&gsk::RoundedRect::from_rect(bounds, 4.0));
-                snapshot.append_scaled_texture(&texture, gsk::ScalingFilter::Trilinear, &drawn);
+                // A plain texture node, drawn at the display's own pixels:
+                // GTK's software renderer draws a scaled texture node
+                // through a surface of the widget's logical size, which at
+                // a scale of 2 halves the picture and blurs it (HOME-033).
+                snapshot.append_texture(&texture, &drawn);
                 snapshot.pop();
             }
         }
@@ -226,7 +242,7 @@ mod tile {
             pub(super) sharp: RefCell<Option<glib::JoinHandle<()>>>,
             /// The item and edge the sharp picture was asked for, decoded
             /// or still being decoded.
-            pub(super) sharp_asked: RefCell<Option<(String, i32)>>,
+            pub(super) sharp_asked: RefCell<Option<(String, (i32, i32))>>,
             pub(super) selected: Cell<bool>,
         }
 
@@ -349,19 +365,19 @@ mod tile {
             &self.imp().asked
         }
 
-        /// The device pixels the sharp picture was asked at, for tests: a
-        /// square of the edge the photo is decoded to fit.
+        /// The device pixels the sharp picture was asked at, for tests: the
+        /// tile's own.
         #[cfg(test)]
         pub(crate) fn requested_pixels(&self) -> Option<(i32, i32)> {
             self.imp()
                 .sharp_asked
                 .borrow()
                 .as_ref()
-                .map(|(_, edge)| (*edge, *edge))
+                .map(|(_, pixels)| *pixels)
         }
 
         /// The item and edge of the sharp picture asked for.
-        pub(crate) fn sharp_asked(&self) -> &RefCell<Option<(String, i32)>> {
+        pub(crate) fn sharp_asked(&self) -> &RefCell<Option<(String, (i32, i32))>> {
             &self.imp().sharp_asked
         }
 
@@ -890,29 +906,33 @@ impl GalleryCanvas {
             return;
         };
         let entry = item.entry();
-        let edge = sharp_edge(width, height, aspect_of(Some(&item)), self.scale_factor());
-        let asked_enough = tile
+        let scale = self.scale_factor();
+        let pixels = (width * scale, height * scale);
+        let asked_already = tile
             .sharp_asked()
             .borrow()
             .as_ref()
-            .is_some_and(|(uri, asked)| *uri == entry.uri && *asked >= edge);
-        if asked_enough {
+            .is_some_and(|(uri, asked)| *uri == entry.uri && *asked == pixels);
+        if asked_already {
             return;
         }
+        let edge = sharp_edge(width, height, aspect_of(Some(&item)), scale);
         let Some(request) = self.owners().previews().request(entry, edge) else {
             return;
         };
-        tile.sharp_asked().replace(Some((entry.uri.clone(), edge)));
+        tile.sharp_asked().replace(Some((entry.uri.clone(), pixels)));
         let weak = tile.downgrade();
         let task = glib::spawn_future_local(async move {
-            let texture = crate::thumbnails::sharp_picture(request).await;
+            let texture = crate::thumbnails::sharp_picture(request, pixels.0, pixels.1).await;
             let Some(tile) = weak.upgrade() else {
                 return;
             };
             // Done: nothing is left to cancel.
             tile.finish_sharp();
             if let Some(texture) = texture {
-                tile.picture().offer(texture);
+                // The picture for the tile's size now, even when a larger
+                // one, for a larger size before, was drawn.
+                tile.picture().show(Some(texture));
             }
         });
         tile.set_sharp(Some(task));
@@ -1576,6 +1596,7 @@ impl GalleryView {
         paintable.snapshot(&snapshot, f64::from(width), f64::from(height));
         let node = snapshot.to_node()?;
         let renderer = picture.native()?.renderer()?;
+        #[expect(clippy::cast_precision_loss, reason = "tile sizes are small")]
         let bounds = graphene::Rect::new(0.0, 0.0, width as f32, height as f32);
         let texture = renderer.render_texture(node, Some(&bounds));
         let mut downloader = gdk::TextureDownloader::new(&texture);

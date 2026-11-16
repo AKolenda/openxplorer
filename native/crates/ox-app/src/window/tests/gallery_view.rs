@@ -416,24 +416,26 @@ fn listing_gallery_shows_honest_progress() {
     assert_eq!(test.window.status_bar().texts().0, "1 item");
 }
 
-/// A picture of "text": lines of 2-pixel black and white blocks on white,
-/// as small print in a screenshot, `width` by `height` pixels, as RGB.
+/// A picture of "text": lines of 20-pixel black and white glyph blocks on
+/// white, as bold print in a screenshot that is still legible once the
+/// screenshot is shrunk to a tile, `width` by `height` pixels, as RGB.
 fn text_like(width: usize, height: usize) -> Vec<u8> {
     let mut pixels = vec![255_u8; width * height * 3];
     let mut seed = 0x2545_f491_u32;
+    let mut ink = vec![false; (width / 20 + 1) * (height / 20 + 1)];
+    for cell in &mut ink {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        *cell = seed & 3 != 0;
+    }
     for y in 0..height {
-        // 8 rows of glyphs, then 6 of line spacing.
-        if y % 14 >= 8 {
+        // 40-pixel lines: 20 of glyphs, then 20 of spacing.
+        if y % 40 >= 20 {
             continue;
         }
         for x in 0..width {
-            if x % 2 == 0 && y % 2 == 0 {
-                seed ^= seed << 13;
-                seed ^= seed >> 17;
-                seed ^= seed << 5;
-            }
-            let ink = (seed >> ((x / 2 + y / 2) % 16)) & 1 == 1;
-            if ink {
+            if ink[(y / 20) * (width / 20 + 1) + x / 20] {
                 let at = (y * width + x) * 3;
                 pixels[at..at + 3].copy_from_slice(&[20, 20, 20]);
             }
@@ -445,6 +447,12 @@ fn text_like(width: usize, height: usize) -> Vec<u8> {
 /// `rgb` (`width` by `height`) shrunk to cover `out_width` by `out_height`
 /// by averaging every source pixel each output pixel covers, then cut to
 /// it from the middle: the reference a sharp tile matches.
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "picture sizes are small"
+)]
 fn area_average(rgb: &[u8], width: usize, height: usize, out_width: usize, out_height: usize) -> Vec<u8> {
     let factor = (out_width as f64 / width as f64).max(out_height as f64 / height as f64);
     let (covered_width, covered_height) = (
@@ -477,6 +485,7 @@ fn area_average(rgb: &[u8], width: usize, height: usize, out_width: usize, out_h
 /// The mean difference, per channel out of 255, between the RGBA pixels
 /// `drawn` and the RGB `reference`, leaving out a 5-pixel border (the
 /// tile's rounded corners).
+#[expect(clippy::cast_precision_loss, reason = "picture sizes are small")]
 fn mean_difference(drawn: &[u8], reference: &[u8], width: usize, height: usize) -> f64 {
     let mut sum = 0_u64;
     let mut count = 0_u64;
@@ -501,8 +510,8 @@ fn mean_difference(drawn: &[u8], reference: &[u8], width: usize, height: usize) 
 /// parity: HOME-033
 #[gtk::test]
 #[expect(
-    clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
     reason = "picture sizes are small"
 )]
@@ -559,7 +568,7 @@ fn small_print_is_drawn_as_sharp_as_the_original_shrunk_to_the_tile() {
                 let (tile_width, tile_height) = (tile_width as usize, tile_height as usize);
                 let reference = area_average(&rgb, width, height, tile_width, tile_height);
                 last = mean_difference(&drawn, &reference, tile_width, tile_height);
-                if last < 6.0 {
+                if last < 3.0 {
                     break;
                 }
             }
