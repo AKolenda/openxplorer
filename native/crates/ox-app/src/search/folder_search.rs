@@ -157,7 +157,7 @@ impl FolderSearch {
             // such as the home folder with pinned folders, or Windows 11's
             // Home, which has no listing of its own: its whole tree is
             // walked, its own matches first, so files in the subfolders
-            // nobody cached are found too (SRCH-007, HOME-033).
+            // nobody cached are found too (SRCH-007, HOME-035).
             SearchSource::CurrentFolderAndCachedSubfolders if walks_subfolders(folder) => {
                 SearchSource::CurrentFolder
             }

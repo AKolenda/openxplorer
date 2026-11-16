@@ -168,9 +168,9 @@ pub(crate) fn wildcard_in_name(pattern: &str, lowercase_name: &str) -> bool {
     extension.is_some_and(|extension| matches_tokens(&tokens, &lowercase_name[extension..]))
 }
 
-/// Whether the whole of `name` matches the wildcard `pattern`.
-#[cfg(test)]
-fn wildcard_matches(pattern: &str, name: &str) -> bool {
+/// Whether the whole of `name` matches the wildcard `pattern`, as
+/// `name:~` asks ([`super::expression`]).
+pub(crate) fn wildcard_matches(pattern: &str, name: &str) -> bool {
     let pattern: Vec<char> = pattern.chars().collect();
     matches_tokens(&tokens(&pattern), name)
 }
