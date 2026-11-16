@@ -1002,6 +1002,32 @@ fn a_quick_access_tiles_menu_is_windows_11s() {
     classic.popdown();
 }
 
+/// Ctrl+C on a Quick access tile copies its folder, as the menu's Copy,
+/// which shows Ctrl+C, does.
+///
+/// parity: HOME-013
+#[gtk::test]
+fn ctrl_c_on_a_quick_access_tile_copies_its_folder() {
+    use super::recent_rows::copied_uris;
+
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Projects")).expect("fixture subfolder");
+    let test = home_window(&fixture);
+    test.activate("pin-location", Some(&fixture.uri_of("Projects")));
+    wait_until("the Projects tile", || {
+        home_page::tile_names(body(&test)).contains(&"Projects".to_owned())
+    });
+    test.window.clipboard().set_text("Synthetic text");
+
+    let handled = home_page::press_on_item(body(&test), "Projects", "<Control>c");
+
+    assert!(handled, "the tile handles Ctrl+C");
+    let projects = fixture.uri_of("Projects");
+    wait_until("the copied folder", || {
+        copied_uris(&test).as_deref() == Some(projects.as_str())
+    });
+}
+
 /// The open menu in the folder pane, once it has the keyboard.
 fn open_tile_menu(test: &TestWindow) -> crate::window::menu_popover::MenuPopover {
     use crate::test_support::harness::descendants;

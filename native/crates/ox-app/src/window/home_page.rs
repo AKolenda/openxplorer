@@ -1031,6 +1031,29 @@ fn connect_item_keys(flow: &gtk::FlowBox, items: &Rc<Vec<Item>>) {
     ));
     let trigger = gtk::ShortcutTrigger::parse_string("<Control><Shift>c");
     shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(copy_path)));
+    // Ctrl+C on a Quick access tile copies its folder, as its menu's
+    // Copy says; a share's root has no Copy, and other rows leave Ctrl+C
+    // to the window.
+    let copy = gtk::CallbackAction::new(glib::clone!(
+        #[strong]
+        items,
+        move |flow, _| {
+            let Some(item) = flow
+                .downcast_ref::<gtk::FlowBox>()
+                .and_then(|flow| selected_item(flow, &items))
+            else {
+                return glib::Propagation::Proceed;
+            };
+            let is_tile = matches!(item.menu, ItemMenu::Place(_));
+            if !is_tile || ox_core::location::is_smb_share_root(&item.properties) {
+                return glib::Propagation::Proceed;
+            }
+            WindowAction::CopyFolder.activate_from(&item.child, Some(&item.properties.to_variant()));
+            glib::Propagation::Stop
+        }
+    ));
+    let trigger = gtk::ShortcutTrigger::parse_string("<Control>c");
+    shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(copy)));
     flow.add_controller(shortcuts);
 }
 
@@ -1857,11 +1880,6 @@ pub(crate) fn item_named(page: &gtk::Box, name: &str) -> gtk::FlowBoxChild {
 #[cfg(test)]
 pub(crate) fn item_menu(page: &gtk::Box, name: &str, accelerator: &str) -> MenuPopover {
     let child = item_named(page, name);
-    let flow = child
-        .parent()
-        .and_downcast::<gtk::FlowBox>()
-        .expect("an item's box");
-    flow.select_child(&child);
     let pane = child
         .ancestor(super::folder_pane::FolderPane::static_type())
         .expect("the folder pane");
@@ -1871,9 +1889,25 @@ pub(crate) fn item_menu(page: &gtk::Box, name: &str, accelerator: &str) -> MenuP
             .collect()
     };
     let before = menus(&pane).len();
+    let ran = press_on_item(page, name, accelerator);
+    assert!(ran, "{accelerator} opens the item's menu");
+    let opened = menus(&pane);
+    assert!(opened.len() > before, "a menu opened");
+    opened.last().expect("the menu").clone()
+}
+
+/// Selects the item named `name` and runs the shortcut of its box that
+/// `accelerator` triggers; false when none handles it.
+#[cfg(test)]
+pub(crate) fn press_on_item(page: &gtk::Box, name: &str, accelerator: &str) -> bool {
+    let child = item_named(page, name);
+    let flow = child
+        .parent()
+        .and_downcast::<gtk::FlowBox>()
+        .expect("an item's box");
+    flow.select_child(&child);
     let (key, modifiers) = gtk::accelerator_parse(accelerator).expect("a valid accelerator");
-    let ran = flow
-        .observe_controllers()
+    flow.observe_controllers()
         .into_iter()
         .filter_map(|controller| controller.ok().and_downcast::<gtk::ShortcutController>())
         .flat_map(|shortcuts| {
@@ -1888,11 +1922,7 @@ pub(crate) fn item_menu(page: &gtk::Box, name: &str, accelerator: &str) -> MenuP
             })
         })
         .and_then(|shortcut| shortcut.action())
-        .is_some_and(|action| action.activate(gtk::ShortcutActionFlags::empty(), &flow, None));
-    assert!(ran, "{accelerator} opens the item's menu");
-    let opened = menus(&pane);
-    assert!(opened.len() > before, "a menu opened");
-    opened.last().expect("the menu").clone()
+        .is_some_and(|action| action.activate(gtk::ShortcutActionFlags::empty(), &flow, None))
 }
 
 /// The labels of the menu of the item named `name`, opened by the Menu

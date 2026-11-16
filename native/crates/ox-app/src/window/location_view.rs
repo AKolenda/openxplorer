@@ -200,6 +200,11 @@ fn tab_icon(
     if let Some(glyph) = listed_place_glyph(uri) {
         return Art::Glyph(glyph);
     }
+    // Home first: `user-dirs.dirs` may put a standard folder at the home
+    // folder (`XDG_DESKTOP_DIR="$HOME"`), whose tab still shows Home.
+    if location::same_location(uri, &locations.home_uri()) {
+        return Art::Glyph(Page::Home.icon());
+    }
     if let Some(folder) = standard_folder_at(uri, known_folders) {
         // On the network, as the navigation pane's row shows it.
         return if locations.is_network_location(uri) {
@@ -207,9 +212,6 @@ fn tab_icon(
         } else {
             Art::for_known_folder(folder)
         };
-    }
-    if location::same_location(uri, &locations.home_uri()) {
-        return Art::Glyph(Page::Home.icon());
     }
     if is_device_location(uri) {
         Art::Glyph(Icon::Phone)
@@ -695,6 +697,29 @@ mod tests {
         assert_eq!(tab_on("file:///home/demo/Templates"), Art::Folder);
         assert_eq!(tab_on("file:///home/demo/Public"), Art::Folder);
         assert_eq!(tab_on("file:///home/demo/Downloads/Old"), Art::Folder);
+    }
+
+    /// When `user-dirs.dirs` puts a standard folder at the home folder
+    /// (`XDG_DESKTOP_DIR="$HOME"`, as some desktops write it), the home
+    /// folder's tab still shows Home's glyph, not that folder's.
+    ///
+    /// parity: TAB-010
+    #[test]
+    fn the_home_folders_tab_shows_home_when_a_standard_folder_is_home() {
+        let known_folders = [Place {
+            label: String::new(),
+            uri: "file:///home/demo".to_owned(),
+            known_folder: Some(KnownFolder::Desktop),
+            is_shared: false,
+        }];
+        let locations = LocationContext {
+            home: Some("/home/demo".into()),
+            ..LocationContext::default()
+        };
+        assert_eq!(
+            tab_icon("file:///home/demo/", &locations, &[], &known_folders),
+            Art::Glyph(Page::Home.icon())
+        );
     }
 
     /// A location and the title and tooltip of its tab.
