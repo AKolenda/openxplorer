@@ -447,11 +447,11 @@ fn the_tab_shows_a_progress_ring_while_the_search_runs() {
     assert!(test.window.is_searching(), "the results still show");
 }
 
-/// A search that is cancelled, by emptying the box, takes its ring away.
+/// A search that is canceled, by emptying the box, takes its ring away.
 ///
 /// parity: SRCH-048
 #[gtk::test]
-fn a_cancelled_search_takes_the_ring_away() {
+fn a_canceled_search_takes_the_ring_away() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.window.search_box().entry().set_text("notes");

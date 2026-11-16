@@ -2,14 +2,14 @@
 //! A small spinning progress ring, as Windows 11 File Explorer shows on a
 //! tab while its search's results are still coming in or its folder is
 //! loading (checked on Windows 11 build 26200): an arc in the accent
-//! colour that turns clockwise.
+//! color that turns clockwise.
 //!
 //! Drawn as the drive ring of Properties is drawn
 //! (`properties/space_ring.rs`): [`render`] computes the arc's pixels at
 //! the device's scale, sampling each pixel sixteen times for smooth
 //! edges, once for each of [`FRAMES`] turns of the arc, and the widget
 //! shows them in turn as textures in a `gtk::Picture`, one per frame of
-//! the frame clock. The colour is the skin's accent (`progressring` in
+//! the frame clock. The color is the skin's accent (`progressring` in
 //! `title-bar.css`). With animations off (`gtk-enable-animations`, ACC-010)
 //! the ring stands still, as the address bar's progress does.
 
@@ -30,7 +30,7 @@ const FRAMES: usize = 30;
 /// How long one turn takes.
 const TURN: Duration = Duration::from_millis(1100);
 
-/// An RGBA colour, not premultiplied.
+/// An RGBA color, not premultiplied.
 type Rgba = [u8; 4];
 
 /// The pixels of a ring `size` pixels square whose arc starts `start`
@@ -41,20 +41,20 @@ type Rgba = [u8; 4];
     clippy::cast_sign_loss,
     reason = "pixel coordinates and channels far inside every type's range"
 )]
-pub(crate) fn render(start: f64, size: usize, colour: Rgba) -> Vec<u8> {
+pub(crate) fn render(start: f64, size: usize, color: Rgba) -> Vec<u8> {
     let mut image = vec![0_u8; size * size * 4];
-    let centre = size as f64 / 2.0;
-    let outer = centre;
+    let center = size as f64 / 2.0;
+    let outer = center;
     let inner = outer - size as f64 * THICKNESS;
     let samples = (SAMPLES * SAMPLES) as f64;
-    let alpha = f64::from(colour[3]) / 255.0;
+    let alpha = f64::from(color[3]) / 255.0;
     for y in 0..size {
         for x in 0..size {
             let mut covered = 0.0_f64;
             for sub_y in 0..SAMPLES {
                 for sub_x in 0..SAMPLES {
-                    let dx = x as f64 + (sub_x as f64 + 0.5) / SAMPLES as f64 - centre;
-                    let dy = y as f64 + (sub_y as f64 + 0.5) / SAMPLES as f64 - centre;
+                    let dx = x as f64 + (sub_x as f64 + 0.5) / SAMPLES as f64 - center;
+                    let dy = y as f64 + (sub_y as f64 + 0.5) / SAMPLES as f64 - center;
                     let distance = dx.hypot(dy);
                     if distance > outer || distance < inner {
                         continue;
@@ -69,7 +69,7 @@ pub(crate) fn render(start: f64, size: usize, colour: Rgba) -> Vec<u8> {
             let share = covered / samples * alpha;
             let at = (y * size + x) * 4;
             for channel in 0..3 {
-                image[at + channel] = (f64::from(colour[channel]) * share).round() as u8;
+                image[at + channel] = (f64::from(color[channel]) * share).round() as u8;
             }
             image[at + 3] = (share * 255.0).round() as u8;
         }
@@ -121,7 +121,7 @@ mod imp {
         /// The frame shown.
         pub(super) shown: Cell<usize>,
         /// What the frames were drawn for: their size in pixels and the
-        /// colour.
+        /// color.
         pub(super) drawn: Cell<Option<(i32, Rgba)>>,
         /// Turns the arc while the ring is on screen and animations are on.
         pub(super) tick: RefCell<Option<gtk::TickCallbackId>>,
@@ -187,8 +187,11 @@ mod imp {
 
         fn snapshot(&self, snapshot: &gtk::Snapshot) {
             let obj = self.obj();
-            let recoloured = self.drawn.get().is_some_and(|(_, colour)| colour != obj.colour());
-            if recoloured {
+            let recolored = self
+                .drawn
+                .get()
+                .is_some_and(|(_, color)| color != obj.ring_color());
+            if recolored {
                 obj.queue_allocate();
             }
             self.parent_snapshot(snapshot);
@@ -276,7 +279,7 @@ impl ProgressRing {
     }
 
     /// Places the picture in `width` × `height`, and draws the frames
-    /// again when their size, scale or colour changed.
+    /// again when their size, scale or color changed.
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -289,8 +292,8 @@ impl ProgressRing {
             picture.allocate(width, height, -1, None);
         }
         let side = (f64::from(width.min(height)) * self.device_scale()).ceil() as i32;
-        let colour = self.colour();
-        let key = (side, colour);
+        let color = self.ring_color();
+        let key = (side, color);
         if imp.drawn.get() == Some(key) || side <= 0 {
             return;
         }
@@ -302,7 +305,7 @@ impl ProgressRing {
                     side,
                     side,
                     gdk::MemoryFormat::R8g8b8a8Premultiplied,
-                    &glib::Bytes::from_owned(render(frame as f64 / FRAMES as f64, size, colour)),
+                    &glib::Bytes::from_owned(render(frame as f64 / FRAMES as f64, size, color)),
                     size * 4,
                 )
             })
@@ -311,9 +314,9 @@ impl ProgressRing {
         self.show_frame(imp.shown.get());
     }
 
-    /// The skin's colour for the ring.
-    fn colour(&self) -> Rgba {
-        bytes_of(&self.color())
+    /// The skin's color for the ring.
+    fn ring_color(&self) -> Rgba {
+        bytes_of(&WidgetExt::color(self))
     }
 
     /// The pixels per logical pixel of the surface the ring shows on.
