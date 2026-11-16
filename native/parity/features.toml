@@ -15501,7 +15501,7 @@ native_note = "native/crates/ox-app/src/window/toast.rs (one toast, replaced, hi
 id = "LOOK-022"
 area = "LOOK"
 title = "Responsive layout breakpoints"
-behaviour = "At ≤1190 px paddings and column widths tighten. At ≤960 px the details pane is hidden. At ≤680 px search, Cut, Rename, Copy path and the Details button are hidden, the Date and Type columns drop, and cards use one column. At ≤1050 px the appearance label is hidden. At ≤1150 or 750 px search columns adapt. Settings stacks at ≤650 px. Properties and versions reflow at ≤660, 820 and 500 px."
+behaviour = "At ≤1190 px paddings and column widths tighten. At ≤960 px the details pane is hidden. Between 1190 and 961 px the details pane narrows with the window, from 235 down to 180 px, and the Details list's Name column gives way first, down to 140 px, before the list scrolls sideways, so the pane never cuts columns off (native change: the Python app kept Name at 260 px). At ≤680 px search, Cut, Rename, Copy path and the Details button are hidden, the Date and Type columns drop, and cards use one column. At ≤1050 px the appearance label is hidden. At ≤1150 or 750 px search columns adapt. Settings stacks at ≤650 px. Properties and versions reflow at ≤660, 820 and 500 px."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -15522,7 +15522,7 @@ python_tests = [
 ]
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/breakpoints.rs (the 1190/1050/960/680 bands, appearance label hidden from 1050) and window/tests/narrow_windows.rs: details pane gives way below 961 px, compact windows drop the search box, Cut, Rename, Copy path, Details and two columns, the Name column scrolls sideways. Hidden commands stay on their keys and menus. Settings, Properties and search reflow are covered by their own areas."
+native_note = "native/crates/ox-app/src/window/breakpoints.rs (the 1190/1050/960/680 bands, appearance label hidden from 1050) and window/tests/narrow_windows.rs: details pane gives way below 961 px, compact windows drop the search box, Cut, Rename, Copy path, Details and two columns, the Name column gives way down to 140 px before the list scrolls sideways. Hidden commands stay on their keys and menus. Settings, Properties and search reflow are covered by their own areas. native/crates/ox-app/src/window/tests/narrow_windows.rs (the_columns_fit_beside_the_details_pane_and_name_gives_way_first, the_details_pane_narrows_with_the_window, in_a_900_pixel_window_name_gives_way_before_the_list_scrolls); native/crates/ox-app/src/window/picker.rs (the_details_pane_leaves_every_column_of_the_dialogs_list_in_view)."
 
 [[feature]]
 id = "LOOK-023"
