@@ -773,17 +773,44 @@ fn replace_overwrites_without_the_recycle_bin_when_chosen() {
     );
 }
 
-/// The default is unchanged: Replace sends the old file to the Recycle
-/// Bin, as the owner chose.
+/// By default Replace overwrites the old file, as Windows 11 does
+/// (checked in Windows 11, build 26200: nothing new appeared in the
+/// Recycle Bin), through private staging, so no temporary file is left.
 ///
 /// parity: OPS-028
 #[test]
-fn replace_recycles_the_old_file_by_default() {
+fn replace_overwrites_the_old_file_by_default() {
     require_private_trash();
     assert_eq!(
         OperationContext::default().replaced_files,
-        ReplacedFiles::RecycleBin
+        ReplacedFiles::Overwrite
     );
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("report.png"), b"incoming");
+    write(&dst.join("report.png"), b"existing");
+
+    let scan = scan(TransferMode::Copy, &src, &["report.png"], &dst);
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &OperationContext::default(),
+        |_| {},
+    ))
+    .unwrap();
+
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
+    assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"incoming");
+    assert_eq!(recycled_now(&dst.join("report.png")), 0, "nothing was recycled");
+    assert!(staging_left_in(&dst).is_empty(), "{:?}", staging_left_in(&dst));
+}
+
+/// With the switch on, Replace sends the old file to the Recycle Bin.
+///
+/// parity: OPS-028
+#[test]
+fn replace_recycles_the_old_file_when_chosen() {
+    require_private_trash();
     let folders = Folders::new();
     let (src, dst) = (folders.source(), folders.destination());
     write(&src.join("report.png"), b"incoming");

@@ -2795,3 +2795,73 @@ fn ok_during_apply_closes_once_the_change_is_made() {
     wait_until("the window to close", || window.is_closed());
     assert_eq!(extension_questions(&window), 0, "asked once");
 }
+
+/// With "Hide extensions for known file types" on, as it is by default,
+/// Properties names a file as the view does, as Windows 11 (build 26200)
+/// does: the General tab's name box shows "Notes 2" and the window is
+/// "Notes 2 Properties". A name typed there keeps the hidden extension,
+/// as renaming in place does, and the title follows the new name. A
+/// folder and a name with no known type's extension show whole.
+///
+/// parity: PROP-003, PROP-005, VIEW-069
+#[gtk::test]
+fn properties_leave_out_a_hidden_extension_and_a_rename_keeps_it() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("README"), b"Plain text\n").expect("a file without an extension");
+    let test = TestWindow::open(&fixture.uri());
+    assert!(
+        !test.context.settings_data().preferences.show_extensions,
+        "extensions are hidden by default"
+    );
+
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2 Properties");
+    let name = name_field(&window);
+    assert_eq!(name.text(), "Notes 2");
+    name.set_text("Harbor notes");
+    assert!(window.apply_button().is_sensitive(), "a new name is a change");
+    press(&window, "Apply");
+    wait_until("the rename", || fixture.path("Harbor notes.txt").exists());
+    assert!(!fixture.path("Notes 2.txt").exists());
+    assert!(!fixture.path("Harbor notes").exists(), "the extension is kept");
+    wait_until("the title to follow", || window.title_text() == "Harbor notes Properties");
+    assert_eq!(name.text(), "Harbor notes");
+    assert!(!window.apply_button().is_sensitive(), "nothing is left to apply");
+    window.close();
+
+    for (item, title, shown) in [
+        ("Documents", "Documents Properties", "Documents"),
+        ("README", "README Properties", "README"),
+    ] {
+        test.select_named(item);
+        test.activate("properties", None);
+        let window = test.wait_for_properties(title);
+        assert_eq!(name_field(&window).text(), shown, "{item} shows whole");
+        window.close();
+    }
+}
+
+/// With extensions shown, Properties shows the whole name, and a name
+/// typed there is the whole new name.
+///
+/// parity: PROP-003, PROP-005, VIEW-069
+#[gtk::test]
+fn properties_show_the_whole_name_while_extensions_are_shown() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("file-name-extensions", None);
+    wait_until("extensions to show", || {
+        test.context.settings_data().preferences.show_extensions
+    });
+
+    test.select_named("Notes 10.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 10.txt Properties");
+    let name = name_field(&window);
+    assert_eq!(name.text(), "Notes 10.txt");
+    name.set_text("Notes 11.txt");
+    press(&window, "Apply");
+    wait_until("the rename", || fixture.path("Notes 11.txt").exists());
+    wait_until("the title to follow", || window.title_text() == "Notes 11.txt Properties");
+}
