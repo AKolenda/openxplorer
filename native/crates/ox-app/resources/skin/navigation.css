@@ -35,6 +35,11 @@
   border-bottom-color: @ox_accent;
   box-shadow: inset 0 -1px @ox_accent;
 }
+/* No frame round the whole address while a drag is over it (DND-011):
+   GTK's theme draws a green line round a drop target's widget, and
+   Windows outlines only the crumb a drop would go into. */
+.address:drop(active) { box-shadow: none; }
+.address:drop(active):focus-within { box-shadow: inset 0 -1px @ox_accent; }
 /* While the tab in front opens a location, the address shows its
    progress as Windows Explorer's does: a fill crawling along behind the
    address, quickly at first and then ever slower, until the location
@@ -144,3 +149,4 @@
 .search-wrap entry > image { color: @ox_muted; }
 .search-wrap .search-icon { color: @ox_muted; margin-right: 11px; }
 .search-wrap:disabled { opacity: .6; }
+

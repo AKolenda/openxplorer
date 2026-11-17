@@ -5617,12 +5617,12 @@ msgstr ""
 msgid "“{name}” is on a network share, a removable drive or a drive where every file can run, such as a Windows drive. Run it only if you trust where it came from."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/availability.rs
-msgid "A previous version is read-only."
+#: crates/ox-app/src/window/file_drop/targets.rs crates/ox-app/src/window/file_ops/availability.rs
+msgid "An archive is read-only. Extract it to add items."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
-msgid "An archive is read-only. Extract it to add items."
+msgid "A previous version is read-only."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
