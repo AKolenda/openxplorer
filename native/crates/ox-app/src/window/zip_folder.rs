@@ -100,19 +100,39 @@ impl BrowserWindow {
             self.show_message(ox_core::i18n::gettext_static(NOT_IN_DIALOGS));
             return true;
         }
-        let browser = archive_browser();
+        self.open_archive_member(inside.archive_uri, inside.member);
+        true
+    }
+
+    /// Opens `member` of the archive at `archive_uri` as a read-only
+    /// private copy in its application, asking for the password of a
+    /// password-protected ZIP (`archive_password`).
+    pub(super) fn open_archive_member(&self, archive_uri: String, member: String) {
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
-                let copy = browser
-                    .preview_member_in_background(inside.archive_uri, inside.member, Cancellation::new())
+                let copy = window
+                    .with_archive_password(&archive_uri, |password| {
+                        let browser = match password {
+                            Some(password) => archive_browser().with_password(password),
+                            None => archive_browser(),
+                        };
+                        let (uri, member) = (archive_uri.clone(), member.clone());
+                        async move {
+                            browser
+                                .preview_member_in_background(uri, member, Cancellation::new())
+                                .await
+                        }
+                    })
                     .await;
                 match copy {
                     Ok(copy) => {
                         window.open_externally(&copy.uri());
                         remove_copy_later(copy.path);
                     }
+                    // Windows Explorer says nothing after Cancel.
+                    Err(ox_core::archive::ArchiveError::Cancelled) => {}
                     Err(ox_core::archive::ArchiveError::UnsafePreviewType) => {
                         window.show_message(ox_core::i18n::gettext_static(NOT_OPENABLE));
                     }
@@ -120,7 +140,6 @@ impl BrowserWindow {
                 }
             }
         ));
-        true
     }
 }
 

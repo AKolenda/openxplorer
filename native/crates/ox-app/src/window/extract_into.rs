@@ -245,7 +245,9 @@ impl BrowserWindow {
 
     /// Runs `request` with the transfer panel and the window's progress,
     /// with the extractor that `adjust` makes of the window's, for example
-    /// one extracting only some members.
+    /// one extracting only some members. A password-protected ZIP asks for
+    /// its password and runs again (`archive_password`); Cancel there is
+    /// [`ArchiveError::Cancelled`].
     ///
     /// # Errors
     ///
@@ -254,22 +256,41 @@ impl BrowserWindow {
     pub(super) async fn run_extraction(
         &self,
         request: ExtractionRequest,
-        adjust: impl FnOnce(ZipExtractor) -> ZipExtractor,
+        adjust: impl Fn(ZipExtractor) -> ZipExtractor,
     ) -> Result<Result<ExtractedFolder, ArchiveError>, String> {
-        let cancel = Cancellation::new();
-        let label = ox_core::i18n::gettext_static(PREPARING);
-        if !self.claim_transfer_panel(TransferKind::Archive, label, &cancel) {
-            return Err(ox_core::i18n::gettext_static(OPERATION_RUNNING).to_owned());
+        let refusal = std::cell::RefCell::new(None);
+        let archive_uri = request.archive_uri.clone();
+        let extracted = self
+            .with_archive_password(&archive_uri, |password| {
+                let request = request.clone();
+                let adjust = &adjust;
+                let refusal = &refusal;
+                async move {
+                    let cancel = Cancellation::new();
+                    let label = ox_core::i18n::gettext_static(PREPARING);
+                    if !self.claim_transfer_panel(TransferKind::Archive, label, &cancel) {
+                        refusal.replace(Some(ox_core::i18n::gettext_static(OPERATION_RUNNING).to_owned()));
+                        return Err(ArchiveError::Cancelled);
+                    }
+                    self.update_archive_actions();
+                    let mut extractor = adjust(
+                        self.zip_extractor()
+                            .with_progress(self.progress_reporter(&cancel)),
+                    );
+                    if let Some(password) = password {
+                        extractor = extractor.with_password(password);
+                    }
+                    self.describe_extraction(&cancel, &request);
+                    let extracted = extractor.extract_in_background(request, cancel).await;
+                    self.finish_archive_operation();
+                    extracted
+                }
+            })
+            .await;
+        match refusal.take() {
+            Some(refusal) => Err(refusal),
+            None => Ok(extracted),
         }
-        self.update_archive_actions();
-        let extractor = adjust(
-            self.zip_extractor()
-                .with_progress(self.progress_reporter(&cancel)),
-        );
-        self.describe_extraction(&cancel, &request);
-        let extracted = extractor.extract_in_background(request, cancel).await;
-        self.finish_archive_operation();
-        Ok(extracted)
     }
 
     /// Shows `shown` (the extracted folder), or lists the chosen folder's
