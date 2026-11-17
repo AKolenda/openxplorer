@@ -5409,7 +5409,7 @@ msgid "Try again"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/empty_page.rs
+#: crates/ox-app/src/window/empty_page.rs crates/ox-app/src/window/picker.rs
 msgid "{location} is unavailable. Make sure you are connected to the network and the server is turned on, and then try again."
 msgstr ""
 

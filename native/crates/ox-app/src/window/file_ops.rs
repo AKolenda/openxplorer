@@ -57,6 +57,8 @@ mod availability;
 mod batch_rename;
 mod clipboard;
 mod delete;
+#[cfg(test)]
+pub(crate) use delete::report_no_recycle_bin;
 mod delete_label;
 mod duplicate;
 mod extension_confirm;
