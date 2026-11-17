@@ -15,9 +15,9 @@ use ox_core::location::{
     VirtualPlace,
 };
 use ox_core::ops::JournalDirection;
-use ox_core::places::{NetworkLocation, Place};
+use ox_core::places::{KnownFolder, NetworkLocation, Place};
 
-use crate::icons::{Art, Icon, Tint};
+use crate::icons::{Art, Icon, Storage, Tint};
 use crate::locations::Page;
 
 use super::address_bar::CrumbButton;
@@ -157,14 +157,35 @@ fn listed_place_glyph(uri: &str) -> Option<Icon> {
     }
 }
 
+/// The standard folder with a navigation pane glyph of its own (Desktop,
+/// Downloads, Documents, Pictures, Music, Videos) that `known_folders`,
+/// the Quick access rows of the standard folders, place at `uri`.
+fn standard_folder_at(uri: &str, known_folders: &[Place]) -> Option<KnownFolder> {
+    known_folders
+        .iter()
+        .filter(|place| location::same_location(&place.uri, uri))
+        .find_map(|place| place.known_folder)
+        .filter(|folder| KnownFolder::QUICK_ACCESS.contains(folder))
+}
+
 /// A tab's icon: the network glyph on Network, the gear on Settings,
 /// This PC's own icon on This PC and the Recycle Bin's on the Recycle
 /// Bin, as Windows 11 File Explorer's tabs show them, the glyph of their
-/// navigation pane row on Recent files and Recent locations, a phone for
+/// navigation pane row on Recent files and Recent locations, and, as
+/// Windows 11 shows them (checked on Windows 11 on 2026-11-14: the
+/// Downloads tab shows the green Downloads glyph), a standard folder's
+/// navigation pane glyph on a tab of Desktop, Downloads, Documents,
+/// Pictures, Music or Videos (of `known_folders`) and Home's on the home
+/// folder, which Home opens while Quick access is off. A phone for
 /// devices, the colour folder everywhere else, and for a network location
 /// (SMB, or a folder under a kernel CIFS/SMB3 mount, NET-006) the location
 /// on the network bar as its row of `network` shows it in the sidebar.
-fn tab_icon(uri: &str, locations: &LocationContext, network: &[NetworkLocation]) -> Art {
+fn tab_icon(
+    uri: &str,
+    locations: &LocationContext,
+    network: &[NetworkLocation],
+    known_folders: &[Place],
+) -> Art {
     match Page::from_uri(uri) {
         Some(page @ (Page::Home | Page::Network | Page::Settings)) => return Art::Glyph(page.icon()),
         Some(Page::ThisPc) => return Art::TintedGlyph(Page::ThisPc.icon(), Tint::ThisPc),
@@ -172,6 +193,19 @@ fn tab_icon(uri: &str, locations: &LocationContext, network: &[NetworkLocation])
     }
     if let Some(glyph) = listed_place_glyph(uri) {
         return Art::Glyph(glyph);
+    }
+    // Home first: `user-dirs.dirs` may put a standard folder at the home
+    // folder (`XDG_DESKTOP_DIR="$HOME"`), whose tab still shows Home.
+    if location::same_location(uri, &locations.home_uri()) {
+        return Art::Glyph(Page::Home.icon());
+    }
+    if let Some(folder) = standard_folder_at(uri, known_folders) {
+        // On the network, as the navigation pane's row shows it.
+        return if locations.is_network_location(uri) {
+            Art::for_quick_access(Some(folder), Storage::Network)
+        } else {
+            Art::for_known_folder(folder)
+        };
     }
     if is_device_location(uri) {
         Art::Glyph(Icon::Phone)
@@ -186,14 +220,16 @@ fn tab_icon(uri: &str, locations: &LocationContext, network: &[NetworkLocation])
 
 /// How the strip shows `tab`: its title, its address (with "Network
 /// location" for a network location) and its icon, which for a network
-/// location comes from `network`.
+/// location comes from `network` and for a standard folder from
+/// `known_folders`.
 fn tab_view(
     tab: &Tab,
     session: &Session,
     locations: &LocationContext,
-    network: &[NetworkLocation],
+    places: (&[NetworkLocation], &[Place]),
     names_query: bool,
 ) -> TabView {
+    let (network, known_folders) = places;
     let uri = tab.uri();
     let is_search = tab.history.current_search().is_some();
     let mut tooltip = locations.display_location(uri);
@@ -208,7 +244,7 @@ fn tab_view(
         icon: if is_search {
             Art::Glyph(Icon::Search)
         } else {
-            tab_icon(uri, locations, network)
+            tab_icon(uri, locations, network, known_folders)
         },
         active: session.is_active(tab.id),
         previous_version: None,
@@ -427,6 +463,7 @@ impl BrowserWindow {
     /// Redraws the tab strip.
     pub(super) fn render_tabs(&self) {
         let network = self.network_locations();
+        let known_folders = self.context().known_folders();
         let names_query = !self.shows_search_filter_bar();
         let mut views: Vec<TabView> = {
             let session = self.imp().session.borrow();
@@ -434,7 +471,7 @@ impl BrowserWindow {
             let tab_views = session
                 .tabs()
                 .iter()
-                .map(|tab| tab_view(tab, &session, &locations, &network, names_query));
+                .map(|tab| tab_view(tab, &session, &locations, (&network, &known_folders), names_query));
             tab_views.collect()
         };
         self.mark_snapshot_tabs(&mut views);
@@ -578,10 +615,73 @@ mod tests {
         ];
         let locations = LocationContext::default();
         for case in cases {
-            assert_eq!(tab_icon(case.uri, &locations, &[]), case.tab, "{}", case.uri);
+            assert_eq!(tab_icon(case.uri, &locations, &[], &[]), case.tab, "{}", case.uri);
             let address = address_icon(case.uri, "file:///home/demo");
             assert_eq!(address, case.address, "{}", case.uri);
         }
+    }
+
+    /// The tab of a standard folder shows its navigation pane glyph, on
+    /// the network bar when the folder is on the network, and the home
+    /// folder's tab shows Home's; Templates and Public, which have no
+    /// navigation pane glyph, and a plain folder keep the yellow folder.
+    ///
+    /// parity: TAB-010
+    #[test]
+    fn a_standard_folders_tab_shows_its_navigation_pane_glyph() {
+        let place = |uri: &str, folder: KnownFolder| Place {
+            label: String::new(),
+            uri: uri.to_owned(),
+            known_folder: Some(folder),
+            is_shared: false,
+        };
+        let known_folders = [
+            place("file:///home/demo/Downloads", KnownFolder::Downloads),
+            place("file:///mnt/nas/Documents", KnownFolder::Documents),
+            place("file:///home/demo/Templates", KnownFolder::Templates),
+            place("file:///home/demo/Public", KnownFolder::Public),
+        ];
+        let locations = LocationContext {
+            home: Some("/home/demo".into()),
+            network_mounts: vec!["/mnt/nas".into()],
+            ..LocationContext::default()
+        };
+        let tab_on = |uri: &str| tab_icon(uri, &locations, &[], &known_folders);
+        assert_eq!(
+            tab_on("file:///home/demo/Downloads/"),
+            Art::for_known_folder(KnownFolder::Downloads)
+        );
+        assert_eq!(
+            tab_on("file:///mnt/nas/Documents"),
+            Art::for_quick_access(Some(KnownFolder::Documents), Storage::Network)
+        );
+        assert_eq!(tab_on("file:///home/demo"), Art::Glyph(Page::Home.icon()));
+        assert_eq!(tab_on("file:///home/demo/Templates"), Art::Folder);
+        assert_eq!(tab_on("file:///home/demo/Public"), Art::Folder);
+        assert_eq!(tab_on("file:///home/demo/Downloads/Old"), Art::Folder);
+    }
+
+    /// When `user-dirs.dirs` puts a standard folder at the home folder
+    /// (`XDG_DESKTOP_DIR="$HOME"`, as some desktops write it), the home
+    /// folder's tab still shows Home's glyph, not that folder's.
+    ///
+    /// parity: TAB-010
+    #[test]
+    fn the_home_folders_tab_shows_home_when_a_standard_folder_is_home() {
+        let known_folders = [Place {
+            label: String::new(),
+            uri: "file:///home/demo".to_owned(),
+            known_folder: Some(KnownFolder::Desktop),
+            is_shared: false,
+        }];
+        let locations = LocationContext {
+            home: Some("/home/demo".into()),
+            ..LocationContext::default()
+        };
+        assert_eq!(
+            tab_icon("file:///home/demo/", &locations, &[], &known_folders),
+            Art::Glyph(Page::Home.icon())
+        );
     }
 
     /// A location and the title and tooltip of its tab.
@@ -630,7 +730,7 @@ mod tests {
             let mut session = Session::default();
             let id = session.add(case.uri, super::super::session::TabPlacement::Foreground);
             let tab = session.tab(id).expect("the tab was added");
-            let view = tab_view(tab, &session, &locations, &[], true);
+            let view = tab_view(tab, &session, &locations, (&[], &[]), true);
             assert_eq!(view.title, case.title, "{}", case.uri);
             assert_eq!(view.tooltip, case.tooltip, "{}", case.uri);
             assert!(view.active);
@@ -648,7 +748,7 @@ mod tests {
         let mapped_drive = studio_nas_mapped_drive();
         let network = [server.clone(), mapped_drive.clone()];
         let locations = LocationContext::default();
-        let tab_on = |uri: &str| tab_icon(uri, &locations, &network);
+        let tab_on = |uri: &str| tab_icon(uri, &locations, &network, &[]);
         assert_eq!(tab_on(&server.uri), Art::for_network_row(&server));
         assert_eq!(tab_on(&mapped_drive.uri), Art::for_network_row(&mapped_drive));
         assert_eq!(tab_on("smb://studio-nas/projects/2024"), Art::SHARE);
@@ -667,7 +767,7 @@ mod tests {
             network_mounts: vec!["/mnt/nas".into()],
             ..LocationContext::default()
         };
-        let tab_on = |uri: &str| tab_icon(uri, &locations, &[]);
+        let tab_on = |uri: &str| tab_icon(uri, &locations, &[], &[]);
         assert_eq!(tab_on("file:///mnt/nas"), Art::SHARE);
         assert_eq!(tab_on("file:///mnt/nas/Projects"), Art::SHARE);
         assert_eq!(tab_on("file:///mnt/nas-other"), Art::Folder);

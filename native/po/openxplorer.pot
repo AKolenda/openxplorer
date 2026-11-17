@@ -771,12 +771,12 @@ msgid "Date created: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Date modified: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Size: {size}"
 msgstr ""
 
@@ -792,10 +792,6 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/folder_view/column_keys.rs
 msgid "Resize {name} column"
-msgstr ""
-
-#: crates/ox-app/src/folder_view/details/column_fit.rs
-msgid "Drag to resize · double-click to fit loaded items (up to 2,000)"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -5066,6 +5062,10 @@ msgstr ""
 msgid "Recent locations cleared."
 msgstr ""
 
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "7z File"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs
 msgid "Add to Favorites"
 msgstr ""
@@ -5972,17 +5972,13 @@ msgstr ""
 msgid "The name was not changed."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/rename_conflict.rs
-msgid "Rename File"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/rename_conflict.rs
-msgid "There is already a file with the same name in this location."
-msgstr ""
-
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/rename_conflict.rs
-msgid "Would you like to rename \"{name}\" to \"{numbered}\"?"
+msgid "Do you want to rename \"{name}\" to \"{numbered}\"?\nThere is already a file with the same name in this location."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/rename_conflict.rs
+msgid "Rename File"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/transfer.rs
@@ -7634,6 +7630,10 @@ msgstr ""
 
 #: crates/ox-core/src/archive/create.rs
 msgid "The new archive was moved or replaced while it was written. Nothing was removed."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
+msgid "A 7z archive cannot be written here. Create it in a local folder, then copy it here."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
