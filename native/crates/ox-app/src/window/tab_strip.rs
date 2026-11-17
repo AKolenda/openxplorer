@@ -35,6 +35,7 @@ mod drag_marks;
 mod edge_scroll;
 mod edges;
 mod live_drag;
+mod title_room;
 
 use std::cell::Cell;
 
@@ -53,18 +54,22 @@ use super::window_action::WindowAction;
 
 pub(in crate::window) use carried_tab::MARGIN as CARRIED_MARGIN;
 pub(in crate::window) use live_drag::Landing;
+use title_room::clipped;
 
 /// The tab icon's edge: 16 pixels (ui-spec.md I03; the web app's was 17).
 const ICON_SIZE: i32 = 16;
 /// The gap between the icon and the title (ui-spec.md S06).
 const ICON_TO_TITLE: i32 = 10;
+/// The gap between a snapshot tab's badge and its close button.
+const CLOSE_GAP: i32 = 4;
 /// The glyph of a tab's close button.
 const CLOSE_GLYPH: i32 = 12;
 
 /// How many average characters of its title a tab keeps at its
-/// narrowest: about three letters and the ellipsis, as Windows 11 shrinks
-/// tabs no further (checked with 25 tabs in a 1920-pixel window).
-const TITLE_MIN_CHARS: i32 = 5;
+/// narrowest: about three letters of a long name, and "Home" whole, as
+/// Windows 11 shrinks tabs no further (checked with 25 tabs in a
+/// 1920-pixel window, where its tabs are about 115 pixels wide).
+const TITLE_MIN_CHARS: i32 = 7;
 
 /// The glyph of the strip's scroll arrows.
 const SCROLL_GLYPH: i32 = 12;
@@ -663,6 +668,7 @@ fn icon_of(tab: &TabView) -> gtk::Widget {
     if tab.busy {
         let ring = ProgressRing::new(ICON_SIZE);
         ring.add_css_class(TAB_ICON_CLASS);
+        ring.set_margin_end(ICON_TO_TITLE);
         ring.upcast()
     } else {
         tab_icon(tab.icon).upcast()
@@ -696,9 +702,13 @@ pub(super) fn show_close_button_when_wanted(tab: &gtk::Box) {
     }
 }
 
+/// The tab's icon, with the room before the title after it: the tab's
+/// parts sit side by side with no spacing, so the title runs right up to
+/// the close button, as in Windows 11.
 fn tab_icon(icon: Art) -> ArtImage {
     let image = ArtImage::new(icon, ICON_SIZE);
     image.add_css_class(TAB_ICON_CLASS);
+    image.set_margin_end(ICON_TO_TITLE);
     image
 }
 
@@ -707,7 +717,7 @@ fn tab_icon(icon: Art) -> ArtImage {
 /// the tab in front takes keyboard focus.
 fn tab_widget(tab: &TabView) -> gtk::Box {
     let widget = gtk::Box::builder()
-        .spacing(ICON_TO_TITLE)
+        .spacing(0)
         .focusable(tab.active)
         .accessible_role(gtk::AccessibleRole::Tab)
         .tooltip_text(&tab.tooltip)
@@ -720,7 +730,7 @@ fn tab_widget(tab: &TabView) -> gtk::Box {
     widget.update_state(&[gtk::accessible::State::Selected(Some(tab.active))]);
     widget.append(&icon_of(tab));
     widget.update_state(&[gtk::accessible::State::Busy(tab.busy)]);
-    widget.append(&title(&tab.title));
+    widget.append(&clipped(&title(&tab.title)));
     if let Some(snapshot) = &tab.previous_version {
         mark_previous_version(&widget, &tab.title, snapshot);
     }
@@ -845,6 +855,8 @@ fn mark_previous_version(widget: &gtk::Box, title: &str, snapshot: &str) {
             "Previous version · {snapshot}",
             &[("snapshot", snapshot)],
         ))
+        .margin_start(ICON_TO_TITLE)
+        .margin_end(CLOSE_GAP)
         .css_classes(["snapshot-tab-badge"])
         .build();
     badge.append(&icons::image(Icon::Clock, SNAPSHOT_BADGE_GLYPH));
@@ -1029,15 +1041,14 @@ fn arrow_width(arrow: &gtk::Button) -> i32 {
     natural + arrow.margin_start() + arrow.margin_end()
 }
 
-/// A tab's title, ellipsized; at the tab's narrowest it keeps about three
-/// letters ([`TITLE_MIN_CHARS`]).
-fn title(text: &str) -> gtk::Label {
+/// A tab's title, on one line, never shortened to an ellipsis: shown in
+/// [`title_room::clipped`], which cuts it at the last pixel, as Windows 11
+/// cuts it.
+pub(super) fn title(text: &str) -> gtk::Label {
     gtk::Label::builder()
         .label(text)
         .xalign(0.0)
-        .hexpand(true)
-        .width_chars(TITLE_MIN_CHARS)
-        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .single_line_mode(true)
         .css_classes(["tab-title"])
         .build()
 }
@@ -1101,7 +1112,7 @@ mod tests {
 
     /// parity: TAB-010
     #[gtk::test]
-    fn a_live_tab_has_no_badge_a_close_button_and_an_ellipsized_title() {
+    fn a_live_tab_has_no_badge_a_close_button_and_a_title_cut_at_the_last_pixel() {
         let widget = tab_widget(&tab_view(None));
 
         assert!(!widget.has_css_class("snapshot-tab"));
@@ -1112,8 +1123,14 @@ mod tests {
         assert_eq!(close.tooltip_text().as_deref(), Some("Close tab"));
         let title = descendants::<gtk::Label>(&widget)
             .into_iter()
-            .next()
+            .find(|label| label.has_css_class("tab-title"))
             .expect("a tab shows its title");
-        assert_eq!(title.ellipsize(), gtk::pango::EllipsizeMode::End);
+        assert_eq!(
+            title.ellipsize(),
+            gtk::pango::EllipsizeMode::None,
+            "never an ellipsis"
+        );
+        let room = title.parent().expect("the title's room");
+        assert_eq!(room.overflow(), gtk::Overflow::Hidden, "cut at the last pixel");
     }
 }

@@ -497,10 +497,10 @@ fn overflowing_tabs_keep_a_few_letters_and_scroll_with_arrows_at_both_ends() {
                 .expect("a tab title");
             let three: String = title.text().chars().take(3).collect();
             let letters = title.create_pango_layout(Some(&three)).pixel_size().0;
+            let room = title.parent().expect("the title's room").width();
             assert!(
-                title.width() >= letters,
-                "{count} tabs at {width} pixels: {} pixels for a title needing {letters}",
-                title.width()
+                room >= letters,
+                "{count} tabs at {width} pixels: {room} pixels for a title needing {letters}"
             );
         }
     }
@@ -540,6 +540,11 @@ fn span_in(widget: &impl IsA<gtk::Widget>, tab: &gtk::Widget) -> (f64, f64) {
     (f64::from(bounds.x()), f64::from(bounds.x() + bounds.width()))
 }
 
+/// The room `title` is shown in, which cuts it at the last pixel.
+fn room_of(title: &gtk::Label) -> gtk::Widget {
+    title.parent().expect("the title's room")
+}
+
 /// The icon, title and close button of `tab`.
 fn tab_parts(tab: &gtk::Widget) -> (gtk::Widget, gtk::Label, gtk::Button) {
     let icon = tab.first_child().expect("an icon");
@@ -557,8 +562,10 @@ fn tab_parts(tab: &gtk::Widget) -> (gtk::Widget, gtk::Label, gtk::Button) {
 /// A tab at its narrowest gives its title all the room after its icon,
 /// as Windows 11 does: up to its close button on the tab in front or a
 /// hovered tab, and up to the tab's end on the others, whose close button
-/// takes no room then. The title is cut only where it runs out of that
-/// room, so a wider tab shows more of it.
+/// takes no room then, with no spacing before the close button but the
+/// few pixels around its glyph. The title is cut at the last pixel only
+/// where it runs out of that room, so a wider tab shows more of it, and
+/// "Home" fits whole in a tab in front at the narrowest.
 ///
 /// parity: TAB-019
 #[gtk::test]
@@ -567,7 +574,7 @@ fn a_tab_at_its_narrowest_gives_its_title_all_the_room_after_its_icon() {
     let test = TestWindow::open(&fixture.uri_of("Documents"));
     super::narrow_windows::resize(&test, 1366);
     have_tabs(&test, &fixture, 5);
-    let wide_title = tab_parts(&tab_widget(&test, 0)).1.width();
+    let wide_title = room_of(&tab_parts(&tab_widget(&test, 0)).1).width();
     have_tabs(&test, &fixture, 40);
     let adjustment = strip_scroll(&test);
     assert!(
@@ -581,7 +588,7 @@ fn a_tab_at_its_narrowest_gives_its_title_all_the_room_after_its_icon() {
     let (icon, title, close) = tab_parts(&behind);
     assert!(!close.is_visible(), "a tab behind shows no close button");
     let (_, icon_end) = span_in(&icon, &behind);
-    let (title_start, title_end) = span_in(&title, &behind);
+    let (title_start, title_end) = span_in(&room_of(&title), &behind);
     let tab_end = f64::from(behind.width());
     assert!(title_start - icon_end <= 10.5, "the title starts after the icon");
     assert!(
@@ -589,7 +596,7 @@ fn a_tab_at_its_narrowest_gives_its_title_all_the_room_after_its_icon() {
         "the title reaches the tab's end: it ends at {title_end} of {tab_end}"
     );
     assert!(
-        title.width() < wide_title,
+        room_of(&title).width() < wide_title,
         "a wider tab gives its title more room"
     );
 
@@ -598,23 +605,46 @@ fn a_tab_at_its_narrowest_gives_its_title_all_the_room_after_its_icon() {
     crate::test_support::harness::wait_for_frames(&test.window, 3);
     assert!(close.is_visible(), "a hovered tab shows its close button");
     let (close_start, _) = span_in(&close, &behind);
-    let (_, hovered_end) = span_in(&title, &behind);
+    let (_, hovered_end) = span_in(&room_of(&title), &behind);
     assert!(
-        (close_start - hovered_end - 10.0).abs() <= 1.0,
+        (close_start - hovered_end).abs() <= 1.0,
         "the title fills the room up to the close button: {hovered_end} then {close_start}"
     );
     behind.unset_state_flags(gtk::StateFlags::PRELIGHT);
     crate::test_support::harness::wait_for_frames(&test.window, 3);
     assert!(!close.is_visible(), "and hides it again");
 
-    // The tab in front fills the room up to its close button.
-    let front = tab_widget(&test, 39);
+    // The tab in front, Home, fills the room up to its close button, with
+    // only the button's own 5 pixels around its glyph between them, as
+    // Windows 11 leaves about 4, and "Home" fits whole beside the icon.
+    test.window
+        .add_tab(crate::locations::Page::Home.uri())
+        .expect("the Home page");
+    crate::test_support::harness::wait_for_frames(&test.window, 4);
+    let front = tab_widget(&test, 40);
     let (_, title, close) = tab_parts(&front);
+    assert_eq!(title.text().as_str(), "Home");
     assert!(close.is_visible(), "the tab in front shows its close button");
     let (close_start, _) = span_in(&close, &front);
-    let (_, title_end) = span_in(&title, &front);
+    let (_, title_end) = span_in(&room_of(&title), &front);
     assert!(
-        (close_start - title_end - 10.0).abs() <= 1.0,
-        "the front tab's title fills the room up to its close button"
+        (close_start - title_end).abs() <= 1.0,
+        "the front tab's title fills the room up to its close button: {title_end} then {close_start}"
+    );
+    let glyph = close.first_child().expect("the close glyph");
+    let (glyph_start, _) = span_in(&glyph, &front);
+    assert!(
+        glyph_start - title_end <= 6.0,
+        "a small gap before the close glyph: {title_end} then {glyph_start}"
+    );
+    let home = title.create_pango_layout(Some("Home")).pixel_size().0;
+    let room = room_of(&title).width();
+    assert!(
+        room >= home,
+        "\"Home\" fits whole at the narrowest: {room} pixels for {home}"
+    );
+    assert!(
+        f64::from(front.width()) <= f64::from(tab_widget(&test, 0).width()) + 0.5,
+        "the tab in front is no wider than the others"
     );
 }
