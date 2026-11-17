@@ -24,13 +24,16 @@
 //!   ZIP, so nothing is written into a previous version (PROP-024).
 //!
 //! A name ending in `.tar.xz` gives an XZ-compressed TAR instead of a ZIP,
-//! with the same rules (Dolphin's "Compress to…" formats).
+//! with the same rules (Dolphin's "Compress to…" formats), and one ending
+//! in `.7z` a 7z archive, as Windows 11's Compress to › 7z File writes.
 //!
 //! | Module | Responsibility |
 //! |---|---|
 //! | `zip_writer` | The ZIP format: headers, deflated data, the central directory |
 //! | `tar_writer` | The `.tar.xz` format: ustar headers in an XZ stream |
+//! | `seven_zip_writer` | The `.7z` format: LZMA2 streams and the 7z headers (`sevenz-rust2`) |
 
+mod seven_zip_writer;
 mod tar_writer;
 mod zip_writer;
 
@@ -53,6 +56,7 @@ use crate::transfer::{
     already_removed, Cancellation, ItemIdentity, Node, NodeKind, Progress, ProgressScope, StagedName,
     TransferError, WriteGuard,
 };
+use seven_zip_writer::SevenZipWriter;
 use tar_writer::TarWriter;
 use zip_writer::{DosTime, ZipWriter};
 
@@ -63,6 +67,8 @@ const TAR_XZ_ENDING: &str = ".tar.xz";
 const TAR_GZ_ENDINGS: [&str; 2] = [".tar.gz", ".tgz"];
 const TAR_BZ2_ENDINGS: [&str; 2] = [".tar.bz2", ".tbz2"];
 const TAR_ENDING: &str = ".tar";
+/// The ending that asks for a 7z archive.
+const SEVEN_ZIP_ENDING: &str = ".7z";
 
 /// Staging files are `.openxplorer-compress-<32 hex digits>.part`.
 const STAGING_PREFIX: &str = ".openxplorer-compress-";
@@ -357,6 +363,9 @@ impl ZipCompressor {
             ArchiveFormat::TarGz => EntryWriter::Tar(Box::new(TarWriter::gzip(stream, self.level))),
             ArchiveFormat::TarBz2 => EntryWriter::Tar(Box::new(TarWriter::bzip2(stream, self.level))),
             ArchiveFormat::Tar => EntryWriter::Tar(Box::new(TarWriter::plain(stream))),
+            ArchiveFormat::SevenZip => {
+                EntryWriter::SevenZip(Box::new(SevenZipWriter::new(output, self.level)?))
+            }
             ArchiveFormat::Zip => {
                 let writer = ZipWriter::new(stream);
                 EntryWriter::Zip(match self.level {
@@ -579,6 +588,8 @@ fn push_entry(
 enum EntryWriter<W: std::io::Write> {
     Zip(ZipWriter<W>),
     Tar(Box<TarWriter<W>>),
+    /// Writes to the output stream itself, as it seeks.
+    SevenZip(Box<SevenZipWriter>),
 }
 
 impl<W: std::io::Write> EntryWriter<W> {
@@ -589,6 +600,10 @@ impl<W: std::io::Write> EntryWriter<W> {
                 &entry.name,
                 entry.modified.unwrap_or(0),
                 entry.mode.unwrap_or(0o755),
+            ),
+            Self::SevenZip(writer) => writer.add_folder(
+                &entry.name,
+                (entry.modified.unwrap_or(0), entry.mode.unwrap_or(0o755)),
             ),
         }
     }
@@ -613,13 +628,21 @@ impl<W: std::io::Write> EntryWriter<W> {
                 cancel,
                 progress,
             ),
+            Self::SevenZip(writer) => writer.add_file(
+                &entry.name,
+                (entry.modified.unwrap_or(0), entry.mode.unwrap_or(0o644)),
+                content,
+                cancel,
+                progress,
+            ),
         }
     }
 
-    fn finish(self) -> Result<W, ArchiveError> {
+    fn finish(self) -> Result<(), ArchiveError> {
         match self {
-            Self::Zip(writer) => writer.finish(),
-            Self::Tar(writer) => writer.finish(),
+            Self::Zip(writer) => writer.finish().map(drop),
+            Self::Tar(writer) => writer.finish().map(drop),
+            Self::SevenZip(writer) => writer.finish(),
         }
     }
 }
@@ -632,11 +655,13 @@ enum ArchiveFormat {
     TarGz,
     TarBz2,
     TarXz,
+    SevenZip,
 }
 
 impl ArchiveFormat {
     /// `.tar.xz`, `.tar.gz` or `.tgz`, `.tar.bz2` or `.tbz2`, and `.tar`
-    /// (in any case) ask for a TAR; anything else is a ZIP.
+    /// (in any case) ask for a TAR, `.7z` for a 7z; anything else is a
+    /// ZIP.
     fn for_name(name: &str) -> Self {
         let ends_with = |ending: &str| {
             name.len() >= ending.len()
@@ -652,6 +677,8 @@ impl ArchiveFormat {
             Self::TarBz2
         } else if ends_with(TAR_ENDING) {
             Self::Tar
+        } else if ends_with(SEVEN_ZIP_ENDING) {
+            Self::SevenZip
         } else {
             Self::Zip
         }
@@ -927,6 +954,90 @@ mod tests {
             "{reported}"
         );
         assert_eq!(discard(&gone, ArchiveError::Cancelled), ArchiveError::Cancelled);
+    }
+
+    /// The names and contents of the 7z archive at `path`, read back with
+    /// the same crate's reader; folders have no contents.
+    fn seven_zip_entries(path: &Path) -> Vec<(String, bool, Vec<u8>)> {
+        let mut reader = sevenz_rust2::ArchiveReader::open(path, sevenz_rust2::Password::empty()).unwrap();
+        let mut entries = Vec::new();
+        reader
+            .for_each_entries(|entry, content| {
+                let mut bytes = Vec::new();
+                content.read_to_end(&mut bytes)?;
+                entries.push((entry.name().to_owned(), entry.is_directory(), bytes));
+                Ok(true)
+            })
+            .unwrap();
+        entries.sort();
+        entries
+    }
+
+    /// As Windows 11's Compress to › 7z File ("Support for creating 7-zip
+    /// and TAR archives", What's new in Windows 11, version 24H2), a name
+    /// ending in `.7z` writes a 7z archive with the same items and rules:
+    /// folders, empty ones too, files with their contents, names in any
+    /// script, links left out and nothing staged left over.
+    ///
+    /// parity: ARC-023
+    #[test]
+    fn a_7z_name_writes_a_7z_archive_with_the_same_items() {
+        let root = tempfile::tempdir().unwrap();
+        let mut uris = sources(root.path());
+        fs::create_dir(root.path().join("Empty")).unwrap();
+        fs::write(root.path().join("Überblick – 2026 東京.txt"), "über".repeat(5000)).unwrap();
+        uris.push(file_uri(&root.path().join("Empty")));
+        uris.push(file_uri(&root.path().join("Überblick – 2026 東京.txt")));
+
+        let created = ZipCompressor::new()
+            .compress(&request(root.path(), uris, "Bundle.7z"), &Cancellation::new())
+            .unwrap();
+
+        assert_eq!(created.name, "Bundle.7z");
+        assert_eq!((created.item_count, created.skipped_count), (6, 1));
+        let bytes = fs::read(root.path().join("Bundle.7z")).unwrap();
+        assert_eq!(bytes.get(..6), Some(&b"7z\xBC\xAF\x27\x1C"[..]), "a 7z signature");
+        let directory = |name: &str| (name.to_owned(), true, Vec::new());
+        let file = |name: &str, content: &[u8]| (name.to_owned(), false, content.to_vec());
+        assert_eq!(
+            seven_zip_entries(&root.path().join("Bundle.7z")),
+            [
+                directory("Empty"),
+                directory("Photos"),
+                file("Photos/a.jpg", b"first picture"),
+                file("Photos/b.jpg", b"second picture"),
+                file("notes.txt", b"notes"),
+                file("Überblick – 2026 東京.txt", "über".repeat(5000).as_bytes()),
+            ]
+        );
+        let is_staging = |name: &String| name.starts_with(STAGING_PREFIX);
+        assert!(!names_in(root.path()).iter().any(is_staging));
+    }
+
+    /// Cancelled while it writes a file, a 7z compression stops and
+    /// leaves no archive behind, as a ZIP's does.
+    ///
+    /// parity: ARC-023
+    #[test]
+    fn a_7z_cancelled_while_it_writes_leaves_nothing_behind() {
+        let root = tempfile::tempdir().unwrap();
+        let large = root.path().join("large.bin");
+        let content: Vec<u8> = (0..8_000_000_u64)
+            .map(|value| u8::try_from(value * 7919 % 251).unwrap_or_default())
+            .collect();
+        fs::write(&large, content).unwrap();
+        let cancel = Cancellation::new();
+        let cancel_on_progress = cancel.clone();
+        let mut compressor = ZipCompressor::new().with_progress(move |progress| {
+            if progress.bytes.is_some_and(|bytes| bytes.file_written > 0) {
+                cancel_on_progress.cancel();
+            }
+        });
+
+        let refused = compressor.compress(&request(root.path(), vec![file_uri(&large)], "large.7z"), &cancel);
+
+        assert_eq!(refused, Err(ArchiveError::Cancelled));
+        assert_eq!(names_in(root.path()), ["large.bin"]);
     }
 
     #[test]

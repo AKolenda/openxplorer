@@ -794,6 +794,47 @@ fn a_character_windows_forbids_is_refused_with_its_balloon() {
     wait_until("the rename to end", || !is_renaming_in_place(&test));
 }
 
+/// Ctrl+A in the name field selects the whole name being edited, its
+/// extension included, and leaves the items' selection alone, in every
+/// view. The keys are real ones on the private display, so they pass
+/// every key handler the window and the view have on the way.
+///
+/// parity: OPS-010
+#[gtk::test]
+fn ctrl_a_selects_the_whole_name_being_edited() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
+    let mut pointer = Pointer::connect();
+    for view in ["details", "compact", "large", "tiles", "content"] {
+        test.activate("view", Some(view));
+        select_names(&test, &["Notes 2.txt"]);
+        test.activate("rename", None);
+        let field = name_editor(&test);
+        wait_until("the stem to be selected", || {
+            field.selection_bounds() == Some((0, 7))
+        });
+        let middle = (f64::from(field.width()) / 2.0, f64::from(field.height()) / 2.0);
+        let (x, y) = screen_point(&mut pointer, &field, middle, (200, 200));
+        pointer.move_to(x, y);
+
+        pointer.hold_key(gdk::Key::Control_L);
+        pointer.tap_key(gdk::Key::a);
+        pointer.let_go_key(gdk::Key::Control_L);
+        wait_for(Duration::from_millis(300));
+
+        assert_eq!(
+            field.selection_bounds(),
+            Some((0, 11)),
+            "the whole name in {view}"
+        );
+        assert_eq!(test.selected_names(), ["Notes 2.txt"], "only the item in {view}");
+        assert!(is_renaming_in_place(&test), "editing goes on in {view}");
+        press_in(&field, gdk::Key::Escape, gdk::ModifierType::empty());
+        wait_until("the rename to end", || !is_renaming_in_place(&test));
+    }
+}
+
 /// Pasting text with a character Windows forbids pastes nothing and
 /// shows the balloon, so the selected name is not lost; other text is
 /// pasted over the selection as usual.
@@ -828,9 +869,13 @@ fn pasting_a_forbidden_character_leaves_the_name_as_it_was() {
     assert!(fixture.path("Notes 2.txt").is_file(), "Escape renamed nothing");
 }
 
-/// A file renamed to the name of another file asks Windows' "Rename
-/// File" question: No goes back to editing the typed name, Yes gives the
-/// file the first free numbered name, and nothing is overwritten.
+/// A file renamed to the name of another file asks Windows 11's "Rename
+/// File" question in its small message box: "Do you want to rename
+/// "Notes 2.txt" to "Notes 10 (3).txt"?", naming the file being renamed
+/// and the name it is offered, and on the next line "There is already a
+/// file with the same name in this location.", with Yes and No. No goes
+/// back to editing the typed name, Yes gives the file the first free
+/// numbered name, and nothing is overwritten.
 ///
 /// parity: OPS-008, OPS-010
 #[gtk::test]
@@ -849,6 +894,7 @@ fn a_file_renamed_to_a_taken_name_is_offered_the_next_free_number() {
     let question = open_dialog(&test);
     let (title, message) = (question.title_text(), question.message_text());
     let (texts, buttons) = (question.texts(), question.button_labels());
+    super::file_ops_support::assert_windows_message_box(question.upcast_ref(), "Yes");
     question.press("No");
     wait_for_no_dialog(&test);
     wait_until("the field to come back", || field.is_sensitive());
@@ -862,16 +908,14 @@ fn a_file_renamed_to_a_taken_name_is_offered_the_next_free_number() {
     assert_eq!(title, "Rename File");
     assert_eq!(
         message,
-        "There is already a file with the same name in this location."
+        "Do you want to rename \"Notes 2.txt\" to \"Notes 10 (3).txt\"?\nThere is already a file \
+         with the same name in this location."
     );
-    let asks = "Would you like to rename \"Notes 10.txt\" to \"Notes 10 (3).txt\"?";
-    assert!(texts.iter().any(|text| text == asks), "{texts:?}");
-    let sizes = texts.iter().filter(|text| text.starts_with("Size: ")).count();
-    let dates = texts
+    let described = texts
         .iter()
-        .filter(|text| text.starts_with("Date modified: "))
+        .filter(|text| text.starts_with("Size: ") || text.starts_with("Date modified: "))
         .count();
-    assert_eq!((sizes, dates), (2, 2), "both files are described: {texts:?}");
+    assert_eq!(described, 0, "only the question, as Windows 11 asks: {texts:?}");
     assert_eq!(buttons, ["Yes", "No"]);
     assert_eq!(typed, "Notes 10.txt", "No keeps the typed name for editing");
     assert!(!fixture.path("Notes 2.txt").exists());
@@ -958,7 +1002,8 @@ fn a_shortcut_renamed_to_a_taken_name_is_numbered_after_its_whole_name() {
         fixture.path("Q3.v1 (2)").is_symlink() && !is_renaming_in_place(&test)
     });
 
-    let asks = "Would you like to rename \"Q3.v1\" to \"Q3.v1 (2)\"?";
+    let asks = "Do you want to rename \"Report.txt - Shortcut\" to \"Q3.v1 (2)\"?\nThere is already a \
+                file with the same name in this location.";
     assert!(texts.iter().any(|text| text == asks), "{texts:?}");
     assert!(!fixture.path("Q3 (2).v1").exists());
     assert!(fixture.path("Q3.v1").is_file(), "the other file stays");

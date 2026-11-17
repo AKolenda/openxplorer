@@ -765,12 +765,12 @@ msgid "Date created: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Date modified: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/folder_view/gallery_view.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/folder_view/gallery_view.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Size: {size}"
 msgstr ""
 
@@ -786,10 +786,6 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/folder_view/column_keys.rs
 msgid "Resize {name} column"
-msgstr ""
-
-#: crates/ox-app/src/folder_view/details/column_fit.rs
-msgid "Drag to resize · double-click to fit loaded items (up to 2,000)"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -5119,6 +5115,10 @@ msgstr ""
 msgid "Recent locations cleared."
 msgstr ""
 
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "7z File"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs
 msgid "Add to Favorites"
 msgstr ""
@@ -6032,17 +6032,13 @@ msgstr ""
 msgid "The name was not changed."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/rename_conflict.rs
-msgid "Rename File"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/rename_conflict.rs
-msgid "There is already a file with the same name in this location."
-msgstr ""
-
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/rename_conflict.rs
-msgid "Would you like to rename \"{name}\" to \"{numbered}\"?"
+msgid "Do you want to rename \"{name}\" to \"{numbered}\"?\nThere is already a file with the same name in this location."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/rename_conflict.rs
+msgid "Rename File"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/transfer.rs
@@ -7757,6 +7753,10 @@ msgstr ""
 
 #: crates/ox-core/src/archive/create.rs
 msgid "The new archive was moved or replaced while it was written. Nothing was removed."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
+msgid "A 7z archive cannot be written here. Create it in a local folder, then copy it here."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
@@ -10249,6 +10249,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "OpenXplorer now looks and works much more like Windows 11's File Explorer: its command bar, status bar, menus with side flyouts, title bar, address bar, navigation pane and row density follow Windows 11, with new Tiles and Content views, groups that collapse under their headings, and This PC shown as drive tiles. Right-click menus have labeled Cut, Copy, Rename, Share and Delete buttons on the side nearest the pointer, address bar suggestions show the current one as Windows 11 does, Show more options has Send to, a right-button drag asks whether to copy or move, a drive can be pasted into a folder as a shortcut, and the progress window asks about replaced and failed items, offering Continue as administrator when a copy, move or delete is denied. Properties, the Details pane, the Open and Save dialogs, Folder Options, Open with, Map network drive and the Recycle Bin are laid out as in Windows 11, and Recent files opens from the navigation pane. Previews also come from the desktop's own thumbnailers, run in a sandbox with resource limits, and a picture on the clipboard can be pasted as a new file. The file list no longer stays blank after opening a folder on a slow share."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Pictures, PDFs and other files in network folders show thumbnails by default, as in Windows. While a command bar menu is open, one click on another menu button opens that menu, and Shift+F10 or the Menu key opens the menu at the item the keyboard is on. No in the Rename question ends the rename and keeps the old name, Ctrl+A while renaming selects only the name, and Duplicate tab puts the copy next to the original with the same folder, view and history."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml

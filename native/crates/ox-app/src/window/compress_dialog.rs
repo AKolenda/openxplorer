@@ -39,10 +39,14 @@ struct Format {
 }
 
 /// The formats offered, in the drop-down's order.
-const FORMATS: [Format; 2] = [
+const FORMATS: [Format; 3] = [
     Format {
         label: "zip",
         methods: &[("Deflate", ".zip")],
+    },
+    Format {
+        label: "7z",
+        methods: &[("LZMA2", ".7z")],
     },
     Format {
         label: "tar",
@@ -57,8 +61,8 @@ const FORMATS: [Format; 2] = [
 
 /// The archive endings a path loses when the format or method changes,
 /// longer ones first.
-const KNOWN_ENDINGS: [&str; 8] = [
-    ".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tgz", ".tbz2", ".tar", ".zip",
+const KNOWN_ENDINGS: [&str; 9] = [
+    ".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tgz", ".tbz2", ".tar", ".zip", ".7z",
 ];
 
 /// The level the slider starts at, the formats' usual default.
