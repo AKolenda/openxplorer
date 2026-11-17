@@ -95,7 +95,7 @@ fn tab_uris(test: &TestWindow) -> Vec<String> {
 }
 
 /// The URI list the window's clipboard holds, one address per line.
-fn copied_uris(test: &TestWindow) -> Option<String> {
+pub(super) fn copied_uris(test: &TestWindow) -> Option<String> {
     let clipboard = test.window.clipboard();
     let bytes = gtk::glib::MainContext::default().block_on(async {
         let (stream, _) = clipboard

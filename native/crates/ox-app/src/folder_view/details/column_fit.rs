@@ -36,10 +36,6 @@ const RESIZE_EDGE: f64 = 8.0;
 /// How many pixels Left and Right change a focused title's column.
 const NUDGE_STEP: i32 = 10;
 
-/// What a title says about its edge (`handle.title` in app.js).
-const TITLE_TOOLTIP: &str =
-    crate::i18n::message_id("Drag to resize · double-click to fit loaded items (up to 2,000)");
-
 impl DetailsView {
     /// Lets the titles fit and nudge their columns, and keeps dragged
     /// widths within the columns' limits.
@@ -47,7 +43,9 @@ impl DetailsView {
         let Some(header) = self.header() else { return };
         for (column, title) in self.titles(&header) {
             title.set_focusable(true);
-            title.set_tooltip_text(Some(ox_core::i18n::gettext_static(TITLE_TOOLTIP)));
+            // Windows 11 File Explorer shows no tooltip on its column
+            // titles (checked on Windows 11 on 2026-11-14), so neither do
+            // these, unlike app.js's `handle.title`.
             describe_resizing(&title, column);
             let keys = gtk::EventControllerKey::new();
             keys.connect_key_pressed(glib::clone!(
@@ -437,6 +435,36 @@ mod tests {
             narrowest,
             "Size stops where its text still fits"
         );
+    }
+
+    /// Windows 11 File Explorer shows no tooltip on its column titles;
+    /// neither do these, nor anything inside them but the item check
+    /// box's own "Select all".
+    ///
+    /// parity: VIEW-029
+    #[gtk::test]
+    fn column_titles_show_no_tooltip() {
+        let (view, _model) = view_of(&["a.txt"]);
+        let header = view.header().expect("column titles");
+        let titles = view.titles(&header);
+        let mut widgets: Vec<gtk::Widget> = titles.iter().map(|(_, title)| title.clone()).collect();
+        let mut tooltips = Vec::new();
+        while let Some(widget) = widgets.pop() {
+            // The item check box's "Select all" is no column title's.
+            if widget.has_css_class("select-all") {
+                continue;
+            }
+            if let Some(tooltip) = widget.tooltip_text() {
+                tooltips.push(tooltip.to_string());
+            }
+            let mut child = widget.first_child();
+            while let Some(next) = child {
+                child = next.next_sibling();
+                widgets.push(next);
+            }
+        }
+        assert_eq!(tooltips, Vec::<String>::new());
+        assert!(!titles.is_empty(), "the titles are there");
     }
 
     /// A double-click on a title's end edge fits that column, and the

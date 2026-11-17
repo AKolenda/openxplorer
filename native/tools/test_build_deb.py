@@ -332,6 +332,36 @@ class MaintainerScriptTests(TemporaryFolderTestCase):
         self.assertFalse(rule.is_symlink())
         self.assertEqual(elsewhere.read_text(encoding='utf-8'), 'kept\n')
 
+    # parity: INT-033
+    def test_removing_either_package_leaves_super_e_and_home_folders_alone(self) -> None:
+        """Super+E lives only in each user's KDE shortcuts and settings
+        folder, which the package that remains tidies up: neither package's
+        scripts touch a home folder or KDE's shortcuts, and removing or
+        purging, again and again, succeeds on a system without KDE."""
+        for channel in Channel:
+            control = self.write_scripts(channel)
+            for script in sorted(control.iterdir()):
+                text = script.read_text(encoding='utf-8')
+                for word in ('kglobalshortcutsrc', 'kglobalaccel', 'launch-shortcut', '/home',
+                             '$HOME', '~/', '.config', 'winspace/'):
+                    with self.subTest(channel=channel.name, script=script.name, word=word):
+                        self.assertNotIn(word, text)
+            root = self.folder / f'no-kde-{channel.name}'
+            home = root / 'home/someone/.config'
+            home.mkdir(parents=True)
+            shortcuts = home / 'kglobalshortcutsrc'
+            shortcuts.write_text('[io.winspace.Development.desktop]\nNewWindow=Meta+E,none,New window\n',
+                                 encoding='utf-8')
+            before = sorted(path.relative_to(root) for path in root.rglob('*'))
+            for action in ('remove', 'remove', 'purge', 'purge'):
+                with self.subTest(channel=channel.name, action=action):
+                    result = self.run_postrm(control, action, root)
+
+                    self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(sorted(path.relative_to(root) for path in root.rglob('*')), before)
+            self.assertIn('Meta+E', shortcuts.read_text(encoding='utf-8'))
+            shutil.rmtree(control)
+
     def test_the_preview_postrm_leaves_the_stable_setting_alone(self) -> None:
         control = self.write_scripts(Channel.PREVIEW)
         root = self.folder / 'root'

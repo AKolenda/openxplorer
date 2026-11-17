@@ -76,8 +76,8 @@ pub(crate) fn listed_matches_passing(
 }
 
 /// The listed items whose name and folder hold every word of `text`,
-/// ignoring case (`currentFolderMatches`); a wildcard word matches the
-/// whole name (SRCH-004).
+/// ignoring case (`currentFolderMatches`); a wildcard word is found
+/// within the name (SRCH-004).
 fn listing_matches(listing: Listing<'_>, text: &str) -> MergedResults {
     let folder = display_path(listing.folder).to_lowercase();
     matching_items(listing, text, &folder, &FacetMatcher::default())

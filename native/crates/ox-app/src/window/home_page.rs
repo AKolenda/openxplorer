@@ -10,9 +10,13 @@
 //!   ("available by default as pinned folders in Quick access in both
 //!   File Explorer Home and the left navigation pane",
 //!   support.microsoft.com, File Explorer in Windows), as tiles of the
-//!   Tiles view, as This PC draws its drives. A tile's menu is the pin's,
-//!   with Unpin from Quick access; a middle-click opens the folder in a
-//!   background tab (Windows Insider blog, 2026-08-17).
+//!   Tiles view, as This PC draws its drives. A tile's menu is Windows
+//!   11's (checked on Windows 11 on 2026-11-14): Copy in the strip, then
+//!   Open, the new tab and window items, Unpin from Quick access, Compress
+//!   to, Copy as path, Properties, Open in Terminal and "Show more
+//!   options", behind which the pin's whole menu keeps the app's own items
+//!   ([`PlaceMenu::QuickAccessPin`]); a middle-click opens the folder in
+//!   a background tab (Windows Insider blog, 2026-08-17).
 //! - A switcher between Recent and Favorites ("File Explorer Home with
 //!   new tabs for Recent, Favorites, and Shared", Windows Insider blog,
 //!   build 22635.3930). Shared lists files shared through a Microsoft
@@ -41,6 +45,7 @@ use ox_core::location::{LocationContext, RECENT_URI};
 use ox_core::places::Place;
 use ox_core::settings::{Preferences, SettingsError};
 
+use crate::folder_view::shown_name::{shown_name, Extensions};
 use crate::i18n::message_id;
 use crate::icons::{self, Art, ArtImage, Icon, Storage};
 use crate::places::Places;
@@ -49,9 +54,8 @@ use crate::settings_store::Change;
 use super::context_menu::{MENU_KEY, SHIFT_F10_KEY};
 use super::gestures;
 use super::menu_popover::{MenuEntry, MenuItem, MenuPopover, MenuStyle};
-use super::place_menus::classic_or_compact;
+use super::place_menus::{classic_or_compact, popup_item_place_menu, PlaceMenu};
 use super::result_location::LocationTarget;
-use super::sidebar::menu::pin_menu;
 use super::widget_tree::{children, remove_children, toggle_class};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -76,8 +80,10 @@ const TILE_EMBLEM: i32 = 20;
 /// tiles about 284 pixels apart across and 60 down.
 const TILE_CONTENT: (i32, i32) = (284, 60);
 /// A tile's height in Compact view, which draws the tiles closer as it
-/// does the list's rows: the folder and its three lines still fit.
-const COMPACT_TILE_HEIGHT: i32 = 48;
+/// does the list's rows: the folder and its three lines still fit, with
+/// a few pixels left above and below, so a pin never touches the name of
+/// the tile under it.
+const COMPACT_TILE_HEIGHT: i32 = 54;
 /// Pixels of the pin glyph under a pinned folder's location.
 const PIN_GLYPH: i32 = 12;
 /// Most tiles a row of Quick access holds; the pane's width decides.
@@ -182,14 +188,24 @@ impl Tab {
     }
 }
 
+/// The right-click menu of a tile or row of Home.
+enum ItemMenu {
+    /// A Recent or Favorites file's rows, in the compact style.
+    Entries(Vec<MenuEntry>),
+    /// A Quick access tile's: the pin's place menu, Windows 11's, with
+    /// its icon strip and "Show more options".
+    Place(PlaceMenu),
+}
+
 /// One tile or row of Home and what it does.
 struct Item {
     child: gtk::FlowBoxChild,
     /// Double-click and Enter: an action and its target.
     open: (WindowAction, String),
-    /// The right-click menu, in the compact style.
-    menu: Vec<MenuEntry>,
-    /// What Alt+Enter shows the Properties of.
+    /// The right-click menu.
+    menu: ItemMenu,
+    /// What Alt+Enter shows the Properties of, and Ctrl+Shift+C copies
+    /// the path of.
     properties: String,
 }
 
@@ -208,6 +224,15 @@ impl Item {
         } else {
             window.map_or(MenuStyle::Compact, |window| window.preferred_menu_style())
         };
+        let entries = match &self.menu {
+            ItemMenu::Entries(entries) => entries,
+            ItemMenu::Place(place) => {
+                // Hung from the folder pane too; "Show more options" opens
+                // the classic menu in its place.
+                popup_item_place_menu(place, &self.child, x, y, style);
+                return;
+            }
+        };
         let owner = self
             .child
             .ancestor(super::folder_pane::FolderPane::static_type())
@@ -215,7 +240,7 @@ impl Item {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let at = gtk::graphene::Point::new(x as f32, y as f32);
         let point = self.child.compute_point(&owner, &at).unwrap_or(at);
-        let popover = MenuPopover::new(classic_or_compact(copy_entries(&self.menu), style));
+        let popover = MenuPopover::new(classic_or_compact(copy_entries(entries), style));
         popover.set_style_and_strip(style, Vec::new());
         popover.set_offset(0, 0);
         popover.set_position(gtk::PositionType::Bottom);
@@ -331,12 +356,7 @@ fn folder_location(uri: &str, locations: &LocationContext) -> String {
 /// A Quick access tile as Windows 11's Home draws it: a 48-pixel folder
 /// (a standard folder's glyph on it), then three lines: the name, where
 /// the folder is, and the pin glyph; 60 pixels high, 48 in Compact view.
-fn folder_tile(
-    place: &Place,
-    window: Option<&BrowserWindow>,
-    locations: &LocationContext,
-    compact: bool,
-) -> Item {
+fn folder_tile(place: &Place, locations: &LocationContext, compact: bool) -> Item {
     let art = if place.is_shared {
         ArtImage::new(
             Art::for_quick_access(place.known_folder, Storage::Network),
@@ -388,11 +408,13 @@ fn folder_tile(
         .build();
     child.update_property(&[gtk::accessible::Property::Label(&place.label)]);
     gestures::open_folder_on_middle_click(&child, &place.uri);
-    let caching = window.and_then(|window| window.caching_of(&place.uri));
     Item {
         child,
         open: (WindowAction::GoTo, place.uri.clone()),
-        menu: pin_menu(&place.uri, caching, place.known_folder.is_none()),
+        menu: ItemMenu::Place(PlaceMenu::QuickAccessPin {
+            uri: place.uri.clone(),
+            editable: place.known_folder.is_none(),
+        }),
         properties: place.uri.clone(),
     }
 }
@@ -427,8 +449,8 @@ const LOCATION_WIDTH: i32 = 300;
 /// Home's spacing, measured on Windows 11's Home: its chevrons about 30
 /// pixels in from the pane's edge, the first tile's name about 37
 /// pixels under the heading's middle, 45 pixels from the last tiles to
-/// the pills, 51 from the pills' middle to the column headers' and 50
-/// from there to the first row's.
+/// the pills, 51 from the pills' middle to the column headers', and the
+/// first row right under the headers, one row (36 pixels) from theirs.
 const SECTION_INDENT: i32 = 14;
 /// Quick access's tiles stand further in than the heading: their folders
 /// about 92 pixels from the pane's edge, as in Windows 11.
@@ -437,7 +459,6 @@ const LIST_INDENT: i32 = 48;
 const TILES_BELOW_HEADING: i32 = 6;
 const PILLS_BELOW_TILES: i32 = 45;
 const HEADER_BELOW_PILLS: i32 = 19;
-const ROWS_BELOW_HEADER: i32 = 14;
 /// The narrowest Name gets in a narrow window, and the narrowest Date
 /// accessed and File location.
 const NARROWEST_NAME: i32 = 140;
@@ -527,17 +548,30 @@ struct Columns {
     location: gtk::SizeGroup,
     home: std::path::PathBuf,
     pitch: i32,
+    /// Whether names show the extensions of known types, as the file
+    /// list shows them (VIEW-069).
+    extensions: Extensions,
 }
 
 impl Columns {
+    /// Columns for the rows of `page`, named as its window names files.
+    fn for_page(page: &gtk::Box) -> Self {
+        let extensions = page
+            .root()
+            .and_downcast::<BrowserWindow>()
+            .map_or_else(Extensions::default, |window| window.file_name_extensions());
+        Self::new(glib::home_dir(), is_compact(page), extensions)
+    }
+
     /// Columns for rows `pitch` pixels apart.
-    fn new(home: std::path::PathBuf, compact: bool) -> Self {
+    fn new(home: std::path::PathBuf, compact: bool, extensions: Extensions) -> Self {
         Self {
             name: gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal),
             date: gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal),
             location: gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal),
             home,
             pitch: if compact { COMPACT_ROW_PITCH } else { ROW_PITCH },
+            extensions,
         }
     }
 
@@ -558,9 +592,10 @@ impl Columns {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         row.add_css_class("home-list-header");
         row.set_halign(gtk::Align::Start);
-        row.set_size_request(-1, ROW_PITCH);
+        // As tall as a row, and right above the first: no empty band
+        // between the titles and the rows, in the Compact view too.
+        row.set_size_request(-1, self.pitch);
         row.set_margin_top(HEADER_BELOW_PILLS);
-        row.set_margin_bottom(ROWS_BELOW_HEADER);
         // Name stands over the rows' icons, as in Windows 11; the rows'
         // indent is a spacer, as a size group counts a cell's margins.
         let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -606,7 +641,10 @@ fn file_row(name: &str, uri: &str, accessed: Option<u64>, favorites: &[String], 
     let icon = ArtImage::new(Art::for_file_name(name), ROW_ICON);
     icon.set_margin_end(ICON_GAP);
     icon.set_valign(gtk::Align::Center);
-    let name_text = label(name, "home-row-name");
+    // Named as the file list names it: without a known type's extension
+    // while extensions are hidden.
+    let shown = shown_name(name, false, columns.extensions);
+    let name_text = label(shown, "home-row-name");
     // The icon and the name share the Name column, as in Windows 11.
     let name_cell = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     name_cell.append(&icon);
@@ -628,13 +666,13 @@ fn file_row(name: &str, uri: &str, accessed: Option<u64>, favorites: &[String], 
     row.append(&date);
     row.append(&location);
     let child = gtk::FlowBoxChild::builder().child(&row).name(uri).build();
-    child.update_property(&[gtk::accessible::Property::Label(name)]);
+    child.update_property(&[gtk::accessible::Property::Label(shown)]);
     // Compared by the canonical form Favorites keeps (HOME-014).
     let is_favorite = ox_core::settings::favorite_key(uri).is_some_and(|key| favorites.contains(&key));
     Item {
         child,
         open: (WindowAction::OpenItemAt, uri.to_owned()),
-        menu: file_menu(uri, is_favorite),
+        menu: ItemMenu::Entries(file_menu(uri, is_favorite)),
         properties: uri.to_owned(),
     }
 }
@@ -994,6 +1032,47 @@ fn connect_item_keys(flow: &gtk::FlowBox, items: &Rc<Vec<Item>>) {
         let trigger = gtk::ShortcutTrigger::parse_string(key);
         shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(properties.clone())));
     }
+    // Ctrl+Shift+C copies the item's path, as its menu's Copy as path
+    // says, as in Windows 11's Home.
+    let copy_path = gtk::CallbackAction::new(glib::clone!(
+        #[strong]
+        items,
+        move |flow, _| {
+            let Some(item) = flow
+                .downcast_ref::<gtk::FlowBox>()
+                .and_then(|flow| selected_item(flow, &items))
+            else {
+                return glib::Propagation::Proceed;
+            };
+            WindowAction::CopyPathOf.activate_from(&item.child, Some(&item.properties.to_variant()));
+            glib::Propagation::Stop
+        }
+    ));
+    let trigger = gtk::ShortcutTrigger::parse_string("<Control><Shift>c");
+    shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(copy_path)));
+    // Ctrl+C on a Quick access tile copies its folder, as its menu's
+    // Copy says; a share's root has no Copy, and other rows leave Ctrl+C
+    // to the window.
+    let copy = gtk::CallbackAction::new(glib::clone!(
+        #[strong]
+        items,
+        move |flow, _| {
+            let Some(item) = flow
+                .downcast_ref::<gtk::FlowBox>()
+                .and_then(|flow| selected_item(flow, &items))
+            else {
+                return glib::Propagation::Proceed;
+            };
+            let is_tile = matches!(item.menu, ItemMenu::Place(_));
+            if !is_tile || ox_core::location::is_smb_share_root(&item.properties) {
+                return glib::Propagation::Proceed;
+            }
+            WindowAction::CopyFolder.activate_from(&item.child, Some(&item.properties.to_variant()));
+            glib::Propagation::Stop
+        }
+    ));
+    let trigger = gtk::ShortcutTrigger::parse_string("<Control>c");
+    shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(copy)));
     flow.add_controller(shortcuts);
 }
 
@@ -1287,8 +1366,6 @@ pub(super) fn render(
     };
     let quick_folded = folded(Section::QuickAccess);
     let files_folded = folded(Section::Files);
-    let window = page.root().and_downcast::<BrowserWindow>();
-
     let heading = quick_access_heading(page, quick_folded);
     heading.set_margin_start(SECTION_INDENT);
     page.append(&heading);
@@ -1299,7 +1376,7 @@ pub(super) fn render(
     let tiles: Vec<Item> = places
         .quick_access
         .iter()
-        .map(|place| folder_tile(place, window.as_ref(), locations, is_compact(page)))
+        .map(|place| folder_tile(place, locations, is_compact(page)))
         .collect();
     if tiles.is_empty() {
         quick_body.append(&empty_label(ox_core::i18n::gettext_static(
@@ -1544,7 +1621,7 @@ fn read_favorite_time(uri: &str, date: glib::WeakRef<gtk::Label>, cancellable: &
 /// one slow share delays only its own row, and no longer once Home is
 /// drawn again or left.
 fn list_favorites(page: &gtk::Box, list: &gtk::Box, favorites: &[String]) {
-    let columns = Columns::new(glib::home_dir(), is_compact(page));
+    let columns = Columns::for_page(page);
     let rows: Vec<Item> = favorites
         .iter()
         .map(|uri| file_row(&favorite_name(uri), uri, None, favorites, &columns))
@@ -1592,7 +1669,7 @@ fn list_recent(page: &gtk::Box, list: &gtk::Box, favorites: Vec<String>) {
             return;
         }
         let kept = KeptFocus::read(&page);
-        let columns = Columns::new(glib::home_dir(), is_compact(&page));
+        let columns = Columns::for_page(&page);
         let rows = files
             .iter()
             .map(|(entry, target, used)| file_row(&entry.name, target, *used, &favorites, &columns))
@@ -1771,6 +1848,24 @@ pub(crate) fn tile_names(page: &gtk::Box) -> Vec<String> {
         .collect()
 }
 
+/// The pin under a Quick access tile's name and location, for tests.
+#[cfg(test)]
+pub(crate) fn tile_pin(tile: &gtk::Widget) -> gtk::Widget {
+    descendants_with_class(tile, "home-pin")
+        .into_iter()
+        .next()
+        .expect("a tile's pin")
+}
+
+/// A Quick access tile's name, for tests.
+#[cfg(test)]
+pub(crate) fn tile_name_label(tile: &gtk::Widget) -> gtk::Widget {
+    descendants_with_class(tile, "tile-name")
+        .into_iter()
+        .next()
+        .expect("a tile's name")
+}
+
 /// The names of the rows of the list shown, for tests.
 #[cfg(test)]
 pub(crate) fn list_names(page: &gtk::Box) -> Vec<String> {
@@ -1822,11 +1917,6 @@ pub(crate) fn item_named(page: &gtk::Box, name: &str) -> gtk::FlowBoxChild {
 #[cfg(test)]
 pub(crate) fn item_menu(page: &gtk::Box, name: &str, accelerator: &str) -> MenuPopover {
     let child = item_named(page, name);
-    let flow = child
-        .parent()
-        .and_downcast::<gtk::FlowBox>()
-        .expect("an item's box");
-    flow.select_child(&child);
     let pane = child
         .ancestor(super::folder_pane::FolderPane::static_type())
         .expect("the folder pane");
@@ -1836,9 +1926,25 @@ pub(crate) fn item_menu(page: &gtk::Box, name: &str, accelerator: &str) -> MenuP
             .collect()
     };
     let before = menus(&pane).len();
+    let ran = press_on_item(page, name, accelerator);
+    assert!(ran, "{accelerator} opens the item's menu");
+    let opened = menus(&pane);
+    assert!(opened.len() > before, "a menu opened");
+    opened.last().expect("the menu").clone()
+}
+
+/// Selects the item named `name` and runs the shortcut of its box that
+/// `accelerator` triggers; false when none handles it.
+#[cfg(test)]
+pub(crate) fn press_on_item(page: &gtk::Box, name: &str, accelerator: &str) -> bool {
+    let child = item_named(page, name);
+    let flow = child
+        .parent()
+        .and_downcast::<gtk::FlowBox>()
+        .expect("an item's box");
+    flow.select_child(&child);
     let (key, modifiers) = gtk::accelerator_parse(accelerator).expect("a valid accelerator");
-    let ran = flow
-        .observe_controllers()
+    flow.observe_controllers()
         .into_iter()
         .filter_map(|controller| controller.ok().and_downcast::<gtk::ShortcutController>())
         .flat_map(|shortcuts| {
@@ -1853,11 +1959,7 @@ pub(crate) fn item_menu(page: &gtk::Box, name: &str, accelerator: &str) -> MenuP
             })
         })
         .and_then(|shortcut| shortcut.action())
-        .is_some_and(|action| action.activate(gtk::ShortcutActionFlags::empty(), &flow, None));
-    assert!(ran, "{accelerator} opens the item's menu");
-    let opened = menus(&pane);
-    assert!(opened.len() > before, "a menu opened");
-    opened.last().expect("the menu").clone()
+        .is_some_and(|action| action.activate(gtk::ShortcutActionFlags::empty(), &flow, None))
 }
 
 /// The labels of the menu of the item named `name`, opened by the Menu

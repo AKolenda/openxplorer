@@ -46,7 +46,7 @@ msgstr "Content-Type: text/plain; charset=UTF-8\n"
 msgid "Operation cancelled."
 msgstr "Test cancellation"
 
-msgid "GitHub could not check for updates (HTTP {status}). Try again later."
+msgid "GitHub refused the update check (HTTP {status}). Try again later."
 msgstr "Test status {status}: update unavailable"
 
 msgid "{cause}\nIncomplete extraction remains at {staging_uri}. Inspect it before removing it. {cleanup}"

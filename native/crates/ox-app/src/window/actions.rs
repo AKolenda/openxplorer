@@ -407,12 +407,45 @@ impl BrowserWindow {
         }
     }
 
-    /// The user chose `view`: shows it from the top and saves it as the
-    /// view of every tab and new window (`changeView` in app.js), or of
-    /// the folder when each folder keeps its own (VIEW-020).
+    /// The user chose `view`: shows it and saves it as the view of every
+    /// tab and new window (`changeView` in app.js), or of the folder when
+    /// each folder keeps its own (VIEW-020). As in Windows Explorer, the
+    /// item with the list's keyboard focus, else the first selected one,
+    /// stays in view, and keeps the keyboard when the list had it; with
+    /// neither, the new view shows from the top.
     fn change_view(&self, view: FolderView) {
+        let pane = self.folder_pane();
+        let had_keyboard = pane.view_has_focus();
+        let selected = pane.model().selected_positions();
+        let current = pane.focused_position().or_else(|| selected.first().copied());
         self.show_view(view);
-        self.folder_pane().restore_scroll_position(0.0);
+        let Some(position) = current else {
+            pane.restore_scroll_position(0.0);
+            self.remember_style();
+            return;
+        };
+        // Once the new view has its items laid out.
+        glib::idle_add_local_once(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move || {
+                let pane = window.folder_pane();
+                // Something else came first: another selection, or a text
+                // field such as a rename in place took the keyboard.
+                let typing = GtkWindowExt::focus(&window).is_some_and(|focus| focus.is::<gtk::Text>());
+                if position >= pane.model().n_items()
+                    || pane.model().selected_positions() != selected
+                    || typing
+                {
+                    return;
+                }
+                if had_keyboard {
+                    pane.reveal(position);
+                } else {
+                    pane.scroll_into_view(position);
+                }
+            }
+        ));
         self.remember_style();
     }
 
