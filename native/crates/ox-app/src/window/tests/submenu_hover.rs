@@ -93,7 +93,10 @@ fn shows_submenu_of(menu: &MenuPopover, label: &str) -> bool {
 /// The screen point `fraction` across and half way down `label`'s row.
 fn point_on_row(session: &Session, menu: &MenuPopover, label: &str, fraction: f64) -> (i32, i32) {
     let row = row_of(menu, label);
-    session.on_screen(&row, (f64::from(row.width()) * fraction, f64::from(row.height()) / 2.0))
+    session.on_screen(
+        &row,
+        (f64::from(row.width()) * fraction, f64::from(row.height()) / 2.0),
+    )
 }
 
 /// What the checks of the submenus found, for the log and the failures.
@@ -124,7 +127,13 @@ impl Findings {
 /// click opens it before the hover delay could; Right opens it with the
 /// keyboard in it, Left closes it with the keyboard back on its row, and so
 /// does Escape, which leaves the menu open.
-fn check_submenus(session: &mut Session, findings: &mut Findings, name: &str, menu: &MenuPopover, start: (i32, i32)) {
+fn check_submenus(
+    session: &mut Session,
+    findings: &mut Findings,
+    name: &str,
+    menu: &MenuPopover,
+    start: (i32, i32),
+) {
     let rows = submenu_rows(menu);
     assert!(!rows.is_empty(), "{name} has a submenu");
     let plain = plain_row(menu);
@@ -142,7 +151,12 @@ fn check_submenus(session: &mut Session, findings: &mut Findings, name: &str, me
         session.pointer.glide(on_row, on_plain, GLIDE_STEPS);
         wait_for(PAST_THE_DELAY);
         let closed = menu.open_submenu_menu().is_none();
-        findings.note(name, &label, "hover on another row closes", opened && closed && menu.is_mapped());
+        findings.note(
+            name,
+            &label,
+            "hover on another row closes",
+            opened && closed && menu.is_mapped(),
+        );
         // A click opens it at once.
         let clicked = Instant::now();
         session.click_at(on_row);
@@ -186,7 +200,12 @@ fn check_submenus(session: &mut Session, findings: &mut Findings, name: &str, me
             wait_for(Duration::from_millis(15));
             menu.open_submenu_menu().is_none() && menu.is_mapped() && has_keyboard(&session.test, &row)
         });
-        findings.note(name, &label, "Escape closes it to its row, the menu stays", escaped);
+        findings.note(
+            name,
+            &label,
+            "Escape closes it to its row, the menu stays",
+            escaped,
+        );
         from = on_row;
     }
 }
@@ -338,7 +357,11 @@ fn moving_slowly_towards_an_open_submenu_across_other_rows_keeps_it_open() {
         shows_submenu_of(&menu, "View"),
         "View's submenu stays open while the pointer heads into it"
     );
-    assert_eq!(menu.open_submenu_menu().as_ref(), Some(&submenu), "the same submenu");
+    assert_eq!(
+        menu.open_submenu_menu().as_ref(),
+        Some(&submenu),
+        "the same submenu"
+    );
     menu.popdown();
 }
 
@@ -397,7 +420,13 @@ fn a_submenu_with_no_room_beside_its_menu_opens_over_it() {
     ];
     let menu = MenuPopover::new(vec![
         MenuItem::new("First", Icon::Copy, WindowAction::CopyAddress).into(),
-        MenuItem::submenu("Example submenu", Icon::Folder, WindowAction::CopyAddress, submenu).into(),
+        MenuItem::submenu(
+            "Example submenu",
+            Icon::Folder,
+            WindowAction::CopyAddress,
+            submenu,
+        )
+        .into(),
     ]);
     let pane = session.test.window.folder_pane().clone();
     menu.set_parent(&pane);
@@ -443,5 +472,42 @@ fn the_pointer_resting_on_show_as_view_opens_opens_its_submenu() {
         menu.popdown();
         wait_until("the menu to close", || !menu.is_mapped());
     }
-    assert!(failed.is_empty(), "Show's submenu did not open on hover in attempts {failed:?}");
+    assert!(
+        failed.is_empty(),
+        "Show's submenu did not open on hover in attempts {failed:?}"
+    );
+}
+
+/// In the dark theme with animations turned off, as the desktop's reduced
+/// motion asks, submenus open and close after the same delays: View >
+/// Show and the compact right-click menu's.
+///
+/// parity: CMD-005, CMD-010
+#[gtk::test]
+fn submenus_behave_the_same_in_the_dark_theme_without_animations() {
+    let _theme = crate::test_support::harness::ThemeGuard::keep();
+    let settings = gtk::Settings::default().expect("the private display's settings");
+    let animations = settings.is_gtk_enable_animations();
+    settings.set_gtk_enable_animations(false);
+    let mut session = Session::open(None);
+    session.test.activate("theme", Some("dark"));
+    wait_for_frames(&session.test.window, 4);
+    let mut findings = Findings::default();
+    session.open_by_click("View");
+    let menu = menu_of(&session.test, "View");
+    let start = session.middle_of(&menu_button(&session.test, "View"));
+    check_submenus(&mut session, &mut findings, "dark View", &menu, start);
+    menu.popdown();
+    wait_until("the menu to close", || !menu.is_mapped());
+    choose_menu_style(&session.test, ContextMenu::Win11);
+    session
+        .test
+        .window
+        .right_click(Some(position_of(&session.test, "Notes 2.txt")));
+    let menu = open_pane_menu(&session);
+    let start = corner_of(&session, &menu);
+    check_submenus(&mut session, &mut findings, "dark Win11 file menu", &menu, start);
+    menu.popdown();
+    settings.set_gtk_enable_animations(animations);
+    findings.assert_none_failed();
 }
