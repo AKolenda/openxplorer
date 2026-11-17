@@ -68,6 +68,10 @@ pub(crate) struct DosDateTime {
 }
 
 impl DosDateTime {
+    /// No time at all: day 0 of month 0, which no calendar has, so
+    /// [`Self::to_unix_seconds`] reads it as `None`.
+    pub(crate) const UNKNOWN: Self = Self { date: 0, time: 0 };
+
     /// The MS-DOS form of `seconds` since the Unix epoch in local time,
     /// for archives that record Unix times; times before 1980 or after 2107
     /// are clamped to the range the format can hold.

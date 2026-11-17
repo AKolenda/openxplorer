@@ -68,6 +68,47 @@ fn a_move_is_finished_by_copying_only_when_the_user_agrees() {
     }
 }
 
+/// While an operation runs, "Move by copying?" opens over its progress
+/// window, as the File Conflict window does: the progress window shows
+/// at once and the question is its modal child, so the desktop keeps the
+/// question in front of it and its title and text are never covered.
+/// Its buttons still give the worker its answer.
+///
+/// parity: XFER-011, XFER-013, OPS-019
+#[gtk::test]
+fn move_by_copying_asks_in_front_of_the_progress_window() {
+    use crate::dialog::Dialog;
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let _cancel = start_operation(&test);
+    let progress = ProgressWindow::of(&test.context);
+    let item = MoveByCopyingItem {
+        name: "plan.pdf".into(),
+        destination: "Studio".into(),
+    };
+    let asker = test.window.move_by_copying_asker();
+    let worker = thread::spawn(move || asker.ask(&item));
+    let question = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|window| window.downcast::<Dialog>().ok())
+            .find(|dialog| dialog.is_visible() && dialog.title().as_deref() == Some("Move by copying?"))
+    };
+    wait_until("the question", || question().is_some());
+    let dialog = question().expect("the question shows");
+    assert!(progress.is_visible(), "the progress window shows with it");
+    assert_eq!(
+        dialog.transient_for().as_ref(),
+        Some(progress.upcast_ref::<gtk::Window>()),
+        "the question belongs to the progress window"
+    );
+    assert!(dialog.is_modal());
+    dialog.press("Copy, then remove originals");
+    wait_until("the worker to get its answer", || worker.is_finished());
+    assert!(worker.join().expect("the worker finishes"), "the user agreed");
+}
+
 /// Asks `item` on a worker thread, as the engine does, in the action of
 /// the operation `cancel` stops, and returns the worker and that action
 /// once the question shows there.

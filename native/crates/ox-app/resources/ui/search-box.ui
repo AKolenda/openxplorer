@@ -18,7 +18,7 @@
         <!-- queueSearch: the search runs once typing pauses for 120
              milliseconds. -->
         <property name="search-delay">120</property>
-        <property name="tooltip-text" translatable="yes">Search cached filenames and paths. Enable folders in Settings → Search.</property>
+        <property name="tooltip-text" translatable="yes">Search names in this folder and its subfolders. Folders cached in Settings → Search are searched faster.</property>
         <!-- The box has a fixed width (.search-wrap{width:235px}), so the
              entry asks for no more than one character. -->
         <property name="width-chars">1</property>

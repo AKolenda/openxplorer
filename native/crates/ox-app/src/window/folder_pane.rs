@@ -799,6 +799,12 @@ impl FolderPane {
         self.scroll_to(position, gtk::ListScrollFlags::FOCUS, None);
     }
 
+    /// Scrolls `position` into view without moving keyboard focus or the
+    /// selection.
+    pub(super) fn scroll_into_view(&self, position: u32) {
+        self.scroll_to(position, gtk::ListScrollFlags::NONE, None);
+    }
+
     /// Gives `position` keyboard focus without scrolling the view.
     pub(super) fn focus_item(&self, position: u32) {
         let stay = gtk::ScrollInfo::new();

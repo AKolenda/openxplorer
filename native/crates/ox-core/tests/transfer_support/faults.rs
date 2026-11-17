@@ -9,7 +9,7 @@ use std::sync::Arc;
 use ox_core::transfer::{Cancellation, Node, TransferError};
 
 use super::local::{local_path_of, LocalNode, Provider};
-use super::{is_backup, is_staging, write};
+use super::{is_backup, is_staging, is_staging_path, write};
 
 /// Where a [`Faults`] provider breaks the copy, publication or reversible
 /// replacement.
@@ -44,6 +44,10 @@ pub enum Fault {
     /// The first file copy writes 60 % of its bytes, reports them and
     /// fails; every later copy works, as after a reconnected device.
     InterruptedOnce,
+    /// The backend cannot move natively, so a move is finished by copying,
+    /// and the server stops right after the copy was published and the
+    /// original removed: deleting the empty staging folder fails.
+    StopsAfterCopy,
 }
 
 impl Fault {
@@ -96,6 +100,13 @@ impl MoveStep {
             MoveStep::Install
         }
     }
+}
+
+/// Whether `node` is a staging folder or the copy built inside one, which
+/// publishing moves to its final name in the same folder.
+fn is_in_staging(node: &LocalNode) -> bool {
+    let path = node.local_path();
+    is_staging_path(path) || path.parent().is_some_and(is_staging_path)
 }
 
 /// A local provider that fails the way `fault` describes. Direct overwrite
@@ -235,7 +246,7 @@ impl Provider for Faults {
         target: &dyn Node,
         cancel: Option<&Cancellation>,
     ) -> Result<(), TransferError> {
-        if self.fault == Fault::MoveUnsupported {
+        if matches!(self.fault, Fault::MoveUnsupported | Fault::StopsAfterCopy) && !is_in_staging(node) {
             return Err(TransferError::NotSupported("Native move unsupported.".into()));
         }
         match MoveStep::of(node, target) {
@@ -248,6 +259,11 @@ impl Provider for Faults {
     fn delete(&self, node: &LocalNode) -> Result<(), TransferError> {
         if self.fault.keeps_backup() && is_backup(node) {
             return Err(TransferError::failed("Backup deletion refused."));
+        }
+        if self.fault == Fault::StopsAfterCopy && is_staging(node) {
+            return Err(TransferError::failed(
+                "Error deleting file: Software caused connection abort",
+            ));
         }
         node.local_delete()
     }

@@ -3914,6 +3914,87 @@ mod tests {
         wait_until("the picker to close", || !window.is_visible());
     }
 
+    /// Backspace in the file list of an Open or Save dialog opens the
+    /// folder one level up, as Windows 11 does ("Open a folder one level
+    /// up if a folder is selected in the Save As or Open dialog box",
+    /// support.microsoft.com, keyboard shortcuts in Windows), not the
+    /// previous folder; at `/` it does nothing, and in File name it erases
+    /// text.
+    ///
+    /// parity: INT-032, NAV-004
+    #[gtk::test]
+    fn backspace_in_the_file_list_opens_the_folder_one_level_up() {
+        let fixture = Fixture::empty();
+        std::fs::create_dir(fixture.path("Letters")).expect("fixture subfolder");
+        fixture.write("Letters/letter.odt");
+        let portal = Portal::new();
+        let answer = portal.call(
+            "SaveFile",
+            &[
+                (
+                    "current_folder",
+                    path_variant(&fixture.path("Letters").display().to_string()),
+                ),
+                ("current_name", "draft.odt".to_variant()),
+            ],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        // The dialog started elsewhere first, so Back would go there.
+        window.navigate("file:///").expect("a valid folder");
+        wait_until("the root's listing", || {
+            window.current_uri().as_deref() == Some("file:///") && window.is_listed()
+        });
+        window
+            .navigate(&fixture.uri_of("Letters"))
+            .expect("a valid folder");
+        wait_until("the folder's listing again", || {
+            window.current_uri() == Some(fixture.uri_of("Letters")) && window.is_listed()
+        });
+        portal.test.select_named("letter.odt");
+        window.folder_pane().focus_view();
+        let view = window.folder_pane().details().column_view();
+        let press_backspace = || {
+            let keys = view
+                .observe_controllers()
+                .iter::<glib::Object>()
+                .filter_map(Result::ok)
+                .filter_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+                .find(|controller| controller.propagation_phase() == gtk::PropagationPhase::Capture)
+                .expect("the details view handles keys");
+            keys.emit_by_name::<bool>(
+                "key-pressed",
+                &[
+                    &gtk::gdk::Key::BackSpace.into_glib(),
+                    &0_u32,
+                    &gtk::gdk::ModifierType::empty(),
+                ],
+            )
+        };
+
+        assert!(press_backspace());
+        wait_until("the folder one level up", || {
+            window.current_uri() == Some(fixture.uri()) && window.is_listed()
+        });
+        window.navigate("file:///").expect("a valid folder");
+        wait_until("the root's listing", || {
+            window.current_uri().as_deref() == Some("file:///") && window.is_listed()
+        });
+        window.folder_pane().focus_view();
+        press_backspace();
+        for _ in 0..5 {
+            glib::MainContext::default().iteration(false);
+        }
+        assert_eq!(
+            window.current_uri().as_deref(),
+            Some("file:///"),
+            "/ has no folder above"
+        );
+        window.cancel_picking();
+        let (response, _) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_CANCELLED);
+    }
+
     /// Opens a dialog of `method` with `entries` on `fixture`'s folder.
     fn dialog_on(
         portal: &Portal,
