@@ -21,8 +21,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
 use ox_core::location::{
-    is_device_location, is_remote_location, is_smb_location, is_smb_server, RECENT_LOCATIONS_URI, RECENT_URI,
-    TRASH_URI,
+    is_device_location, is_remote_location, is_smb_location, is_smb_server, is_smb_share_root,
+    RECENT_LOCATIONS_URI, RECENT_URI, TRASH_URI,
 };
 use ox_core::places::{NetworkKind, NetworkLocation};
 use ox_core::search::Caching;
@@ -35,6 +35,7 @@ use super::cache_folder::cache_item;
 use super::context_menu::{classic_look, more_options_item};
 use super::folder_pane::FolderPane;
 use super::menu_popover::{MenuEntry, MenuItem, MenuPopover, MenuStyle};
+use super::sidebar::menu::{compress_to_item, pin_menu};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -72,6 +73,14 @@ pub(super) enum PlaceMenu {
     RecentFiles,
     /// The Recent locations row (SIDE-026).
     RecentLocations,
+    /// A Quick access tile of Home: a pinned folder, `editable` when the
+    /// user pinned it (SIDE-011), not for a standard folder.
+    QuickAccessPin {
+        /// The folder it opens.
+        uri: String,
+        /// Whether Edit… can change it.
+        editable: bool,
+    },
 }
 
 /// An item that runs `action` with the place `target`.
@@ -290,6 +299,62 @@ fn drive_menu(
     }
 }
 
+/// A Home Quick access tile's menu in `style`, in Windows 11's order
+/// (checked on Windows 11 on 2026-11-14): Copy alone in the strip, then
+/// Open (Enter), Open in new tab, Open in new window, Unpin from Quick
+/// access, Compress to, Copy as path (Ctrl+Shift+C), Properties
+/// (Alt+Enter) and Open in Terminal, without Pin to Start, which is
+/// Windows' own. A share's root has no Copy, as in the navigation pane.
+///
+/// The classic menu ("Show more options") is the pin's whole menu, with
+/// the app's own items Windows does not list (Open folder with…, "Cache
+/// this folder for search", Sign out of server…, Edit…, Previous
+/// versions) and Copy as a row.
+fn quick_access_pin_menu(
+    uri: &str,
+    editable: bool,
+    facts: PlaceFacts,
+    style: MenuStyle,
+) -> (Vec<MenuEntry>, Vec<MenuItem>) {
+    let target = |label: &str, glyph: Icon, action: WindowAction| -> MenuItem {
+        MenuItem::with_text_target(&ox_core::i18n::gettext(label), glyph, action, uri)
+    };
+    let copy: Vec<MenuItem> = (!is_smb_share_root(uri))
+        .then(|| target("Copy", Icon::Copy, WindowAction::CopyFolder).with_shortcut("Ctrl+C"))
+        .into_iter()
+        .collect();
+    match style {
+        MenuStyle::Compact => {
+            let entries = vec![
+                target("Open", Icon::Folder, WindowAction::GoTo)
+                    .with_shortcut("Enter")
+                    .into(),
+                target("Open in new tab", Icon::Add, WindowAction::OpenTab).into(),
+                target("Open in new window", Icon::WindowNew, WindowAction::OpenWindow).into(),
+                target("Unpin from Quick access", Icon::Pin, WindowAction::Unpin).into(),
+                compress_to_item(uri).into(),
+                target("Copy as path", Icon::Link, WindowAction::CopyPathOf)
+                    .with_shortcut("Ctrl+Shift+C")
+                    .into(),
+                target("Properties", Icon::Info, WindowAction::PropertiesOf)
+                    .with_shortcut("Alt+Enter")
+                    .into(),
+                MenuEntry::Divider,
+                terminal_item(uri),
+            ];
+            (entries, copy)
+        }
+        MenuStyle::Classic => {
+            let mut entries = pin_menu(uri, facts.caching, editable);
+            if !copy.is_empty() {
+                entries.push(MenuEntry::Divider);
+                entries.extend(copy.into_iter().map(MenuEntry::from));
+            }
+            (entries, Vec::new())
+        }
+    }
+}
+
 /// `networkLocationMenu`: opening, Open in Terminal, the cache item,
 /// keeping or removing a share, Sign out for SMB, Disconnect for a
 /// connected SFTP, FTP, WebDAV or NFS place, and Properties of a mount or
@@ -478,6 +543,9 @@ impl PlaceMenu {
     pub(super) fn styled(&self, facts: PlaceFacts, style: MenuStyle) -> (Vec<MenuEntry>, Vec<MenuItem>) {
         match self {
             PlaceMenu::Drive { uri, kind, controls } => drive_menu(uri, *kind, *controls, facts, style),
+            PlaceMenu::QuickAccessPin { uri, editable } => {
+                quick_access_pin_menu(uri, *editable, facts, style)
+            }
             _ => (self.entries(facts.caching), Vec::new()),
         }
     }
@@ -485,7 +553,9 @@ impl PlaceMenu {
     /// The location the menu is about, which may be cached for search.
     fn location(&self) -> Option<&str> {
         match self {
-            PlaceMenu::Drive { uri, .. } | PlaceMenu::SavedShare { uri } => Some(uri),
+            PlaceMenu::Drive { uri, .. }
+            | PlaceMenu::SavedShare { uri }
+            | PlaceMenu::QuickAccessPin { uri, .. } => Some(uri),
             PlaceMenu::Network(location) => Some(&location.uri),
             PlaceMenu::Volume { .. }
             | PlaceMenu::RecycleBin { .. }
@@ -515,6 +585,7 @@ impl PlaceMenu {
             PlaceMenu::RecycleBin { has_items } => recycle_bin_entries(*has_items),
             PlaceMenu::RecentFiles => recent_files_entries(),
             PlaceMenu::RecentLocations => recent_locations_entries(),
+            PlaceMenu::QuickAccessPin { uri, editable } => pin_menu(uri, caching, *editable),
             PlaceMenu::SavedShare { uri } => {
                 let mut entries = vec![
                     item(
@@ -572,15 +643,38 @@ pub(super) fn popup_place_menu(
     let point = anchor
         .compute_point(&owner, &graphene::Point::new(x as f32, y as f32))
         .unwrap_or_else(|| graphene::Point::new(x as f32, y as f32));
-    popup_place_menu_in(menu, &owner, point, style)
+    popup_place_menu_in(menu, &owner, point, style, None)
 }
 
-/// Opens `menu` in `style` at `point` of `owner`, its folder pane.
+/// [`popup_place_menu`] for the menu of `item`, which takes the keyboard
+/// back when the menu closes, Escape included, as the file list's items,
+/// the tabs and the navigation pane's rows do, also after "Show more
+/// options" when that menu closes; unless the item is gone, as when its
+/// Open item opened the folder.
+pub(super) fn popup_item_place_menu(
+    menu: &PlaceMenu,
+    item: &impl IsA<gtk::Widget>,
+    x: f64,
+    y: f64,
+    style: MenuStyle,
+) -> Option<MenuPopover> {
+    let item = item.upcast_ref::<gtk::Widget>();
+    let owner = menu_owner(item);
+    #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+    let point = item
+        .compute_point(&owner, &graphene::Point::new(x as f32, y as f32))
+        .unwrap_or_else(|| graphene::Point::new(x as f32, y as f32));
+    popup_place_menu_in(menu, &owner, point, style, Some(item))
+}
+
+/// Opens `menu` in `style` at `point` of `owner`, its folder pane; the
+/// `opener`, if any, takes the keyboard back when it closes.
 pub(super) fn popup_place_menu_in(
     menu: &PlaceMenu,
     owner: &gtk::Widget,
     point: graphene::Point,
     style: MenuStyle,
+    opener: Option<&gtk::Widget>,
 ) -> Option<MenuPopover> {
     let (entries, strip) = menu.styled(facts_in(menu, owner), style);
     if entries.is_empty() {
@@ -588,7 +682,7 @@ pub(super) fn popup_place_menu_in(
     }
     let entries = finish_menu(entries, style, WindowAction::PlaceMoreOptions);
     if let Some(window) = owner.root().and_downcast::<BrowserWindow>() {
-        window.remember_place_menu(menu.clone(), owner, point);
+        window.remember_place_menu(menu.clone(), owner, point, opener);
     }
     let popover = MenuPopover::new(entries);
     popover.set_style_and_strip(style, strip);
@@ -600,9 +694,15 @@ pub(super) fn popup_place_menu_in(
     popover.set_pointing_to(Some(&pointing_to));
     // A menu belongs to one right-click; it lets go of the pane once it
     // closes and its item has run.
-    popover.connect_closed(|popover| {
+    let opener = opener.map(ObjectExt::downgrade);
+    popover.connect_closed(move |popover| {
         let closed = popover.clone();
         glib::idle_add_local_once(move || closed.unparent());
+        if let Some(opener) = opener.as_ref().and_then(glib::WeakRef::upgrade) {
+            if opener.is_drawable() {
+                opener.grab_focus();
+            }
+        }
     });
     popover.popup();
     Some(popover)
@@ -642,16 +742,25 @@ pub(super) struct OpenPlaceMenu {
     menu: PlaceMenu,
     owner: glib::WeakRef<gtk::Widget>,
     point: graphene::Point,
+    /// The item that takes the keyboard back, if any.
+    opener: Option<glib::WeakRef<gtk::Widget>>,
 }
 
 impl BrowserWindow {
-    /// Keeps `menu`, opened at `point` of `owner`, for "Show more
-    /// options".
-    fn remember_place_menu(&self, menu: PlaceMenu, owner: &gtk::Widget, point: graphene::Point) {
+    /// Keeps `menu`, opened at `point` of `owner` from `opener`, for
+    /// "Show more options".
+    fn remember_place_menu(
+        &self,
+        menu: PlaceMenu,
+        owner: &gtk::Widget,
+        point: graphene::Point,
+        opener: Option<&gtk::Widget>,
+    ) {
         self.imp().place_menu.replace(Some(OpenPlaceMenu {
             menu,
             owner: owner.downgrade(),
             point,
+            opener: opener.map(ObjectExt::downgrade),
         }));
     }
 
@@ -663,7 +772,14 @@ impl BrowserWindow {
             return;
         };
         if let Some(owner) = open.owner.upgrade() {
-            popup_place_menu_in(&open.menu, &owner, open.point, MenuStyle::Classic);
+            let opener = open.opener.as_ref().and_then(glib::WeakRef::upgrade);
+            popup_place_menu_in(
+                &open.menu,
+                &owner,
+                open.point,
+                MenuStyle::Classic,
+                opener.as_ref(),
+            );
         }
     }
 }

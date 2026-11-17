@@ -395,8 +395,10 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/archive_view/browser.rs
-msgid "{hidden_unsafe_count} unsafe names or links are hidden."
-msgstr ""
+msgid "{hidden_unsafe_count} unsafe name or link is hidden."
+msgid_plural "{hidden_unsafe_count} unsafe names or links are hidden."
+msgstr[0] ""
+msgstr[1] ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/archive_view/browser.rs
@@ -769,12 +771,12 @@ msgid "Date created: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Date modified: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/rename_conflict.rs
+#: crates/ox-app/src/folder_view/cells/row_tooltip.rs crates/ox-app/src/window/file_ops/delete.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Size: {size}"
 msgstr ""
 
@@ -790,10 +792,6 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/folder_view/column_keys.rs
 msgid "Resize {name} column"
-msgstr ""
-
-#: crates/ox-app/src/folder_view/details/column_fit.rs
-msgid "Drag to resize · double-click to fit loaded items (up to 2,000)"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -1874,7 +1872,7 @@ msgstr ""
 msgid "{width} x {height}"
 msgstr ""
 
-#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/details_tab.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/loading/denied_folder.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/details_tab.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/empty_page.rs crates/ox-app/src/window/loading/denied_folder.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Details"
 msgstr ""
 
@@ -4334,12 +4332,17 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/update/state.rs
-msgid "Could not check for updates. {reason}"
+msgid "Could not restart. {reason}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/update/state.rs
-msgid "Could not restart. {reason}"
+msgid "Couldn't check for updates (HTTP {status}). Try again later."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "Couldn't check for updates. {reason}"
 msgstr ""
 
 #: crates/ox-app/src/update/state.rs
@@ -5059,6 +5062,10 @@ msgstr ""
 msgid "Recent locations cleared."
 msgstr ""
 
+#: crates/ox-app/src/window/context_menu/entries.rs
+msgid "7z File"
+msgstr ""
+
 #: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/home_page.rs
 msgid "Add to Favorites"
 msgstr ""
@@ -5399,6 +5406,11 @@ msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
 msgid "Try again"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/empty_page.rs
+msgid "{location} is unavailable. Make sure you are connected to the network and the server is turned on, and then try again."
 msgstr ""
 
 #: crates/ox-app/src/window/extract_into.rs
@@ -5960,17 +5972,13 @@ msgstr ""
 msgid "The name was not changed."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/rename_conflict.rs
-msgid "Rename File"
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/rename_conflict.rs
-msgid "There is already a file with the same name in this location."
-msgstr ""
-
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/rename_conflict.rs
-msgid "Would you like to rename \"{name}\" to \"{numbered}\"?"
+msgid "Do you want to rename \"{name}\" to \"{numbered}\"?\nThere is already a file with the same name in this location."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/rename_conflict.rs
+msgid "Rename File"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/transfer.rs
@@ -7622,6 +7630,10 @@ msgstr ""
 
 #: crates/ox-core/src/archive/create.rs
 msgid "The new archive was moved or replaced while it was written. Nothing was removed."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
+msgid "A 7z archive cannot be written here. Create it in a local folder, then copy it here."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
@@ -9853,12 +9865,12 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/update/error.rs
-msgid "GitHub could not check for updates (HTTP {status}). Try again later."
+msgid "GitHub could not provide the installer (HTTP {status}). Nothing was installed."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/update/error.rs
-msgid "GitHub could not provide the installer (HTTP {status}). Nothing was installed."
+msgid "GitHub refused the update check (HTTP {status}). Try again later."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

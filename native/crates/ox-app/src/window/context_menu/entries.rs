@@ -574,15 +574,22 @@ fn compress_to_dialog_item(label: &str) -> MenuEntry {
     item(label, Icon::FolderZip, WindowAction::CompressTo).into()
 }
 
-/// "Compress to", Windows 11's submenu: ZIP File, TAR File (a plain
-/// TAR, as Windows 11 creates TAR archives besides ZIP), and Additional
-/// options, the app's Compress dialog, which also writes TAR.XZ.
+/// "Compress to", Windows 11's submenu: ZIP File, 7z File and TAR File
+/// (a plain TAR), as Windows 11 creates 7z and TAR archives besides ZIP,
+/// and Additional options, the app's Compress dialog, which also writes
+/// TAR.XZ.
 fn compress_submenu() -> MenuEntry {
     let entries = vec![
         item(
             ox_core::i18n::gettext_static("ZIP File"),
             Icon::FolderZip,
             WindowAction::CompressToZip,
+        )
+        .into(),
+        item(
+            ox_core::i18n::gettext_static("7z File"),
+            Icon::FolderZip,
+            WindowAction::CompressToSevenZip,
         )
         .into(),
         item(
@@ -2121,7 +2128,7 @@ mod tests {
         assert_eq!(submenu("Share with"), ["Bluetooth device", "Mail recipient"]);
         assert_eq!(
             submenu("Compress to"),
-            ["ZIP File", "TAR File", "Additional options"]
+            ["ZIP File", "7z File", "TAR File", "Additional options"]
         );
         let several = ItemFacts {
             is_single: false,

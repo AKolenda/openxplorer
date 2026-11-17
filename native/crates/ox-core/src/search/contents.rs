@@ -9,7 +9,7 @@
 //! read, up to [`MAX_READ_BYTES`], and only when they look like text: a
 //! file with a NUL byte near its start is binary and is matched by name
 //! only. Words are matched ignoring case, as in names; a wildcard word
-//! still has to match the whole name.
+//! is still looked for in the name only.
 
 use std::fs::OpenOptions;
 use std::io::Read;
