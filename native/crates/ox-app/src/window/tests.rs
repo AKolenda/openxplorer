@@ -104,6 +104,7 @@ mod shortcut_tab;
 mod sidebar;
 mod sidebar_layout;
 mod sidebar_sections;
+mod submenu_hover;
 mod slow_locations;
 mod split_view;
 mod stopping;
