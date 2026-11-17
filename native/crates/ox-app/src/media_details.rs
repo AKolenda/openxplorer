@@ -309,7 +309,7 @@ pub(crate) async fn read_in_reader(
             .await
             .ok();
     }
-    let program = std::env::current_exe().ok()?;
+    let program = reader_program()?;
     let size = size.map(|size| size.to_string()).unwrap_or_default();
     let arguments = [
         program.as_os_str(),
@@ -320,6 +320,19 @@ pub(crate) async fn read_in_reader(
     ];
     let output = run_with_timeout(&arguments, READ_TIMEOUT, process).await?;
     serde_json::from_slice(&output).ok()
+}
+
+/// The program the reader runs: the running app itself, through
+/// `/proc/self/exe`, which reaches it even after a package update replaced
+/// its file while it runs (the path [`std::env::current_exe`] gives then
+/// names a deleted file, which cannot be started); that path where
+/// `/proc` is not mounted.
+pub(crate) fn reader_program() -> Option<std::path::PathBuf> {
+    let running = std::path::Path::new("/proc/self/exe");
+    if running.exists() {
+        return Some(running.to_path_buf());
+    }
+    std::env::current_exe().ok()
 }
 
 /// Runs `arguments` without the display, and returns what it wrote if it

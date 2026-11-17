@@ -35,7 +35,7 @@ use crate::icons::{self, Icon};
 use crate::media_details::{read_in_reader, MediaDetails, MediaKind, ReaderProcess};
 
 /// The list's height, as Windows' Details list fills its tab.
-const LIST_HEIGHT: i32 = 320;
+const LIST_HEIGHT: i32 = 120;
 /// The size of a Rating star.
 const STAR_SIZE: i32 = 14;
 

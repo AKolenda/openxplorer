@@ -30,6 +30,9 @@ use super::security_model::Level;
 use super::window::{push_button, PropertiesWindow, Rows};
 use crate::icons::{self, Icon};
 
+/// The least height of the permission list: four entries; it shows them
+/// all when the tab has room, and scrolls in its own box otherwise.
+const PERMISSIONS_LEAST_HEIGHT: i32 = 76;
 /// The glyph of an allowed permission.
 const CHECK_GLYPH: i32 = 12;
 /// The glyph beside a name in the list.
@@ -110,6 +113,7 @@ pub(super) fn fill_security(page: &gtk::Box, facts: &SecurityFacts, context: &Se
     edit_text.set_hexpand(true);
     edit_row.append(&edit_text);
     let edit = push_button(&ox_core::i18n::gettext("Edit..."));
+    super::window::give_access_key(&edit, 'e');
     edit.set_sensitive(facts.can_edit && facts.mode.is_some());
     edit_row.append(&edit);
     page.append(&edit_row);
@@ -136,6 +140,7 @@ pub(super) fn fill_security(page: &gtk::Box, facts: &SecurityFacts, context: &Se
     advanced_text.set_hexpand(true);
     advanced_row.append(&advanced_text);
     let advanced = push_button(&ox_core::i18n::gettext("Advanced"));
+    super::window::give_access_key(&advanced, 'v');
     advanced.set_valign(gtk::Align::Center);
     advanced_row.append(&advanced);
     page.append(&advanced_row);
@@ -303,8 +308,18 @@ impl PermissionGrid {
             }
             rows.push((level, allow));
         }
-        let frame = gtk::Frame::builder()
+        // The entries scroll in their own box when the tab has less room
+        // than they need, as Windows' permission list does, so the tab
+        // itself fits the window's one size.
+        let scroller = gtk::ScrolledWindow::builder()
             .child(&grid)
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .min_content_height(PERMISSIONS_LEAST_HEIGHT)
+            .propagate_natural_height(true)
+            .vexpand(true)
+            .build();
+        let frame = gtk::Frame::builder()
+            .child(&scroller)
             .css_classes(["properties-list-frame"])
             .build();
         frame.update_relation(&[gtk::accessible::Relation::LabelledBy(&[title.upcast_ref()])]);

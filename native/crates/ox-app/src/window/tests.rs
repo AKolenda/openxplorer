@@ -99,6 +99,7 @@ mod send_to;
 mod settings;
 mod share;
 mod shift_f10_keys;
+mod shortcut_tab;
 mod sidebar;
 mod sidebar_layout;
 mod sidebar_sections;
