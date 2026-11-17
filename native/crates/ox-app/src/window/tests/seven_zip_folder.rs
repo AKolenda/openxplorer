@@ -215,7 +215,8 @@ fn extract_all_and_extract_here_unpack_a_7z() {
     assert_eq!(fs::read(beside).expect("extracted"), b"read me");
 }
 
-/// A damaged 7z, or one whose names are encrypted, says why in the tab.
+/// A damaged 7z, or one whose names are encrypted, says why in the tab,
+/// on a page about the archive rather than the network one.
 ///
 /// parity: ARC-016, ARC-017, ARC-026
 #[gtk::test]
@@ -235,6 +236,18 @@ fn a_damaged_or_encrypted_7z_says_why_in_the_tab() {
         test.wait_for_listing("the refusal");
         let error = test.window.load_error().expect("the tab says why");
         assert!(error.contains(words), "{name}: {error}");
+        // An archive page, not the network one: an archive icon, its own
+        // title, the message not selected, and no Try again, which would
+        // fail the same way.
+        let page = test.window.folder_pane().empty_page();
+        assert_eq!(page.title(), "This archive can't be opened", "{name}");
+        assert_eq!(
+            page.icon_name().as_deref(),
+            Some(crate::icons::Icon::FolderZip.name()),
+            "{name}"
+        );
+        assert!(!page.message_is_selectable(), "{name}");
+        assert!(!page.offers_try_again(), "{name}");
         test.activate("up", None);
         wait_until("back", || test.window.current_uri() == Some(fixture.uri()));
         test.wait_for_listing("the folder");

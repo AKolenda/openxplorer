@@ -308,6 +308,18 @@ impl EmptyPage {
         self.message.text().to_string()
     }
 
+    /// The icon shown, for tests.
+    #[cfg(test)]
+    pub(super) fn icon_name(&self) -> Option<String> {
+        self.icon.icon_name().map(|name| name.to_string())
+    }
+
+    /// True when the message's text can be selected, or is, for tests.
+    #[cfg(test)]
+    pub(super) fn message_is_selectable(&self) -> bool {
+        self.message.is_selectable() || self.message.selection_bounds().is_some()
+    }
+
     /// True when a Try again button that refreshes is shown, for tests.
     #[cfg(test)]
     pub(super) fn offers_try_again(&self) -> bool {
