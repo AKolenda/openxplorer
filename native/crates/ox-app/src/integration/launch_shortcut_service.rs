@@ -5,6 +5,7 @@
 //! launch shortcut only after the user logs out and back in, so the line
 //! and the messages say so.
 
+use gtk::glib;
 use ox_core::integration::{LaunchShortcut, LaunchShortcutStatus, RestoredShortcut};
 
 use super::changes::IntegrationError;
@@ -103,6 +104,21 @@ impl DesktopIntegration {
                 .run_in_background(LaunchShortcut::status)
                 .await,
         )
+    }
+
+    /// Tidies up, off the main thread, after a package of `OpenXplorer`
+    /// or an app Super+E was taken from was uninstalled: Super+E on a
+    /// removed package goes back where it took it from, and records that
+    /// lead to a removed app are mended or dropped. Off KDE Plasma it
+    /// does nothing.
+    pub(crate) fn forget_removed_launch_shortcut_apps(&self) {
+        let tidying = self
+            .launch_shortcut()
+            .run_in_background(LaunchShortcut::forget_removed_apps);
+        glib::spawn_future_local(async move {
+            // Failing here changes nothing; the switch tries again.
+            let _ = tidying.await;
+        });
     }
 
     fn launch_shortcut(&self) -> &LaunchShortcut<ShortcutBackend> {

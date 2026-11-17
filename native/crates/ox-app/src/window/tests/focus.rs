@@ -1067,7 +1067,9 @@ fn the_keyboard_entering_a_scrolled_list_lands_on_an_item_in_view() {
     test.window.set_focus_visible(true);
     grid.grab_focus();
     pane.focus_an_item();
-    settle();
+    // GTK 4.18 and later keep the tile that had the keyboard before, so the
+    // grid may scroll back to it; wait for that layout before looking.
+    wait_for_frames(&test.window, 3);
     let focused_at = pane.focused_position().expect("a tile has the keyboard");
     assert!(
         pane.positions_shown().contains(&focused_at),

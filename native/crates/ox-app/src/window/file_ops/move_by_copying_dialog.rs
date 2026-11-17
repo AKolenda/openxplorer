@@ -7,11 +7,19 @@
 //! refusal as the safe answer and asks once per operation. Cancel, Escape
 //! and closing the dialog keep the originals. The engine asks from its
 //! worker thread and waits (see `worker_question`).
+//!
+//! While the operation's action shows in the progress window, the
+//! question is that window's modal child, as the File Conflict window is,
+//! and the progress window shows at once: the desktop keeps the question
+//! in front of it, so the progress never covers the question's title and
+//! text, and the browsing windows stay usable meanwhile.
 
 use ox_core::ops::MoveByCopyingAsker;
 use ox_core::transfer::MoveByCopyingItem;
 
 use super::worker_question::worker_question;
+use gtk::prelude::*;
+
 use crate::dialog::Dialog;
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
@@ -41,7 +49,20 @@ impl BrowserWindow {
 
     /// Asks about `item`; only the agreeing button agrees.
     async fn ask_about_move_by_copying(&self, item: &MoveByCopyingItem) -> bool {
-        let dialog = Dialog::new(self, ox_core::i18n::gettext_static(TITLE), &question_text(item));
+        let title = ox_core::i18n::gettext_static(TITLE);
+        let progress = self
+            .context()
+            .progress_window()
+            .filter(|progress| !progress.actions().is_empty());
+        let dialog = match &progress {
+            Some(progress) => {
+                progress.show_question();
+                let dialog = Dialog::new(progress, title, &question_text(item));
+                progress.group_for_questions().add_window(&dialog);
+                dialog
+            }
+            None => Dialog::new(self, title, &question_text(item)),
+        };
         dialog.add_cancel_button();
         let copy = dialog.add_button(
             ox_core::i18n::gettext_static(COPY_AND_REMOVE),

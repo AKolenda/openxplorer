@@ -68,9 +68,9 @@ pub(crate) enum UpdateState {
     },
     /// A newer release exists.
     Available(AvailableUpdate),
-    /// The check failed; the message is the reason.
+    /// The check failed; the message says so and why.
     CheckFailed {
-        /// Why, in the updater's words.
+        /// That the check failed and why, as one plain sentence or two.
         reason: String,
     },
     /// An installation runs; `step` is its latest progress report.
@@ -107,8 +107,19 @@ impl UpdateState {
         match result {
             Ok(UpdateCheck::Checked(status)) => Self::after_status(&status, installation),
             Ok(UpdateCheck::RestartPending { .. }) => Self::RestartPending,
+            // One plain sentence: a refusal names its HTTP status in it,
+            // any other failure follows "Couldn't check for updates."
+            Err(UpdateError::CheckRefused { status }) => Self::CheckFailed {
+                reason: ox_core::i18n::format_message(
+                    "Couldn't check for updates (HTTP {status}). Try again later.",
+                    &[("status", &status.to_string())],
+                ),
+            },
             Err(error) => Self::CheckFailed {
-                reason: error.to_string(),
+                reason: ox_core::i18n::format_message(
+                    "Couldn't check for updates. {reason}",
+                    &[("reason", &error.to_string())],
+                ),
             },
         }
     }
@@ -194,9 +205,7 @@ impl UpdateState {
                 "An update is available. Automatic installation is unavailable.",
             )
             .to_owned(),
-            Self::CheckFailed { reason } => {
-                ox_core::i18n::format_message("Could not check for updates. {reason}", &[("reason", reason)])
-            }
+            Self::CheckFailed { reason } => reason.clone(),
             Self::Installing { step: None, .. } => ox_core::i18n::gettext_static(
                 "Preparing update. Approve the administrator prompt to install.",
             )
@@ -288,7 +297,8 @@ impl UpdateState {
                     ("current", &update.current.to_string()),
                 ],
             ),
-            other => format!("{} {}", other.versions_text(running), other.status_text()),
+            // The installed version on a line of its own, then the status.
+            other => format!("{}\n{}", other.versions_text(running), other.status_text()),
         }
     }
 }
@@ -350,10 +360,8 @@ mod tests {
                 status: "An update is available. Automatic installation is unavailable.",
             },
             StatusCase {
-                state: UpdateState::CheckFailed {
-                    reason: "Could not reach GitHub. Check your connection and try again.".to_owned(),
-                },
-                status: "Could not check for updates. Could not reach GitHub. Check your connection and \
+                state: UpdateState::after_check(Err(UpdateError::Unreachable), Installation::DebianPackage),
+                status: "Couldn't check for updates. Could not reach GitHub. Check your connection and \
                          try again.",
             },
             StatusCase {
@@ -414,6 +422,33 @@ mod tests {
             "Installed: 1.1.4 · Available: 1.2.0"
         );
         assert_eq!(UpdateState::Checking.versions_text(RUNNING), "Installed: 1.1.4");
+    }
+
+    /// A failed check reads plainly in About: the installed version on a
+    /// line of its own, then one sentence that says the check failed and
+    /// why, without "GitHub could not check".
+    ///
+    /// parity: UPD-001
+    #[test]
+    fn a_refused_check_reads_plainly_under_the_version() {
+        let refused = UpdateState::after_check(
+            Err(UpdateError::CheckRefused { status: 403 }),
+            Installation::DebianPackage,
+        );
+        assert_eq!(
+            refused.status_text(),
+            "Couldn't check for updates (HTTP 403). Try again later."
+        );
+        assert_eq!(
+            refused.about_summary(RUNNING),
+            "Installed: 1.1.4\nCouldn't check for updates (HTTP 403). Try again later."
+        );
+        let offline = UpdateState::after_check(Err(UpdateError::Unreachable), Installation::DebianPackage);
+        assert_eq!(
+            offline.about_summary(RUNNING),
+            "Installed: 1.1.4\nCouldn't check for updates. Could not reach GitHub. Check your \
+             connection and try again."
+        );
     }
 
     #[test]

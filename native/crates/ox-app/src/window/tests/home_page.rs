@@ -164,17 +164,17 @@ fn a_favorite_file_is_listed_opened_and_removed() {
     let notes = fixture.uri_of("Notes 2.txt");
     test.activate("add-to-favorites", Some(&notes));
     wait_until("the favorite", || {
-        home_page::list_names(body(&test)) == ["Notes 2.txt"]
+        home_page::list_names(body(&test)) == ["Notes 2"]
     });
     assert_eq!(
         test.context.settings_data().preferences.favorites,
         std::slice::from_ref(&notes)
     );
-    let labels = home_page::menu_labels(body(&test), "Notes 2.txt");
+    let labels = home_page::menu_labels(body(&test), "Notes 2");
     assert!(labels.contains(&"Open file location".to_owned()), "{labels:?}");
     assert!(labels.contains(&"Remove from Favorites".to_owned()), "{labels:?}");
 
-    home_page::open_item(body(&test), "Notes 2.txt");
+    home_page::open_item(body(&test), "Notes 2");
     wait_until("the file to be opened", || {
         !test.context.recorded_launches().is_empty()
     });
@@ -288,13 +288,13 @@ fn a_recent_file_opens_the_real_file_and_its_location() {
     let test = home_window(&fixture);
 
     wait_until("the recent file", || {
-        home_page::list_names(body(&test)).contains(&"plan.txt".to_owned())
+        home_page::list_names(body(&test)).contains(&"plan".to_owned())
     });
-    let labels = home_page::menu_labels(body(&test), "plan.txt");
+    let labels = home_page::menu_labels(body(&test), "plan");
     assert!(labels.contains(&"Open file location".to_owned()), "{labels:?}");
     assert!(labels.contains(&"Add to Favorites".to_owned()), "{labels:?}");
 
-    home_page::open_item(body(&test), "plan.txt");
+    home_page::open_item(body(&test), "plan");
     wait_until("the file to be opened", || {
         !test.context.recorded_launches().is_empty()
     });
@@ -304,6 +304,49 @@ fn a_recent_file_opens_the_real_file_and_its_location() {
     test.wait_for_listing("the file's folder");
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
     assert_eq!(test.selected_names(), ["plan.txt"]);
+}
+
+/// Recent and Favorites name files as the file list does: without the
+/// extension of a known type while extensions are hidden, as by default
+/// in Windows, and whole once View > Show > File name extensions is on.
+/// The row still opens the real file.
+///
+/// parity: HOME-014, HOME-015, VIEW-069
+#[gtk::test]
+fn recent_and_favorites_follow_the_file_name_extensions_setting() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/plan.txt"), b"Fictional plan\n").expect("fixture file");
+    let plan = fixture.uri_of("Documents/plan.txt");
+    add_to_desktop_history(&plan, "text/plain");
+    let test = home_window(&fixture);
+    wait_until("the recent file, without its extension", || {
+        home_page::list_names(body(&test)).contains(&"plan".to_owned())
+    });
+    assert!(
+        !home_page::list_names(body(&test)).contains(&"plan.txt".to_owned()),
+        "{:?}",
+        home_page::list_names(body(&test))
+    );
+    test.activate("add-to-favorites", Some(&fixture.uri_of("Notes 2.txt")));
+    home_page::choose_tab(body(&test), "Favorites");
+    wait_until("the favorite, without its extension", || {
+        home_page::list_names(body(&test)) == ["Notes 2"]
+    });
+
+    test.activate("file-name-extensions", None);
+    wait_until("the favorite, whole", || {
+        home_page::list_names(body(&test)) == ["Notes 2.txt"]
+    });
+    home_page::choose_tab(body(&test), "Recent");
+    wait_until("the recent file, whole", || {
+        home_page::list_names(body(&test)).contains(&"plan.txt".to_owned())
+    });
+    home_page::open_item(body(&test), "plan.txt");
+    wait_until("the file to be opened", || {
+        !test.context.recorded_launches().is_empty()
+    });
+    assert_eq!(test.context.recorded_launches(), std::slice::from_ref(&plan));
 }
 
 /// Quick access and the Recent / Favorites list fold and unfold from
@@ -387,7 +430,7 @@ fn the_list_has_name_date_accessed_and_file_location_columns() {
     add_to_desktop_history(&fixture.uri_of("Documents/plan.txt"), "text/plain");
     let test = home_window(&fixture);
     wait_until("the recent file", || {
-        home_page::list_names(body(&test)).contains(&"plan.txt".to_owned())
+        home_page::list_names(body(&test)).contains(&"plan".to_owned())
     });
 
     assert!(home_page::tab_has_icon(body(&test), "Recent"));
@@ -396,9 +439,9 @@ fn the_list_has_name_date_accessed_and_file_location_columns() {
         home_page::list_headers(body(&test)),
         ["Name", "Date accessed", "File location"]
     );
-    let cells = home_page::row_cells(body(&test), "plan.txt");
+    let cells = home_page::row_cells(body(&test), "plan");
     assert_eq!(cells.len(), 3, "{cells:?}");
-    assert_eq!(cells[0], "plan.txt");
+    assert_eq!(cells[0], "plan");
     assert!(!cells[1].is_empty() && cells[1] != "—", "a date: {cells:?}");
     assert!(cells[2].ends_with("Example projects/Documents"), "{cells:?}");
 }
@@ -562,8 +605,8 @@ fn home_is_spaced_as_windows_11_home() {
     near(
         "headers to the first row",
         middle(&metrics.rows[0]) - middle(&metrics.header),
-        50,
-        3,
+        36,
+        1,
     );
     let (name, date, location) = (
         bounds(&test, &metrics.columns[0]).x,
@@ -573,8 +616,8 @@ fn home_is_spaced_as_windows_11_home() {
     near("Name to Date accessed", date - name, 484, 2);
     near("Date accessed to File location", location - date, 298, 2);
     near("Name from the pane's edge", name - page.x, 90, 4);
-    let cells = home_page::row_cell_widgets(body(&test), "plan.txt");
-    let icon = home_page::row_icon(body(&test), "plan.txt");
+    let cells = home_page::row_cell_widgets(body(&test), "plan");
+    let icon = home_page::row_icon(body(&test), "plan");
     near("a row's icon under Name", bounds(&test, &icon).x, name, 1);
     near(
         "a row's name right of its icon",
@@ -630,6 +673,71 @@ fn home_is_spaced_as_windows_11_home() {
     );
 }
 
+/// Home is laid out evenly in the normal and the Compact view: the
+/// list's first row comes one row under the column titles, with no empty
+/// band between them, and a Quick access tile's pin never touches the
+/// name of the tile below it.
+///
+/// parity: HOME-013, HOME-015, HOME-016
+#[gtk::test]
+fn home_has_no_band_under_the_titles_and_its_tiles_do_not_touch() {
+    use super::geometry::bounds;
+
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/plan.txt"), b"Fictional plan\n").expect("fixture file");
+    add_to_desktop_history(&fixture.uri_of("Documents/plan.txt"), "text/plain");
+    let test = home_window(&fixture);
+    // Narrow enough for one tile a row, so the tiles stand one above the
+    // other.
+    test.window.set_default_size(700, 900);
+    for folder in ["Documents", "Music", "Pictures"] {
+        test.activate("pin-location", Some(&fixture.uri_of(folder)));
+    }
+    wait_until("the tiles and the recent file", || {
+        home_page::tile_names(body(&test)).len() >= 2 && !home_page::list_names(body(&test)).is_empty()
+    });
+    for (compact, pitch) in [(false, 36), (true, 26)] {
+        if compact {
+            test.activate("compact-density", None);
+            wait_until("Compact view", || test.window.shows_compact_density());
+            wait_until("the recent file again", || {
+                !home_page::list_names(body(&test)).is_empty()
+            });
+        }
+        let view = if compact { "Compact" } else { "normal" };
+        // Home is drawn again for the Compact view: the rows take their
+        // new pitch once it is laid out.
+        wait_until("Home laid out", || {
+            crate::test_support::harness::wait_for_frames(&test.window, 2);
+            let rows = home_page::metrics(body(&test)).rows;
+            rows.first()
+                .is_some_and(|row| (bounds(&test, row).height - pitch).abs() <= 1)
+        });
+        crate::test_support::harness::wait_for_frames(&test.window, 4);
+        let metrics = home_page::metrics(body(&test));
+        let middle = |widget: &gtk::Widget| {
+            let place = bounds(&test, widget);
+            place.y + place.height / 2
+        };
+        let below = middle(&metrics.rows[0]) - middle(&metrics.columns[0]);
+        assert!(
+            below <= pitch + 1,
+            "{view}: the first row is {below} px under the titles, want one row ({pitch})"
+        );
+        let tiles = &metrics.tiles;
+        let first = bounds(&test, &tiles[0]);
+        let next = tiles
+            .iter()
+            .find(|tile| bounds(&test, *tile).y > first.y)
+            .expect("a tile under the first");
+        let pin = home_page::tile_pin(&tiles[0]);
+        let name = home_page::tile_name_label(next);
+        let gap = bounds(&test, &name).y - bounds(&test, &pin).bottom();
+        assert!(gap >= 6, "{view}: the pin is {gap} px above the next tile's name");
+    }
+}
+
 /// Recent follows the desktop's privacy settings as the navigation
 /// pane's Recent locations does: with recent files turned off it lists
 /// nothing, though `GVfs` still lists the earlier files.
@@ -643,7 +751,7 @@ fn recent_lists_nothing_while_the_desktop_remembers_no_recent_files() {
     add_to_desktop_history(&fixture.uri_of("Documents/plan.txt"), "text/plain");
     let test = home_window(&fixture);
     wait_until("the recent file", || {
-        home_page::list_names(body(&test)).contains(&"plan.txt".to_owned())
+        home_page::list_names(body(&test)).contains(&"plan".to_owned())
     });
 
     // GNOME's privacy switch, which leaves the desktop's list, and so
@@ -728,10 +836,10 @@ fn a_favorite_opens_as_a_double_click_in_its_folder_does() {
     );
     home_page::choose_tab(body(&test), "Favorites");
     wait_until("the favorite", || {
-        home_page::list_names(body(&test)) == ["Documents link.desktop"]
+        home_page::list_names(body(&test)) == ["Documents link"]
     });
 
-    home_page::open_item(body(&test), "Documents link.desktop");
+    home_page::open_item(body(&test), "Documents link");
 
     wait_until("the linked folder", || {
         test.window.current_uri() == Some(fixture.uri_of("Documents"))
@@ -862,7 +970,7 @@ fn favorites_rows_come_at_once_and_their_dates_only_when_shown() {
     home_page::choose_tab(body(&test), "Favorites");
     assert_eq!(
         home_page::list_names(body(&test)),
-        ["Notes 2.txt"],
+        ["Notes 2"],
         "listed at once, before any file is read"
     );
     home_page::choose_tab(body(&test), "Recent");
@@ -877,7 +985,7 @@ fn favorites_rows_come_at_once_and_their_dates_only_when_shown() {
 
     home_page::choose_tab(body(&test), "Favorites");
     wait_until("the date", || {
-        home_page::row_cells(body(&test), "Notes 2.txt")
+        home_page::row_cells(body(&test), "Notes 2")
             .get(1)
             .is_some_and(|date| !date.is_empty() && date != "—")
     });
@@ -902,7 +1010,7 @@ fn compact_view_draws_quick_access_tiles_closer() {
     test.activate("compact-density", None);
     wait_until("Compact view", || test.window.shows_compact_density());
     crate::test_support::harness::wait_for_frames(&test.window, 3);
-    assert_eq!(tile(&test), 48, "a compact tile");
+    assert_eq!(tile(&test), 54, "a compact tile");
 }
 
 /// The shortcut text `menu`'s rows show, in order.
@@ -1000,6 +1108,32 @@ fn a_quick_access_tiles_menu_is_windows_11s() {
     }
     assert!(classic.strip_labels().is_empty());
     classic.popdown();
+}
+
+/// Ctrl+C on a Quick access tile copies its folder, as the menu's Copy,
+/// which shows Ctrl+C, does.
+///
+/// parity: HOME-013
+#[gtk::test]
+fn ctrl_c_on_a_quick_access_tile_copies_its_folder() {
+    use super::recent_rows::copied_uris;
+
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Projects")).expect("fixture subfolder");
+    let test = home_window(&fixture);
+    test.activate("pin-location", Some(&fixture.uri_of("Projects")));
+    wait_until("the Projects tile", || {
+        home_page::tile_names(body(&test)).contains(&"Projects".to_owned())
+    });
+    test.window.clipboard().set_text("Synthetic text");
+
+    let handled = home_page::press_on_item(body(&test), "Projects", "<Control>c");
+
+    assert!(handled, "the tile handles Ctrl+C");
+    let projects = fixture.uri_of("Projects");
+    wait_until("the copied folder", || {
+        copied_uris(&test).as_deref() == Some(projects.as_str())
+    });
 }
 
 /// The open menu in the folder pane, once it has the keyboard.
@@ -1139,7 +1273,7 @@ fn shows_home_page(test: &TestWindow) -> bool {
 /// home folder and its subfolders with the usual results: "<query> -
 /// Search Results in Home". Back and Close search return to Home.
 ///
-/// parity: HOME-033
+/// parity: HOME-035
 #[gtk::test]
 fn searching_from_home_searches_the_home_folder_and_its_subfolders() {
     let _home_files = file_in_home_folder("Quarterly zebra plan.txt");
@@ -1185,7 +1319,7 @@ fn searching_from_home_searches_the_home_folder_and_its_subfolders() {
 /// With "Open Quick access on Home" off, Home is the home folder, which
 /// is searched as any folder is, with its subfolders.
 ///
-/// parity: HOME-033, NAV-038
+/// parity: HOME-035, NAV-038
 #[gtk::test]
 fn searching_the_home_folder_finds_files_in_its_subfolders() {
     let _home_files = file_in_home_folder("Quarterly zebra plan.txt");
@@ -1268,7 +1402,7 @@ fn home_with_cached_and_uncached_folders() -> tempfile::TempDir {
 /// its own, so its search walks the home folder. The home folder itself
 /// finds them too.
 ///
-/// parity: HOME-033
+/// parity: HOME-035
 #[gtk::test]
 fn searching_from_home_finds_files_deep_in_uncached_folders() {
     let home = home_with_cached_and_uncached_folders();
@@ -1304,4 +1438,69 @@ fn searching_from_home_finds_files_deep_in_uncached_folders() {
     test.wait_for_listing("the home folder");
     test.search_for("extra");
     wait_until("every extra file from the home folder", || found(&test));
+}
+
+/// What the active pane shows of a search from Home, sampled once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SearchSample {
+    rows: u32,
+    searching: bool,
+    empty_page: bool,
+}
+
+/// Searching from Home in a big home folder with a cached folder in it:
+/// the files are listed as the walk finds them, and the pane never says "No matching items" while
+/// the search still runs or while it has rows; at the end every match is
+/// shown. Before, the empty page stayed up until the whole home folder
+/// had been walked, which on a real home can take minutes.
+///
+/// parity: HOME-035, SRCH-035
+#[gtk::test]
+fn searching_from_a_big_home_shows_matches_as_they_are_found() {
+    let home = home_with_cached_and_uncached_folders();
+    for folder in 0..1500 {
+        let path = home.path().join(format!("snap/part{}/dir{folder}", folder / 50));
+        fs::create_dir_all(&path).expect("fixture folder");
+        for file in 0..4 {
+            fs::write(path.join(format!("item_{file}.dat")), b"").expect("fixture file");
+        }
+    }
+    let fixture = Fixture::standard();
+    let test = home_window(&fixture);
+    test.start_search_cache();
+    test.index_folder(&ox_core::location::file_uri(&home.path().join("Documents")));
+    let tooltip = test.window.search_box().entry().tooltip_text();
+    assert_eq!(
+        tooltip.as_deref(),
+        Some("Search names in this folder and its subfolders. Folders cached in Settings → Search are searched faster."),
+        "the box does not claim to search cached names only"
+    );
+    let pane = test.window.folder_pane();
+    let sample = || SearchSample {
+        rows: test.window.folder_model().n_items(),
+        searching: test.status_count().starts_with("Searching"),
+        empty_page: pane.page() == Some(crate::window::folder_pane::PanePage::Empty),
+    };
+    let samples = std::cell::RefCell::new(Vec::new());
+
+    test.window.search_box().entry().set_text("extra");
+    wait_until("the search to end with every match", || {
+        let now = sample();
+        samples.borrow_mut().push(now);
+        !now.searching && now.rows == 5
+    });
+    let samples = samples.into_inner();
+
+    let wrong: Vec<_> = samples
+        .iter()
+        .filter(|sample| sample.empty_page && (sample.searching || sample.rows > 0))
+        .collect();
+    assert!(
+        wrong.is_empty(),
+        "no empty page while searching or with rows: {wrong:?}"
+    );
+    assert!(
+        samples.iter().any(|sample| sample.searching),
+        "the search was seen running"
+    );
 }

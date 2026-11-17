@@ -52,6 +52,18 @@
   background-size: 33% 100%;
   animation: ox-address-progress 12s cubic-bezier(.1, .7, .3, 1) forwards;
 }
+/* Gallery's listing, whose end is not known until every folder is read
+   (HOME-034): the fill sweeps across the address again and again rather
+   than pretending to near an end. Still, with animations off. */
+.address.loading.indeterminate {
+  background-size: 25% 100%;
+  background-position: 0 0;
+  animation: ox-address-sweep 1.6s linear infinite;
+}
+@keyframes ox-address-sweep {
+  from { background-position: -40% 0; }
+  to { background-position: 140% 0; }
+}
 @keyframes ox-address-progress {
   from { background-size: 4% 100%; }
   to { background-size: 92% 100%; }
@@ -137,3 +149,4 @@
 .search-wrap entry > image { color: @ox_muted; }
 .search-wrap .search-icon { color: @ox_muted; margin-right: 11px; }
 .search-wrap:disabled { opacity: .6; }
+
