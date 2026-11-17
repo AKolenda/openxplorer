@@ -551,8 +551,8 @@ fn coders_linked_in_a_loop_are_refused_at_once() {
     fixture.assert_no_output();
 }
 
-/// 7-Zip writes BZip2 and Deflate 7z archives when asked (`-m0=BZip2`,
-/// `-m0=Deflate`). A BZip2 one opens like any other 7z; a Deflate one is
+/// 7-Zip writes `BZip2` and Deflate 7z archives when asked (`-m0=BZip2`,
+/// `-m0=Deflate`). A `BZip2` one opens like any other 7z; a Deflate one is
 /// listed and refused plainly, as the reader does not decode Deflate.
 ///
 /// parity: ARC-024
