@@ -222,11 +222,15 @@ fn key_labels<'a>(triggers: impl IntoIterator<Item = &'a str>) -> Vec<String> {
     labels
 }
 
-/// What a key reads as: GTK's label, except Ctrl with the keypad's plus,
-/// which reads as Windows lists it, "Ctrl+Plus (numeric keypad)", and the
-/// navigation pane's keypad plus, minus and asterisk alone, which read
+/// What a key reads as, in Microsoft's spelling: the modifiers in
+/// Windows' order, Ctrl, Alt, Shift ("Ctrl+Shift+N", "Alt+Shift+P"), where
+/// GTK reads "Shift+Ctrl+N"; then the key as Windows names it ("Enter",
+/// "Esc", "Spacebar", "Left arrow"), else GTK's name for it. Ctrl with the
+/// keypad's plus reads as Windows lists it, "Ctrl+Plus (numeric keypad)",
+/// and the navigation pane's keypad plus, minus and asterisk alone read
 /// "Num +", "Num -" and "Num *", as Windows names them after Num Lock
-/// (CMD-039).
+/// (CMD-039). Each modifier's name is GTK's own, so it is translated as
+/// GTK translates it.
 fn key_label(key: gdk::Key, modifiers: gdk::ModifierType) -> String {
     if key == gdk::Key::KP_Add && modifiers == gdk::ModifierType::CONTROL_MASK {
         return ox_core::i18n::gettext_static("Ctrl+Plus (numeric keypad)").to_owned();
@@ -235,28 +239,53 @@ fn key_label(key: gdk::Key, modifiers: gdk::ModifierType) -> String {
     if let (true, Some(symbol)) = (modifiers.is_empty() && keypad.contains(&key), key.to_unicode()) {
         return ox_core::i18n::format_message("Num {key}", &[("key", &symbol.to_string())]);
     }
-    let label = gtk::accelerator_get_label(key, modifiers).to_string();
-    // Enter and Backspace as Windows names them ("Alt+Enter"), where GTK
-    // reads "Return" and "BackSpace".
-    let windows_name = match key {
-        gdk::Key::Return => Some(("Return", ox_core::i18n::gettext_static("Enter"))),
-        gdk::Key::BackSpace => Some(("BackSpace", ox_core::i18n::gettext_static("Backspace"))),
-        _ => None,
-    };
-    match windows_name.and_then(|(gtk_name, name)| Some((label.strip_suffix(gtk_name)?, name))) {
-        Some((modifiers, name)) => format!("{modifiers}{name}"),
-        None => label,
+    let bare = gtk::accelerator_get_label(key, gdk::ModifierType::empty()).to_string();
+    let mut label = String::new();
+    for modifier in WINDOWS_MODIFIER_ORDER {
+        if modifiers.contains(modifier) {
+            let with = gtk::accelerator_get_label(key, modifier).to_string();
+            label.push_str(with.strip_suffix(bare.as_str()).unwrap_or_default());
+        }
     }
+    label.push_str(&windows_key_name(key).map_or(bare, str::to_owned));
+    label
+}
+
+/// The modifiers in the order Windows writes them.
+const WINDOWS_MODIFIER_ORDER: [gdk::ModifierType; 4] = [
+    gdk::ModifierType::CONTROL_MASK,
+    gdk::ModifierType::ALT_MASK,
+    gdk::ModifierType::SHIFT_MASK,
+    gdk::ModifierType::SUPER_MASK,
+];
+
+/// A key's name where Microsoft's list names it otherwise than GTK
+/// ("Return", "BackSpace", "Escape", "Space", "Left").
+fn windows_key_name(key: gdk::Key) -> Option<&'static str> {
+    let name = match key {
+        gdk::Key::Return | gdk::Key::KP_Enter => crate::i18n::message_id("Enter"),
+        gdk::Key::BackSpace => crate::i18n::message_id("Backspace"),
+        gdk::Key::Escape => crate::i18n::message_id("Esc"),
+        gdk::Key::space | gdk::Key::KP_Space => crate::i18n::message_id("Spacebar"),
+        gdk::Key::Left | gdk::Key::KP_Left => crate::i18n::message_id("Left arrow"),
+        gdk::Key::Right | gdk::Key::KP_Right => crate::i18n::message_id("Right arrow"),
+        gdk::Key::Up | gdk::Key::KP_Up => crate::i18n::message_id("Up arrow"),
+        gdk::Key::Down | gdk::Key::KP_Down => crate::i18n::message_id("Down arrow"),
+        _ => return None,
+    };
+    Some(ox_core::i18n::gettext_static(name))
 }
 
 /// The keys the window takes where the keyboard is, with no binding of
 /// their own to read, each with its command and group, in the words of
 /// Microsoft's list of File Explorer's keys
 /// (<https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows>):
-/// the file list's arrows with Shift or Ctrl, Ctrl+Space, Home and End
-/// (`grid_keys.rs`, GTK's lists), Left and Right in the navigation pane
-/// (`sidebar/collapsing.rs`), Alt alone (`focus_regions.rs`) and Ctrl with
-/// the scroll wheel (`view_zoom.rs`).
+/// the file list's arrows with Shift or Ctrl, then Ctrl+Spacebar, Home,
+/// End, Page Up, Page Down and Enter (`grid_keys.rs`, GTK's lists), Left
+/// and Right in the navigation pane (`sidebar/collapsing.rs`), Alt alone
+/// (`focus_regions.rs`), Ctrl with the scroll wheel (`view_zoom.rs`),
+/// Shift with a right-click (`context_menu.rs`, the classic menu) and Ctrl,
+/// Shift or Alt with a drag (`file_drop/action.rs`).
 fn keys_without_a_binding() -> Vec<ShortcutRow> {
     // A single key reads as GTK names it in the user's language, as the
     // bound keys do; a group of keys is a phrase of its own.
@@ -305,6 +334,52 @@ fn keys_without_a_binding() -> Vec<ShortcutRow> {
             Group::Selection,
             ox_core::i18n::gettext_static("Last item"),
             key("End"),
+        ),
+        (
+            Group::Selection,
+            ox_core::i18n::gettext_static("Select several items one at a time"),
+            ox_core::i18n::format_message(
+                "{move}, then {select}",
+                &[
+                    ("move", ox_core::i18n::gettext_static("Ctrl+arrow keys")),
+                    ("select", &key("<Primary>space")),
+                ],
+            ),
+        ),
+        (
+            Group::Selection,
+            ox_core::i18n::gettext_static("Move up a page of items"),
+            key("Page_Up"),
+        ),
+        (
+            Group::Selection,
+            ox_core::i18n::gettext_static("Move down a page of items"),
+            key("Page_Down"),
+        ),
+        (
+            Group::Selection,
+            ox_core::i18n::gettext_static("Open the selected items"),
+            key("Return"),
+        ),
+        (
+            Group::Selection,
+            ox_core::i18n::gettext_static("Open the classic context menu (Show more options)"),
+            ox_core::i18n::gettext_static("Shift+right-click").to_owned(),
+        ),
+        (
+            Group::Files,
+            ox_core::i18n::gettext_static("Copy the dragged items where they are dropped"),
+            ox_core::i18n::gettext_static("Ctrl+drag").to_owned(),
+        ),
+        (
+            Group::Files,
+            ox_core::i18n::gettext_static("Move the dragged items where they are dropped"),
+            ox_core::i18n::gettext_static("Shift+drag").to_owned(),
+        ),
+        (
+            Group::Files,
+            ox_core::i18n::gettext_static("Create shortcuts to the dragged items where they are dropped"),
+            ox_core::i18n::gettext_static("Alt+drag").to_owned(),
         ),
         (
             Group::View,
@@ -540,6 +615,7 @@ fn search_words(text: &str) -> Vec<String> {
         .map(|word| match word {
             "control" => "ctrl",
             "escape" => "esc",
+            "space" => "spacebar",
             "delete" => "del",
             "keypad" | "numeric" => "num",
             other => other,
@@ -680,7 +756,7 @@ mod tests {
 
         assert_eq!(keys_of("Search"), ["Ctrl+F", "Ctrl+E", "F3"]);
         assert_eq!(keys_of("Delete"), ["Delete", "Ctrl+D"]);
-        assert_eq!(keys_of("Details pane"), ["Shift+Alt+P"]);
+        assert_eq!(keys_of("Details pane"), ["Alt+Shift+P"]);
         assert_eq!(keys_of("Preview pane"), ["Alt+P"]);
         assert_eq!(keys_of("Full screen"), ["F11"]);
         assert_eq!(
@@ -736,19 +812,19 @@ mod tests {
             ),
             (
                 "Select or clear the item the keyboard is on",
-                "Ctrl+Space",
+                "Ctrl+Spacebar",
                 Group::Selection,
             ),
             ("First item", "Home", Group::Selection),
             ("Last item", "End", Group::Selection),
             (
                 "Collapse the folder, or go to the folder it is in (navigation pane)",
-                "Left",
+                "Left arrow",
                 Group::Navigation,
             ),
             (
                 "Expand the folder, or go to its first subfolder (navigation pane)",
-                "Right",
+                "Right arrow",
                 Group::Navigation,
             ),
             ("Move to the command bar", "Alt", Group::Navigation),
@@ -758,6 +834,133 @@ mod tests {
             assert_eq!(listed.keys, [keys], "{label}");
             assert_eq!(listed.group, group, "{label}");
         }
+    }
+
+    /// Keys read as Microsoft writes them and as the menus show them
+    /// (<https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows>):
+    /// Ctrl, then Alt, then Shift ("Ctrl+Shift+N", "Alt+Shift+P"), and
+    /// Enter, Esc, Spacebar and the arrow keys by their names there.
+    ///
+    /// parity: CMD-032
+    #[gtk::test]
+    fn the_shortcuts_window_spells_keys_as_windows_does() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let (rows, _) = test.window.shortcut_rows();
+        let keys_of = |label: &str| {
+            rows.iter()
+                .find(|row| row.label == label)
+                .map_or_else(|| panic!("{label} is listed"), |row| row.keys.clone())
+        };
+        assert_eq!(keys_of("New folder"), ["Ctrl+Shift+N"]);
+        assert_eq!(keys_of("Details pane"), ["Alt+Shift+P"]);
+        assert_eq!(keys_of("Properties"), ["Alt+Enter"]);
+        assert_eq!(keys_of("Details"), ["Ctrl+Shift+6"]);
+        assert!(keys_of("Back").contains(&"Alt+Left arrow".to_owned()));
+        assert!(keys_of("Forward").contains(&"Alt+Right arrow".to_owned()));
+        assert!(keys_of("Up to the containing folder").contains(&"Alt+Up arrow".to_owned()));
+        assert!(keys_of("Clear the selection").contains(&"Esc".to_owned()));
+        for row in &rows {
+            for keys in &row.keys {
+                let words: Vec<&str> = keys.split('+').collect();
+                for wrong in [
+                    "Return",
+                    "Escape",
+                    "Space",
+                    "BackSpace",
+                    "Left",
+                    "Right",
+                    "Up",
+                    "Down",
+                ] {
+                    assert!(!words.contains(&wrong), "{}: {keys}", row.label);
+                }
+                let order = |name: &str| words.iter().position(|word| *word == name);
+                let (ctrl, alt, shift) = (order("Ctrl"), order("Alt"), order("Shift"));
+                assert!(
+                    ctrl.zip(alt).is_none_or(|(c, a)| c < a)
+                        && ctrl.zip(shift).is_none_or(|(c, s)| c < s)
+                        && alt.zip(shift).is_none_or(|(a, s)| a < s),
+                    "{}: {keys}",
+                    row.label
+                );
+            }
+        }
+    }
+
+    /// Every key of Microsoft's list of File Explorer's keys that works
+    /// here is listed
+    /// (<https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows>,
+    /// "File Explorer keyboard shortcuts"), with the general keys that work
+    /// in the file list, including the mouse with Ctrl, Shift and Alt.
+    ///
+    /// parity: CMD-032
+    #[gtk::test]
+    fn the_shortcuts_window_lists_every_key_of_microsofts_file_explorer_list() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let (rows, _) = test.window.shortcut_rows();
+        let listed: Vec<&String> = rows.iter().flat_map(|row| &row.keys).collect();
+        let mut missing = Vec::new();
+        for keys in [
+            "Alt+D",
+            "Alt+Enter",
+            "Alt+Left arrow",
+            "Backspace",
+            "Alt+drag",
+            "Alt+P",
+            "Alt+Right arrow",
+            "Alt+Shift+P",
+            "Alt+Up arrow",
+            "Ctrl+arrow keys, then Ctrl+Spacebar",
+            "Ctrl+D",
+            "Delete",
+            "Ctrl+E",
+            "Ctrl+F",
+            "Ctrl+L",
+            "Ctrl+drag",
+            "Ctrl+scroll wheel",
+            "Ctrl+N",
+            "Ctrl+1",
+            "Ctrl+Plus (numeric keypad)",
+            "Ctrl+Shift+E",
+            "Ctrl+Shift+N",
+            "Ctrl+Shift+1",
+            "Ctrl+Shift+Tab",
+            "Ctrl+T",
+            "Ctrl+W",
+            "Ctrl+Tab",
+            "End",
+            "F2",
+            "F3",
+            "F4",
+            "F5",
+            "F6",
+            "F11",
+            "Home",
+            "Left arrow",
+            "Right arrow",
+            "Shift+arrow keys",
+            "Shift+Delete",
+            "Shift+F10",
+            "Shift+drag",
+            "Shift+right-click",
+            "Ctrl+A",
+            "Ctrl+C",
+            "Ctrl+X",
+            "Ctrl+V",
+            "Ctrl+Z",
+            "Ctrl+Y",
+            "Esc",
+            "Enter",
+            "Page Up",
+            "Page Down",
+        ] {
+            if !listed.iter().any(|listed| listed.as_str() == keys) {
+                missing.push(keys);
+            }
+        }
+        assert!(missing.is_empty(), "not listed: {missing:?}");
     }
 
     /// The search's words: one spelling, the separators between keys
@@ -789,7 +992,7 @@ mod tests {
     /// parity: CMD-032
     #[test]
     fn a_query_finds_a_shortcut_by_its_keys_or_words() {
-        let keys = ["Shift+Ctrl+E".to_owned()];
+        let keys = ["Ctrl+Shift+E".to_owned()];
         let reveal = |query: &str| query_matches(query, "Open the navigation pane", "Navigation", &keys);
         for query in [
             "ctrl shift e",
@@ -894,7 +1097,7 @@ mod tests {
         assert_eq!(search_words("ctrl - shift - e"), ["ctrl", "shift", "e"]);
         assert_eq!(search_words("ctrl + +"), ["ctrl", "plus"]);
         assert_eq!(search_words("num +"), ["num", "plus"]);
-        let keys = ["Shift+Ctrl+E".to_owned()];
+        let keys = ["Ctrl+Shift+E".to_owned()];
         for query in ["ctrl + shift + e", "ctrl+ shift+e", "Ctrl + Shift + E"] {
             assert!(
                 query_matches(query, "Open the navigation pane", "Navigation", &keys),
@@ -1104,7 +1307,7 @@ mod tests {
         assert_eq!(keys_of("Paste"), ["Ctrl+V", "Shift+Insert"]);
         assert_eq!(
             keys_of("Open the navigation pane to the current folder, while it is shown"),
-            ["Shift+Ctrl+E"]
+            ["Ctrl+Shift+E"]
         );
         assert_eq!(
             keys_of("Expand the selected folder in the navigation pane"),
