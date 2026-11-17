@@ -43,6 +43,34 @@ pub enum ArchiveError {
     )]
     DamagedArchive,
 
+    /// A 7z archive whose headers or data are damaged or cut short, or a
+    /// file named `.7z` that holds no 7z archive.
+    #[error(
+        "{}",
+        crate::i18n::gettext("This 7z archive is damaged or incomplete. Use an archive manager.")
+    )]
+    DamagedSevenZip,
+
+    /// ARC-016: a 7z archive is encrypted, which the built-in reader
+    /// cannot decrypt.
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "This 7z archive is encrypted, which isn't supported. To open it, use a different archive app."
+        )
+    )]
+    SevenZipEncryption,
+
+    /// ARC-016: a 7z archive uses a compression method other than LZMA,
+    /// LZMA2 or the filters 7-Zip pairs with them.
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "This 7z archive uses a compression method that isn't supported. To open it, use a different archive app."
+        )
+    )]
+    SevenZipMethod,
+
     /// The compressed stream requests more decoder memory than the
     /// built-in reader allows, before any dictionary is allocated.
     #[error(
