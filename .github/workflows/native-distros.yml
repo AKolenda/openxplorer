@@ -35,7 +35,7 @@ jobs:
   distribution:
     name: ${{ matrix.name }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     container:
       image: ${{ matrix.image }}
     strategy:
@@ -121,6 +121,16 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # As in checks.yml's release job: updating the image's runtimes in
+      # the container's overlay fails with "Invalid cross-device link"
+      # (flatpak/flatpak-github-actions#267), so they move to the runner's
+      # own disk first.
+      - name: Move the Flatpak installation off the container's overlay
+        run: |
+          mkdir "$RUNNER_TEMP/flatpak"
+          cp -a /var/lib/flatpak/. "$RUNNER_TEMP/flatpak/"
+          rm -rf /var/lib/flatpak
+          ln -s "$RUNNER_TEMP/flatpak" /var/lib/flatpak
       - name: Build the preview Flatpak
         # Builds offline from native/packaging/flatpak/cargo-sources.json and
         # leaves io.winspace.Development.Native.flatpak for the next step,
