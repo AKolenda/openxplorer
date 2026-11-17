@@ -137,6 +137,33 @@ impl BrowserWindow {
                 }
             }
         ));
+        // Enter presses OK, the default button, as in Windows, unless the
+        // keyboard is on a button, which Enter presses.
+        let keys = gtk::EventControllerKey::new();
+        keys.connect_key_pressed(glib::clone!(
+            #[weak]
+            ok,
+            #[weak]
+            frame,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_, key, _, modifiers| {
+                let enter = matches!(
+                    key,
+                    gtk::gdk::Key::Return | gtk::gdk::Key::KP_Enter | gtk::gdk::Key::ISO_Enter
+                );
+                let on_button = frame
+                    .root()
+                    .and_then(|root| root.focus())
+                    .is_some_and(|focus| focus.is::<gtk::Button>());
+                if enter && modifiers.is_empty() && !on_button {
+                    ok.emit_clicked();
+                    return glib::Propagation::Stop;
+                }
+                glib::Propagation::Proceed
+            }
+        ));
+        frame.add_controller(keys);
         self.imp().gallery_locations.replace(Some(dialog.clone()));
         frame.connect_closed(glib::clone!(
             #[weak(rename_to = window)]
@@ -317,7 +344,11 @@ impl GalleryLocations {
 
     /// Puts the local folder at `uri` in the list, once.
     pub(crate) fn add_folder(&self, uri: &str) {
-        if gio::File::for_uri(uri).path().is_none() {
+        let file = gio::File::for_uri(uri);
+        let is_local_folder = file.path().is_some()
+            && file.query_file_type(gio::FileQueryInfoFlags::NONE, gio::Cancellable::NONE)
+                == gio::FileType::Directory;
+        if !is_local_folder {
             self.frame.show_error(&ox_core::i18n::gettext(
                 "Only folders on this computer can be added.",
             ));
@@ -360,6 +391,14 @@ impl GalleryLocations {
         };
         if removed {
             self.show_rows();
+            // The keyboard goes back to the list, on the row that took the
+            // removed one's place, as Remove is grayed now.
+            let count = i32::try_from(self.locations.borrow().len()).unwrap_or(1);
+            let index = i32::try_from(index).unwrap_or(0).min(count - 1);
+            if let Some(row) = self.list.row_at_index(index) {
+                self.list.select_row(Some(&row));
+                row.grab_focus();
+            }
         }
     }
 

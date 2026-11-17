@@ -192,6 +192,9 @@ struct Contribution<'a> {
     is_saved: bool,
     /// An active mount serves the location.
     is_connected: bool,
+    /// The label is the user's, from a saved share or one mapped for this
+    /// session, and never follows a browsed address's spelling.
+    names_row: bool,
     /// The row's kind, if this contribution creates it.
     kind: NetworkKind,
 }
@@ -203,6 +206,7 @@ impl<'a> Contribution<'a> {
             label: Cow::Borrowed(&share.bookmark.label),
             is_saved: true,
             is_connected: share.is_connected,
+            names_row: true,
             kind: NetworkKind::Share,
         }
     }
@@ -213,6 +217,7 @@ impl<'a> Contribution<'a> {
             label: Cow::Borrowed(&mount.label),
             is_saved: false,
             is_connected: true,
+            names_row: false,
             kind: smb_location_kind(&mount.uri),
         }
     }
@@ -223,6 +228,7 @@ impl<'a> Contribution<'a> {
             label: mount.display_label(),
             is_saved: false,
             is_connected: true,
+            names_row: false,
             kind: NetworkKind::Mount,
         }
     }
@@ -235,6 +241,8 @@ impl<'a> Contribution<'a> {
             label: Cow::Borrowed(&bookmark.label),
             is_saved: false,
             is_connected: false,
+            // A mapped share's label, with its drive letter, is the user's.
+            names_row: !bookmark.label.is_empty(),
             kind: smb_location_kind(&bookmark.uri),
         }
     }
@@ -291,6 +299,9 @@ fn fallback_label(uri: &str) -> String {
 #[derive(Default)]
 struct NetworkRows {
     rows: Vec<NetworkLocation>,
+    /// For each row, whether its label is the user's (see
+    /// `Contribution::names_row`), which a browsed address never respells.
+    named: Vec<bool>,
     indexes: HashMap<NetworkKey, usize>,
     /// The first row on each SFTP, FTP, WebDAV or NFS server, by scheme
     /// and authority (user, host and port).
@@ -309,7 +320,7 @@ impl NetworkRows {
             return;
         };
         if let Some(&index) = self.indexes.get(&key) {
-            self.rows[index].merge(location);
+            self.merge_into(index, location);
             return;
         }
         let server = remote_server(&location.uri);
@@ -321,7 +332,7 @@ impl NetworkRows {
             .filter(|_| !location.is_saved)
             .and_then(|server| self.remote_servers.get(server));
         if let Some(&index) = server_row {
-            self.rows[index].merge(location);
+            self.merge_into(index, location);
             return;
         }
         if let Some(server) = server {
@@ -329,7 +340,54 @@ impl NetworkRows {
         }
         self.indexes.insert(key, self.rows.len());
         self.rows.push(location);
+        self.named.push(contribution.names_row);
     }
+
+    /// Merges `later` into the row at `index`. A saved share's label
+    /// replaces the row's and is the user's from then on.
+    fn merge_into(&mut self, index: usize, later: NetworkLocation) {
+        let row = &mut self.rows[index];
+        let is_named = &mut self.named[index];
+        if later.is_saved {
+            *is_named = true;
+        } else if !later.is_connected && !*is_named {
+            // A browsed address, not a mount: the user's spelling, for a
+            // label taken from a mount.
+            row.respell_share(&later.uri);
+        }
+        row.merge(later);
+    }
+}
+
+impl NetworkLocation {
+    /// Spells the share in this row's label as `uri`, the address the user
+    /// browsed, spells it, when the label starts with the share as GIO
+    /// wrote it ("studio on nas") and only the case differs: the address
+    /// bar shows the share as the address spells it, so the navigation
+    /// pane says "Studio on nas" too. Any other label stays.
+    fn respell_share(&mut self, uri: &str) {
+        let (Some(ours), Some(theirs)) = (smb_share_name(&self.uri), smb_share_name(uri)) else {
+            return;
+        };
+        if ours == theirs || glib::casefold(&ours) != glib::casefold(&theirs) {
+            return;
+        }
+        if let Some(rest) = self.label.strip_prefix(ours.as_str()) {
+            self.label = format!("{theirs}{rest}");
+        }
+    }
+}
+
+/// The share an SMB location is on, decoded, or `None` for a server or
+/// another kind of location.
+fn smb_share_name(uri: &str) -> Option<String> {
+    let parts = split_location(uri).ok()?;
+    if parts.scheme != "smb" {
+        return None;
+    }
+    let path = unquote_lossy(&parts.path);
+    let share = path.trim_start_matches('/').split('/').next()?;
+    (!share.is_empty()).then(|| share.to_owned())
 }
 
 /// The scheme and authority of an SFTP, FTP, WebDAV or NFS location;

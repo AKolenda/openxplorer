@@ -4162,6 +4162,87 @@ mod tests {
         wait_until("the picker to close", || !window.is_visible());
     }
 
+    /// Backspace in the file list of an Open or Save dialog opens the
+    /// folder one level up, as Windows 11 does ("Open a folder one level
+    /// up if a folder is selected in the Save As or Open dialog box",
+    /// support.microsoft.com, keyboard shortcuts in Windows), not the
+    /// previous folder; at `/` it does nothing, and in File name it erases
+    /// text.
+    ///
+    /// parity: INT-032, NAV-004
+    #[gtk::test]
+    fn backspace_in_the_file_list_opens_the_folder_one_level_up() {
+        let fixture = Fixture::empty();
+        std::fs::create_dir(fixture.path("Letters")).expect("fixture subfolder");
+        fixture.write("Letters/letter.odt");
+        let portal = Portal::new();
+        let answer = portal.call(
+            "SaveFile",
+            &[
+                (
+                    "current_folder",
+                    path_variant(&fixture.path("Letters").display().to_string()),
+                ),
+                ("current_name", "draft.odt".to_variant()),
+            ],
+        );
+        let window = &portal.test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        // The dialog started elsewhere first, so Back would go there.
+        window.navigate("file:///").expect("a valid folder");
+        wait_until("the root's listing", || {
+            window.current_uri().as_deref() == Some("file:///") && window.is_listed()
+        });
+        window
+            .navigate(&fixture.uri_of("Letters"))
+            .expect("a valid folder");
+        wait_until("the folder's listing again", || {
+            window.current_uri() == Some(fixture.uri_of("Letters")) && window.is_listed()
+        });
+        portal.test.select_named("letter.odt");
+        window.folder_pane().focus_view();
+        let view = window.folder_pane().details().column_view();
+        let press_backspace = || {
+            let keys = view
+                .observe_controllers()
+                .iter::<glib::Object>()
+                .filter_map(Result::ok)
+                .filter_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+                .find(|controller| controller.propagation_phase() == gtk::PropagationPhase::Capture)
+                .expect("the details view handles keys");
+            keys.emit_by_name::<bool>(
+                "key-pressed",
+                &[
+                    &gtk::gdk::Key::BackSpace.into_glib(),
+                    &0_u32,
+                    &gtk::gdk::ModifierType::empty(),
+                ],
+            )
+        };
+
+        assert!(press_backspace());
+        wait_until("the folder one level up", || {
+            window.current_uri() == Some(fixture.uri()) && window.is_listed()
+        });
+        window.navigate("file:///").expect("a valid folder");
+        wait_until("the root's listing", || {
+            window.current_uri().as_deref() == Some("file:///") && window.is_listed()
+        });
+        window.folder_pane().focus_view();
+        press_backspace();
+        for _ in 0..5 {
+            glib::MainContext::default().iteration(false);
+        }
+        assert_eq!(
+            window.current_uri().as_deref(),
+            Some("file:///"),
+            "/ has no folder above"
+        );
+        window.cancel_picking();
+        let (response, _) = Portal::finish(&answer);
+        assert_eq!(response, RESPONSE_CANCELLED);
+    }
+
     /// Opens a dialog of `method` with `entries` on `fixture`'s folder.
     fn dialog_on(
         portal: &Portal,
@@ -4993,7 +5074,7 @@ mod tests {
     }
 
     /// The keyboard's ring on the accept button shows, light and dark. The
-    /// ring is drawn in the accent colour (C29), which on the accent-filled
+    /// ring is drawn in the accent color (C29), which on the accent-filled
     /// Open or Save button was the button's own fill, so Tab to it showed
     /// nothing. It is drawn just outside that button now, as Windows draws
     /// its focus visual around a control, so it shows against the bar; the
@@ -5037,20 +5118,20 @@ mod tests {
             crate::test_support::harness::wait_for(std::time::Duration::from_millis(600));
             let without = painted(false);
             let with = painted(true);
-            // The button's fill, the colour most of the bar's saturated
-            // pixels have, which is the ring's colour too (C29).
+            // The button's fill, the color most of the bar's saturated
+            // pixels have, which is the ring's color too (C29).
             let fill = most_common_saturated(&without);
             let near = |pixel: &[u8; 3]| pixel.iter().zip(fill).all(|(a, b)| a.abs_diff(b) <= 12);
             let count = |pixels: &[[u8; 3]]| pixels.iter().filter(|pixel| near(pixel)).count();
             let (before, after) = (count(&without), count(&with));
             assert!(
                 after > before + 80,
-                "{theme}: the ring adds its colour around the button: {before} pixels without it, {after} with"
+                "{theme}: the ring adds its color around the button: {before} pixels without it, {after} with"
             );
         }
     }
 
-    /// The RGB colours of the pixels `widget` paints, outlines of its
+    /// The RGB colors of the pixels `widget` paints, outlines of its
     /// children included.
     fn painted_pixels(widget: &gtk::Widget) -> Vec<[u8; 3]> {
         let renderer = widget
@@ -5079,7 +5160,7 @@ mod tests {
             .collect()
     }
 
-    /// The colour most of the strongly coloured `pixels` have.
+    /// The color most of the strongly colored `pixels` have.
     fn most_common_saturated(pixels: &[[u8; 3]]) -> [u8; 3] {
         let mut counts: std::collections::HashMap<[u8; 3], usize> = std::collections::HashMap::new();
         for pixel in pixels {
@@ -5093,7 +5174,7 @@ mod tests {
         counts
             .into_iter()
             .max_by_key(|(_, count)| *count)
-            .map(|(colour, _)| colour)
+            .map(|(color, _)| color)
             .expect("the accept button's fill")
     }
 
@@ -5873,6 +5954,59 @@ mod tests {
             "Alt+T reaches the type list"
         );
         assert_eq!(picker.named(&name.text()), "notes.txt", "the name is kept");
+    }
+
+    /// An Open dialog about 1000 pixels wide with the Details pane open
+    /// shows every column of its list beside the pane, as Windows' common
+    /// dialog does: Name gives way first. Before, Name kept 260 pixels and
+    /// the pane cut Type mid-word ("Debian Packa") and hid Size, which only
+    /// a scroll bar shown under the pointer reached.
+    ///
+    /// parity: INT-032, LOOK-022
+    #[gtk::test]
+    fn the_details_pane_leaves_every_column_of_the_dialogs_list_in_view() {
+        let fixture = Fixture::empty();
+        for name in [
+            "openxplorer_2.0.17_amd64.deb",
+            "org.example.Notes.flatpakref",
+            "Meeting agenda.pdf",
+        ] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "OpenFile",
+            vec![("multiple", true.to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        test.open_details_pane();
+        window.set_default_size(1000, 630);
+        wait_until("the new width", || (window.width() - 1000).abs() <= 8);
+        crate::test_support::harness::wait_for_frames(window, 4);
+        let pane = window.details_pane();
+        assert!(pane.is_visible(), "the pane is open");
+        let view = window.folder_pane().details().column_view().clone();
+        let scroller = view
+            .parent()
+            .and_downcast::<gtk::ScrolledWindow>()
+            .expect("the list scrolls");
+        let columns = scroller.hadjustment().upper();
+        let shown = scroller.hadjustment().page_size();
+        assert!(
+            columns <= shown + 1.0,
+            "every column shows beside the pane: {shown} of {columns} pixels"
+        );
+        let list = view.compute_bounds(window).expect("shown");
+        let pane_left = pane.compute_bounds(window).expect("shown").x();
+        assert!(
+            list.x() + list.width() <= pane_left + 0.5,
+            "nothing lies under the pane"
+        );
+        window.cancel_picking();
     }
 
     /// The Properties window of the item called `name`, opened from the
