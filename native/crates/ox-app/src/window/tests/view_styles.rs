@@ -14,7 +14,7 @@ use crate::window::folder_pane::FolderView;
 use crate::window::session::Direction;
 
 /// Saves `update` as another window would and lets `test` read it.
-fn change_preferences(test: &TestWindow, update: &PreferencesUpdate) {
+pub(in crate::window) fn change_preferences(test: &TestWindow, update: &PreferencesUpdate) {
     Settings::open(test.settings_directory())
         .update_preferences(update)
         .expect("the settings file takes the change");
@@ -201,7 +201,7 @@ pub(in crate::window) fn folder_options_over(test: &TestWindow) -> Option<Proper
 fn options_button(options: &PropertiesWindow, label: &str) -> gtk::Button {
     descendants::<gtk::Button>(options)
         .into_iter()
-        .find(|button| button.label().as_deref() == Some(label))
+        .find(|button| button.label().as_deref().map(without_access_key).as_deref() == Some(label))
         .unwrap_or_else(|| panic!("Folder Options has a {label} button"))
 }
 
@@ -458,6 +458,12 @@ pub(in crate::window) fn options_tab(options: &PropertiesWindow, title: &str) ->
         .unwrap_or_else(|| panic!("Folder Options has a {title} tab"))
 }
 
+/// `label` as it reads on screen, without the "_" that marks its access
+/// key.
+pub(in crate::window) fn without_access_key(label: &str) -> String {
+    label.replace('_', "")
+}
+
 /// The check box labelled `label` on the tab `tab` of `options`.
 pub(in crate::window) fn option_check(
     options: &PropertiesWindow,
@@ -466,7 +472,7 @@ pub(in crate::window) fn option_check(
 ) -> gtk::CheckButton {
     descendants::<gtk::CheckButton>(&options_tab(options, tab))
         .into_iter()
-        .find(|check| check.label().as_deref() == Some(label))
+        .find(|check| check.label().as_deref().map(without_access_key).as_deref() == Some(label))
         .unwrap_or_else(|| panic!("the {tab} tab has {label}"))
 }
 
@@ -474,7 +480,7 @@ pub(in crate::window) fn option_check(
 pub(in crate::window) fn tab_button(options: &PropertiesWindow, tab: &str, label: &str) -> gtk::Button {
     descendants::<gtk::Button>(&options_tab(options, tab))
         .into_iter()
-        .find(|button| button.label().as_deref() == Some(label))
+        .find(|button| button.label().as_deref().map(without_access_key).as_deref() == Some(label))
         .unwrap_or_else(|| panic!("the {tab} tab has a {label} button"))
 }
 
@@ -511,10 +517,10 @@ fn folder_options_has_the_general_view_and_search_tabs_of_windows() {
     );
     assert!(descendants::<gtk::Label>(&general)
         .iter()
-        .any(|label| label.text() == "Open OpenXplorer to:"));
+        .any(|label| label.text() == "Open OpenXplorer to:" && label.mnemonic_keyval() == gtk::gdk::Key::t));
     let view_checks: Vec<String> = descendants::<gtk::CheckButton>(&options_tab(&options, "View"))
         .iter()
-        .filter_map(|check| check.label().map(String::from))
+        .filter_map(|check| check.label().as_deref().map(without_access_key))
         .collect();
     assert_eq!(
         view_checks,
@@ -536,7 +542,7 @@ fn folder_options_has_the_general_view_and_search_tabs_of_windows() {
     );
     let general_checks: Vec<String> = descendants::<gtk::CheckButton>(&general)
         .iter()
-        .filter_map(|check| check.label().map(String::from))
+        .filter_map(|check| check.label().as_deref().map(without_access_key))
         .collect();
     assert_eq!(
         general_checks,
@@ -553,7 +559,7 @@ fn folder_options_has_the_general_view_and_search_tabs_of_windows() {
     );
     let search_checks: Vec<String> = descendants::<gtk::CheckButton>(&options_tab(&options, "Search"))
         .iter()
-        .filter_map(|check| check.label().map(String::from))
+        .filter_map(|check| check.label().as_deref().map(without_access_key))
         .collect();
     assert_eq!(
         search_checks,
