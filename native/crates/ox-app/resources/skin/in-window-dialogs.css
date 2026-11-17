@@ -155,3 +155,24 @@ ox-dialog-layer .ox-dialog.create-archive dropdown > button:hover { background-c
 ox-dialog-layer .ox-dialog.create-archive dropdown > button:checked,
 ox-dialog-layer .ox-dialog.create-archive dropdown > button:active { background-color: @ox_control_fill_pressed; }
 ox-dialog-layer .ox-dialog.create-archive dropdown > button arrow { -gtk-icon-size: 12px; color: @ox_muted; }
+
+/* Gallery Locations (HOME-025): the blue heading, the text, the list of
+   folders with Add… and Remove under it, as Windows 11 lays it out. */
+ox-dialog-layer .ox-dialog.gallery-locations .gallery-locations-heading {
+  color: @ox_command_blue;
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+ox-dialog-layer .ox-dialog.gallery-locations .gallery-locations-text { margin-bottom: 14px; }
+ox-dialog-layer .ox-dialog.gallery-locations .gallery-locations-label { margin-bottom: 6px; }
+ox-dialog-layer .ox-dialog.gallery-locations .gallery-locations-list {
+  border: 1px solid @ox_control_stroke;
+  background-color: @ox_field_bg;
+}
+ox-dialog-layer .ox-dialog.gallery-locations .gallery-location { padding: 6px 8px; }
+ox-dialog-layer .ox-dialog.gallery-locations .gallery-location-path,
+ox-dialog-layer .ox-dialog.gallery-locations .gallery-location-note { color: @ox_muted; font-size: smaller; }
+ox-dialog-layer .ox-dialog.gallery-locations .gallery-locations-list > row:selected .gallery-location-path,
+ox-dialog-layer .ox-dialog.gallery-locations .gallery-locations-list > row:selected .gallery-location-note { color: inherit; }
+ox-dialog-layer .ox-dialog.gallery-locations .gallery-locations-buttons { margin-top: 10px; }
+ox-dialog-layer .ox-dialog.gallery-locations .gallery-locations-buttons > button { min-height: 30px; min-width: 90px; padding: 0 16px; }

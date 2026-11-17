@@ -17,7 +17,6 @@ use ox_core::location::{
 use ox_core::ops::JournalDirection;
 use ox_core::places::{KnownFolder, NetworkLocation, Place};
 
-use crate::folder_view::shown_name::shown_name;
 use crate::icons::{Art, Icon, Storage, Tint};
 use crate::locations::Page;
 
@@ -200,6 +199,11 @@ fn tab_icon(
     if let Some(glyph) = listed_place_glyph(uri) {
         return Art::Glyph(glyph);
     }
+    // Home first: `user-dirs.dirs` may put a standard folder at the home
+    // folder (`XDG_DESKTOP_DIR="$HOME"`), whose tab still shows Home.
+    if location::same_location(uri, &locations.home_uri()) {
+        return Art::Glyph(Page::Home.icon());
+    }
     if let Some(folder) = standard_folder_at(uri, known_folders) {
         // On the network, as the navigation pane's row shows it.
         return if locations.is_network_location(uri) {
@@ -207,9 +211,6 @@ fn tab_icon(
         } else {
             Art::for_known_folder(folder)
         };
-    }
-    if location::same_location(uri, &locations.home_uri()) {
-        return Art::Glyph(Page::Home.icon());
     }
     if is_device_location(uri) {
         Art::Glyph(Icon::Phone)
@@ -285,6 +286,9 @@ impl BrowserWindow {
         let uri = location.uri.as_str();
         let on_page = Page::from_uri(uri).is_some();
         let title = self.imp().locations.borrow().title_for(uri);
+        // No tooltip of the place left stays over the one shown now
+        // (VIEW-073).
+        self.hide_tooltip();
         self.render_title();
         self.set_action_enabled(WindowAction::Back, location.can_go_back);
         self.set_action_enabled(WindowAction::Forward, location.can_go_forward);
@@ -297,7 +301,10 @@ impl BrowserWindow {
         self.render_address(uri);
         let search = self.search_box();
         search.set_folder_title(&title);
-        search.set_enabled(!on_page && !in_zip && !is_device_location(uri));
+        // Windows 11's Home searches the home folder (HOME-035); the other
+        // pages search nothing.
+        let searches_home = Page::from_uri(uri) == Some(Page::Home);
+        search.set_enabled((!on_page || searches_home) && !in_zip && !is_device_location(uri));
         self.show_extract_button();
         self.update_more_menu();
         let tab = self.imp().session.borrow().active_id();
@@ -448,24 +455,16 @@ impl BrowserWindow {
     }
 
     /// Draws the crumbs and the address of `uri`. The crumb of an opened
-    /// archive is a file's name, so it hides a known extension while
-    /// names do, as Windows' does for a ZIP folder; folders keep theirs.
-    /// Search results add their own crumb and icon.
+    /// archive is its real file name, as its tab and the window's title
+    /// name it, so the archive has one name wherever it is shown. Search
+    /// results add their own crumb and icon.
     pub(super) fn render_address_of(&self, uri: &str) {
         let full_path = self.shows_full_path();
-        let extensions = self.file_name_extensions();
         let is_search = self.current_uri().as_deref() == Some(uri) && self.shows_search_step();
         let locations = self.imp().locations.borrow();
         let mut crumbs = crumb_buttons(&locations, uri, full_path);
         if is_search {
             crumbs.push(search_crumb(&locations, uri));
-        }
-        if let Some(archive) = crumbs
-            .iter_mut()
-            .find(|crumb| is_archive_location(&crumb.crumb.uri))
-        {
-            let shown = shown_name(&archive.crumb.label, false, extensions).to_owned();
-            archive.crumb.label = shown;
         }
         let address = locations.display_location(uri);
         let icon = step_icon(uri, &locations.home_uri(), is_search);
@@ -678,6 +677,29 @@ mod tests {
         assert_eq!(tab_on("file:///home/demo/Templates"), Art::Folder);
         assert_eq!(tab_on("file:///home/demo/Public"), Art::Folder);
         assert_eq!(tab_on("file:///home/demo/Downloads/Old"), Art::Folder);
+    }
+
+    /// When `user-dirs.dirs` puts a standard folder at the home folder
+    /// (`XDG_DESKTOP_DIR="$HOME"`, as some desktops write it), the home
+    /// folder's tab still shows Home's glyph, not that folder's.
+    ///
+    /// parity: TAB-010
+    #[test]
+    fn the_home_folders_tab_shows_home_when_a_standard_folder_is_home() {
+        let known_folders = [Place {
+            label: String::new(),
+            uri: "file:///home/demo".to_owned(),
+            known_folder: Some(KnownFolder::Desktop),
+            is_shared: false,
+        }];
+        let locations = LocationContext {
+            home: Some("/home/demo".into()),
+            ..LocationContext::default()
+        };
+        assert_eq!(
+            tab_icon("file:///home/demo/", &locations, &[], &known_folders),
+            Art::Glyph(Page::Home.icon())
+        );
     }
 
     /// A location and the title and tooltip of its tab.

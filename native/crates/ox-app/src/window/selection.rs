@@ -13,6 +13,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::location::is_smb_location;
 
+use crate::folder_view::item::FileItem;
 use crate::folder_view::shown_name::{shown_name, shows_whole};
 use crate::locations::Page;
 
@@ -146,10 +147,16 @@ impl BrowserWindow {
 
     /// Shows the item count and the selection in the status bar.
     pub(super) fn update_status(&self) {
-        let on_page = self.current_uri().as_deref().and_then(Page::drawn_at).is_some();
+        // Search results from Home are counted as results (HOME-035).
+        let page = self
+            .current_uri()
+            .as_deref()
+            .and_then(Page::drawn_at)
+            .filter(|_| !self.shows_search_step());
+        let on_page = page.is_some();
         let shown = self.folder_pane().model().n_items();
-        let home_items = super::home_page::item_count(self.folder_pane().landing())
-            .filter(|_| self.current_uri().as_deref() == Some(Page::Home.uri()));
+        let home_items =
+            super::home_page::item_count(self.folder_pane().landing()).filter(|_| page == Some(Page::Home));
         let subject = if let Some(shown) = home_items {
             // Home counts its tiles and rows, as Windows 11's does.
             StatusSubject::Folder {
@@ -163,7 +170,9 @@ impl BrowserWindow {
         } else {
             StatusSubject::Folder {
                 shown,
-                loading: self.is_busy() && self.is_slow(),
+                // Gallery's walk has no end it can know: its count says
+                // it is loading from the start (HOME-034).
+                loading: self.is_busy() && (self.is_slow() || self.lists_gallery()),
             }
         };
         let selected = self.folder_pane().model().summary();
@@ -200,9 +209,13 @@ impl BrowserWindow {
     /// pane.
     pub(super) fn update_details_pane(&self) {
         let pane = self.details_pane();
-        let selection = match pane.hovered() {
-            Some(hovered) => vec![hovered],
-            None => self.folder_pane().model().selected_items(),
+        let hovered = pane.hovered();
+        let selected;
+        let selection: &[FileItem] = if let Some(hovered) = &hovered {
+            std::slice::from_ref(hovered)
+        } else {
+            selected = self.folder_pane().model().selected_items();
+            &selected
         };
         let Some(folder_uri) = self.current_uri() else {
             return;
@@ -217,7 +230,7 @@ impl BrowserWindow {
         };
         let locations = self.imp().locations.borrow();
         let mut content = details_pane::pane_content(&PaneFacts {
-            selection: &selection,
+            selection,
             folder_uri: &folder_uri,
             folder_item_count,
             locations: &locations,
@@ -226,16 +239,19 @@ impl BrowserWindow {
             preview_rules: PreviewRules {
                 // A recent item or a search result is judged by its own
                 // location too, as its thumbnail is.
+                // Read for one item alone, which is the only one the
+                // pane previews: not worked out for 100,000 selected.
                 remote: self.is_remote_folder(&folder_uri)
-                    || selection.iter().any(|item| {
-                        let entry = item.entry();
-                        self.is_remote_folder(&entry.uri)
-                            || entry
-                                .meta
-                                .recent_target
-                                .as_deref()
-                                .is_some_and(|target| self.is_remote_folder(target))
-                    }),
+                    || (selection.len() == 1
+                        && selection.iter().any(|item| {
+                            let entry = item.entry();
+                            self.is_remote_folder(&entry.uri)
+                                || entry
+                                    .meta
+                                    .recent_target
+                                    .as_deref()
+                                    .is_some_and(|target| self.is_remote_folder(target))
+                        })),
                 remote_previews: self
                     .context()
                     .settings_data()
@@ -245,7 +261,7 @@ impl BrowserWindow {
             },
         });
         // One item is named as the file list names it (VIEW-069).
-        if let [item] = selection.as_slice() {
+        if let [item] = selection {
             let entry = item.entry();
             if content.name == entry.name {
                 let extensions = self.file_name_extensions();
