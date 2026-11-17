@@ -85,7 +85,7 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
   background-color: @ox_bg;
   border: 1px solid @ox_border;
 }
-.ox-properties .properties-page { padding: 11px 11px 8px 11px; }
+.ox-properties .properties-page { padding: 11px 11px 6px 11px; }
 .ox-properties .properties-page > * { margin-bottom: 0; }
 
 /* The General tab: picture and name, groups of rows between dividers. */
@@ -121,7 +121,7 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
 .ox-properties .drive-swatch.free { background-color: alpha(@ox_text, .14); }
 .ox-properties spacering .space-used { color: @ox_accent; }
 .ox-properties spacering .space-free { color: alpha(@ox_text, .14); }
-.ox-properties spacering.drive-ring { margin: 10px 0 6px 0; }
+.ox-properties spacering.drive-ring { margin: 6px 0 4px 0; }
 .ox-properties .drive-name-row { margin: 0 0 4px 0; min-height: 23px; }
 .ox-properties checkbutton { padding: 0; min-height: 18px; }
 
@@ -147,17 +147,17 @@ window.ox.ox-properties:backdrop .properties-titlebar { color: @ox_text_tertiary
   box-shadow: inset 0 0 0 1px @ox_accent;
 }
 .ox-properties .properties-footer { border-spacing: 8px; margin: 10px 11px 11px 11px; }
-.ox-properties .properties-button-row { border-spacing: 10px; margin: 8px 0; }
+.ox-properties .properties-button-row { border-spacing: 10px; margin: 5px 0; }
 
 /* Group boxes (Sharing, Customize, Advanced Sharing). */
 .ox-properties frame.properties-group {
   border: 1px solid @ox_border;
   border-radius: 0;
-  margin: 4px 0 10px 0;
+  margin: 4px 0 4px 0;
   padding: 0;
 }
 .ox-properties frame.properties-group > label { margin: 0 6px; padding: 0 2px; }
-.ox-properties .properties-group-content { padding: 6px 10px 10px 10px; border-spacing: 6px; }
+.ox-properties .properties-group-content { padding: 3px 10px 6px 10px; border-spacing: 4px; }
 /* The title sits on the box's top line, as Windows draws a group box: it
    is lifted by half its height onto the line, whose stroke its own
    background hides behind the text. The lift (half the title's line, past
@@ -179,14 +179,14 @@ window.ox-properties:not(.ox-folder-options) frame.properties-group > label {
   background-color: @ox_bg;
   margin: 2px 0 6px 0;
 }
-.ox-properties .properties-caption { margin: 6px 0 2px 0; }
+.ox-properties .properties-caption { margin: 4px 0 2px 0; }
 .ox-properties list.properties-names { background-color: @ox_bg; min-height: 64px; }
 .ox-properties list.properties-names > row { padding: 1px 4px; min-height: 18px; }
 .ox-properties list.properties-names > row:selected {
   background-color: @ox_accent;
   color: @ox_on_accent;
 }
-.ox-properties grid.properties-permission-heading { margin-top: 8px; }
+.ox-properties grid.properties-permission-heading { margin-top: 5px; }
 .ox-properties .properties-permission-column { min-width: 52px; }
 .ox-properties grid.properties-permissions { padding: 3px 4px; border-spacing: 0 1px; }
 .ox-properties .properties-permission-cell { min-width: 52px; }
@@ -223,7 +223,7 @@ window.ox-properties:not(.ox-folder-options) frame.properties-group > label {
 }
 /* The template list, then the folder picture's stacked
    buttons beside its preview, as Windows 11 spaces them. */
-.ox-properties dropdown.folder-template { margin: 2px 0 6px 0; }
+.ox-properties dropdown.folder-template { margin: 1px 0 3px 0; }
 /* Windows' combo box: a push button's frame around the choice and its
    chevron. */
 .ox-properties dropdown.folder-template > button,
@@ -243,7 +243,7 @@ window.ox-properties:not(.ox-folder-options) frame.properties-group > label {
 .ox-properties dropdown.folder-template > button:active { background-color: @ox_control_fill_pressed; }
 .ox-properties dropdown.properties-combo > button arrow,
 .ox-properties dropdown.folder-template > button arrow { -gtk-icon-size: 12px; color: @ox_muted; }
-.ox-properties .properties-button-column { border-spacing: 6px; margin: 8px 0 2px 0; }
+.ox-properties .properties-button-column { border-spacing: 6px; margin: 4px 0 0 0; }
 .ox-properties .folder-picture-preview { margin: 0 8px 0 0; }
 
 /* Forms inside a tab or a Properties dialog (Snapshot source, Location,

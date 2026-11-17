@@ -73,6 +73,137 @@ fn dialog_width(dialog: &gtk::Window) -> i32 {
     }
 }
 
+/// Makes Tab and Shift+Tab in `window` go round its controls, as
+/// Microsoft lists them for dialog boxes: "Tab: Move forward through
+/// options", "Shift+Tab: Move back through options"
+/// (<https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows>),
+/// ACC-004. GTK 4.14, Ubuntu 24.04's, failed twice here:
+///
+/// - Past the last control of a window with a title bar widget it does
+///   not show, as the dialogs have, it gave the keyboard to nothing. So
+///   once GTK has moved, the keyboard goes on to the first control (the
+///   last, backward) when nothing has it.
+/// - A scrolled body holding no control, as a question's lines about a
+///   file, claimed Tab without taking the keyboard, even when it was not
+///   focusable, so Tab went nowhere from there on. So before GTK moves,
+///   each dialog body takes part only where it has something for the
+///   keyboard ([`update_body_tab_stop`]).
+pub(crate) fn tab_goes_round(window: &impl IsA<gtk::Window>) {
+    let window = window.as_ref();
+    window.connect_move_focus(|window, direction| {
+        if is_tab(direction) {
+            update_body_tab_stops(window.upcast_ref());
+        }
+    });
+    window.connect_local("move-focus", true, |values| {
+        let window = values.first()?.get::<gtk::Window>().ok()?;
+        let direction = values.get(1)?.get::<gtk::DirectionType>().ok()?;
+        if is_tab(direction) && GtkWindowExt::focus(&window).is_none() {
+            if let Some(content) = window.child() {
+                content.child_focus(direction);
+            }
+        }
+        None
+    });
+}
+
+/// Whether `direction` is Tab's or Shift+Tab's.
+fn is_tab(direction: gtk::DirectionType) -> bool {
+    matches!(
+        direction,
+        gtk::DirectionType::TabForward | gtk::DirectionType::TabBackward
+    )
+}
+
+/// The CSS class of a dialog's scrolled body (`dialog-frame.ui`).
+pub(crate) const DIALOG_BODY: &str = "dialog-body-scroller";
+
+/// Updates the Tab stop of every dialog body under `root`.
+pub(crate) fn update_body_tab_stops(root: &gtk::Widget) {
+    let mut next = root.first_child();
+    while let Some(widget) = next {
+        match widget.downcast_ref::<gtk::ScrolledWindow>() {
+            Some(scroller) if scroller.has_css_class(DIALOG_BODY) => update_body_tab_stop(scroller),
+            _ => update_body_tab_stops(&widget),
+        }
+        next = widget.next_sibling();
+    }
+}
+
+/// Lets a dialog's scrolled body `scroller` take Tab only for what it has
+/// for the keyboard: itself while it has more to show than fits, so the
+/// arrow and page keys scroll it (drawn with the ring, dialogs.css), and
+/// the controls inside it. A body that fits and holds no control is no
+/// stop: GTK would make it one that shows nothing, or one that never
+/// takes the keyboard at all.
+pub(crate) fn update_body_tab_stop(scroller: &gtk::ScrolledWindow) {
+    let adjustment = scroller.vadjustment();
+    let scrolls = adjustment.upper() - adjustment.page_size() > 0.5;
+    let holds_a_control = scroller.child().is_some_and(|child| holds_a_control(&child));
+    scroller.set_focusable(scrolls);
+    scroller.set_can_focus(scrolls || holds_a_control);
+}
+
+/// Whether a shown, usable control under `widget`, or `widget` itself,
+/// takes the keyboard.
+fn holds_a_control(widget: &gtk::Widget) -> bool {
+    if !widget.is_visible() || !widget.is_sensitive() || !widget.can_focus() {
+        return false;
+    }
+    if widget.is_focusable() {
+        return true;
+    }
+    let mut next = widget.first_child();
+    while let Some(child) = next {
+        if holds_a_control(&child) {
+            return true;
+        }
+        next = child.next_sibling();
+    }
+    false
+}
+
+/// A controller for a window: F4 on a drop-down list shows its items, as
+/// Microsoft lists for dialog boxes ("F4: Display the items in the active
+/// list",
+/// <https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows>).
+/// Elsewhere the key goes on, so the browser window's F4 still opens the
+/// address bar. GTK opens a drop-down with Space or Enter only.
+pub(crate) fn f4_shows_a_list() -> gtk::ShortcutController {
+    let action = gtk::CallbackAction::new(|widget, _| {
+        let focus = widget.root().and_then(|root| root.focus());
+        let drop_down = focus.and_then(|focus| {
+            focus
+                .downcast_ref::<gtk::DropDown>()
+                .cloned()
+                .or_else(|| focus.ancestor(gtk::DropDown::static_type()).and_downcast())
+        });
+        let Some(drop_down) = drop_down.filter(WidgetExt::is_sensitive) else {
+            return glib::Propagation::Proceed;
+        };
+        show_items(&drop_down);
+        glib::Propagation::Stop
+    });
+    let trigger = gtk::KeyvalTrigger::new(gdk::Key::F4, gdk::ModifierType::empty());
+    let shortcuts = gtk::ShortcutController::new();
+    shortcuts.set_propagation_phase(gtk::PropagationPhase::Capture);
+    shortcuts.add_shortcut(gtk::Shortcut::new(Some(trigger), Some(action)));
+    shortcuts
+}
+
+/// Shows the list of `drop_down`, as a click on it does: its button is a
+/// toggle button whose press opens the list.
+fn show_items(drop_down: &gtk::DropDown) {
+    let mut next = drop_down.first_child();
+    while let Some(child) = next {
+        if let Some(button) = child.downcast_ref::<gtk::ToggleButton>() {
+            button.set_active(true);
+            return;
+        }
+        next = child.next_sibling();
+    }
+}
+
 /// A controller for a dialog window: Escape closes it through its close
 /// request, which a dialog refuses while it must stay open, such as
 /// Software updates during an installation.

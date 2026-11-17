@@ -210,12 +210,14 @@ impl LocationPanel {
         let imp = self.imp();
         imp.controls.add_css_class("location-controls");
         let check = glyph_button(ox_core::i18n::gettext_static("Check location"), Icon::Checkmark);
+        super::window::give_access_key(&check, 'c');
         check.connect_clicked(glib::clone!(
             #[weak(rename_to = panel)]
             self,
             move |_| panel.check_location()
         ));
         let restore = glyph_button(ox_core::i18n::gettext_static("Restore default"), Icon::ArrowReset);
+        super::window::give_access_key(&restore, 'r');
         restore.connect_clicked(glib::clone!(
             #[weak(rename_to = panel)]
             self,
@@ -241,6 +243,7 @@ impl LocationPanel {
         ));
         self.append(&consent);
         let apply = glyph_button(ox_core::i18n::gettext_static("Apply location"), Icon::Checkmark);
+        super::window::give_access_key(&apply, 'l');
         // The page's main button, set apart from the consent box above it.
         apply.add_css_class("suggested-action");
         apply.set_margin_top(8);

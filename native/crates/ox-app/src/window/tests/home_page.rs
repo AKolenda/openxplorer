@@ -1350,9 +1350,9 @@ fn the_keyboard_comes_back_to_the_item_whose_menu_closed() {
     let notes = fixture.uri_of("Notes 2.txt");
     test.activate("add-to-favorites", Some(&notes));
     home_page::choose_tab(body(&test), "Favorites");
+    // Known extensions are hidden in Home's list too (VIEW-069).
     wait_until("the tile and the favorite", || {
-        !home_page::tile_names(body(&test)).is_empty()
-            && home_page::list_names(body(&test)) == ["Notes 2.txt"]
+        !home_page::tile_names(body(&test)).is_empty() && home_page::list_names(body(&test)) == ["Notes 2"]
     });
     let focus_is_on = |item: &gtk::FlowBoxChild| {
         gtk::prelude::GtkWindowExt::focus(&test.window)
@@ -1362,8 +1362,8 @@ fn the_keyboard_comes_back_to_the_item_whose_menu_closed() {
     for (name, accelerator) in [
         ("Documents", "<Shift>F10"),
         ("Documents", "Menu"),
-        ("Notes 2.txt", "<Shift>F10"),
-        ("Notes 2.txt", "Menu"),
+        ("Notes 2", "<Shift>F10"),
+        ("Notes 2", "Menu"),
     ] {
         let item = home_page::item_named(body(&test), name);
         item.grab_focus();

@@ -129,6 +129,8 @@ mod imp {
         pub(super) strip_items: RefCell<Vec<MenuItem>>,
         /// The classic or compact look.
         pub(super) style: Cell<MenuStyle>,
+        /// Whether an item was chosen, so the menu closed for it.
+        pub(super) chose: Cell<bool>,
         /// The submenu open beside a row, and that row's item index.
         pub(super) submenu: RefCell<Option<(super::MenuPopover, usize)>>,
         /// While the open submenu waits for its row to be laid out before
@@ -872,11 +874,18 @@ impl MenuPopover {
         // The first menu runs the action: it hangs from the window, and its
         // submenus close with it.
         let first = self.root_menu();
+        first.imp().chose.set(true);
         first.popdown();
         // GTK fails only when no ancestor has the action. Every browser
         // window and the application register them all, so that is a menu
         // outside a window, which has nothing to run.
         let _ = first.activate_action(&item.action.detailed_name(), item.target.as_ref());
+    }
+
+    /// Whether the menu closed because an item of it, or of one of its
+    /// submenus, was chosen.
+    pub(super) fn chose_an_item(&self) -> bool {
+        self.imp().chose.get()
     }
 
     /// The menu this one is a submenu of, if it is one.

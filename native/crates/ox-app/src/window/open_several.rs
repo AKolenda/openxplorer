@@ -29,6 +29,12 @@ impl BrowserWindow {
             self.activate_item(*position);
             return;
         }
+        // Items in the Recycle Bin are not opened, but shown in Properties,
+        // as one is (BrowserWindow::activate_listed_entry).
+        if self.shows_recycle_bin() && !positions.is_empty() {
+            self.open_properties(crate::properties::PropertiesTab::General);
+            return;
+        }
         // A file dialog takes several files as its choice (INT-032).
         if self.pick_selection() {
             return;

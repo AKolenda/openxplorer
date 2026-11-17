@@ -51,6 +51,26 @@ is missing.
   focus rings show only after keyboard navigation (ACC-009). Windows 11
   opens Home with Quick access by default; "Open Quick access on Home"
   stays off here, the owner's choice.
+- **Advanced Query Syntax in the search box (2026-11-15).** Quoted phrases,
+  upper-case `AND`, `OR` and `NOT`, `name:`, `ext:`, `date:` with dates,
+  comparisons and ranges, and sizes in KB, MB or GB are read as Microsoft
+  documents them (SRCH-047). Not read yet: other properties (`author:`,
+  `folder:`, `datecreated:`), day and month names and future dates, dates
+  written day first, and a search option (`kind:`, `date:`, `size:`) after
+  `NOT` or next to `OR`, which stays a word to search for. Not built: a
+  recent-searches list under the search box and the Search options menu's
+  Other properties and Advanced options, which no Microsoft page found so
+  far documents.
+- **Keyboard and focus (2026-11-15).** Changed, replacing an earlier
+  choice: Left or Right with nowhere to go in the navigation pane keeps the
+  keyboard on its row (SIDE-033); it used to be left to the list, and GTK
+  then moved it to the pane's resize handle. Not checked against Windows,
+  so unchanged: Page Up and Page Down in List view move across columns, as
+  GTK's list does, so with every item in one column they do nothing; the
+  Properties windows' values and title-bar Close are Tab stops; each
+  Settings category is a Tab stop; Home tiles are a Tab stop each; the
+  message boxes Delete File and Rename File have no Alt+letter keys; a
+  folder opened from the command line has Home before it in Back's history.
 - **Checks this environment cannot run.** LOOK-028 (fractional scales and a
   window moving between monitors of different scales need a Wayland
   compositor), ACC-003 (nobody has checked the file list with Orca; the icon
@@ -287,4 +307,3 @@ braveSync, cacheClear, cacheRefresh, cacheRemove, cacheSet, cacheStatus,
 cacheStop, chrome, connect, environment, focusWindow, list, locationApply,
 locationCheck, mountPlan, mountVolume, normalise, open, openTerminal, pin,
 preferences, quit, search, uiReady, unmount, window, windowMetadata, windows.
-

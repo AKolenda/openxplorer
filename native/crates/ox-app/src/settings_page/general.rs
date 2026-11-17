@@ -90,9 +90,9 @@ const EDITABLE_ADDRESS: RowText = RowText {
 };
 
 const TITLE_PATH: RowText = RowText {
-    title: "Show the full path in the title bar",
-    description: "Off: the title is the folder's name, as in File Explorer.",
-    keywords: "show full path in the title bar window title taskbar caption path",
+    title: "Display the full path in the title bar",
+    description: "Off: the title is the folder's name, as in File Explorer. Also in Folder Options.",
+    keywords: "show full path in the title bar window title taskbar caption path folder options",
 };
 
 const MOVE_TABS: RowText = RowText {

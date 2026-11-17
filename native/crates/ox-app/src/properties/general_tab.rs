@@ -104,19 +104,21 @@ pub(super) fn general_tab(
         kind.add(&ox_core::i18n::gettext("Type"), &entry.type_label);
     } else {
         kind.add(&ox_core::i18n::gettext("Type of file"), &type_of_file(entry));
-        let (row, value) = opens_with_row(properties, rights.can_change_app, uri);
-        kind.add_control(&ox_core::i18n::gettext("Opens with"), &row);
-        opens_with = Some(value);
+        // An item in the Recycle Bin opens with nothing until it is
+        // restored.
+        // Nor does a shortcut, which opens its target.
+        let is_shortcut = entry.is_symlink || entry.content_type.as_deref() == Some("application/x-desktop");
+        if entry.trash_orig_path.is_none() && !is_shortcut {
+            let (row, value) = opens_with_row(properties, rights.can_change_app, uri);
+            kind.add_control(&ox_core::i18n::gettext("Opens with"), &row);
+            opens_with = Some(value);
+        }
     }
     page.append(kind.widget());
     page.append(&divider());
 
     let place = Rows::new();
-    let container = properties.parent_uri.as_deref().unwrap_or(&entry.uri);
-    place.add_line(
-        &ox_core::i18n::gettext("Location"),
-        &locations.display_location(container),
-    );
+    place_row(&place, properties, locations);
     if let Some(target) = &properties.link_target {
         place.add_line(&ox_core::i18n::gettext("Target"), target);
     }
@@ -160,6 +162,12 @@ pub(super) fn general_tab(
             &format::long_date_time_text(properties.accessed),
         );
     }
+    if entry.trash_orig_path.is_some() {
+        dates.add(
+            &ox_core::i18n::gettext("Deleted"),
+            &format::weekday_date_time_text(entry.trash_deletion_date),
+        );
+    }
     page.append(dates.widget());
     page.append(&divider());
 
@@ -172,6 +180,30 @@ pub(super) fn general_tab(
         folder_rows,
         opens_with,
         edits,
+    }
+}
+
+/// The row that says where the item is: its folder's Location, or, for an
+/// item in the Recycle Bin, the folder it was deleted from, as Windows'
+/// Origin does, instead of the Recycle Bin.
+fn place_row(place: &Rows, properties: &ItemProperties, locations: &LocationContext) {
+    let entry = &properties.entry;
+    let origin = entry
+        .trash_orig_path
+        .as_deref()
+        .and_then(std::path::Path::parent)
+        .map(|folder| gtk::gio::File::for_path(folder).uri().to_string());
+    if let Some(origin) = &origin {
+        place.add_line(
+            &ox_core::i18n::gettext("Origin"),
+            &locations.display_location(origin),
+        );
+    } else {
+        let container = properties.parent_uri.as_deref().unwrap_or(&entry.uri);
+        place.add_line(
+            &ox_core::i18n::gettext("Location"),
+            &locations.display_location(container),
+        );
     }
 }
 
@@ -217,6 +249,7 @@ fn opens_with_row(
         .build();
     row.append(&value);
     let change = push_button(&ox_core::i18n::gettext("Change..."));
+    super::window::give_access_key(&change, 'c');
     change.set_valign(gtk::Align::Center);
     change.set_sensitive(can_change);
     change.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
@@ -259,6 +292,7 @@ fn volume_row(mount: &MountFacts, uri: &Rc<RefCell<String>>) -> gtk::Box {
             .build(),
     );
     let properties = push_button(&ox_core::i18n::gettext("Properties"));
+    super::window::give_access_key(&properties, 'p');
     properties.set_valign(gtk::Align::Center);
     properties.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
         "Properties of the mounted volume",
@@ -356,6 +390,8 @@ impl GeneralEdits {
         read_only.set_inconsistent(entry.is_dir);
         read_only.set_sensitive(rights.can_change_permissions);
         let hidden = gtk::CheckButton::with_mnemonic(&ox_core::i18n::gettext("Hidden"));
+        super::window::give_access_key(&read_only, 'r');
+        super::window::give_access_key(&hidden, 'h');
         super::window::wrap_check_label(&read_only);
         super::window::wrap_check_label(&hidden);
         hidden.set_active(entry.name.starts_with('.'));

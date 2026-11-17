@@ -30,6 +30,8 @@ mod query;
 mod remote_delete;
 mod removal;
 
+pub(crate) use local_delete::FolderDeletion;
+
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 

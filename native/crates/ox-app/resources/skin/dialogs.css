@@ -84,6 +84,12 @@ window.ox.ox-dialog .dialog-actions {
 /* The dialog frame in a window (src/dialog/window.rs): the body a little
    under the message, and the buttons 8 apart. */
 window.ox.ox-dialog ox-dialog-frame .dialog-body { margin-top: 3px; }
+/* A dialog body taller than the dialog takes the keyboard itself, so the
+   keys scroll it, and shows it with the app's ring (src/modal.rs,
+   update_body_tab_stop): no Tab stop is invisible. */
+/* :focus as well: GTK 4.14 marks the focused widget's ancestors
+   :focus-visible too, which would ring the body around a field in it. */
+ox-dialog-frame scrolledwindow.dialog-body-scroller:focus:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }
 window.ox.ox-dialog ox-dialog-frame .dialog-actions { border-spacing: 8px; }
 window.ox.ox-dialog button.dialog-button {
   min-height: 30px;

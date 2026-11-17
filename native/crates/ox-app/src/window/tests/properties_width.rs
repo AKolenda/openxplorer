@@ -19,8 +19,9 @@ const LONG_NAME: &str =
     "Discover Effective Calming Techniques_ Deep Breathing and Quiet Evenings – Example.com_files";
 
 /// Every tab a Properties window may have, by page name.
-const TABS: [&str; 8] = [
+const TABS: [&str; 9] = [
     "general",
+    "shortcut",
     "hardware",
     "sharing",
     "security",
@@ -398,6 +399,11 @@ fn every_kind(theme: Option<&str>, each: &mut dyn FnMut(&str, &PropertiesWindow)
         fixture.path("Tickets.txt - Shortcut"),
     )
     .expect("a shortcut");
+    fs::write(
+        fixture.path("Planner.desktop"),
+        "[Desktop Entry]\nType=Application\nName=Planner\nComment=A fictional planner\nExec=true\nPath=/tmp\n",
+    )
+    .expect("a launcher");
     let test = &TestWindow::open(&fixture.uri());
     if let Some(theme) = theme {
         test.activate("theme", Some(theme));
@@ -435,26 +441,91 @@ fn every_kind(theme: Option<&str>, each: &mut dyn FnMut(&str, &PropertiesWindow)
         show("other-drive", drive_properties(test, &uri));
     }
     show("wrapped", seven_tab_properties(test));
+    // A launcher has a Shortcut tab with its fields.
+    test.select_named("Planner.desktop");
+    show(
+        "launcher",
+        properties_of_selection(test, "Planner.desktop Properties"),
+    );
+    // An item in the Recycle Bin, where the tests' Trash is their own.
+    {
+        super::file_ops_support::require_private_trash();
+        fs::write(fixture.path("Old draft.txt"), "fictional").expect("a file");
+        gtk::gio::File::for_path(fixture.path("Old draft.txt"))
+            .trash(None::<&gtk::gio::Cancellable>)
+            .expect("the private Trash takes the file");
+        let bin = TestWindow::open(ox_core::location::TRASH_URI);
+        crate::test_support::harness::wait_until("the trashed file", || {
+            bin.names().contains(&"Old draft.txt".to_owned())
+        });
+        bin.select_named("Old draft.txt");
+        show(
+            "recycled",
+            properties_of_selection(&bin, "Old draft.txt Properties"),
+        );
+    }
 }
 
-/// Every Properties window has Windows' one fixed size, whatever it
-/// shows: a file, a shortcut, several items, a folder, a drive or a mount
-/// point, with one row of tabs or two, on every tab. Windows sizes a
-/// property sheet once and never changes it.
+/// As in Windows 11, every tab of every kind of Properties fits the
+/// window's one size: the page itself never needs a vertical scroll bar.
+/// Only the lists inside a tab (Security's names, the Details list,
+/// Previous Versions' list) scroll in their own boxes.
+///
+/// parity: PROP-001
+#[gtk::test]
+fn no_tab_needs_an_outer_scroll_bar() {
+    let mut scrolling = Vec::new();
+    every_kind(None, &mut |kind, window| {
+        let page = window.scroller().vadjustment();
+        for name in TABS {
+            if window.tab_page(name).is_none() {
+                continue;
+            }
+            window.select_tab(name);
+            wait_for_frames(window, 4);
+            // What the tabs need at the window's width, against the room
+            // the window has for them.
+            let tabs = window.scroller().child().expect("the tabs");
+            let (needed, _, _, _) = tabs.measure(gtk::Orientation::Vertical, tabs.width());
+            if f64::from(needed) > page.page_size() + 1.0 {
+                let pages: Vec<String> = TABS
+                    .iter()
+                    .filter_map(|tab| window.tab_page(tab).map(|page| (tab, page)))
+                    .map(|(tab, page)| {
+                        let (height, _, _, _) = page.measure(gtk::Orientation::Vertical, page.width());
+                        format!("{tab}={height}")
+                    })
+                    .collect();
+                scrolling.push(format!(
+                    "{kind} {name}: {needed} of {} {pages:?}",
+                    page.page_size()
+                ));
+            }
+        }
+    });
+    assert!(scrolling.is_empty(), "tabs that scroll: {scrolling:#?}");
+}
+
+/// Every Properties window has one fixed size, about 380 by 520 logical
+/// pixels with its title bar and border, whatever it shows: a file, a
+/// shortcut, several items, a folder, a drive or a mount point, with one
+/// row of tabs or two, on every tab. Windows sizes a property sheet once
+/// and never changes it. A page taller than the window scrolls inside it,
+/// never sideways.
 ///
 /// parity: PROP-001
 #[gtk::test]
 fn every_kind_of_properties_has_one_size() {
     let mut sizes = Vec::new();
     every_kind(None, &mut |kind, window| {
-        let scrolling = window.scroller().vadjustment();
+        let sideways = window.scroller().hadjustment();
         let mut look = |what: String| {
             sizes.push((what.clone(), (window.width(), window.height())));
             assert!(
-                scrolling.upper() <= scrolling.page_size() + 1.0,
-                "{what}: fits without scrolling ({} of {})",
-                scrolling.upper(),
-                scrolling.page_size()
+                sideways.upper() <= sideways.page_size() + 1.0,
+                "{what}: never scrolls sideways ({} of {})",
+                sideways.upper(),
+                sideways.page_size()
             );
         };
         look(kind.to_owned());
@@ -467,7 +538,7 @@ fn every_kind_of_properties_has_one_size() {
             look(format!("{kind} {name}"));
         }
     });
-    let expected = (PropertiesWindow::WIDTH, sizes[0].1 .1);
+    let expected = (PropertiesWindow::WIDTH, PropertiesWindow::HEIGHT);
     let others: Vec<_> = sizes.iter().filter(|(_, size)| *size != expected).collect();
     assert!(others.is_empty(), "every window is {expected:?}: {others:?}");
 }

@@ -117,7 +117,10 @@ impl SettingsPage {
         entry.connect_changed(glib::clone!(
             #[weak(rename_to = page)]
             self,
-            move |entry| page.apply_search(&entry.text())
+            move |entry| {
+                page.apply_search(&entry.text());
+                keep_typing_in(entry);
+            }
         ));
         entry.connect_activate(glib::clone!(
             #[weak(rename_to = page)]
@@ -405,4 +408,22 @@ impl SettingsPage {
 /// The category a row of the category list stands for.
 fn category_of(row: &gtk::ListBoxRow) -> Option<Category> {
     row.downcast_ref::<CategoryRow>().map(CategoryRow::category)
+}
+
+/// Moves the keyboard into `entry` when a search was started by typing
+/// elsewhere on the page, which the search box's key capture passes on to
+/// it without moving the keyboard: the rest of what is typed, a space
+/// too, then goes into the search instead of to the category list, where
+/// Space would choose a category and end the search. Nothing is selected
+/// and the cursor stays after the text, so typing goes on where it was.
+fn keep_typing_in(entry: &gtk::SearchEntry) {
+    if entry.text().is_empty() || entry.state_flags().contains(gtk::StateFlags::FOCUS_WITHIN) {
+        return;
+    }
+    let Some(text) = entry.delegate().and_downcast::<gtk::Text>() else {
+        return;
+    };
+    if text.grab_focus_without_selecting() {
+        entry.set_position(-1);
+    }
 }

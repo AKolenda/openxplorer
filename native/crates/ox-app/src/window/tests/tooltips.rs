@@ -10,7 +10,7 @@ use gtk::prelude::*;
 
 use super::file_ops_support::{is_renaming_in_place, name_editor, select_names};
 use crate::folder_view::cells::FileCell;
-use crate::test_support::harness::{wait_for, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{settle, wait_for, wait_until, Fixture, TestWindow};
 use crate::test_support::pointer::{screen_point, Button, Pointer};
 use crate::window::widget_tree::descendants;
 
@@ -142,12 +142,11 @@ fn cell_of(test: &TestWindow, name: &str) -> FileCell {
     })
 }
 
-/// The Details view's column title that names `column`.
+/// The Details view's column title that names `column`. Column titles
+/// have no tooltip of their own, as in Windows 11 (VIEW-029).
 fn column_title(test: &TestWindow, column: &str) -> gtk::Widget {
     drawn_in_view(test, &format!("the {column} column"), |widget: &gtk::Widget| {
-        widget
-            .tooltip_text()
-            .is_some_and(|text| text.starts_with("Drag to resize"))
+        widget.type_().name() == "GtkColumnViewTitle"
             && descendants::<gtk::Label>(widget)
                 .iter()
                 .any(|label| label.text() == column)
@@ -214,12 +213,13 @@ fn no_tooltip_stays_over_a_menu_the_rename_box_or_the_next_folder() {
     }
 
     keep_keyboard_in(&test);
-    hover(
-        &test,
-        &mut pointer,
-        &column_title(&test, "Name"),
-        "the Name column",
-    );
+    // The title has no tooltip to wait for (VIEW-029): the pointer only
+    // has to be on it.
+    let title = column_title(&test, "Name");
+    let middle = (f64::from(title.width()) / 2.0, f64::from(title.height()) / 2.0);
+    let (x, y) = screen_point(&mut pointer, &title, middle, (200, 200));
+    pointer.move_to(x, y);
+    settle();
     pointer.press(Button::Secondary);
     pointer.release(Button::Secondary);
     wait_until("no tooltip over the column menu", || {

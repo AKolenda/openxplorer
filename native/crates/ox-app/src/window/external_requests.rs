@@ -128,6 +128,16 @@ impl BrowserWindow {
         }
     }
 
+    /// Shows the folder of the item at `uri` with the item selected, in
+    /// front, as a shortcut's Open File Location does.
+    pub(crate) fn show_item_in_folder(&self, uri: &str) {
+        let Some(folder) = parent_location(uri) else {
+            return;
+        };
+        self.reveal_items(&folder, vec![uri.to_owned()]);
+        self.present();
+    }
+
     /// Shows `folder` with exactly `items` selected and the first in view:
     /// in the tab that shows it already, listed again, or in a new tab.
     fn reveal_items(&self, folder: &str, items: Vec<String>) {

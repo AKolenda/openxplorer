@@ -260,7 +260,7 @@ impl Picker {
 /// network address (`\\nas\projects\Plans`), never by the `GVfs` FUSE
 /// path the caller gets; a local folder by its path.
 fn shown_path(path: &Path) -> String {
-    let uri = gio::File::for_path(path).uri();
+    let uri = ox_core::network::outside_location(gio::File::for_path(path).uri().to_string());
     if uri.starts_with("file:") {
         return path.display().to_string();
     }
@@ -3985,6 +3985,42 @@ mod tests {
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(uris, [fixture.uri_of("list.txt")]);
+    }
+
+    /// No in Confirm Save As gives the keyboard back to File name, where
+    /// it was when the question came, so the name can be changed at once;
+    /// it went to the list of files.
+    ///
+    /// parity: INT-032, ACC-005
+    #[gtk::test]
+    fn no_in_confirm_save_as_gives_the_keyboard_back_to_file_name() {
+        let fixture = Fixture::empty();
+        fs::write(fixture.path("extra_2.txt"), "old").expect("a file");
+        let portal = Portal::hiding_extensions();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "extra_2.txt".to_variant())],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        name.grab_focus();
+        enter(&name);
+        let question = replace_question(&portal.test);
+        press_in(&question, "No");
+        wait_until("the question to close", || {
+            window.dialog_layer().shown().is_none()
+        });
+        crate::test_support::harness::wait_for_frames(window, 3);
+        let focus = gtk::prelude::GtkWindowExt::focus(window);
+        assert!(
+            focus.is_some_and(
+                |focus| focus == name.clone().upcast::<gtk::Widget>() || focus.is_ancestor(&name)
+            ),
+            "File name has the keyboard again"
+        );
     }
 
     /// A long name wraps in Confirm Save As, which stays a compact box

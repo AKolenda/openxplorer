@@ -320,12 +320,20 @@ impl BrowserWindow {
         let entry = single_entry(items).await;
         let subject = DeleteSubject::of(items.len(), entry.as_ref().is_some_and(is_folder));
         let confirmation = confirmation(subject);
-        let dialog = Dialog::new(self, confirmation.title, &confirmation.body);
+        // A Windows message box, as Windows 11 asks it: the caption names
+        // what is deleted, the icon stands beside the question, and Yes
+        // is focused, so Enter answers it; No, Escape and the close
+        // button keep the items. Alt+Y and Alt+N, and Y and N alone,
+        // press the buttons, as in Windows' message box.
+        let dialog = Dialog::message_box(self, confirmation.title, &confirmation.body);
         if let [item] = items {
             dialog.add_field(&item_details(item, entry.as_ref()));
         }
         let yes = dialog.add_button(&gettext("Yes"), ButtonStyle::Accent);
-        dialog.add_button(&gettext("No"), ButtonStyle::Bordered);
+        let no = dialog.add_button(&gettext("No"), ButtonStyle::Bordered);
+        dialog.also_press_with(yes, 'y');
+        dialog.also_press_with(no, 'n');
+        dialog.press_with_letters_alone();
         dialog.open();
         let answer = dialog.next_response().await;
         dialog.finish();
@@ -333,7 +341,7 @@ impl BrowserWindow {
     }
 
     /// True while the tab shows the Recycle Bin itself.
-    pub(super) fn shows_recycle_bin(&self) -> bool {
+    pub(crate) fn shows_recycle_bin(&self) -> bool {
         self.command_facts().folder.is_recycle_bin
     }
 }

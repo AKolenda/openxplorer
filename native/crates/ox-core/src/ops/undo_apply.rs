@@ -23,6 +23,7 @@
 //!   that folder, as a merging move does once it emptied it: the folder
 //!   is made again first.
 
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::sync::{Arc, Mutex};
 
@@ -34,7 +35,7 @@ use super::folder_groups::{FolderGroup, FolderGroups};
 use super::recycle_bin::{find_trashed_since, restore_found, restore_trashed_since};
 use super::rename::rename_back;
 use super::results::{merge_results, AskedItem, ItemQuestions};
-use super::run_transfer::{gio_transfer_engine, unix_seconds_now};
+use super::run_transfer::{gio_transfer_engine, recycling_order, unix_seconds_now};
 use super::undo::{MovedItem, RenamedPair, UndoRecord};
 use crate::gio_node::GioNode;
 use crate::transfer::{
@@ -101,13 +102,14 @@ pub async fn reverse_deleting(
     if !delete_permanently.is_empty() && !removed_by_undo(record).is_empty() {
         let reversed_since = unix_seconds_now();
         let record = record.clone();
-        let deleted: Vec<String> = delete_permanently.to_vec();
+        let deleted: HashSet<String> = delete_permanently.iter().cloned().collect();
         let context = context.clone();
         return on_worker(move || {
             let mut engine = gio_transfer_engine(&context, progress);
             let removed = removed_by_undo(&record);
             let (gone, trashed): (Vec<String>, Vec<String>) =
                 removed.into_iter().partition(|uri| deleted.contains(uri));
+            let gone_set: HashSet<&str> = gone.iter().map(String::as_str).collect();
             let mut result = move_to_trash(&mut engine, &trashed, &context);
             if !result.cancelled && !gone.is_empty() {
                 let deleted_now = engine
@@ -120,7 +122,7 @@ pub async fn reverse_deleting(
                 done: result
                     .done
                     .iter()
-                    .filter(|uri| !gone.contains(uri))
+                    .filter(|uri| !gone_set.contains(uri.as_str()))
                     .cloned()
                     .collect(),
                 ..TransferResult::default()
@@ -306,7 +308,7 @@ fn move_to_trash(engine: &mut TransferEngine, uris: &[String], context: &Operati
         return TransferResult::default();
     }
     engine
-        .run(Operation::Trash, uris, &context.cancel)
+        .run(Operation::Trash, &recycling_order(uris.to_vec()), &context.cancel)
         .unwrap_or_else(|error| failed_request(&error.into(), context))
 }
 

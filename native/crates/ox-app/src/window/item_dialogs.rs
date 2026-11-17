@@ -406,19 +406,32 @@ impl BrowserWindow {
 
     /// Shows a dialog that belongs to the window.
     pub(super) fn present_window_dialog(&self, frame: &DialogFrame) {
+        // The control that had the keyboard, to have it back once the
+        // dialog closes (ACC-005); a menu's row, gone with its menu, is
+        // none.
+        let opener = gtk::prelude::GtkWindowExt::focus(self)
+            .filter(|focus| focus.ancestor(gtk::Popover::static_type()).is_none())
+            .map(|focus| focus.downgrade());
         frame.connect_closed(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |_| window.dialog_closed()
+            move |_| window.dialog_closed(opener.as_ref().and_then(glib::WeakRef::upgrade))
         ));
         self.dialog_layer().present(frame);
     }
 
-    /// After a window dialog closed, the folder takes focus again, or in
-    /// an Open or Save dialog File name, where the choice asked about was
-    /// typed.
-    fn dialog_closed(&self) {
-        if self.dialog_layer().shown().is_none() && !self.give_keyboard_back_to_name() {
+    /// After a window dialog closed: in an Open or Save dialog File name,
+    /// where the choice asked about was typed, has the keyboard again;
+    /// else the control that had it when the dialog opened, `opener`
+    /// (ACC-005); else the folder takes it.
+    fn dialog_closed(&self, opener: Option<gtk::Widget>) {
+        if self.dialog_layer().shown().is_some() || self.give_keyboard_back_to_name() {
+            return;
+        }
+        let back = opener
+            .filter(|opener| opener.is_drawable() && opener.is_sensitive())
+            .is_some_and(|opener| opener.grab_focus());
+        if !back {
             self.folder_pane().focus_view();
         }
     }

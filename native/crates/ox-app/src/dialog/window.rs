@@ -135,6 +135,8 @@ mod imp {
             // Escape closes the dialog, which cancels it (`closeModal` in
             // app.js).
             self.obj().add_controller(crate::modal::escape_closes());
+            crate::modal::tab_goes_round(&*self.obj());
+            self.obj().add_controller(crate::modal::f4_shows_a_list());
         }
 
         fn dispose(&self) {
@@ -311,8 +313,12 @@ impl Dialog {
         let line = wrapped_label(text, css_class);
         line.set_max_width_chars(60);
         line.set_selectable(true);
-        // Selectable with the pointer, but no stop for the keyboard.
+        // Selectable with the pointer, but no stop for the keyboard. Not
+        // `focusable` alone: GTK 4.14 still offers Tab to a selectable
+        // label, which claims it without taking the keyboard, so Tab went
+        // nowhere from there on; without `can-focus` Tab passes it by.
         line.set_focusable(false);
+        line.set_can_focus(false);
         self.append_field(&line);
         line
     }

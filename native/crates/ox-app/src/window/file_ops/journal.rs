@@ -16,7 +16,7 @@
 //! permanently only after Delete's own question there (OPS-016).
 
 use ox_core::ops::{
-    changed_copies, plan_delete, removed_by_undo, reverse_deleting, JournalDirection, JournalEntry,
+    changed_copies_except, plan_delete, removed_by_undo, reverse_deleting, JournalDirection, JournalEntry,
     STOPPED_TITLE,
 };
 use ox_core::transfer::Cancellation;
@@ -55,7 +55,10 @@ impl BrowserWindow {
             };
             // The permanent delete was just confirmed with the item's
             // details; the Recycle Bin question is for the others.
-            if without_recycle_bin.is_empty() && !self.confirm_undoing_changed_copies(&step).await {
+            if !self
+                .confirm_undoing_changed_copies(&step, &without_recycle_bin)
+                .await
+            {
                 self.context().put_back_journal_step(direction, step);
                 return;
             }
@@ -118,8 +121,8 @@ impl BrowserWindow {
 
     /// True when Undo may move the copies of `step` to the Trash: none
     /// was modified after the copy, or the user confirmed (OPS-030).
-    async fn confirm_undoing_changed_copies(&self, step: &JournalEntry) -> bool {
-        let changed = changed_copies(&step.record, step.recorded_at).await;
+    async fn confirm_undoing_changed_copies(&self, step: &JournalEntry, deleted: &[String]) -> bool {
+        let changed = changed_copies_except(&step.record, step.recorded_at, deleted).await;
         let Some(first) = changed.first() else {
             return true;
         };

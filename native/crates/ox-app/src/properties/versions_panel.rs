@@ -52,7 +52,7 @@ const INTRO_GLYPH: i32 = 32;
 /// The least height of the list, which grows to fill the tab as Windows'
 /// list does; it leaves room for two rows of tabs at the default text
 /// size.
-const LIST_HEIGHT: i32 = 216;
+const LIST_HEIGHT: i32 = 96;
 
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};
@@ -234,6 +234,7 @@ impl VersionsPanel {
             .css_classes(["properties-button-row", "versions-buttons"])
             .build();
         let source = push_button(&ox_core::i18n::gettext("Snapshot source..."));
+        super::window::give_access_key(&source, 's');
         source.connect_clicked(glib::clone!(
             #[weak(rename_to = panel)]
             self,
@@ -242,12 +243,14 @@ impl VersionsPanel {
         source.set_hexpand(true);
         row.append(&source);
         let open = push_button(&ox_core::i18n::gettext("Open"));
+        super::window::give_access_key(&open, 'o');
         open.connect_clicked(glib::clone!(
             #[weak(rename_to = panel)]
             self,
             move |_| panel.run_on_selected(true)
         ));
         let restore = push_button(&ox_core::i18n::gettext("Restore"));
+        super::window::give_access_key(&restore, 'r');
         restore.set_tooltip_text(Some(&ox_core::i18n::gettext(
             "Restore a copy of this version somewhere else; the live item is never overwritten.",
         )));

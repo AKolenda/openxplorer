@@ -347,8 +347,11 @@ fn desktop_font_row(page: &SettingsPage) -> SettingRow {
             ..PreferencesUpdate::default()
         },
     });
+    // Text follows the saved choice, not the switch: told at once, the
+    // shared skin redrew text and showed the page the preference not yet
+    // saved, which turned the switch straight back off.
     let skin = page.context().skin().clone();
-    switch.connect_active_notify(move |switch| skin.set_uses_desktop_font(switch.is_active()));
+    page.follow_preferences(move |preferences| skin.set_uses_desktop_font(preferences.desktop_font));
     row.add_control(&switch, ControlName::RowTitle);
     row
 }

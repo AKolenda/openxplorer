@@ -1,3 +1,41 @@
+# 2.0.19 — 2026-11-17
+
+Gallery looks and works as in Windows 11, the search box understands Windows search syntax, and folders of 100,000 items stay responsive. Network folders show type icons again by default, as Windows 11 does. Properties, Folder Options, the Recycle Bin, ZIP archives, drag and drop and the keyboard all work more like Windows 11's. Much of this release is the work of @addition-official.
+
+## Updating from 2.0.18
+* In the Debian package, **Check for updates** installs 2.0.19 without asking for a password when **Settings › About › Install updates without asking for a password** is on (the default). As before, that holds for an administrator in an active session at the computer; anyone else, and any remote or inactive session, is asked for an administrator's password.
+* Network folders show type icons again, as Windows 11 does, unless you saved **Settings › Files & folders › Show thumbnails in network folders** (called **Also in network folders** in 2.0.18) on. A choice you saved is kept.
+* Undo of a copy onto a share, which has no Recycle Bin, now asks Delete's own question and deletes the copy permanently only on Yes. Before, it always stopped with "Trash is not supported at this location".
+
+## What's Changed
+* **Gallery:** it sits under Home in the navigation pane and shows the photos in Pictures and its subfolders, newest first, in justified rows that keep each photo's shape. A date scrubber at the right edge jumps between months and years, and the command bar has Rotate left, Rotate right and a Collection menu. Manage collection chooses Gallery's folders, and a JPEG is turned by its EXIF orientation alone, so its pixels stay the same.
+* **Search:** the search box reads Windows search syntax: quoted phrases, `AND`, `OR` and `NOT`, parentheses, and `name:`, `ext:`, `date:` and `size:` with comparisons and ranges, such as `ext:pdf date:>2026-01-31` or `size:5kb..10kb`. While a search or a folder is still loading, its tab shows a spinning progress ring. Searching from Home searches the home folder and its subfolders, and matches show as they are found. A wildcard word such as `a?b` is found within a name, as a plain word is.
+* **Large folders:** in a folder of 100,000 items, Ctrl+A, Shift+End, Copy, Cut and Group by answer in a fraction of a second instead of 3 to 4 seconds, and the folder is listed in half the time.
+* **Network folders:** files on shares, servers, phones and cameras show their type icons, and **Show thumbnails in network folders** turns their thumbnails on. Copying one large file from a share shows real progress and time remaining, the progress window names a share as its tab does, and a wrong password keeps the user name you typed. An offline share says "\\\\server\\share is unavailable" with the system's error under Details, and Open and Save dialogs name a share's folders by their network address.
+* **Recycle Bin:** emptying 50,000 items takes seconds instead of minutes, with progress. Opening an item in the Recycle Bin shows its Properties, as in Windows, and Date modified is listed after its own columns.
+* **Properties:** every Properties window is 380 by 520 pixels, and its tabs fit without scrolling. Shortcuts and launchers have a Shortcut tab, a Recycle Bin item shows where and when it was deleted, the Sharing tab works with Samba 4.15 and newer, and Alt with an underlined letter presses the buttons and check boxes.
+* **ZIP and other archives:** opening a file in a password-protected ZIP, extracting or copying out of it asks for the password, which is kept only in memory until the window closes. Names written with backslashes by Windows tools open as folders, Compress to makes ZIPs over 4 GiB or with more than 65,535 items, and Compress to › 7z File makes 7z archives. A safe link inside a TAR archive is listed.
+* **Settings and Folder Options:** Settings uses Windows' names for folder options, has **Show hidden files, folders, and drives** and **Hide extensions for known file types**, and opens Folder Options, whose choices its search finds. Folder Options has access keys, Enter presses OK, and it follows changes made elsewhere while it is open. **Use the desktop font** stays on.
+* **Keyboard:** Tab no longer gets lost in question dialogs, F4 opens drop-down lists, F6 reaches both panes of a split tab, dialogs inside the window keep Tab inside themselves and give the keyboard back when they close, and Left and Right keep the keyboard in the navigation pane and folder tree. Focus rings show only after the keyboard is used, Backspace in Open and Save dialogs opens the folder one level up, and the keyboard comes back to an item when its menu closes.
+* **Drag and drop:** Alt at a drop makes shortcuts, as in Windows. A plain drag into Thunar copies without a menu, the folder tree takes drops, a drop on an open ZIP says why it is refused, and the green frame around the whole navigation pane during a drag is gone.
+* **Dialogs and Home:** Windows' Open and Save dialogs keep their columns and the keyboard where Windows keeps them. Quick access tiles on Home have Windows 11's menu, Recent and Favorites follow the File name extensions choice, Home's Compact tiles stand apart, and standard folders' tabs show their own icons. Renaming to a taken name asks in Windows 11's Rename File message box.
+* **Other fixes:** Undo warns when a copy it would remove has changed, also when part of the Undo goes to the Recycle Bin. On KDE Plasma, Super+E is never handed back to an uninstalled OpenXplorer package. No tooltip stays over a menu, the rename box or the next folder, Ctrl+A on Home or Settings selects no hidden items, a window saved larger than the screen opens fitted to it, and a finished move on a share is no longer reported as failed.
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.19_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.19-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.19-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.19-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.19-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.18...v2.0.19
+
 # 2.0.18 — 2026-11-16
 
 Pictures and PDFs in network folders show thumbnails by default, as in Windows. The command bar's menus switch with one click, the keyboard menu opens at the item the keyboard is on, No in the Rename question ends the rename, Duplicate tab puts the copy next to the original, and Ctrl+A while renaming selects just the name. Much of this release is the work of @addition-official.
