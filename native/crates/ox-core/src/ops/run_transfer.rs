@@ -104,6 +104,11 @@ pub(super) fn run_on_engine(
         }
     }
     let operation = Operation::from_request(request.mode, destination.as_deref(), request.policy)?;
+    let items = if request.mode == TransferMode::Trash {
+        recycling_order(items)
+    } else {
+        items
+    };
     let tracking = RunTracking::before_run(operation);
     let result = engine.run(operation, &items, &context.cancel)?;
     Ok(tracking.finish(result))
@@ -152,6 +157,17 @@ pub(super) fn run_renamed_on_engine(
         created,
         undo,
     })
+}
+
+/// `uris` in the order Move to Trash takes them: by name, last first, in
+/// byte order. The Trash backend of `GVfs` keeps its record of a watched
+/// Trash folder sorted by name and looks for each new item's place from
+/// its start; items arriving first to last made it walk the whole record
+/// for each, so after 50,000 items it listed the Recycle Bin as empty for
+/// minutes. Arriving last to first, each goes at its start.
+pub(crate) fn recycling_order(mut uris: Vec<String>) -> Vec<String> {
+    uris.sort_by_cached_key(|uri| std::cmp::Reverse(GioNode::new(uri).name().into_encoded_bytes()));
+    uris
 }
 
 /// The canonical destination folder of a copy or move, checked against
@@ -309,4 +325,35 @@ pub(super) fn unix_seconds_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn move_to_trash_takes_items_by_name_last_first_in_byte_order() {
+        let uris = [
+            "file:///home/user/Documents/b.txt",
+            "file:///home/user/a%20b.txt",
+            "file:///home/user/Z.txt",
+            "file:///home/user/%C3%A9t%C3%A9.txt",
+            "file:///home/user/Documents/b.txt.bak",
+        ]
+        .map(String::from)
+        .to_vec();
+
+        let ordered = recycling_order(uris);
+
+        assert_eq!(
+            ordered,
+            [
+                "file:///home/user/%C3%A9t%C3%A9.txt",
+                "file:///home/user/Documents/b.txt.bak",
+                "file:///home/user/Documents/b.txt",
+                "file:///home/user/a%20b.txt",
+                "file:///home/user/Z.txt",
+            ]
+        );
+    }
 }

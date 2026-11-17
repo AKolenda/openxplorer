@@ -644,6 +644,8 @@ fn shift_delete_deletes_permanently_after_its_own_confirmation() {
     test.activate("delete-permanently", None);
     let dialog = open_dialog(&test);
 
+    // A Windows message box, as Windows 11 asks it, with Yes as default.
+    super::file_ops_support::assert_windows_message_box(dialog.upcast_ref(), "Yes");
     assert_eq!(dialog.title_text(), "Delete Folder");
     assert_eq!(
         dialog.message_text(),

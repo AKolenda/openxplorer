@@ -19,9 +19,11 @@ use gtk::{gio, glib};
 use ox_core::entry::{self, Entry, EntryError, EntryKind};
 use ox_core::integration;
 use ox_core::location::VirtualPlace;
+use ox_core::ops::is_recycle_bin_item;
 
 use crate::folder_view::loader::Listing;
 use crate::locations::{self, Page};
+use crate::properties::PropertiesTab;
 
 use super::desktop_link::{link_target_of_file, may_be_link, LinkTarget};
 use super::run_on_open::RunChoice;
@@ -303,6 +305,12 @@ impl BrowserWindow {
     /// application, a link followed, an item gone said so. Home's Recent
     /// and Favorites rows open this way too.
     pub(super) fn activate_listed_entry(&self, entry: Entry) {
+        // An item in the Recycle Bin is not opened: as in Windows, its
+        // Properties show where it came from and when it was deleted.
+        if is_recycle_bin_item(&entry.uri) {
+            self.open_properties_of(&entry.uri, PropertiesTab::General);
+            return;
+        }
         // An item listed inside a ZIP has no file of its own to read again
         // (ARC-026).
         if self.activate_zip_member(&entry) {

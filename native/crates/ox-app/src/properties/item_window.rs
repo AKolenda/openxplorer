@@ -28,6 +28,7 @@ use ox_core::folder_locations::FolderRelocation;
 use ox_core::integration::BraveIntegration;
 use ox_core::location::{is_smb_location, is_smb_server, is_smb_share_root, ItemKind, LocationContext};
 use ox_core::network::Usershares;
+use ox_core::ops::is_recycle_bin_item;
 use ox_core::transfer::Cancellation;
 use ox_core::versions::{is_conventional_snapshot, PreviousVersions};
 
@@ -377,7 +378,10 @@ impl ItemPages {
         let rights = GeneralRights {
             can_rename: self.can_rename(&properties),
             can_change_permissions: can_edit,
-            can_change_app: !properties.entry.is_dir && !is_read_only,
+            // An item in the Recycle Bin is not opened (OPS-040).
+            can_change_app: !properties.entry.is_dir
+                && !is_read_only
+                && !is_recycle_bin_item(&properties.entry.uri),
         };
         clear(&self.general);
         let general = general_tab(
@@ -394,12 +398,10 @@ impl ItemPages {
             if is_smb_server(&properties.entry.uri) {
                 rows.show(Totals::zero());
             } else {
-                count_folders(
-                    vec![properties.entry.uri.clone()],
-                    Totals::zero(),
-                    rows,
-                    &self.count,
-                );
+                // A trashed folder is counted where its Trash folder keeps
+                // it, which the Recycle Bin's backend does not list sizes of.
+                let counted = properties.stored_uri.as_ref().unwrap_or(&properties.entry.uri);
+                count_folders(vec![counted.clone()], Totals::zero(), rows, &self.count);
             }
         }
         if let Some(opens_with) = general.opens_with {

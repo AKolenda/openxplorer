@@ -22,9 +22,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use ox_core::ops::{
-    delete_from_recycle_bin, empty_recycle_bin, list_recycle_bin, recycle_bin_item_count,
-    restore_from_recycle_bin, run_transfer, undo, FailureAsker, OperationContext, RecycledItem,
-    TransferRequest, UndoRecord, WriteProtection,
+    delete_from_recycle_bin, empty_recycle_bin, empty_recycle_bin_reporting, list_recycle_bin,
+    recycle_bin_item_count, restore_from_recycle_bin, run_transfer, undo, FailureAsker, OperationContext,
+    RecycledItem, TransferRequest, UndoRecord, WriteProtection,
 };
 use ox_core::transfer::{
     Cancellation, ConflictPolicy, FailedItem, FailureAnswer, FailureCause, TransferMode,
@@ -436,4 +436,355 @@ fn undoing_a_restore_moves_the_items_to_the_trash_again() {
     assert_eq!(result.done, [file_uri(&draft)]);
     assert!(!draft.exists());
     assert_eq!(recycled_from(&draft).name, "draft.txt");
+}
+
+/// Puts `count` files named `<prefix> 00001.txt` and on straight into the
+/// private home Trash, with their descriptions, as the freedesktop Trash
+/// specification lays them out: much quicker than trashing each, so a
+/// large Recycle Bin can be tested. Their original locations are in
+/// `origin`, a temporary folder. Returns their original paths.
+fn fill_home_trash(origin: &Path, prefix: &str, count: usize) -> Vec<std::path::PathBuf> {
+    let trash = glib::user_data_dir().join("Trash");
+    fs::create_dir_all(trash.join("files")).unwrap();
+    fs::create_dir_all(trash.join("info")).unwrap();
+    (1..=count)
+        .map(|number| {
+            let name = format!("{prefix} {number:05}.txt");
+            let original = origin.join(&name);
+            let description = format!(
+                "[Trash Info]\nPath={}\nDeletionDate=2026-11-01T09:30:00\n",
+                original.display().to_string().replace(' ', "%20")
+            );
+            // The description first, as the specification says a program
+            // that trashes writes it, so the item is never listed without.
+            fs::write(trash.join("info").join(format!("{name}.trashinfo")), description).unwrap();
+            fs::write(trash.join("files").join(&name), b"old").unwrap();
+            original
+        })
+        .collect()
+}
+
+/// Waits until the Recycle Bin lists at least `count` items, each with
+/// its original location.
+fn wait_for_listed(count: usize) -> Vec<RecycledItem> {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let items = recycle_bin();
+        if items.len() >= count && items.iter().all(|item| item.original_path.is_some()) {
+            return items;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "only {} of {count} items are listed",
+            items.len()
+        );
+        thread::sleep(Duration::from_millis(200));
+    }
+}
+
+/// Watches `trash:///` on a thread of its own while it is held, as an open
+/// window's Recycle Bin row does.
+struct TrashWatcher {
+    stop: Option<std::sync::mpsc::Sender<()>>,
+    thread: Option<thread::JoinHandle<()>>,
+}
+
+impl TrashWatcher {
+    fn start() -> Self {
+        use gio::prelude::*;
+        let (stop, stopped) = std::sync::mpsc::channel::<()>();
+        let (ready, is_ready) = std::sync::mpsc::channel::<()>();
+        let thread = thread::spawn(move || {
+            let context = glib::MainContext::new();
+            context
+                .with_thread_default(|| {
+                    let monitor = gio::File::for_uri("trash:///")
+                        .monitor_directory(gio::FileMonitorFlags::NONE, gio::Cancellable::NONE)
+                        .expect("the Trash backend watches trash:///");
+                    monitor.connect_changed(|_, _, _, _| {});
+                    ready.send(()).unwrap();
+                    while stopped.try_recv().is_err() {
+                        context.iteration(false);
+                        thread::sleep(Duration::from_millis(5));
+                    }
+                    monitor.cancel();
+                    while context.pending() {
+                        context.iteration(false);
+                    }
+                })
+                .unwrap();
+        });
+        is_ready.recv().unwrap();
+        Self {
+            stop: Some(stop),
+            thread: Some(thread),
+        }
+    }
+}
+
+impl Drop for TrashWatcher {
+    fn drop(&mut self) {
+        let _ = self.stop.take().map(|stop| stop.send(()));
+        let _ = self.thread.take().map(thread::JoinHandle::join);
+    }
+}
+
+/// Emptying a large Recycle Bin while a window watches it takes seconds,
+/// not minutes: the items are removed from the Trash folder on disk
+/// rather than one request each to the Trash backend, which listed the
+/// whole Trash folder again after each one (201 s for 50,000 items).
+///
+/// parity: OPS-042
+#[test]
+fn emptying_a_large_recycle_bin_takes_seconds() {
+    const ITEMS: usize = 6_000;
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let originals = fill_home_trash(temp.path(), "Big bin", ITEMS);
+    let watcher = TrashWatcher::start();
+    let before = wait_for_listed(ITEMS);
+    let temp_root = std::env::temp_dir();
+    assert!(
+        before.iter().all(|item| item
+            .original_path
+            .as_ref()
+            .is_some_and(|path| path.starts_with(&temp_root))),
+        "the Recycle Bin holds items these tests did not trash: {:?}",
+        before.iter().find(|item| !item
+            .original_path
+            .as_ref()
+            .is_some_and(|path| path.starts_with(&temp_root)))
+    );
+
+    let started = Instant::now();
+    let result = block_on(empty_recycle_bin(&OperationContext::default())).unwrap();
+    let took = started.elapsed();
+    drop(watcher);
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert_eq!(result.done.len(), before.len());
+    assert!(
+        // 22 s before; 2 to 4 s now, and up to 11 s on a busy machine.
+        took < Duration::from_secs(15),
+        "emptying {ITEMS} items took {took:?}"
+    );
+    let trash = glib::user_data_dir().join("Trash");
+    assert_eq!(fs::read_dir(trash.join("files")).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(trash.join("info")).unwrap().count(), 0);
+    assert!(recycle_bin().is_empty());
+    assert!(
+        originals.iter().all(|path| !path.exists()),
+        "nothing was restored"
+    );
+}
+
+/// A trashed folder holding read-only folders and files is deleted whole,
+/// as the Trash backend of `GVfs` deletes it.
+///
+/// parity: OPS-042
+#[test]
+fn a_trashed_folder_with_read_only_folders_inside_is_emptied() {
+    use std::os::unix::fs::PermissionsExt;
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let folder = temp.path().join("Read-only project");
+    let locked = folder.join("locked");
+    fs::create_dir_all(&locked).unwrap();
+    fs::write(locked.join("read-only.txt"), b"kept").unwrap();
+    fs::set_permissions(locked.join("read-only.txt"), fs::Permissions::from_mode(0o444)).unwrap();
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o500)).unwrap();
+    trash(&[&folder]);
+    let item = recycled_from(&folder);
+
+    let result = block_on(delete_from_recycle_bin(
+        std::slice::from_ref(&item.uri),
+        &OperationContext::default(),
+    ))
+    .unwrap();
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert_eq!(result.done, [item.uri]);
+    assert!(!glib::user_data_dir()
+        .join("Trash/files/Read-only project")
+        .exists());
+    assert!(!recycle_bin()
+        .iter()
+        .any(|item| item.original_path.as_deref() == Some(folder.as_path())));
+}
+
+/// An item that can be deleted only in part, here a trashed folder nested
+/// deeper than any deletion walks, is asked about; it stays in the
+/// Recycle Bin with what is left of it, and the others are deleted.
+///
+/// parity: OPS-042, OPS-047
+#[test]
+fn an_item_emptying_cannot_delete_whole_stays_in_the_recycle_bin() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let folder = temp.path().join("Deep project");
+    let mut deepest = folder.clone();
+    for _ in 0..=ox_core::transfer::MAX_DEPTH {
+        deepest.push("d");
+    }
+    fs::create_dir_all(&deepest).unwrap();
+    fs::write(deepest.join("deep.txt"), b"deep").unwrap();
+    let file = temp.path().join("loose.txt");
+    fs::write(&file, b"loose").unwrap();
+    trash(&[&folder, &file]);
+    let folder_item = recycled_from(&folder);
+    let file_item = recycled_from(&file);
+    let (context, asked) = asking_context(FailureAnswer::Skip);
+
+    let uris = [folder_item.uri.clone(), file_item.uri.clone()];
+    let result = block_on(delete_from_recycle_bin(&uris, &context)).unwrap();
+
+    assert_eq!(result.done, [file_item.uri]);
+    let asked = asked.lock().unwrap();
+    assert_eq!(asked.len(), 1, "{asked:?}");
+    assert_eq!(asked[0].uri, folder_item.uri);
+    let left = recycled_from(&folder);
+    assert_eq!(
+        left.uri, folder_item.uri,
+        "the folder is still listed, to delete or restore"
+    );
+    let stored = glib::user_data_dir().join("Trash/files/Deep project");
+    let inside = deepest.strip_prefix(&folder).unwrap();
+    assert!(
+        stored.join(inside).join("deep.txt").exists(),
+        "nothing below the limit went"
+    );
+    // Cleaned up for the tests that empty the Recycle Bin.
+    fs::remove_dir_all(&stored).unwrap();
+    fs::remove_file(glib::user_data_dir().join("Trash/info/Deep project.trashinfo")).unwrap();
+}
+
+/// Emptying the Recycle Bin counts its items as it goes, as Windows'
+/// progress window does, without a report per item.
+///
+/// parity: OPS-042
+#[test]
+fn emptying_the_recycle_bin_reports_how_many_items_are_done() {
+    const ITEMS: usize = 300;
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    fill_home_trash(temp.path(), "Counted", ITEMS);
+    let before = wait_for_listed(ITEMS);
+    let temp_root = std::env::temp_dir();
+    assert!(before.iter().all(|item| item
+        .original_path
+        .as_ref()
+        .is_some_and(|path| path.starts_with(&temp_root))));
+    let reports = Arc::new(Mutex::new(Vec::new()));
+    let log = Arc::clone(&reports);
+
+    let result = block_on(empty_recycle_bin_reporting(
+        &OperationContext::default(),
+        move |report| {
+            log.lock().unwrap().push(report);
+        },
+    ))
+    .unwrap();
+
+    assert_eq!(result.done.len(), before.len());
+    let reports = reports.lock().unwrap();
+    let counts: Vec<_> = reports.iter().map(|report| report.items.unwrap()).collect();
+    assert_eq!(counts.first().map(|count| count.done), Some(0));
+    assert!(counts.iter().all(|count| count.total == before.len() as u64));
+    assert!(counts.windows(2).all(|pair| pair[0].done < pair[1].done));
+    assert!(reports.len() < before.len(), "not one report per item");
+    assert!(reports.iter().all(|report| report.label.starts_with("Delete: ")));
+}
+
+/// Items whose names are not UTF-8, or long, are deleted for good by
+/// their exact names, alone and among many, and nothing else is.
+///
+/// parity: OPS-042, OPS-043
+#[test]
+fn items_with_names_that_are_not_utf8_or_long_are_deleted_exactly() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let latin1 = temp.path().join(OsStr::from_bytes(b"caf\xe9 notes.txt"));
+    let long = temp.path().join(format!("{}.txt", "L".repeat(200)));
+    let neighbour = temp.path().join("caf notes.txt");
+    for path in [&latin1, &long, &neighbour] {
+        fs::write(path, b"old").unwrap();
+    }
+    trash(&[&latin1, &long, &neighbour]);
+    let alone = recycled_from(&latin1);
+    let kept = recycled_from(&neighbour);
+
+    let result = block_on(delete_from_recycle_bin(
+        std::slice::from_ref(&alone.uri),
+        &OperationContext::default(),
+    ))
+    .unwrap();
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let files = glib::user_data_dir().join("Trash/files");
+    assert!(!files.join(OsStr::from_bytes(b"caf\xe9 notes.txt")).exists());
+
+    // Among many, which read where they are kept from one listing.
+    let originals = fill_home_trash(temp.path(), "Among many", 80);
+    let listed = wait_for_listed(81);
+    let mut uris: Vec<String> = listed
+        .iter()
+        .filter(|item| {
+            item.original_path
+                .as_ref()
+                .is_some_and(|path| originals.contains(path) || *path == long)
+        })
+        .map(|item| item.uri.clone())
+        .collect();
+    uris.sort();
+    assert_eq!(uris.len(), 81);
+    let result = block_on(delete_from_recycle_bin(&uris, &OperationContext::default())).unwrap();
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert_eq!(result.done.len(), 81);
+    assert!(!files.join(format!("{}.txt", "L".repeat(200))).exists());
+    let left: Vec<RecycledItem> = recycle_bin();
+    assert!(
+        left.iter().any(|item| item.uri == kept.uri),
+        "the neighbour stays"
+    );
+    assert_eq!(fs::read(files.join("caf notes.txt")).unwrap(), b"old");
+    block_on(delete_from_recycle_bin(&[kept.uri], &OperationContext::default())).unwrap();
+}
+
+/// Two items deleted under the same name from different folders are kept
+/// apart in the Recycle Bin, and deleting one for good leaves the other.
+///
+/// parity: OPS-043
+#[test]
+fn deleting_one_of_two_items_with_the_same_name_leaves_the_other() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let (first, second) = (temp.path().join("One"), temp.path().join("Two"));
+    fs::create_dir_all(&first).unwrap();
+    fs::create_dir_all(&second).unwrap();
+    let (a, b) = (first.join("Same name.txt"), second.join("Same name.txt"));
+    fs::write(&a, b"first").unwrap();
+    fs::write(&b, b"second").unwrap();
+    trash(&[&a, &b]);
+    let (item_a, item_b) = (recycled_from(&a), recycled_from(&b));
+    assert_ne!(item_a.uri, item_b.uri);
+
+    let result = block_on(delete_from_recycle_bin(
+        std::slice::from_ref(&item_a.uri),
+        &OperationContext::default(),
+    ))
+    .unwrap();
+
+    assert_eq!(result.done, std::slice::from_ref(&item_a.uri));
+    let left = recycle_bin();
+    assert!(!left.iter().any(|item| item.uri == item_a.uri));
+    let still = recycled_from(&b);
+    let restored = block_on(restore_from_recycle_bin(
+        &[still.uri],
+        &OperationContext::default(),
+    ))
+    .unwrap();
+    assert!(restored.result.errors.is_empty(), "{:?}", restored.result.errors);
+    assert_eq!(fs::read(&b).unwrap(), b"second", "the other one is the one left");
 }

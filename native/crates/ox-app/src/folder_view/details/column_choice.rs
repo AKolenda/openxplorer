@@ -116,7 +116,7 @@ impl DetailsView {
     }
 
     /// Puts the columns in the order of [`column_layout`].
-    fn arrange_columns(&self) {
+    pub(super) fn arrange_columns(&self) {
         let imp = self.imp();
         let was_arranging = imp.arranging.replace(true);
         let layout = column_layout(&imp.chosen.borrow());
@@ -182,6 +182,28 @@ mod tests {
     use super::*;
     use crate::folder_view::cells::CellOwners;
     use crate::folder_view::model::FolderModel;
+
+    /// A new view lays its columns out with the listings' own after Name:
+    /// in the Recycle Bin, Original location and Date deleted come before
+    /// Date modified, as in Windows 11, not in the order they were made.
+    ///
+    /// parity: VIEW-062
+    #[gtk::test]
+    fn a_new_view_puts_the_listings_own_columns_after_name() {
+        let view = DetailsView::new(&FolderModel::new(), &CellOwners::new());
+
+        assert_eq!(
+            view.column_order()[..6],
+            [
+                SortColumn::Name,
+                SortColumn::FolderPath,
+                SortColumn::OriginalLocation,
+                SortColumn::Deleted,
+                SortColumn::Modified,
+                SortColumn::Type,
+            ]
+        );
+    }
 
     /// A dragged column keeps its new place, Name stays first, and the
     /// view reports the new order.
