@@ -99,7 +99,8 @@ fn ends_without_a_report(test: &TestWindow) {
 
 /// Restore onto a taken name asks in the progress window, as a move
 /// into the original folder; Skip leaves the item in the Recycle Bin and
-/// says nothing; Restore again and Replace puts it back in place.
+/// says nothing; Restore again and Replace puts it back in place, the
+/// file it replaced going to the Recycle Bin with the switch on.
 ///
 /// parity: OPS-041, OPS-026, OPS-028
 #[gtk::test]
@@ -108,6 +109,7 @@ fn restoring_onto_a_taken_name_asks_replace_or_skip_files() {
     let fixture = Fixture::standard();
     let name = "Quarterly report.txt";
     let test = trash_and_take_names(&fixture, &[name]);
+    recycle_replaced_files(&test);
     select_names(&test, &[name]);
 
     test.activate("restore", None);
@@ -395,7 +397,7 @@ fn the_question_greys_more_details_and_compares_the_files_only_in_the_file_confl
 /// selected and restored. The second is asked about, and:
 ///
 /// - Replace restores it over the first, which goes back to the Recycle
-///   Bin, with no Operation result report;
+///   Bin with the switch on, with no Operation result report;
 /// - Skip leaves it in the Recycle Bin, with the first restored;
 /// - Compare info, both kept, restores it as "Twin (2).txt".
 ///
@@ -413,6 +415,7 @@ fn replace_restores_the_second_of_two_twins_over_the_first() {
             trash(&fixture.path(name));
         }
         let test = TestWindow::open(TRASH_URI);
+        recycle_replaced_files(&test);
         wait_until("both twins to be listed", || {
             test.names().iter().filter(|shown| *shown == name).count() == 2
         });
@@ -516,6 +519,22 @@ pub(super) fn overwrite_replaced_files(test: &TestWindow) {
     });
 }
 
+/// Turns on Settings > Files & folders > "When replacing a file, move the
+/// old one to the Recycle Bin", as the switch does.
+pub(super) fn recycle_replaced_files(test: &TestWindow) {
+    let update = PreferencesUpdate {
+        recycle_replaced_files: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    ox_core::settings::Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the window to read the choice", || {
+        test.context.settings_data().preferences.recycle_replaced_files
+    });
+}
+
 /// With the switch off, Replace restores the item over the newer file,
 /// as Windows overwrites it: the newer file is gone, not in the Recycle
 /// Bin, and nothing is reported.
@@ -542,17 +561,16 @@ fn restore_replace_overwrites_the_newer_file_when_the_switch_is_off() {
     );
 }
 
-/// By default Replace keeps the newer file in the Recycle Bin, as the
-/// owner chose.
+/// With the switch on, Replace keeps the newer file in the Recycle Bin.
 ///
 /// parity: OPS-041, OPS-028
 #[gtk::test]
-fn restore_replace_recycles_the_newer_file_by_default() {
+fn restore_replace_recycles_the_newer_file_when_the_switch_is_on() {
     require_private_trash();
     let fixture = Fixture::standard();
     let name = "Recycled report.txt";
     let test = trash_and_take_names(&fixture, &[name]);
-    assert!(test.context.settings_data().preferences.recycle_replaced_files);
+    recycle_replaced_files(&test);
 
     select_names(&test, &[name]);
     test.activate("restore", None);

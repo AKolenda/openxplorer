@@ -51,6 +51,18 @@ is missing.
   focus rings show only after keyboard navigation (ACC-009). Windows 11
   opens Home with Quick access by default; "Open Quick access on Home"
   stays off here, the owner's choice.
+- **Windows 11 differences (2026-11-17).** Changed to Windows 11's behavior,
+  replacing earlier choices: Replace overwrites the old file, which no
+  longer goes to the Recycle Bin by default ("When replacing a file, move
+  the old one to the Recycle Bin" in Settings → Files & folders is now off;
+  OPS-028), and Undo after it says it can't bring the old file back;
+  Properties leaves out a hidden extension in its name box and title,
+  and a name typed there keeps it (PROP-005); tabs keep their icon, about
+  three letters and the close button, and an overflowing strip has scroll
+  arrows at both ends (TAB-019). Not confirmed in Windows: what its Undo
+  does after a Replace, whether its tab scroll arrows take keyboard focus,
+  their glyph and how far one click scrolls, and the titles of several
+  items' Properties and of the Permissions window.
 - **Advanced Query Syntax in the search box (2026-11-15).** Quoted phrases,
   upper-case `AND`, `OR` and `NOT`, `name:`, `ext:`, `date:` with dates,
   comparisons and ranges, and sizes in KB, MB or GB are read as Microsoft

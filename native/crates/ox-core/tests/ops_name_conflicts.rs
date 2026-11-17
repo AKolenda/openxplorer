@@ -64,13 +64,13 @@ fn write(path: &Path, contents: &[u8]) {
 
 /// Runs `scan` with `answers`, one per conflict.
 fn run(scan: &ConflictScan, answers: &[Resolution]) -> ox_core::ops::TransferOutcome {
-    block_on(run_resolved_transfer(
-        scan,
-        answers,
-        &OperationContext::default(),
-        |_| {},
-    ))
-    .expect("an accepted transfer")
+    // Replace keeps the replaced file in the Recycle Bin, as Settings >
+    // Files & folders can choose; the default overwrites it.
+    let context = OperationContext {
+        replaced_files: ReplacedFiles::RecycleBin,
+        ..OperationContext::default()
+    };
+    block_on(run_resolved_transfer(scan, answers, &context, |_| {})).expect("an accepted transfer")
 }
 
 /// A folder whose name is taken by a folder is merged: only the files
@@ -501,7 +501,10 @@ fn the_items_without_a_conflict_go_before_the_answers() {
     write(&src.join("free.txt"), b"free");
     write(&src.join("taken.txt"), b"incoming");
     write(&dst.join("taken.txt"), b"existing");
-    let context = OperationContext::default();
+    let context = OperationContext {
+        replaced_files: ReplacedFiles::RecycleBin,
+        ..OperationContext::default()
+    };
     let scan = scan(TransferMode::Copy, &src, &["free.txt", "taken.txt"], &dst);
 
     let first = block_on(run_free_items(&scan, &context, |_| {})).expect("the free items");
@@ -766,11 +769,19 @@ fn replace_overwrites_without_the_recycle_bin_when_chosen() {
     assert_eq!(fs::read(src.join("report.png")).unwrap(), b"incoming");
     assert_eq!(recycled_now(&dst.join("report.png")), 0, "nothing was recycled");
     assert!(staging_left_in(&dst).is_empty(), "{:?}", staging_left_in(&dst));
-    assert!(
-        !matches!(outcome.undo, Some(UndoRecord::Replace { .. })),
-        "no replaced file to bring back: {:?}",
-        outcome.undo
-    );
+    // Nothing to bring back: Undo names the overwritten file and leaves
+    // its replacement.
+    let Some(UndoRecord::Replace {
+        steps,
+        replaced,
+        overwritten,
+        ..
+    }) = &outcome.undo
+    else {
+        panic!("{:?}", outcome.undo);
+    };
+    assert!(steps.is_empty() && replaced.is_empty(), "{:?}", outcome.undo);
+    assert_eq!(overwritten, &[file_uri(&dst.join("report.png"))]);
 }
 
 /// By default Replace overwrites the old file, as Windows 11 does

@@ -787,7 +787,7 @@ fn properties_opened_during_the_create_is_left_alone() {
     select_names(&test, &["Résumé.txt"]);
     let release = start_held_text_document(&test);
     test.activate("properties", None);
-    let properties = test.wait_for_properties("Résumé.txt Properties");
+    let properties = test.wait_for_properties("Résumé Properties");
     wait_until("Properties has the focus", || {
         properties.is_active() && !test.window.is_active()
     });

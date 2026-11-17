@@ -452,15 +452,17 @@ fn files_with_the_same_date_and_size_can_be_skipped_at_once() {
     assert!(!fixture.path("Notes 2 (2).txt").exists());
 }
 
-/// Replace keeps the replaced file in the Recycle Bin, and the journal
-/// records it: Undo Copy takes the copy away and brings the replaced file
-/// back, and Redo replaces it again.
+/// With Settings > Files & folders > "When replacing a file, move the old
+/// one to the Recycle Bin" on, Replace keeps the replaced file in the
+/// Recycle Bin, and the journal records it: Undo Copy takes the copy away
+/// and brings the replaced file back, and Redo replaces it again.
 ///
 /// parity: OPS-028, OPS-029, OPS-031
 #[gtk::test]
-fn undo_brings_back_the_file_a_paste_replaced() {
+fn undo_brings_back_the_file_a_paste_replaced_when_the_switch_is_on() {
     let fixture = Fixture::standard();
     let test = copy_namesakes(&fixture, &["Notes 2.txt"]);
+    super::restore_conflicts::recycle_replaced_files(&test);
 
     test.activate("paste", None);
     answer_conflicts(&test, ConflictAnswer::Replace);
@@ -514,7 +516,9 @@ fn a_pasted_replace_overwrites_the_old_file_by_default_and_undo_says_so() {
 
     assert_eq!(recycled(), before, "nothing went to the Recycle Bin");
     assert!(
-        every_name_in(fixture.root()).iter().all(|name| !name.starts_with(".winspace-")),
+        every_name_in(fixture.root())
+            .iter()
+            .all(|name| !name.starts_with(".winspace-")),
         "no temporary file is left: {:?}",
         every_name_in(fixture.root())
     );

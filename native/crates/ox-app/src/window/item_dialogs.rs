@@ -27,6 +27,7 @@ use ox_core::versions::SnapshotLocation;
 
 use crate::dialog::{quiet_text, DialogFrame, DialogLayer, DialogWidth};
 use crate::folder_view::item::FileItem;
+use crate::folder_view::shown_name::{shown_name, shows_whole};
 use crate::locations::Page;
 use crate::properties::{
     open_item_properties, open_selection_properties, PropertiesContext, PropertiesTab, PropertiesTarget,
@@ -173,7 +174,10 @@ impl BrowserWindow {
         } else {
             ItemKind::File
         };
-        self.named_target(entry.opened_uri().to_owned(), entry.name.clone(), kind)
+        // Named as the view names it: without a known type's extension
+        // while extensions are hidden, as Windows 11 titles Properties.
+        let name = shown_name(&entry.name, shows_whole(entry), self.file_name_extensions());
+        self.named_target(entry.opened_uri().to_owned(), name.to_owned(), kind)
     }
 
     /// Whether `uri` is a standard folder (Documents, Downloads and the
@@ -247,7 +251,13 @@ impl BrowserWindow {
                     Ok(info) if info.display_name() == "/" => {
                         (window.imp().locations.borrow().base_name(&uri), item_kind(&info))
                     }
-                    Ok(info) => (info.display_name().to_string(), item_kind(&info)),
+                    Ok(info) => {
+                        let kind = item_kind(&info);
+                        let name = info.display_name();
+                        let extensions = window.file_name_extensions();
+                        let shown = shown_name(&name, kind == ItemKind::Folder, extensions);
+                        (shown.to_owned(), kind)
+                    }
                     // The General tab says why the item cannot be read.
                     Err(_) => (window.imp().locations.borrow().base_name(&uri), ItemKind::File),
                 };
@@ -286,6 +296,7 @@ impl BrowserWindow {
             usershares: crate::properties::system_usershares(self.context().desktop_integration().sandbox()),
             relocation: self.context().folder_relocation(),
             brave: self.context().desktop_integration().brave(),
+            extensions: self.file_name_extensions(),
         }
     }
 

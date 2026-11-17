@@ -436,7 +436,8 @@ fn is_in_view(test: &TestWindow, tab: &gtk::Widget) -> bool {
     let Some(bounds) = tab.compute_bounds(&scroller) else {
         return false;
     };
-    bounds.x() >= -0.5 && bounds.x() + bounds.width() <= scroller.width() as f32 + 0.5
+    f64::from(bounds.x()) >= -0.5
+        && f64::from(bounds.x() + bounds.width()) <= f64::from(scroller.width()) + 0.5
 }
 
 /// Opens tabs until `count` are open, or closes the last ones.
@@ -457,15 +458,15 @@ fn have_tabs(test: &TestWindow, fixture: &Fixture, count: usize) {
 /// scrolls, with an arrow at each end that scrolls it, shown only while
 /// the tabs overflow, and the "+" still after the strip. The wheel still
 /// scrolls it, and a tab shown with Ctrl+Tab comes into view. Closing
-/// tabs until they fit hides the arrows again. At 1366 and 1920 pixels,
-/// with 5, 20 and 40 tabs.
+/// tabs until they fit hides the arrows again. At 1366 pixels and at the
+/// test display's full 1440, with 5, 20 and 40 tabs.
 ///
 /// parity: TAB-019
 #[gtk::test]
 fn overflowing_tabs_keep_a_few_letters_and_scroll_with_arrows_at_both_ends() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    for width in [1366, 1920] {
+    for width in [1366, 1440] {
         super::narrow_windows::resize(&test, width);
         for count in [5, 20, 40] {
             have_tabs(&test, &fixture, count);
@@ -484,7 +485,7 @@ fn overflowing_tabs_keep_a_few_letters_and_scroll_with_arrows_at_both_ends() {
                 .expect("the new-tab button");
             let plus = new_tab.compute_bounds(&test.window).expect("a shown + button");
             assert!(
-                plus.x() + plus.width() <= test.window.width() as f32,
+                f64::from(plus.x() + plus.width()) <= f64::from(test.window.width()),
                 "the + stays in the window"
             );
             // Each tab shows its icon, about three letters and its close
@@ -504,18 +505,23 @@ fn overflowing_tabs_keep_a_few_letters_and_scroll_with_arrows_at_both_ends() {
         }
     }
 
-    // 40 tabs at 1920 pixels: the tab opened last is in front and in view.
+    // 40 tabs at 1440 pixels: the tab opened last is in front and in view.
     let (back, forward) = scroll_arrows(&test);
     let adjustment = strip_scroll(&test);
     let last = tab_widget(&test, 39);
     wait_until("the new tab in view", || is_in_view(&test, &last));
-    assert!(!back.is_focusable() && !forward.is_focusable(), "Tab skips the arrows");
+    assert!(
+        !back.is_focusable() && !forward.is_focusable(),
+        "Tab skips the arrows"
+    );
     let end = adjustment.value();
     back.emit_clicked();
     wait_until("the strip to scroll back", || adjustment.value() < end - 1.0);
     let after_back = adjustment.value();
     forward.emit_clicked();
-    wait_until("the strip to scroll forward", || adjustment.value() > after_back + 1.0);
+    wait_until("the strip to scroll forward", || {
+        adjustment.value() > after_back + 1.0
+    });
     // Ctrl+Tab from the last tab wraps to the first, off at the far end.
     test.activate("next-tab", None);
     let first = tab_widget(&test, 0);

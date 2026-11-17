@@ -132,7 +132,7 @@ fn the_file_keys_keep_working_beside_a_properties_window() {
     let test = TestWindow::open(&fixture.uri());
     select_names(&test, &["Résumé.txt"]);
     test.activate("properties", None);
-    let window = test.wait_for_properties("Résumé.txt Properties");
+    let window = test.wait_for_properties("Résumé Properties");
     test.window.folder_pane().focus_view();
 
     assert!(

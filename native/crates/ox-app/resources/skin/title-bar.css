@@ -81,6 +81,14 @@ window.ox:backdrop .ox-titlebar button.caption { color: @ox_text_tertiary; }
 .tab.tab-drag-source { opacity: 0; }
 .tab.file-drop-active { outline: 2px solid @ox_accent; outline-offset: -2px; }
 
+/* ---- Scroll arrows at the ends of an overflowing strip (TAB-019) ----
+   As Windows 11 shows them: small glyph buttons on the strip's colour,
+   level with the tabs' titles, darkening a little when hovered. */
+.ox-titlebar button.tab-scroll { min-width: 24px; min-height: 28px; padding: 0; margin: 4px 2px 0 2px; border-radius: 4px; }
+.ox-titlebar button.tab-scroll:hover { background-color: @ox_title_hover; }
+.ox-titlebar button.tab-scroll:active { background-color: @ox_title_pressed; }
+.ox-titlebar button.tab-scroll:disabled { color: @ox_text_tertiary; }
+
 /* ---- New tab and drag area ---- */
 .ox-titlebar button.newtab { min-width: 38px; min-height: 34px; margin: 0 3px 0 5px; }
 /* The empty part of the bar always leaves room to grab the window

@@ -18,7 +18,7 @@ fn a_properties_read_after_close_changes_nothing() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
     let general = tab(&window, "general");
     let shown = texts(&general);
 

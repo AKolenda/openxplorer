@@ -9,30 +9,69 @@
     <property name="hexpand">false</property>
     <property name="valign">end</property>
     <child>
-      <!-- External: scrollable without a visible bar, and never asking the
-           window to be as wide as all the tabs. -->
-      <object class="GtkScrolledWindow" id="scroller">
-        <property name="hscrollbar-policy">external</property>
-        <property name="vscrollbar-policy">never</property>
-        <property name="propagate-natural-width">true</property>
-        <property name="child">
-          <object class="GtkViewport" id="viewport">
+      <!-- The scroll arrows at the two ends of the strip, shown only while
+           the tabs overflow, as Windows 11 shows them; Tab skips them, as
+           the arrow keys, Ctrl+Tab and the wheel reach every tab. -->
+      <object class="GtkBox" id="row">
+        <child>
+          <object class="GtkButton" id="scroll_back">
+            <property name="visible">false</property>
+            <property name="focusable">false</property>
+            <property name="focus-on-click">false</property>
+            <property name="valign">center</property>
+            <property name="tooltip-text" translatable="yes">Scroll tab list backward</property>
+            <style>
+              <class name="tab-scroll"/>
+              <class name="back"/>
+            </style>
+            <accessibility>
+              <property name="label" translatable="yes">Scroll tab list backward</property>
+            </accessibility>
+          </object>
+        </child>
+        <child>
+          <!-- External: scrollable without a visible bar, and never asking
+               the window to be as wide as all the tabs. -->
+          <object class="GtkScrolledWindow" id="scroller">
+            <property name="hscrollbar-policy">external</property>
+            <property name="vscrollbar-policy">never</property>
+            <property name="propagate-natural-width">true</property>
             <property name="child">
-              <object class="GtkBox" id="tab_list">
-                <property name="accessible-role">tab-list</property>
-                <property name="layout-manager">
-                  <object class="OxTabLayout" id="layout"/>
+              <object class="GtkViewport" id="viewport">
+                <property name="child">
+                  <object class="GtkBox" id="tab_list">
+                    <property name="accessible-role">tab-list</property>
+                    <property name="layout-manager">
+                      <object class="OxTabLayout" id="layout"/>
+                    </property>
+                    <style>
+                      <class name="tabs"/>
+                    </style>
+                    <accessibility>
+                      <property name="label" translatable="yes">Folder tabs</property>
+                    </accessibility>
+                  </object>
                 </property>
-                <style>
-                  <class name="tabs"/>
-                </style>
-                <accessibility>
-                  <property name="label" translatable="yes">Folder tabs</property>
-                </accessibility>
               </object>
             </property>
           </object>
-        </property>
+        </child>
+        <child>
+          <object class="GtkButton" id="scroll_forward">
+            <property name="visible">false</property>
+            <property name="focusable">false</property>
+            <property name="focus-on-click">false</property>
+            <property name="valign">center</property>
+            <property name="tooltip-text" translatable="yes">Scroll tab list forward</property>
+            <style>
+              <class name="tab-scroll"/>
+              <class name="forward"/>
+            </style>
+            <accessibility>
+              <property name="label" translatable="yes">Scroll tab list forward</property>
+            </accessibility>
+          </object>
+        </child>
       </object>
     </child>
   </template>

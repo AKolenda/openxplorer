@@ -3,8 +3,9 @@
 //!
 //! Ports the flex rules of `.tabs` and `.tab` in `v2.0.0:desktop/ui/style.css`:
 //! every tab is 215 pixels wide (180 or 150 in a narrow window), tabs
-//! shrink evenly toward 100 pixels when the title bar runs out of room, and
-//! below that the strip scrolls. A `GtkBox` cannot shrink its children
+//! shrink evenly toward 100 pixels when the title bar runs out of room, or
+//! as far as keeps the icon, about three letters of the title and the
+//! close button when that is wider, and below that the strip scrolls. A `GtkBox` cannot shrink its children
 //! below their natural width without also dropping to their minimum, so
 //! the tab strip uses this layout.
 
@@ -393,6 +394,12 @@ impl TabLayout {
         if let Some(settled) = settled {
             settled.run();
         }
+    }
+
+    /// How far a tab and the gap after it reach along the strip, as the
+    /// last allocation shared it: what one click of a scroll arrow scrolls.
+    pub(crate) fn tab_step(&self) -> i32 {
+        self.imp().each.get() + TAB_GAP
     }
 
     /// Whether the tabs are laid out live.

@@ -12,20 +12,20 @@
 //! - Skip ("Skip this file") leaves both files as they are.
 //! - Both versions kept in the File Conflict window: the copied file gets
 //!   Windows' number, `report (2).png`, the first free one.
-//! - Replace: Windows overwrites the existing file. Here, by default
-//!   ([`ReplacedFiles::RecycleBin`]), the existing file goes to the
-//!   Recycle Bin first, where the desktop's Trash works, and the incoming
-//!   file then takes its free name, so Undo can bring the replaced file
-//!   back. Should the incoming file not arrive, the replaced one is
-//!   restored at once. With [`ReplacedFiles::Overwrite`] (Settings >
-//!   Files & folders, as Windows does it), where nothing can go to the
+//! - Replace: Windows overwrites the existing file. With
+//!   [`ReplacedFiles::RecycleBin`] (Settings > Files & folders), the
+//!   existing file goes to the Recycle Bin first, where the desktop's
+//!   Trash works, and the incoming file then takes its free name, so Undo
+//!   can bring the replaced file back. Should the incoming file not
+//!   arrive, the replaced one is restored at once. With
+//!   [`ReplacedFiles::Overwrite`] (the default, as Windows does it), where nothing can go to the
 //!   Recycle Bin (most shares and devices), or where a file meets a
 //!   folder, the engine's own Replace runs: a copy is written into
 //!   private staging and swapped in at the end, a move renames over the
 //!   old file, and a folder is never replaced by a file or the other way
-//!   round (XFER-009, XFER-010). A cancelled copy leaves the old file as
-//!   it was. That replaced file is gone, so Undo leaves its replacement
-//!   in place.
+//!   round (XFER-009, XFER-010). A cancelled or failed copy leaves the
+//!   old file as it was. That replaced file is gone, so Undo says it
+//!   can't bring it back and leaves its replacement in place.
 //!
 //! The items without a conflict go first, before the user answers
 //! ([`run_free_items`]), as Windows queues the conflicts "to the end of
@@ -628,11 +628,18 @@ impl<'a> Run<'a> {
         let remade = (!self.removed_folders.is_empty()).then(|| UndoRecord::EmptiedFolders {
             folders: self.removed_folders.iter().rev().cloned().collect(),
         });
-        if self.kept.is_empty() && remade.is_none() {
+        // The files Replace overwrote, in the order they arrived.
+        let overwritten: Vec<String> = self
+            .landed
+            .iter()
+            .map(|landed| landed.destination.clone())
+            .filter(|uri| self.overwritten.contains(uri))
+            .collect();
+        if self.kept.is_empty() && remade.is_none() && overwritten.is_empty() {
             return step;
         }
         let steps: Vec<UndoRecord> = remade.into_iter().chain(step).collect();
-        if steps.is_empty() && self.kept.is_empty() {
+        if steps.is_empty() && self.kept.is_empty() && overwritten.is_empty() {
             return None;
         }
         Some(UndoRecord::Replace {
@@ -644,6 +651,7 @@ impl<'a> Run<'a> {
             steps,
             replaced: self.kept.clone(),
             replaced_since: self.started,
+            overwritten,
         })
     }
 }

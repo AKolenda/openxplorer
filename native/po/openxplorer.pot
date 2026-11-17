@@ -269,6 +269,14 @@ msgstr ""
 msgid "Folder tabs"
 msgstr ""
 
+#: crates/ox-app/resources/ui/tab-strip.ui
+msgid "Scroll tab list backward"
+msgstr ""
+
+#: crates/ox-app/resources/ui/tab-strip.ui
+msgid "Scroll tab list forward"
+msgstr ""
+
 #: crates/ox-app/resources/ui/update-dialog.ui
 msgid "Check again"
 msgstr ""
@@ -3621,7 +3629,7 @@ msgid "Remember each folder's view settings"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Replace in a copy, move or restore keeps the old file in the Recycle Bin, so Undo can bring it back. Off: the new file overwrites it, as in Windows, and it is gone."
+msgid "Replace in a copy, move or restore keeps the old file in the Recycle Bin, so Undo can bring it back. Off, as in Windows: the new file overwrites it, and it is gone."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -5093,7 +5101,7 @@ msgstr ""
 msgid "Tiles"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs crates/ox-core/src/ops/undo_apply.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/file_ops/journal.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs crates/ox-core/src/ops/undo_apply.rs
 msgid "Undo"
 msgstr ""
 
@@ -6009,6 +6017,15 @@ msgstr ""
 msgid "Undo copy?"
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/journal.rs
+msgid "Undo the rest anyway?"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/journal.rs
+msgid "{count} files were replaced, so Undo can't bring back the old files."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/journal.rs
 msgid "{len} copies, such as “{first}”, may have changed after they were copied. Undo moves them to the Recycle Bin anyway?"
@@ -6017,6 +6034,11 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/journal.rs
 msgid "“{first}” may have changed after it was copied. Undo moves it to the Recycle Bin anyway?"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/journal.rs
+msgid "“{name}” was replaced, so Undo can't bring back the old file."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/links.rs

@@ -90,7 +90,7 @@ const EXPANDABLE_FOLDERS: RowText = RowText {
 const RECYCLE_REPLACED: RowText = RowText {
     title: "When replacing a file, move the old one to the Recycle Bin",
     description: "Replace in a copy, move or restore keeps the old file in the Recycle Bin, so Undo can \
-                  bring it back. Off: the new file overwrites it, as in Windows, and it is gone.",
+                  bring it back. Off, as in Windows: the new file overwrites it, and it is gone.",
     keywords: "replace overwrite file conflict copy move paste drag restore recycle bin trash undo old \
                replaced keep windows",
 };
@@ -332,8 +332,8 @@ fn details_group(page: &SettingsPage) -> SettingsGroup {
 }
 
 /// What Replace does with the file it replaces in a copy, move, paste,
-/// drag or Recycle Bin restore. On by default, the owner's choice; off,
-/// the old file is overwritten, as in Windows 11.
+/// drag or Recycle Bin restore. Off by default, as in Windows 11: the old
+/// file is overwritten; on, it goes to the Recycle Bin first.
 fn replacing_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Copying and moving"));
     let row = SettingRow::new(RECYCLE_REPLACED);

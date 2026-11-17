@@ -361,11 +361,11 @@ pub struct Preferences {
     pub progress_details: bool,
     /// Replace (a copy, move, paste, drag or Recycle Bin restore onto a
     /// taken name) moves the file it replaces to the Recycle Bin first,
-    /// so Undo and a cancelled copy can bring it back. On by default, the
-    /// owner's choice; off, the incoming file overwrites the old one, as
-    /// in Windows 11, and the old file is gone. Stored as
-    /// `recycleReplacedFiles`, only when off.
-    #[serde(skip_serializing_if = "is_true")]
+    /// so Undo and a cancelled copy can bring it back. Off by default:
+    /// the incoming file overwrites the old one, as Windows 11 does, and
+    /// the old file is gone. Stored as `recycleReplacedFiles`, only when
+    /// on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub recycle_replaced_files: bool,
     /// Explicitly enabled installed service actions, keyed by definition digest.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -641,7 +641,7 @@ impl Default for Preferences {
             confirm_close_tabs: false,
             ask_to_run_programs: false,
             progress_details: false,
-            recycle_replaced_files: true,
+            recycle_replaced_files: false,
             enabled_service_actions: Vec::new(),
             desktop_font: false,
             hide_sidebar: false,

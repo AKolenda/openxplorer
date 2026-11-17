@@ -20,15 +20,16 @@
 //!   one is restored.
 //! - Skip leaves the item in the Recycle Bin and says nothing more, as
 //!   in Windows.
-//! - Replace moves the item in the original folder to the Recycle Bin
+//! - With [`ReplacedFiles::RecycleBin`] (Settings > Files & folders),
+//!   Replace moves the item in the original folder to the Recycle Bin
 //!   first, then restores the incoming one, as a paste's Replace does
 //!   ([`replace_through_recycle_bin`]); should it not arrive, the
 //!   replaced item comes back at once. Where nothing can go to the
 //!   Recycle Bin, or a file meets a folder, nothing is replaced and the
 //!   item stays in the Recycle Bin.
-//! - With [`ReplacedFiles::Overwrite`] (Settings > Files & folders), a
-//!   file restored over a file overwrites it, as Windows does, and the
-//!   replaced file is gone ([`restore_over`]). The file the Recycle Bin
+//! - With [`ReplacedFiles::Overwrite`] (the default, as Windows does it),
+//!   a file restored over a file overwrites it, and the replaced file is
+//!   gone ([`restore_over`]); Undo says it can't bring it back. The file the Recycle Bin
 //!   keeps takes the old file's name in one rename, so a restore stopped
 //!   or failed before it leaves the old file as it was and the item in
 //!   the Recycle Bin. A folder in the way still goes
@@ -267,6 +268,8 @@ pub struct RestoreSoFar {
     replaced: Vec<PathBuf>,
     /// Each Recycle Bin item restored so far, with the URI it went to.
     placed: Vec<(String, String)>,
+    /// Where restored items overwrote files that are gone.
+    overwritten: Vec<String>,
     /// When the restore started, in seconds since the Unix epoch.
     started: u64,
     /// The Recycle Bin items whose names were found free but were taken
@@ -291,6 +294,7 @@ impl RestoreSoFar {
         Self {
             outcome: TransferOutcome::default(),
             replaced: Vec::new(),
+            overwritten: Vec::new(),
             placed: Vec::new(),
             started: unix_seconds_now(),
             taken: Vec::new(),
@@ -343,7 +347,14 @@ impl RestoreSoFar {
         let restored = UndoRecord::Restore {
             restored: self.outcome.created.clone(),
         };
-        self.outcome.undo = Some(if self.replaced.is_empty() {
+        // Only the files still holding a restored item count as
+        // overwritten.
+        let overwritten: Vec<String> = self
+            .overwritten
+            .into_iter()
+            .filter(|uri| self.outcome.created.contains(uri))
+            .collect();
+        self.outcome.undo = Some(if self.replaced.is_empty() && overwritten.is_empty() {
             restored
         } else {
             UndoRecord::Replace {
@@ -351,6 +362,7 @@ impl RestoreSoFar {
                 steps: vec![restored],
                 replaced: self.replaced,
                 replaced_since: self.started,
+                overwritten,
             }
         });
         self.outcome
@@ -666,9 +678,14 @@ fn replace(
         if let Some(restored) = overwritten {
             // An item this restore already put there is overwritten: it
             // is gone, and no longer restored.
-            if let Some(at) = restored_there {
-                let (earlier, _) = so_far.placed.remove(at);
-                so_far.outcome.result.done.retain(|done| *done != earlier);
+            match restored_there {
+                Some(at) => {
+                    let (earlier, _) = so_far.placed.remove(at);
+                    so_far.outcome.result.done.retain(|done| *done != earlier);
+                }
+                // A file that was there before the restore is gone.
+                None if !so_far.overwritten.contains(&restored) => so_far.overwritten.push(restored.clone()),
+                None => {}
             }
             so_far.outcome.result.done.push(item.uri.clone());
             so_far.placed.push((item.uri.clone(), restored.clone()));
