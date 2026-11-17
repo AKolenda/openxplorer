@@ -39,6 +39,10 @@ pub(super) enum EmptyState {
         /// The system's error, kept under Details for diagnosis.
         details: Option<String>,
     },
+    /// An archive opened like a folder could not be read (damaged,
+    /// encrypted, a method the reader lacks): what to tell the user. It
+    /// offers no Try again, which would fail the same way (ARC-026).
+    ArchiveUnavailable(String),
     /// A search found nothing; the message says why (SRCH-013).
     NoMatches(String),
     /// The folder has no items; the Recycle Bin too, which says so as
@@ -60,6 +64,9 @@ impl EmptyState {
     /// ("Software caused connection abort") under Details. Every other
     /// error is already said for people, and is shown as it is.
     pub(super) fn unavailable(uri: &str, error: &EntryError) -> EmptyState {
+        if ox_core::location::is_archive_location(uri) {
+            return EmptyState::ArchiveUnavailable(error.to_string());
+        }
         let raw = match error {
             EntryError::Failed(raw) | EntryError::NotMounted(raw) if is_server_location(uri) => raw,
             _ => {
@@ -240,6 +247,7 @@ impl EmptyPage {
     pub(super) fn show(&self, state: &EmptyState) {
         let glyph = match state {
             EmptyState::Unavailable { .. } => Icon::Organization,
+            EmptyState::ArchiveUnavailable(_) => Icon::FolderZip,
             EmptyState::NoPhotos => Icon::Image,
             _ => Icon::Folder,
         };
@@ -247,6 +255,10 @@ impl EmptyPage {
         let (title, message) = match state {
             EmptyState::Unavailable { message, .. } => (
                 ox_core::i18n::gettext_static("This location is unavailable"),
+                message.as_str(),
+            ),
+            EmptyState::ArchiveUnavailable(message) => (
+                ox_core::i18n::gettext_static("This archive can't be opened"),
                 message.as_str(),
             ),
             EmptyState::NoMatches(reason) => (
@@ -270,9 +282,13 @@ impl EmptyPage {
         self.title.set_text(title);
         self.message.set_text(message);
         // Only a message worth copying (an error, a search's reason) can
-        // be selected; Gallery's hint would show selected when focused.
-        self.message
-            .set_selectable(!matches!(state, EmptyState::NoPhotos));
+        // be selected; Gallery's hint would show selected when focused, and
+        // an archive's reason would take the keyboard and show selected as
+        // the archive opens.
+        self.message.set_selectable(!matches!(
+            state,
+            EmptyState::NoPhotos | EmptyState::ArchiveUnavailable(_)
+        ));
         self.message.set_visible(!message.is_empty());
         let details = match state {
             EmptyState::Unavailable {

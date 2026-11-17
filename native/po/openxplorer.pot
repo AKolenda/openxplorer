@@ -5469,6 +5469,10 @@ msgid "Photos in your Pictures folder show here."
 msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
+msgid "This archive can't be opened"
+msgstr ""
+
+#: crates/ox-app/src/window/empty_page.rs
 msgid "This folder is empty"
 msgstr ""
 
