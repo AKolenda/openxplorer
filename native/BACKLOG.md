@@ -74,9 +74,10 @@ is missing.
   supported build targets and Flatpak configuration.
 - **Archives.** Browsing and extraction support ZIP (including ZIP64) and
   compressed TAR, and ZIPs with the traditional ZIP password, which ask for
-  it. Compress to › 7z File writes 7z archives (sevenz-rust2); browsing and
-  extracting 7z is not supported yet. RAR and AES-encrypted ZIPs still need
-  additional codecs. A TAR's relative links that stay inside the archive are
+  it. Compress to › 7z File writes 7z archives and 7z archives are browsed
+  and extracted like ZIP (sevenz-rust2), except encrypted ones and methods
+  other than LZMA, LZMA2 and their filters (PPMd, BZip2, Deflate), which are
+  refused plainly. RAR and AES-encrypted ZIPs still need additional codecs. A TAR's relative links that stay inside the archive are
   listed and extracted; ZIP links stay hidden and refused. Search inside an
   opened archive is still unavailable.
 - **Flatpak:** "Show in folder" answers only while OpenXplorer runs unless the

@@ -3055,7 +3055,7 @@ msgid "{percent}% (default)"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/archives.rs
-msgid "Browse ZIP and TAR archives (.tar, .tar.gz, .tar.bz2, .tar.xz, .tar.zst) inside OpenXplorer. Off, they open in their default application."
+msgid "Browse ZIP, TAR and 7z archives (.tar, .tar.gz, .tar.bz2, .tar.xz, .tar.zst, .7z) inside OpenXplorer. Off, they open in their default application."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/archives.rs
@@ -3087,7 +3087,7 @@ msgid "open zip files zip open folder window pop-up compressed explorer browse d
 msgstr ""
 
 #: crates/ox-app/src/settings_page/archives.rs
-msgid "zip tar gz archive compressed browse extract"
+msgid "zip tar gz 7z 7-zip archive compressed browse extract"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -4170,7 +4170,7 @@ msgid "How OpenXplorer looks in every window."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/pages.rs
-msgid "How ZIP and TAR archives open."
+msgid "How ZIP, TAR and 7z archives open."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/pages.rs
@@ -7872,6 +7872,18 @@ msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
 msgid "The destination did not accept all extracted bytes."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
+msgid "This 7z archive is damaged or incomplete. Use an archive manager."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
+msgid "This 7z archive is encrypted, which isn't supported. To open it, use a different archive app."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
+msgid "This 7z archive uses a compression method that isn't supported. To open it, use a different archive app."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
