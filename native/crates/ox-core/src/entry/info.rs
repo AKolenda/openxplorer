@@ -14,12 +14,20 @@ use super::type_label::{shortcut_label, type_label};
 use super::{Entry, EntryKind, EntryMeta};
 use crate::location::{is_virtual_location, normalise, scheme};
 
+#[cfg(test)]
+thread_local! {
+    /// How many rows [`entry_from_info`] built on this thread, for tests.
+    pub(crate) static ROWS_BUILT_HERE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Builds an entry for `file` from its queried `info`.
 ///
 /// Reads only the attributes in [`super::ATTRIBUTES`] that the backend
 /// reported. When the backend reports no name at all, the file's base name
 /// is used, as `gfile.get_basename()` is in Python.
 pub fn entry_from_info(file: &gio::File, info: &gio::FileInfo) -> Entry {
+    #[cfg(test)]
+    ROWS_BUILT_HERE.with(|built| built.set(built.get() + 1));
     let uri = file.uri();
     let base_name = || file.basename().map(|name| name.to_string_lossy().into_owned());
     build_entry(&uri, info, base_name)
@@ -198,11 +206,18 @@ fn deletion_date(info: &gio::FileInfo) -> Option<u64> {
 }
 
 /// `standard::icon` in a thread-safe form; see [`Entry::icon`].
+///
+/// The variant is laid out in memory here, where the row is built (on the
+/// listing's reader thread), so that comparing two rows' icons, as a reload
+/// does for every row, is a comparison of bytes: otherwise the first
+/// comparison laid it out on the main loop, about a microsecond a row.
 fn serialized_icon(info: &gio::FileInfo) -> Option<glib::Variant> {
     if !info.has_attribute("standard::icon") {
         return None;
     }
-    info.icon()?.serialize()
+    let icon = info.icon()?.serialize()?;
+    let _ = icon.data();
+    Some(icon)
 }
 
 #[cfg(test)]
