@@ -14,6 +14,7 @@
 //! folder clicked, not on the folder shown.
 
 mod actions;
+mod drops;
 mod follow;
 mod menu;
 mod model;
@@ -89,6 +90,9 @@ mod imp {
         /// The tree row each shown row draws, with the handler that reads
         /// its subfolders when it is expanded.
         pub(super) bound: RefCell<Vec<super::BoundRow>>,
+        /// The collapsed folder a drag rests on, and the wait before it
+        /// opens.
+        pub(super) drag_expand: RefCell<Option<(gtk::TreeListRow, glib::SourceId)>>,
     }
 
     #[glib::object_subclass]

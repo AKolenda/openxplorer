@@ -20,12 +20,14 @@ const DESKTOP_ID: &str = "ox-test-opener.desktop";
 
 /// The types the window tests open: their text files, scripts, documents,
 /// pictures and archives.
-const CONTENT_TYPES: [&str; 9] = [
+const CONTENT_TYPES: [&str; 10] = [
     "text/plain",
     "application/x-shellscript",
     "text/markdown",
     "application/pdf",
     "image/png",
+    // Gallery's photos (window/tests/gallery.rs).
+    "image/jpeg",
     "application/zip",
     "application/x-compressed-tar",
     "application/gzip",

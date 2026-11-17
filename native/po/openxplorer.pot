@@ -210,11 +210,11 @@ msgid "Running actions"
 msgstr ""
 
 #: crates/ox-app/resources/ui/search-box.ui
-msgid "Search cached filenames and paths. Enable folders in Settings → Search."
+msgid "Search filenames and paths"
 msgstr ""
 
 #: crates/ox-app/resources/ui/search-box.ui
-msgid "Search filenames and paths"
+msgid "Search names in this folder and its subfolders. Folders cached in Settings → Search are searched faster."
 msgstr ""
 
 #: crates/ox-app/resources/ui/search-info-strip.ui
@@ -3447,10 +3447,6 @@ msgstr ""
 msgid "Also copy paths as text"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Also in network folders"
-msgstr ""
-
 #: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/context_menu/entries.rs
 msgid "Calculate folder sizes"
 msgstr ""
@@ -3520,7 +3516,7 @@ msgid "Logical file bytes, the space on disk, what a scan skips, and its limits.
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Off: files on SMB shares, servers and phones keep their icons, so browsing them reads no file contents."
+msgid "Off by default, as in Windows: files on shares, servers, phones and cameras show their type icons. Turn on to show their thumbnails and previews too."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3577,6 +3573,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Show the number of items in folders"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Show thumbnails in network folders"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3648,7 +3648,7 @@ msgid "replace overwrite file conflict copy move paste drag restore recycle bin 
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "show previews in network folders thumbnails remote network smb nas sftp slow"
+msgid "show previews in network folders thumbnails remote network smb nas sftp phone camera also"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -5630,12 +5630,12 @@ msgstr ""
 msgid "“{name}” is on a network share, a removable drive or a drive where every file can run, such as a Windows drive. Run it only if you trust where it came from."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/availability.rs
-msgid "A previous version is read-only."
+#: crates/ox-app/src/window/file_drop/targets.rs crates/ox-app/src/window/file_ops/availability.rs
+msgid "An archive is read-only. Extract it to add items."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
-msgid "An archive is read-only. Extract it to add items."
+msgid "A previous version is read-only."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs

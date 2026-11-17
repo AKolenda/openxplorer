@@ -14,12 +14,20 @@ use super::type_label::{shortcut_label, type_label};
 use super::{Entry, EntryKind, EntryMeta};
 use crate::location::{is_virtual_location, normalise, scheme};
 
+#[cfg(test)]
+thread_local! {
+    /// How many rows [`entry_from_info`] built on this thread, for tests.
+    pub(crate) static ROWS_BUILT_HERE: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Builds an entry for `file` from its queried `info`.
 ///
 /// Reads only the attributes in [`super::ATTRIBUTES`] that the backend
 /// reported. When the backend reports no name at all, the file's base name
 /// is used, as `gfile.get_basename()` is in Python.
 pub fn entry_from_info(file: &gio::File, info: &gio::FileInfo) -> Entry {
+    #[cfg(test)]
+    ROWS_BUILT_HERE.with(|built| built.set(built.get() + 1));
     let uri = file.uri();
     let base_name = || file.basename().map(|name| name.to_string_lossy().into_owned());
     build_entry(&uri, info, base_name)
@@ -34,9 +42,10 @@ pub(super) fn build_entry(
     fallback_name: impl FnOnce() -> Option<String>,
 ) -> Entry {
     let kind = file_kind(info);
-    let content_type = string_attribute(info, "standard::content-type");
-    let classification = classify_info(uri, info, kind, content_type.as_deref());
     let name = display_name(uri, info, fallback_name);
+    let content_type = string_attribute(info, "standard::content-type")
+        .or_else(|| network_file_type(uri, info, kind, &name));
+    let classification = classify_info(uri, info, kind, content_type.as_deref());
     let is_symlink = info.boolean("standard::is-symlink");
     let type_label = if is_shortcut(uri, &name, is_symlink, &classification) {
         shortcut_label()
@@ -77,6 +86,28 @@ pub(super) fn build_entry(
             ..EntryMeta::from_info(info)
         }),
     }
+}
+
+/// The type of a file of a server or a device whose backend reported no
+/// `standard::content-type`, as `GVfs`'s SMB backend leaves it whenever the
+/// name alone does not settle it (a PNG, whose extension two types share):
+/// its `standard::fast-content-type` when reported, else its name's best
+/// guess, which is what that backend's fast type is. A name that says
+/// nothing (`application/octet-stream`) leaves it untyped, and so does a
+/// file of this computer, whose backend reads its contents.
+fn network_file_type(uri: &str, info: &gio::FileInfo, kind: EntryKind, name: &str) -> Option<String> {
+    use crate::location::{location_kind, LocationKind};
+
+    let on_network = matches!(
+        location_kind(uri),
+        LocationKind::Smb | LocationKind::Remote | LocationKind::Device
+    );
+    if !on_network || kind != EntryKind::File {
+        return None;
+    }
+    let guessed = string_attribute(info, "standard::fast-content-type")
+        .unwrap_or_else(|| gio::content_type_guess(Some(name), None).0.to_string());
+    (guessed != "application/octet-stream").then_some(guessed)
 }
 
 /// Whether the item named `name` at `uri` is a shortcut to a file or a
@@ -175,11 +206,18 @@ fn deletion_date(info: &gio::FileInfo) -> Option<u64> {
 }
 
 /// `standard::icon` in a thread-safe form; see [`Entry::icon`].
+///
+/// The variant is laid out in memory here, where the row is built (on the
+/// listing's reader thread), so that comparing two rows' icons, as a reload
+/// does for every row, is a comparison of bytes: otherwise the first
+/// comparison laid it out on the main loop, about a microsecond a row.
 fn serialized_icon(info: &gio::FileInfo) -> Option<glib::Variant> {
     if !info.has_attribute("standard::icon") {
         return None;
     }
-    info.icon()?.serialize()
+    let icon = info.icon()?.serialize()?;
+    let _ = icon.data();
+    Some(icon)
 }
 
 #[cfg(test)]
@@ -248,6 +286,72 @@ mod tests {
         let file = entry_for_uri("file:///tmp/old.txt", &info);
         assert_eq!(file.modified, None);
         assert_eq!(date_text(file.modified), "—");
+    }
+
+    /// `GVfs`'s SMB backend names a file's content type only when its
+    /// name settles it, reporting `standard::fast-content-type` alone for
+    /// a PNG (whose extension two types share): a file of a server or a
+    /// device without a content type is typed by its name, as its fast type
+    /// is, so its preview qualifies when network previews are on. A name
+    /// that says nothing leaves it untyped, and a file of this computer, a
+    /// folder, keep what the backend reported.
+    ///
+    /// parity: VIEW-058
+    #[test]
+    fn a_network_file_without_a_content_type_is_typed_by_its_name() {
+        for uri in [
+            "smb://fileserver.example/team/Photos/Garden.png",
+            "sftp://demo@server.example/home/demo/Garden.png",
+            "mtp://Example_Phone/DCIM/Garden.png",
+        ] {
+            let info = file_info(gio::FileType::Regular, "Garden.png", None);
+            info.set_attribute_string("standard::fast-content-type", "image/png");
+            let file = entry_for_uri(uri, &info);
+            assert_eq!(file.content_type.as_deref(), Some("image/png"), "{uri}");
+        }
+        let guessed = file_info(gio::FileType::Regular, "Garden.png", None);
+        let file = entry_for_uri("smb://fileserver.example/team/Photos/Garden.png", &guessed);
+        assert_eq!(file.content_type.as_deref(), Some("image/png"), "by its name");
+
+        let unknown = file_info(gio::FileType::Regular, "notes", None);
+        let file = entry_for_uri("smb://fileserver.example/team/notes", &unknown);
+        assert_eq!(file.content_type, None, "a name that says nothing");
+        let local = file_info(gio::FileType::Regular, "Garden.png", None);
+        let file = entry_for_uri("file:///home/demo/Pictures/Garden.png", &local);
+        assert_eq!(file.content_type, None, "a file of this computer");
+        let folder = file_info(gio::FileType::Directory, "Photos.png", None);
+        let folder = entry_for_uri("smb://fileserver.example/team/Photos.png", &folder);
+        assert_eq!(folder.content_type, None, "a folder");
+    }
+
+    /// The listing query itself asks for `standard::fast-content-type`, so
+    /// a network file that the backend reports only a fast type for is
+    /// typed by it: an item queried with the listing's attributes carries
+    /// the fast type, and with no content type it types the file.
+    ///
+    /// parity: VIEW-058
+    #[test]
+    fn the_listing_query_asks_for_the_fast_content_type() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let path = folder.path().join("Garden.png");
+        std::fs::write(&path, b"not really a picture").expect("the file is written");
+
+        let info = gio::File::for_path(&path)
+            .query_info(
+                super::super::ATTRIBUTES,
+                gio::FileQueryInfoFlags::NONE,
+                gio::Cancellable::NONE,
+            )
+            .expect("the file is queried");
+
+        assert_eq!(
+            info.attribute_string("standard::fast-content-type").as_deref(),
+            Some("image/png"),
+            "the listing's attributes include the fast type"
+        );
+        info.remove_attribute("standard::content-type");
+        let file = entry_for_uri("smb://fileserver.example/team/Photos/Garden.png", &info);
+        assert_eq!(file.content_type.as_deref(), Some("image/png"));
     }
 
     /// A symbolic link named with no known type's extension is the app's

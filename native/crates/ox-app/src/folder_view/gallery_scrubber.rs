@@ -30,6 +30,12 @@ type Step = Box<dyn Fn(bool)>;
 /// Runs with the month under the pointer and its height, or `None`.
 type Hover = Box<dyn Fn(Option<(String, f64)>)>;
 
+/// The mark of where the view is: a short bar at the track's left edge,
+/// clear of the years.
+const THUMB_WIDTH: i32 = 8;
+/// The room the years leave at their left for the mark.
+const YEAR_INSET: i32 = 12;
+
 /// A point of the timeline: a fraction of the scroll and the month there.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Mark {
@@ -126,7 +132,8 @@ mod imp {
             }
             if orientation == gtk::Orientation::Horizontal {
                 // Room for a year: four digits at the app's text size.
-                let year = self.obj().create_pango_layout(Some("2026")).pixel_size().0 + 12;
+                let year =
+                    self.obj().create_pango_layout(Some("2026")).pixel_size().0 + super::YEAR_INSET + 6;
                 minimum = minimum.max(year);
                 natural = natural.max(year);
             }
@@ -352,6 +359,7 @@ impl GalleryScrubber {
                     .label(year.to_string())
                     .can_target(false)
                     .css_classes(["scrubber-year"])
+                    .xalign(1.0)
                     .build();
                 // Over the position bar.
                 label.set_parent(self);
@@ -396,7 +404,7 @@ impl GalleryScrubber {
         #[expect(clippy::cast_possible_truncation, reason = "pixel positions")]
         let thumb_y =
             arrow_height + (imp.position.get() * f64::from(track_height - thumb_height)).round() as i32;
-        thumb.allocate(width - 8, thumb_height, -1, Some(translate(4, thumb_y)));
+        thumb.allocate(THUMB_WIDTH, thumb_height, -1, Some(translate(2, thumb_y)));
         let mut last_y = f64::NEG_INFINITY;
         for (label, (fraction, _)) in imp.years.borrow().iter().zip(self.year_starts()) {
             let (_, label_height, _, _) = label.measure(gtk::Orientation::Vertical, width);
@@ -406,7 +414,12 @@ impl GalleryScrubber {
             if shows {
                 last_y = y;
                 #[expect(clippy::cast_possible_truncation, reason = "pixel positions")]
-                label.allocate(width, label_height, -1, Some(translate(0, y.round() as i32)));
+                label.allocate(
+                    (width - YEAR_INSET).max(1),
+                    label_height,
+                    -1,
+                    Some(translate(YEAR_INSET, y.round() as i32)),
+                );
             }
         }
     }

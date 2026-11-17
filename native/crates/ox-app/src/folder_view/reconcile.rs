@@ -58,8 +58,25 @@ fn remove_run(store: &gio::ListStore, start: u32, count: u32) {
     }
 }
 
+/// Replaces the items from `start` with `replacements`, which hold them in
+/// reverse order, in one change.
+fn replace_run(store: &gio::ListStore, start: u32, replacements: &mut Vec<FileItem>) {
+    if replacements.is_empty() {
+        return;
+    }
+    replacements.reverse();
+    let count = u32::try_from(replacements.len()).expect("a run is part of a list model");
+    store.splice(start, count, replacements);
+    replacements.clear();
+}
+
 /// Makes `store` hold exactly `entries`, keeping the item objects of
 /// entries that did not change.
+///
+/// Every change of the store costs the sorted list and the views over it
+/// a pass over all items, so neighboring removals and neighboring
+/// changed items are each made in one change, and the new items are added
+/// together.
 ///
 /// # Panics
 ///
@@ -68,26 +85,35 @@ fn remove_run(store: &gio::ListStore, start: u32, count: u32) {
 pub(crate) fn update_in_place(store: &gio::ListStore, entries: Vec<Entry>) {
     let mut listing = NewListing::new(entries);
     // Walk from the end so removals never shift a position still to visit.
-    // `gone_run` counts the gone items directly after `position`, so
-    // neighbouring removals are merged into one change.
+    // `gone_run` counts the gone items directly after `position`, and
+    // `changed_run` holds the replacements of the changed items directly
+    // after it, last first.
     let mut gone_run = 0;
+    let mut changed_run = Vec::new();
     for position in (0..store.n_items()).rev() {
         let item = store
             .item(position)
             .and_downcast::<FileItem>()
             .expect("tab stores hold FileItems");
         let Some(entry) = listing.take(&item.entry().uri) else {
+            replace_run(store, position + 1, &mut changed_run);
             gone_run += 1;
             continue;
         };
         remove_run(store, position + 1, gone_run);
         gone_run = 0;
-        if entry != *item.entry() {
-            store.splice(position, 1, &[FileItem::new(entry)]);
+        if entry == *item.entry() {
+            replace_run(store, position + 1, &mut changed_run);
+        } else {
+            changed_run.push(FileItem::new(entry));
         }
     }
+    replace_run(store, 0, &mut changed_run);
     remove_run(store, 0, gone_run);
-    store.extend_from_slice(&listing.into_remaining());
+    let new_items = listing.into_remaining();
+    if !new_items.is_empty() {
+        store.extend_from_slice(&new_items);
+    }
 }
 
 #[cfg(test)]
@@ -141,6 +167,55 @@ mod tests {
         let after = items(&store);
         assert_ne!(after, before, "a changed entry gets a new item");
         assert_eq!(after[0].entry().size, Some(4096));
+    }
+
+    /// Every change of the store costs the sorted list a pass over all its
+    /// items, which for a folder of 100,000 items reloaded after another
+    /// program changed it froze the window for seconds. Neighboring
+    /// changes are made together, and a reload with nothing changed makes
+    /// no change at all.
+    ///
+    /// parity: PERF-006
+    #[test]
+    fn neighboring_changes_are_made_in_one_change() {
+        let names: Vec<String> = (0..10).map(|number| format!("{number}.txt")).collect();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let store = store_of_files(&names);
+        let changes = std::rc::Rc::new(std::cell::Cell::new(0));
+        let counter = std::rc::Rc::clone(&changes);
+        store.connect_items_changed(move |_, _, _, _| counter.set(counter.get() + 1));
+        let entries = |sized: &[usize], gone: &[usize], new: &[&str]| -> Vec<Entry> {
+            let mut entries: Vec<Entry> = (0..10)
+                .filter(|number| !gone.contains(number))
+                .map(|number| {
+                    let mut entry = file_entry(&format!("{number}.txt"));
+                    if sized.contains(&number) {
+                        entry.size = Some(4096);
+                    }
+                    entry
+                })
+                .collect();
+            entries.extend(new.iter().map(|name| file_entry(name)));
+            entries
+        };
+
+        update_in_place(&store, entries(&[], &[], &[]));
+        assert_eq!(changes.get(), 0, "nothing changed");
+
+        update_in_place(
+            &store,
+            entries(&[2, 3, 4, 5], &[7, 8], &["new 1.txt", "new 2.txt"]),
+        );
+        assert_eq!(
+            changes.get(),
+            3,
+            "one change each: the changed, the gone and the new items"
+        );
+        assert_eq!(store.n_items(), 10);
+        let sizes: Vec<Option<u64>> = items(&store).iter().map(|item| item.entry().size).collect();
+        assert_eq!(sizes[2..6], [Some(4096); 4]);
+        assert_eq!(items(&store)[6].entry().name, "6.txt");
+        assert_eq!(items(&store)[7].entry().name, "9.txt");
     }
 
     #[test]

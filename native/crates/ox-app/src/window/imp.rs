@@ -302,13 +302,28 @@ pub(crate) struct BrowserWindow {
     pub(super) first_offer: RefCell<Option<FirstOffer>>,
     /// What the label on the drag icon says over the window (DND-028).
     pub(super) drop_labels: RefCell<DropLabels>,
+    /// The drag the window last said it refuses, so it says so once.
+    pub(super) explained_drop: RefCell<Option<glib::WeakRef<glib::Object>>>,
     /// The drop menu, built when first needed.
     pub(super) drop_menu: OnceCell<MenuPopover>,
-    /// Why tooltips are off now: a drag of this window's items, and the
-    /// drop menu, show none, as in Windows Explorer (DND-027).
+    /// Why tooltips are off now: a drag of this window's items, the drop
+    /// menu, a rename in place and a menu with the keyboard show none, as
+    /// in Windows Explorer (DND-027, VIEW-073).
     pub(super) tooltips_off: Cell<super::quiet_tooltips::TooltipsOff>,
     /// The widgets whose tooltips were turned off, to turn them on again.
     pub(super) muted_tooltips: RefCell<Vec<glib::WeakRef<gtk::Widget>>>,
+    /// Where the pointer was last seen over the window, in its
+    /// coordinates (VIEW-073).
+    pub(super) pointer_now: Cell<Option<(f64, f64)>>,
+    /// Where the pointer was when a press hid the tooltip shown: tooltips
+    /// come back once it moved from there (VIEW-073).
+    pub(super) pointer_when_hidden: Cell<Option<(f64, f64)>>,
+    /// Whether the window hides GTK's tooltip popup when it shows while
+    /// tooltips are off (VIEW-073).
+    pub(super) watches_tooltip: Cell<bool>,
+    /// The menu or other popover with the keyboard, whose closing lets
+    /// tooltips back (VIEW-073).
+    pub(super) watched_popover: glib::WeakRef<gtk::Popover>,
     /// The tab a file drag hovers over, and the timer that shows it.
     pub(super) tab_hover: RefCell<Option<(TabId, glib::SourceId)>>,
     /// The scroll of a zone a file drag hovers near the edge of.

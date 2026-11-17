@@ -1243,3 +1243,264 @@ fn a_quick_access_tiles_menu_draws_no_ring_around_its_rows() {
         ]
     );
 }
+
+/// A folder in the test's own home with a file only it holds, deleted
+/// with the guard. Only check.py's private session has a disposable
+/// home folder to write to.
+fn file_in_home_folder(name: &str) -> tempfile::TempDir {
+    assert_eq!(
+        std::env::var("OX_ISOLATED_SESSION").as_deref(),
+        Ok("1"),
+        "the home folder is written to only in check.py's private session"
+    );
+    let folder = tempfile::Builder::new()
+        .prefix("Home search ")
+        .tempdir_in(gtk::glib::home_dir())
+        .expect("the test home has room");
+    fs::write(folder.path().join(name), b"Fictional plan\n").expect("fixture file");
+    folder
+}
+
+/// Whether the active pane shows the Home page rather than a listing.
+fn shows_home_page(test: &TestWindow) -> bool {
+    test.window.current_uri().as_deref() == Some(HOME_PAGE)
+        && test.window.folder_pane().page() == Some(crate::window::folder_pane::PanePage::Landing)
+}
+
+/// Search works from Home, as Windows 11 says: "To find relevant files
+/// from your PC and the cloud, search from File Explorer Home". The box
+/// reads "Search Home", Ctrl+E and F3 reach it, and typing searches the
+/// home folder and its subfolders with the usual results: "<query> -
+/// Search Results in Home". Back and Close search return to Home.
+///
+/// parity: HOME-035
+#[gtk::test]
+fn searching_from_home_searches_the_home_folder_and_its_subfolders() {
+    let _home_files = file_in_home_folder("Quarterly zebra plan.txt");
+    let fixture = Fixture::standard();
+    let test = home_window(&fixture);
+    let search = test.window.search_box();
+
+    assert!(search.is_sensitive(), "the search box works on Home");
+    assert_eq!(search.entry().placeholder_text().as_deref(), Some("Search Home"));
+    // The Search action, which Ctrl+F, Ctrl+E and F3 run.
+    test.window.folder_pane().focus_view();
+    test.activate("search", None);
+    let focus = gtk::prelude::GtkWindowExt::focus(&test.window);
+    assert!(
+        focus.is_some_and(|focus| focus.is_ancestor(search)),
+        "Search puts the keyboard in the search box"
+    );
+
+    test.search_for("zebra");
+    wait_until("the result from a subfolder of home", || {
+        test.names() == ["Quarterly zebra plan.txt"]
+    });
+    assert_eq!(test.active_tab_title(), "zebra - Search Results in Home");
+    assert!(!shows_home_page(&test), "the results show, not Home");
+    let count = test.status_count();
+    assert!(
+        count.starts_with("1 result"),
+        "the status bar counts the results: {count}"
+    );
+
+    test.activate("back", None);
+    wait_until("Back to Home", || shows_home_page(&test));
+    assert_eq!(test.search_text(), "");
+
+    test.search_for("zebra");
+    wait_until("the result again", || {
+        test.names() == ["Quarterly zebra plan.txt"]
+    });
+    test.activate("close-search", None);
+    wait_until("Close search returns to Home", || shows_home_page(&test));
+}
+
+/// With "Open Quick access on Home" off, Home is the home folder, which
+/// is searched as any folder is, with its subfolders.
+///
+/// parity: HOME-035, NAV-038
+#[gtk::test]
+fn searching_the_home_folder_finds_files_in_its_subfolders() {
+    let _home_files = file_in_home_folder("Quarterly zebra plan.txt");
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("home", None);
+    test.wait_for_listing("the home folder");
+    assert!(test.window.search_box().is_sensitive());
+
+    test.search_for("zebra");
+    wait_until("the result from a subfolder of home", || {
+        test.names() == ["Quarterly zebra plan.txt"]
+    });
+    assert_eq!(test.active_tab_title(), "zebra - Search Results in Home");
+}
+
+/// The keyboard focus is on the tile or row whose menu just closed, by
+/// Escape, by choosing an item that leaves Home where it is, or by a
+/// click away, so the arrows and Enter go on working there, as with the
+/// navigation pane's menus.
+///
+/// parity: HOME-016
+#[gtk::test]
+fn the_keyboard_comes_back_to_the_item_whose_menu_closed() {
+    let fixture = Fixture::standard();
+    let test = home_window(&fixture);
+    test.activate("pin-location", Some(&fixture.uri_of("Documents")));
+    let notes = fixture.uri_of("Notes 2.txt");
+    test.activate("add-to-favorites", Some(&notes));
+    home_page::choose_tab(body(&test), "Favorites");
+    wait_until("the tile and the favorite", || {
+        !home_page::tile_names(body(&test)).is_empty()
+            && home_page::list_names(body(&test)) == ["Notes 2.txt"]
+    });
+    let focus_is_on = |item: &gtk::FlowBoxChild| {
+        gtk::prelude::GtkWindowExt::focus(&test.window)
+            .is_some_and(|focus| focus == *item.upcast_ref::<gtk::Widget>() || focus.is_ancestor(item))
+    };
+
+    for (name, accelerator) in [
+        ("Documents", "<Shift>F10"),
+        ("Documents", "Menu"),
+        ("Notes 2.txt", "<Shift>F10"),
+        ("Notes 2.txt", "Menu"),
+    ] {
+        let item = home_page::item_named(body(&test), name);
+        item.grab_focus();
+        let menu = home_page::item_menu(body(&test), name, accelerator);
+        wait_until("the menu", || menu.is_visible());
+        menu.popdown();
+        wait_until(
+            &format!("the keyboard back on {name} after {accelerator}"),
+            || !menu.is_visible() && focus_is_on(&item),
+        );
+    }
+}
+
+/// A fictional home laid out as a real one: a cached folder (as a pinned
+/// standard folder is), an uncached test tree with the files three levels
+/// down, and a bigger folder beside them. Deleted with the guard.
+fn home_with_cached_and_uncached_folders() -> tempfile::TempDir {
+    let folder = file_in_home_folder("readme.txt");
+    let root = folder.path();
+    fs::create_dir_all(root.join("Documents/Reports")).expect("fixture folder");
+    fs::write(root.join("Documents/Reports/extra_1.txt"), b"x").expect("fixture file");
+    fs::create_dir_all(root.join("OX-Test/Deb32/Logs")).expect("fixture folder");
+    for name in ["extra_2.txt", "extra_3.txt", "extra_30.txt", "extra_31.txt"] {
+        fs::write(root.join("OX-Test/Deb32/Logs").join(name), b"x").expect("fixture file");
+    }
+    fs::create_dir_all(root.join("checkout/src")).expect("fixture folder");
+    for number in 0..400 {
+        fs::write(root.join(format!("checkout/src/module_{number}.rs")), b"x").expect("fixture file");
+    }
+    folder
+}
+
+/// Searching from Home finds files anywhere under the home folder, also
+/// in folders the search cache does not hold, three levels down, while
+/// another folder under home is cached: the Home page has no listing of
+/// its own, so its search walks the home folder. The home folder itself
+/// finds them too.
+///
+/// parity: HOME-035
+#[gtk::test]
+fn searching_from_home_finds_files_deep_in_uncached_folders() {
+    let home = home_with_cached_and_uncached_folders();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.start_search_cache();
+    let cached = ox_core::location::file_uri(&home.path().join("Documents"));
+    test.index_folder(&cached);
+    let expected = [
+        "extra_1.txt",
+        "extra_2.txt",
+        "extra_3.txt",
+        "extra_30.txt",
+        "extra_31.txt",
+    ];
+    let found = |test: &TestWindow| {
+        let mut names = test.names();
+        names.sort();
+        names == expected
+    };
+
+    open_quick_access_on_home(&test, true);
+    test.activate("home", None);
+    wait_until("the Home page", || {
+        test.window.current_uri().as_deref() == Some(HOME_PAGE)
+    });
+    test.search_for("extra");
+    wait_until("every extra file from Home", || found(&test));
+
+    test.activate("close-search", None);
+    open_quick_access_on_home(&test, false);
+    test.activate("home", None);
+    test.wait_for_listing("the home folder");
+    test.search_for("extra");
+    wait_until("every extra file from the home folder", || found(&test));
+}
+
+/// What the active pane shows of a search from Home, sampled once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SearchSample {
+    rows: u32,
+    searching: bool,
+    empty_page: bool,
+}
+
+/// Searching from Home in a big home folder with a cached folder in it:
+/// the files are listed as the walk finds them, and the pane never says "No matching items" while
+/// the search still runs or while it has rows; at the end every match is
+/// shown. Before, the empty page stayed up until the whole home folder
+/// had been walked, which on a real home can take minutes.
+///
+/// parity: HOME-035, SRCH-035
+#[gtk::test]
+fn searching_from_a_big_home_shows_matches_as_they_are_found() {
+    let home = home_with_cached_and_uncached_folders();
+    for folder in 0..1500 {
+        let path = home.path().join(format!("snap/part{}/dir{folder}", folder / 50));
+        fs::create_dir_all(&path).expect("fixture folder");
+        for file in 0..4 {
+            fs::write(path.join(format!("item_{file}.dat")), b"").expect("fixture file");
+        }
+    }
+    let fixture = Fixture::standard();
+    let test = home_window(&fixture);
+    test.start_search_cache();
+    test.index_folder(&ox_core::location::file_uri(&home.path().join("Documents")));
+    let tooltip = test.window.search_box().entry().tooltip_text();
+    assert_eq!(
+        tooltip.as_deref(),
+        Some("Search names in this folder and its subfolders. Folders cached in Settings → Search are searched faster."),
+        "the box does not claim to search cached names only"
+    );
+    let pane = test.window.folder_pane();
+    let sample = || SearchSample {
+        rows: test.window.folder_model().n_items(),
+        searching: test.status_count().starts_with("Searching"),
+        empty_page: pane.page() == Some(crate::window::folder_pane::PanePage::Empty),
+    };
+    let samples = std::cell::RefCell::new(Vec::new());
+
+    test.window.search_box().entry().set_text("extra");
+    wait_until("the search to end with every match", || {
+        let now = sample();
+        samples.borrow_mut().push(now);
+        !now.searching && now.rows == 5
+    });
+    let samples = samples.into_inner();
+
+    let wrong: Vec<_> = samples
+        .iter()
+        .filter(|sample| sample.empty_page && (sample.searching || sample.rows > 0))
+        .collect();
+    assert!(
+        wrong.is_empty(),
+        "no empty page while searching or with rows: {wrong:?}"
+    );
+    assert!(
+        samples.iter().any(|sample| sample.searching),
+        "the search was seen running"
+    );
+}

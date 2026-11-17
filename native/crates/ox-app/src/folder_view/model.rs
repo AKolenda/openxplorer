@@ -7,7 +7,7 @@
 //! natural order, ties by name ascending, as `filtered()` in app.js) and one
 //! multi-selection shared by the details and icon views.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::rc::Rc;
 
@@ -16,7 +16,7 @@ use gtk::{gio, glib};
 use ox_core::search::SearchFacets;
 
 use crate::folder_view::details::GroupTitle;
-use crate::folder_view::filter::{ChooserListing, FilterState};
+use crate::folder_view::filter::{ChooserListing, FilterState, Visibility};
 use crate::folder_view::grid::CollapsedGroups;
 use crate::folder_view::groups::{self, GroupClocks, Grouping};
 use crate::folder_view::item::FileItem;
@@ -43,6 +43,90 @@ pub(crate) struct SelectionSummary {
     pub all_files: bool,
 }
 
+impl SelectionSummary {
+    /// The counts of `items`.
+    fn of(items: &[FileItem]) -> Self {
+        let mut summary = Self {
+            all_files: true,
+            ..Self::default()
+        };
+        for item in items {
+            summary.count += 1;
+            match item.file_size() {
+                Some(size) => summary.bytes += size,
+                None => summary.all_files = false,
+            }
+        }
+        summary.all_files &= summary.count > 0;
+        summary
+    }
+}
+
+/// The selected items in display order, with their counts.
+#[derive(Debug)]
+struct SelectedItems {
+    items: Vec<FileItem>,
+    summary: SelectionSummary,
+}
+
+/// The selected items in display order, shared with the model rather than
+/// copied: with 100,000 items selected, a copy for each reader took more
+/// time than reading them.
+#[derive(Debug, Clone)]
+pub(crate) struct SelectedItemsRef(Rc<SelectedItems>);
+
+impl std::ops::Deref for SelectedItemsRef {
+    type Target = [FileItem];
+
+    fn deref(&self) -> &[FileItem] {
+        &self.0.items
+    }
+}
+
+impl PartialEq for SelectedItemsRef {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
+impl SelectedItemsRef {
+    /// The items as a slice.
+    pub(crate) fn as_slice(&self) -> &[FileItem] {
+        &self.0.items
+    }
+}
+
+/// Copies of the items, for the few readers that keep them.
+impl IntoIterator for SelectedItemsRef {
+    type Item = FileItem;
+    type IntoIter = std::vec::IntoIter<FileItem>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.items.clone().into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a SelectedItemsRef {
+    type Item = &'a FileItem;
+    type IntoIter = std::slice::Iter<'a, FileItem>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.items.iter()
+    }
+}
+
+/// The positions in `bitset`, ascending.
+fn positions_in(bitset: &gtk::Bitset) -> Vec<u32> {
+    let Some((rest, first)) = gtk::BitsetIter::init_first(bitset) else {
+        return Vec::new();
+    };
+    // A list model has at most u32::MAX positions.
+    let mut positions = Vec::with_capacity(usize::try_from(bitset.size()).unwrap_or(0));
+    positions.push(first);
+    positions.extend(rest);
+    positions
+}
+
 /// Filter, sort and selection over the active tab's store.
 #[derive(Debug)]
 pub(crate) struct FolderModel {
@@ -58,12 +142,41 @@ pub(crate) struct FolderModel {
     sort_options: SharedOptions,
     folders_first: gtk::CustomSorter,
     role_sorter: gtk::CustomSorter,
-    group_sorter: gtk::CustomSorter,
+    /// Sorts the items into their groups; replaced by a new one when the
+    /// items are grouped another way.
+    group_sorter: RefCell<gtk::CustomSorter>,
     /// The groups collapsed under their headings, shared by the views
     /// (VIEW-022).
     collapsed: CollapsedGroups,
     /// The store shown, whose collapsed groups stay while it does.
     store: RefCell<Option<glib::WeakRef<gio::ListStore>>>,
+    /// The selected items, once looked up; forgotten when the selection or
+    /// the items change.
+    selected: Rc<RefCell<Option<Rc<SelectedItems>>>>,
+    /// Whether the store shown holds a hidden item, and the handler that
+    /// keeps that up to date as items are added.
+    hidden: Rc<Cell<bool>>,
+    hidden_watch: RefCell<Option<(glib::WeakRef<gio::ListStore>, glib::SignalHandlerId)>>,
+}
+
+/// Whether the items need filtering at all: something narrows them beyond
+/// hidden files, or a hidden item is listed while hidden files are not
+/// shown.
+///
+/// GTK's filter model with no filter hands its items through as they are.
+/// With a filter, finding the nth shown item searches a bitset, which every
+/// lookup pays: sorting 100,000 items, selecting all of them or adding a
+/// batch of a listing then cost tenths of a second more. Most large
+/// folders hold no hidden files, so most of the time no filter is needed.
+fn needs_filter(state: &FilterState, has_hidden: bool) -> bool {
+    state.narrows() || (has_hidden && !state.shows_hidden())
+}
+
+/// Whether any of the `count` items of `store` from `position` is hidden.
+fn any_hidden(store: &gio::ListStore, position: u32, count: u32) -> bool {
+    (position..position.saturating_add(count))
+        .filter_map(|position| store.item(position).and_downcast::<FileItem>())
+        .any(|item| item.visibility() == Visibility::Hidden)
 }
 
 impl FolderModel {
@@ -81,7 +194,19 @@ impl FolderModel {
         let filter_model = gtk::FilterListModel::new(None::<gio::ListStore>, Some(filter.clone()));
         let sort_model = gtk::SortListModel::new(Some(filter_model.clone()), None::<gtk::Sorter>);
         let tree = FolderTree::new(&sort_model, &filter);
-        let selection = gtk::MultiSelection::new(Some(tree.model().clone()));
+        // Folders do not expand yet, so the selection shows the sorted items.
+        let selection = gtk::MultiSelection::new(Some(sort_model.clone()));
+        // Connected first, so the window's handlers, which run after, never
+        // read the selection of before the change.
+        let selected: Rc<RefCell<Option<Rc<SelectedItems>>>> = Rc::default();
+        let forget = Rc::clone(&selected);
+        selection.connect_selection_changed(move |_, _, _| {
+            forget.replace(None);
+        });
+        let forget = Rc::clone(&selected);
+        selection.connect_items_changed(move |_, _, _, _| {
+            forget.replace(None);
+        });
         let sort_options = SharedOptions::default();
         Self {
             filter_state,
@@ -92,10 +217,13 @@ impl FolderModel {
             selection,
             folders_first: folders_first(&sort_options),
             role_sorter: role_sorter(&sort_options),
-            group_sorter: group_sorter(&sort_options),
+            group_sorter: RefCell::new(group_sorter(&sort_options)),
             sort_options,
             collapsed: CollapsedGroups::default(),
             store: RefCell::default(),
+            selected,
+            hidden: Rc::default(),
+            hidden_watch: RefCell::default(),
         }
     }
 
@@ -142,29 +270,71 @@ impl FolderModel {
             // Other groups: none of them is collapsed.
             self.collapsed.borrow_mut().clear();
         }
-        self.change_sort_options(&self.group_sorter, |options| options.grouping = grouping);
-        if grouping.is_some() && was_grouped {
-            // GTK 4.14 sorts again when the section sorter changes but keeps
-            // the old section boundaries, so one group could show up split
-            // in two; setting the sorter again redraws the sections.
-            let selected = self.selected_uris();
-            self.sort_model.set_section_sorter(None::<&gtk::Sorter>);
-            self.sort_model.set_section_sorter(Some(&self.group_sorter));
-            self.select_uris(&selected);
+        if let (Some(grouping), true) = (&grouping, was_grouped) {
+            self.regroup(grouping);
+            return;
         }
+        let sorter = self.group_sorter.borrow().clone();
+        self.change_sort_options(&sorter, |options| options.grouping = grouping);
         if grouping.is_some() != was_grouped {
             let selected = self.selected_uris();
-            let sections = grouping.map(|_| self.group_sorter.clone());
+            let sections = grouping.map(|_| sorter.clone());
             self.sort_model.set_section_sorter(sections.as_ref());
             // GTK 4.14's tree list passes no groups through, so grouped
             // items are shown without it, and folders do not expand.
             if grouping.is_some() {
                 self.tree.set_expandable(false);
-                self.selection.set_model(Some(&self.sort_model));
-            } else {
-                self.selection.set_model(Some(self.tree.model()));
             }
+            self.selection.set_model(Some(&self.shown_items()));
             self.select_uris(&selected);
+        }
+    }
+
+    /// Groups the grouped items another way, or by the periods of a new
+    /// day.
+    ///
+    /// GTK 4.14 sorts again when the section sorter says it changed but
+    /// keeps the old section boundaries, so one group could show up split
+    /// in two; a new section sorter makes it draw the new ones. Setting it
+    /// straight away sorts once: going through no section sorter first
+    /// sorted the items without their groups while the views still headed
+    /// them by the new grouping, so nearly every item headed a group of
+    /// its own, which with 100,000 items froze the window for seconds and
+    /// overran the weak references one object may have.
+    fn regroup(&self, grouping: &(Grouping, GroupClocks)) {
+        let mut options = self.sort_options.get();
+        options.grouping = Some(*grouping);
+        if options == self.sort_options.get() {
+            return;
+        }
+        self.sort_options.set(options);
+        let sorter = group_sorter(&self.sort_options);
+        self.group_sorter.replace(sorter.clone());
+        let selected = self.selected_uris();
+        self.sort_model.set_section_sorter(Some(&sorter));
+        self.select_uris(&selected);
+    }
+
+    /// Lets folders expand in place (VIEW-035), or stops them, keeping the
+    /// selection: while they may, the selection shows the tree of the
+    /// sorted items and the expanded folders' contents, else the sorted
+    /// items themselves.
+    pub(crate) fn set_expandable(&self, expandable: bool) {
+        if self.tree.is_expandable() == expandable {
+            return;
+        }
+        let selected = self.selected_uris();
+        self.tree.set_expandable(expandable);
+        self.selection.set_model(Some(&self.shown_items()));
+        self.select_uris(&selected);
+    }
+
+    /// What the selection shows: the tree while folders may expand and the
+    /// items are not grouped, else the sorted items.
+    fn shown_items(&self) -> gio::ListModel {
+        match self.tree.model() {
+            Some(tree) if self.grouping().is_none() => tree.upcast(),
+            _ => self.sort_model.clone().upcast(),
         }
     }
 
@@ -188,7 +358,7 @@ impl FolderModel {
         let options = Rc::clone(&self.sort_options);
         Rc::new(move |item| {
             let (grouping, clocks) = options.get().grouping?;
-            Some(groups::group_in(grouping, item, &clocks).title)
+            Some(groups::group_in(grouping, item, &clocks).title.clone())
         })
     }
 
@@ -245,7 +415,94 @@ impl FolderModel {
             self.store.replace(store.map(ObjectExt::downgrade));
         }
         self.tree.collapse_all();
+        let watched = self
+            .hidden_watch
+            .borrow()
+            .as_ref()
+            .and_then(|(store, _)| store.upgrade());
+        if watched.as_ref() != store {
+            self.watch_hidden(store);
+        }
         self.filter_model.set_model(store);
+    }
+
+    /// Follows whether `store` holds a hidden item, giving the filter model
+    /// its filter when one arrives ([`needs_filter`]).
+    ///
+    /// Whether the new store needs the filter is settled before the filter
+    /// model takes it, so its items are filtered once. The handler is
+    /// connected after the filter model took the store, so it runs after
+    /// the filter model's own: giving the filter while the filter model and
+    /// the models over it were still taking in new items crashed GTK.
+    fn watch_hidden(&self, store: Option<&gio::ListStore>) {
+        if let Some((old, handler)) = self.hidden_watch.take() {
+            if let Some(old) = old.upgrade() {
+                old.disconnect(handler);
+            }
+        }
+        let has_hidden = store.is_some_and(|store| any_hidden(store, 0, store.n_items()));
+        self.hidden.set(has_hidden);
+        let needed = needs_filter(&self.filter_state.borrow(), has_hidden);
+        if needed != self.filter_model.filter().is_some() {
+            // Let go of the old store first, so it is not filtered again
+            // on its way out.
+            self.filter_model.set_model(None::<&gio::ListStore>);
+            self.apply_filter_need();
+        }
+        let Some(store) = store else { return };
+        // The filter model takes the store first, so its handler runs
+        // before this one.
+        self.filter_model.set_model(Some(store));
+        let hidden = Rc::clone(&self.hidden);
+        let state = Rc::clone(&self.filter_state);
+        let filter_model = self.filter_model.clone();
+        let filter = self.filter.clone();
+        let handler = store.connect_items_changed(move |store, position, _, added| {
+            if !hidden.get() && any_hidden(store, position, added) {
+                hidden.set(true);
+                if needs_filter(&state.borrow(), true) {
+                    filter_model.set_filter(Some(&filter));
+                }
+            } else if hidden.get() && store.n_items() == 0 {
+                // Emptied to list another folder in the same tab.
+                hidden.set(false);
+                if !needs_filter(&state.borrow(), false) {
+                    filter_model.set_filter(None::<&gtk::Filter>);
+                }
+            }
+        });
+        self.hidden_watch.replace(Some((store.downgrade(), handler)));
+    }
+
+    /// Gives the items the filter before hidden items are added to
+    /// `store`, while it is the store shown, so they are never handed
+    /// through even for a moment. The listing and the merge of a reload
+    /// call this; the store's own handler catches the rest after the fact.
+    pub(crate) fn expect_hidden_items(&self, store: &gio::ListStore) {
+        let watched = self
+            .hidden_watch
+            .borrow()
+            .as_ref()
+            .and_then(|(store, _)| store.upgrade());
+        if watched.as_ref() == Some(store) && !self.hidden.get() {
+            self.hidden.set(true);
+            self.apply_filter_need();
+        }
+    }
+
+    /// Whether the items pass through a filter now.
+    #[cfg(test)]
+    pub(crate) fn is_filtering(&self) -> bool {
+        self.filter_model.filter().is_some()
+    }
+
+    /// Gives the filter model its filter while items must be left out, and
+    /// none while every item is shown.
+    fn apply_filter_need(&self) {
+        let needed = needs_filter(&self.filter_state.borrow(), self.hidden.get());
+        if needed != self.filter_model.filter().is_some() {
+            self.filter_model.set_filter(needed.then_some(&self.filter));
+        }
     }
 
     /// Items shown (after filtering), expanded folders' contents included.
@@ -316,25 +573,56 @@ impl FolderModel {
         // filter's callback, which borrows the state too.
         let changed = update(&mut self.filter_state.borrow_mut());
         if changed {
-            self.filter.changed(gtk::FilterChange::Different);
+            let was_filtering = self.filter_model.filter().is_some();
+            self.apply_filter_need();
+            // A filter just given has filtered the items; expanded
+            // folders' contents are filtered by the same filter, so it is
+            // still told when folders are expanded.
+            let is_filtering = self.filter_model.filter().is_some();
+            if (was_filtering && is_filtering) || self.tree.model().is_some() {
+                self.filter.changed(gtk::FilterChange::Different);
+            }
         }
         changed
     }
 
     /// Display positions of the selected items, ascending.
+    ///
+    /// Walks the selection's bitset once: asking it for each nth member
+    /// instead searched the bitset again for every one, which with 100,000
+    /// items selected took most of a second.
     pub(crate) fn selected_positions(&self) -> Vec<u32> {
-        let bitset = self.selection.selection();
-        // A list model has at most u32::MAX positions.
-        let count = u32::try_from(bitset.size()).unwrap_or(u32::MAX);
-        (0..count).map(|nth| bitset.nth(nth)).collect()
+        positions_in(&self.selection.selection())
     }
 
     /// The selected items in display order.
-    pub(crate) fn selected_items(&self) -> Vec<FileItem> {
-        self.selected_positions()
+    ///
+    /// Many parts of the window ask after each change of the selection
+    /// (the status bar, the details pane, the commands), so the items are
+    /// looked up once and kept until the selection or the items change.
+    pub(crate) fn selected_items(&self) -> SelectedItemsRef {
+        SelectedItemsRef(self.selected())
+    }
+
+    /// The selected items and their summary, looked up again only after
+    /// the selection or the items changed.
+    fn selected(&self) -> Rc<SelectedItems> {
+        if let Some(selected) = self.selected.borrow().as_ref() {
+            return Rc::clone(selected);
+        }
+        #[cfg(test)]
+        tests::LOOKUPS.with(|lookups| lookups.set(lookups.get() + 1));
+        let items: Vec<FileItem> = self
+            .selected_positions()
             .into_iter()
             .filter_map(|position| self.item(position))
-            .collect()
+            .collect();
+        let selected = Rc::new(SelectedItems {
+            summary: SelectionSummary::of(&items),
+            items,
+        });
+        self.selected.replace(Some(Rc::clone(&selected)));
+        selected
     }
 
     /// The first selected position, if any.
@@ -348,19 +636,7 @@ impl FolderModel {
 
     /// Count and size of the selection.
     pub(crate) fn summary(&self) -> SelectionSummary {
-        let mut summary = SelectionSummary {
-            all_files: true,
-            ..SelectionSummary::default()
-        };
-        for item in self.selected_items() {
-            summary.count += 1;
-            match item.file_size() {
-                Some(size) => summary.bytes += size,
-                None => summary.all_files = false,
-            }
-        }
-        summary.all_files &= summary.count > 0;
-        summary
+        self.selected().summary
     }
 
     /// Selects only `position`.
@@ -525,6 +801,181 @@ mod tests {
         let (model, _store) = model_with(&["a.txt", "b.txt"]);
         assert_eq!(model.name_at(1).as_deref(), Some("b.txt"));
         assert_eq!(model.name_at(2), None);
+    }
+
+    /// While folders may not expand (the default), the selection shows the
+    /// sorted items themselves, so a batch of a large folder's listing is
+    /// not copied into a tree of every item; while they may, it shows the
+    /// tree, and the selection survives each switch.
+    ///
+    /// parity: PERF-002
+    #[gtk::test]
+    fn the_selection_shows_a_tree_only_while_folders_may_expand() {
+        let (model, store) = model_with(&["a.txt", "b.txt"]);
+        let shows_sorted = |model: &FolderModel| {
+            model
+                .selection()
+                .model()
+                .and_downcast::<gtk::SortListModel>()
+                .is_some()
+        };
+        assert!(shows_sorted(&model));
+        model.select_uris(&[uri("b.txt")]);
+
+        model.set_expandable(true);
+        assert!(model
+            .selection()
+            .model()
+            .and_downcast::<gtk::TreeListModel>()
+            .is_some());
+        assert_eq!(model.selected_uris(), [uri("b.txt")]);
+        store.append(&FileItem::new(file_entry("c.txt")));
+        assert_eq!(model.n_items(), 3);
+
+        model.set_expandable(false);
+        assert!(shows_sorted(&model));
+        assert_eq!(model.selected_uris(), [uri("b.txt")]);
+        assert_eq!(model.n_items(), 3);
+    }
+
+    thread_local! {
+        /// How often the model looked the selected items up.
+        pub(super) static LOOKUPS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+    }
+
+    fn lookups() -> u32 {
+        LOOKUPS.with(std::cell::Cell::get)
+    }
+
+    /// The status bar, the details pane and the commands each ask for the
+    /// selection after it changes; with 100,000 items selected each asking
+    /// looked every item up again. Now one change costs one lookup.
+    ///
+    /// parity: PERF-004
+    #[gtk::test]
+    fn the_selected_items_are_looked_up_once_per_change() {
+        let names: Vec<String> = (0..3000).map(|number| format!("file {number}.txt")).collect();
+        let names: Vec<&str> = names.iter().map(String::as_str).collect();
+        let (model, store) = model_with(&names);
+        model.select_all();
+        let before = lookups();
+        for _ in 0..5 {
+            assert_eq!(model.summary().count, 3000);
+            assert_eq!(model.selected_items().len(), 3000);
+            assert_eq!(model.selected_uris().len(), 3000);
+        }
+        assert_eq!(lookups() - before, 1);
+        assert!(
+            std::ptr::eq(model.selected_items().as_ptr(), model.selected_items().as_ptr()),
+            "readers share the items rather than copy them"
+        );
+
+        model.select_only(1);
+        assert_eq!(model.summary().count, 1, "a new selection is looked up again");
+        assert_eq!(model.selected_items()[0].entry().name, "file 1.txt");
+        store.remove(1);
+        assert_eq!(model.summary().count, 0, "so are changed items");
+        assert_eq!(lookups() - before, 3);
+    }
+
+    /// The positions of a selection come from one walk over it, in order.
+    #[gtk::test]
+    fn selected_positions_are_ascending_and_complete() {
+        let selected = gtk::Bitset::new_empty();
+        selected.add_range(5, 3);
+        selected.add(66_000);
+        assert_eq!(positions_in(&selected), [5, 6, 7, 66_000]);
+        assert!(positions_in(&gtk::Bitset::new_empty()).is_empty());
+    }
+
+    /// The items pass GTK's filter model untouched while nothing is left
+    /// out, so looking them up costs no bitset search; a search, or a
+    /// hidden item while hidden files are not shown, brings the filter
+    /// back.
+    ///
+    /// parity: PERF-004
+    #[gtk::test]
+    fn the_items_are_filtered_only_while_something_is_left_out() {
+        let (model, store) = model_with(&["a.txt", "b.txt", "report.txt"]);
+        let filtering = |model: &FolderModel| model.filter_model.filter().is_some();
+        assert!(!filtering(&model));
+        assert_eq!(model.n_items(), 3);
+
+        model.set_query("report");
+        assert!(filtering(&model));
+        assert_eq!(model.n_items(), 1);
+        model.set_query("");
+        assert!(!filtering(&model));
+        assert_eq!(model.n_items(), 3);
+
+        let mut cache = file_entry(".cache");
+        cache.is_hidden = true;
+        store.append(&FileItem::new(cache));
+        assert!(filtering(&model), "a hidden item arrived");
+        assert_eq!(model.n_items(), 3, "and is left out");
+        model.set_show_hidden(true);
+        assert!(!filtering(&model));
+        assert_eq!(model.n_items(), 4);
+        model.set_show_hidden(false);
+        assert_eq!(model.n_items(), 3);
+
+        let (other, _store) = model_with(&["c.txt"]);
+        other.set_store(Some(&store));
+        assert!(
+            filtering(&other),
+            "a store with hidden items is filtered when shown"
+        );
+        assert_eq!(other.n_items(), 3);
+    }
+
+    /// Grouping the items another way sorts them into the new groups at
+    /// once. Going through no groups first showed the items sorted by name
+    /// under headings of the new grouping, so each item headed a group of
+    /// its own: thousands of headings, which with 100,000 items froze the
+    /// window and overran the weak references one object may have.
+    ///
+    /// parity: VIEW-022
+    #[gtk::test]
+    fn grouping_another_way_never_heads_each_item_on_its_own() {
+        use crate::folder_view::grid::GroupedSelection;
+        use crate::folder_view::sort_roles::{SortBy, SortState};
+        use crate::folder_view::sorting::SortColumn;
+        use ox_core::grouping::GroupBy;
+
+        let store = gio::ListStore::new::<FileItem>();
+        for number in 0..3000_u64 {
+            let mut entry = file_entry(&format!(
+                "f{number:04}.{}",
+                ["txt", "png", "pdf"][usize::try_from(number % 3).unwrap()]
+            ));
+            entry.modified = Some(1_600_000_000 + number * 86_400);
+            store.append(&FileItem::new(entry));
+        }
+        let model = FolderModel::new();
+        model.attach_column_sorter(&column_sorter(SortColumn::Name).upcast());
+        model.set_store(Some(&store));
+        let sort = SortState {
+            by: SortBy::Column(SortColumn::Name),
+            direction: SortDirection::Ascending,
+        };
+        model.set_grouping(Grouping::of(GroupBy::Modified, sort));
+        let grouped = GroupedSelection::new(
+            model.selection(),
+            model.group_titles(),
+            model.collapsed_groups(),
+            1,
+        );
+        let most = Rc::new(std::cell::Cell::new(0));
+        let seen = Rc::clone(&most);
+        grouped.connect_items_changed(move |grouped, _, _, _| {
+            let groups = grouped.layout().map_or(0, |layout| layout.groups().len());
+            seen.set(seen.get().max(groups));
+        });
+
+        model.set_grouping(Grouping::of(GroupBy::Type, sort));
+        assert_eq!(grouped.layout().map(|layout| layout.groups().len()), Some(3));
+        assert!(most.get() <= 30, "{} groups were headed at once", most.get());
+        assert_eq!(model.n_items(), 3000);
     }
 
     /// parity: NAV-014
