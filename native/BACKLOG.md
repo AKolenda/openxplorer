@@ -76,7 +76,9 @@ is missing.
   compressed TAR, and ZIPs with the traditional ZIP password, which ask for
   it. Compress to › 7z File writes 7z archives (sevenz-rust2); browsing and
   extracting 7z is not supported yet. RAR and AES-encrypted ZIPs still need
-  additional codecs.
+  additional codecs. A TAR's relative links that stay inside the archive are
+  listed and extracted; ZIP links stay hidden and refused. Search inside an
+  opened archive is still unavailable.
 - **Flatpak:** "Show in folder" answers only while OpenXplorer runs unless the
   desktop's Background portal starts it at login (native/packaging/README.md,
   "Differences inside the Flatpak"). Flathub publication needs the owner.

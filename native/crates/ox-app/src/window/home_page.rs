@@ -45,6 +45,7 @@ use ox_core::location::{LocationContext, RECENT_URI};
 use ox_core::places::Place;
 use ox_core::settings::{Preferences, SettingsError};
 
+use crate::folder_view::shown_name::{shown_name, Extensions};
 use crate::i18n::message_id;
 use crate::icons::{self, Art, ArtImage, Icon, Storage};
 use crate::places::Places;
@@ -79,8 +80,10 @@ const TILE_EMBLEM: i32 = 20;
 /// tiles about 284 pixels apart across and 60 down.
 const TILE_CONTENT: (i32, i32) = (284, 60);
 /// A tile's height in Compact view, which draws the tiles closer as it
-/// does the list's rows: the folder and its three lines still fit.
-const COMPACT_TILE_HEIGHT: i32 = 48;
+/// does the list's rows: the folder and its three lines still fit, with
+/// a few pixels left above and below, so a pin never touches the name of
+/// the tile under it.
+const COMPACT_TILE_HEIGHT: i32 = 54;
 /// Pixels of the pin glyph under a pinned folder's location.
 const PIN_GLYPH: i32 = 12;
 /// Most tiles a row of Quick access holds; the pane's width decides.
@@ -422,8 +425,8 @@ const LOCATION_WIDTH: i32 = 300;
 /// Home's spacing, measured on Windows 11's Home: its chevrons about 30
 /// pixels in from the pane's edge, the first tile's name about 37
 /// pixels under the heading's middle, 45 pixels from the last tiles to
-/// the pills, 51 from the pills' middle to the column headers' and 50
-/// from there to the first row's.
+/// the pills, 51 from the pills' middle to the column headers', and the
+/// first row right under the headers, one row (36 pixels) from theirs.
 const SECTION_INDENT: i32 = 14;
 /// Quick access's tiles stand further in than the heading: their folders
 /// about 92 pixels from the pane's edge, as in Windows 11.
@@ -432,7 +435,6 @@ const LIST_INDENT: i32 = 48;
 const TILES_BELOW_HEADING: i32 = 6;
 const PILLS_BELOW_TILES: i32 = 45;
 const HEADER_BELOW_PILLS: i32 = 19;
-const ROWS_BELOW_HEADER: i32 = 14;
 /// The narrowest Name gets in a narrow window, and the narrowest Date
 /// accessed and File location.
 const NARROWEST_NAME: i32 = 140;
@@ -522,17 +524,30 @@ struct Columns {
     location: gtk::SizeGroup,
     home: std::path::PathBuf,
     pitch: i32,
+    /// Whether names show the extensions of known types, as the file
+    /// list shows them (VIEW-069).
+    extensions: Extensions,
 }
 
 impl Columns {
+    /// Columns for the rows of `page`, named as its window names files.
+    fn for_page(page: &gtk::Box) -> Self {
+        let extensions = page
+            .root()
+            .and_downcast::<BrowserWindow>()
+            .map_or_else(Extensions::default, |window| window.file_name_extensions());
+        Self::new(glib::home_dir(), is_compact(page), extensions)
+    }
+
     /// Columns for rows `pitch` pixels apart.
-    fn new(home: std::path::PathBuf, compact: bool) -> Self {
+    fn new(home: std::path::PathBuf, compact: bool, extensions: Extensions) -> Self {
         Self {
             name: gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal),
             date: gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal),
             location: gtk::SizeGroup::new(gtk::SizeGroupMode::Horizontal),
             home,
             pitch: if compact { COMPACT_ROW_PITCH } else { ROW_PITCH },
+            extensions,
         }
     }
 
@@ -553,9 +568,10 @@ impl Columns {
         let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         row.add_css_class("home-list-header");
         row.set_halign(gtk::Align::Start);
-        row.set_size_request(-1, ROW_PITCH);
+        // As tall as a row, and right above the first: no empty band
+        // between the titles and the rows, in the Compact view too.
+        row.set_size_request(-1, self.pitch);
         row.set_margin_top(HEADER_BELOW_PILLS);
-        row.set_margin_bottom(ROWS_BELOW_HEADER);
         // Name stands over the rows' icons, as in Windows 11; the rows'
         // indent is a spacer, as a size group counts a cell's margins.
         let spacer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
@@ -601,7 +617,10 @@ fn file_row(name: &str, uri: &str, accessed: Option<u64>, favorites: &[String], 
     let icon = ArtImage::new(Art::for_file_name(name), ROW_ICON);
     icon.set_margin_end(ICON_GAP);
     icon.set_valign(gtk::Align::Center);
-    let name_text = label(name, "home-row-name");
+    // Named as the file list names it: without a known type's extension
+    // while extensions are hidden.
+    let shown = shown_name(name, false, columns.extensions);
+    let name_text = label(shown, "home-row-name");
     // The icon and the name share the Name column, as in Windows 11.
     let name_cell = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     name_cell.append(&icon);
@@ -623,7 +642,7 @@ fn file_row(name: &str, uri: &str, accessed: Option<u64>, favorites: &[String], 
     row.append(&date);
     row.append(&location);
     let child = gtk::FlowBoxChild::builder().child(&row).name(uri).build();
-    child.update_property(&[gtk::accessible::Property::Label(name)]);
+    child.update_property(&[gtk::accessible::Property::Label(shown)]);
     // Compared by the canonical form Favorites keeps (HOME-014).
     let is_favorite = ox_core::settings::favorite_key(uri).is_some_and(|key| favorites.contains(&key));
     Item {
@@ -1578,7 +1597,7 @@ fn read_favorite_time(uri: &str, date: glib::WeakRef<gtk::Label>, cancellable: &
 /// one slow share delays only its own row, and no longer once Home is
 /// drawn again or left.
 fn list_favorites(page: &gtk::Box, list: &gtk::Box, favorites: &[String]) {
-    let columns = Columns::new(glib::home_dir(), is_compact(page));
+    let columns = Columns::for_page(page);
     let rows: Vec<Item> = favorites
         .iter()
         .map(|uri| file_row(&favorite_name(uri), uri, None, favorites, &columns))
@@ -1626,7 +1645,7 @@ fn list_recent(page: &gtk::Box, list: &gtk::Box, favorites: Vec<String>) {
             return;
         }
         let kept = KeptFocus::read(&page);
-        let columns = Columns::new(glib::home_dir(), is_compact(&page));
+        let columns = Columns::for_page(&page);
         let rows = files
             .iter()
             .map(|(entry, target, used)| file_row(&entry.name, target, *used, &favorites, &columns))
@@ -1803,6 +1822,24 @@ pub(crate) fn tile_names(page: &gtk::Box) -> Vec<String> {
         .flat_map(descendants_of_type::<gtk::FlowBoxChild>)
         .filter_map(|child| item_name(&child))
         .collect()
+}
+
+/// The pin under a Quick access tile's name and location, for tests.
+#[cfg(test)]
+pub(crate) fn tile_pin(tile: &gtk::Widget) -> gtk::Widget {
+    descendants_with_class(tile, "home-pin")
+        .into_iter()
+        .next()
+        .expect("a tile's pin")
+}
+
+/// A Quick access tile's name, for tests.
+#[cfg(test)]
+pub(crate) fn tile_name_label(tile: &gtk::Widget) -> gtk::Widget {
+    descendants_with_class(tile, "tile-name")
+        .into_iter()
+        .next()
+        .expect("a tile's name")
 }
 
 /// The names of the rows of the list shown, for tests.

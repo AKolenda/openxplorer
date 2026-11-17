@@ -255,13 +255,18 @@ fn properties_on_tab(
     }
 }
 
-/// The dialog window over `window` that opened last, if any.
+/// The dialog window over `window`, or over the progress window of the
+/// operation it started (as "Move by copying?" is), that opened last, if
+/// any.
 fn last_dialog(window: &BrowserWindow) -> Option<gtk::Window> {
     let parent: &gtk::Window = window.upcast_ref();
+    let is_ours = |owner: Option<gtk::Window>| {
+        owner.is_some_and(|owner| &owner == parent || owner.is::<crate::window::ProgressWindow>())
+    };
     gtk::Window::list_toplevels()
         .into_iter()
         .filter_map(|toplevel| toplevel.downcast::<crate::dialog::Dialog>().ok())
-        .filter(|dialog| dialog.is_visible() && dialog.transient_for().as_ref() == Some(parent))
+        .filter(|dialog| dialog.is_visible() && is_ours(dialog.transient_for()))
         .map(Cast::upcast)
         .last()
 }
