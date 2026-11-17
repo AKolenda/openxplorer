@@ -672,6 +672,9 @@ fn load_pictures(conflict: &NameConflict, pictures: &[gtk::Image; 2], size: i32)
                 // they are, as before.
                 local_only: false,
                 target_uri: None,
+                // A file of a mounted share is found by the file system
+                // check, and made on the network's slots.
+                on_network: false,
             };
             if let Some(texture) = preview(request).await {
                 picture.set_paintable(Some(&texture));
