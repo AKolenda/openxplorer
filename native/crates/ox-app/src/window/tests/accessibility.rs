@@ -546,7 +546,10 @@ fn large_text_widens_default_columns_and_the_navigation_pane() {
 
     assert_eq!(large, (282, 270, 420), "twice the text, wider columns and pane");
     assert_eq!(name_room, 280, "Name keeps room for names");
-    assert!(header_width >= 280 + 282 + 270, "the list scrolls sideways: {header_width}");
+    assert!(
+        header_width >= 280 + 282 + 270,
+        "the list scrolls sideways: {header_width}"
+    );
     assert_eq!(back, (176, 135, 210));
     assert_eq!(dragged, 150, "a width the user chose stays");
 }
