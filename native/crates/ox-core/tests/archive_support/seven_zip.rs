@@ -289,5 +289,5 @@ pub const COPY: [u8; 1] = [0x00];
 pub const LZMA2: [u8; 1] = [0x21];
 /// The AES-256 + SHA-256 method id.
 pub const AES: [u8; 4] = [0x06, 0xf1, 0x07, 0x01];
-/// The PPMd method id.
+/// The `PPMd` method id.
 pub const PPMD: [u8; 3] = [0x03, 0x04, 0x01];
