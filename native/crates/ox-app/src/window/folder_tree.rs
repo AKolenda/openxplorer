@@ -364,7 +364,14 @@ impl FolderTree {
             return false;
         };
         if row.is_expanded() {
-            self.focus_row(position + 1);
+            // Only to a subfolder: the next row of a folder without any
+            // is the folder after it.
+            let first_child = self
+                .row(position + 1)
+                .filter(|next| next.depth() == row.depth() + 1);
+            if first_child.is_some() {
+                self.focus_row(position + 1);
+            }
         } else {
             row.set_expanded(true);
             model::load_children(&row);

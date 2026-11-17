@@ -7,7 +7,9 @@
 //! are read from the live bindings: the application's accelerators as
 //! GTK holds them, and the key tables the window installs its shortcut
 //! controllers from. Only the names and groups are written here, so the
-//! list cannot disagree with the keys that work.
+//! list cannot disagree with the keys that work; the few keys taken where
+//! the keyboard is, with no binding to read, such as Shift with the arrow
+//! keys, are written out with their names ([`keys_without_a_binding`]).
 
 use std::collections::BTreeMap;
 
@@ -18,6 +20,7 @@ use super::context_menu::{MENU_KEY, SHIFT_F10_KEY};
 use super::file_ops::file_key_bindings;
 use super::focus_regions::region_key_bindings;
 use super::folder_tree::tree_key_bindings;
+use super::input::BACK_KEY;
 use super::navigation_buttons::navigation_key_bindings;
 use super::selection_keys::selection_key_bindings;
 use super::window_keys::{window_key_bindings, REVEAL_KEY_NAME};
@@ -232,7 +235,90 @@ fn key_label(key: gdk::Key, modifiers: gdk::ModifierType) -> String {
     if let (true, Some(symbol)) = (modifiers.is_empty() && keypad.contains(&key), key.to_unicode()) {
         return ox_core::i18n::format_message("Num {key}", &[("key", &symbol.to_string())]);
     }
-    gtk::accelerator_get_label(key, modifiers).to_string()
+    let label = gtk::accelerator_get_label(key, modifiers).to_string();
+    // Enter and Backspace as Windows names them ("Alt+Enter"), where GTK
+    // reads "Return" and "BackSpace".
+    let windows_name = match key {
+        gdk::Key::Return => Some(("Return", ox_core::i18n::gettext_static("Enter"))),
+        gdk::Key::BackSpace => Some(("BackSpace", ox_core::i18n::gettext_static("Backspace"))),
+        _ => None,
+    };
+    match windows_name.and_then(|(gtk_name, name)| Some((label.strip_suffix(gtk_name)?, name))) {
+        Some((modifiers, name)) => format!("{modifiers}{name}"),
+        None => label,
+    }
+}
+
+/// The keys the window takes where the keyboard is, with no binding of
+/// their own to read, each with its command and group, in the words of
+/// Microsoft's list of File Explorer's keys
+/// (<https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows>):
+/// the file list's arrows with Shift or Ctrl, Ctrl+Space, Home and End
+/// (`grid_keys.rs`, GTK's lists), Left and Right in the navigation pane
+/// (`sidebar/collapsing.rs`), Alt alone (`focus_regions.rs`) and Ctrl with
+/// the scroll wheel (`view_zoom.rs`).
+fn keys_without_a_binding() -> Vec<ShortcutRow> {
+    // A single key reads as GTK names it in the user's language, as the
+    // bound keys do; a group of keys is a phrase of its own.
+    let key = |accelerator: &str| key_labels([accelerator]).concat();
+    [
+        (
+            Group::Navigation,
+            ox_core::i18n::gettext_static(
+                "Collapse the folder, or go to the folder it is in (navigation pane)",
+            ),
+            key("Left"),
+        ),
+        (
+            Group::Navigation,
+            ox_core::i18n::gettext_static(
+                "Expand the folder, or go to its first subfolder (navigation pane)",
+            ),
+            key("Right"),
+        ),
+        (
+            Group::Navigation,
+            ox_core::i18n::gettext_static("Move to the command bar"),
+            ox_core::i18n::gettext_static("Alt").to_owned(),
+        ),
+        (
+            Group::Selection,
+            ox_core::i18n::gettext_static("Select several items"),
+            ox_core::i18n::gettext_static("Shift+arrow keys").to_owned(),
+        ),
+        (
+            Group::Selection,
+            ox_core::i18n::gettext_static("Move to an item without selecting it"),
+            ox_core::i18n::gettext_static("Ctrl+arrow keys").to_owned(),
+        ),
+        (
+            Group::Selection,
+            ox_core::i18n::gettext_static("Select or clear the item the keyboard is on"),
+            key("<Primary>space"),
+        ),
+        (
+            Group::Selection,
+            ox_core::i18n::gettext_static("First item"),
+            key("Home"),
+        ),
+        (
+            Group::Selection,
+            ox_core::i18n::gettext_static("Last item"),
+            key("End"),
+        ),
+        (
+            Group::View,
+            ox_core::i18n::gettext_static("Change the view"),
+            ox_core::i18n::gettext_static("Ctrl+scroll wheel").to_owned(),
+        ),
+    ]
+    .into_iter()
+    .map(|(group, label, keys)| ShortcutRow {
+        group,
+        label: label.to_owned(),
+        keys: vec![keys],
+    })
+    .collect()
 }
 
 /// Every binding: the action's detailed name and its keys as GTK parses
@@ -253,6 +339,9 @@ fn bindings(app: &gtk::Application) -> Vec<(String, String)> {
         .chain([
             ("menu-key".to_owned(), MENU_KEY),
             ("win.context-menu".to_owned(), SHIFT_F10_KEY),
+            // The file list's Backspace goes back (input.rs), as
+            // Microsoft lists it beside Alt+Left.
+            ("win.back".to_owned(), BACK_KEY),
         ]);
     bindings.extend(tables.map(|(name, keys)| (name, keys.to_owned())));
     bindings
@@ -296,6 +385,7 @@ fn shortcut_rows(app: &gtk::Application) -> (Vec<ShortcutRow>, Vec<String>) {
     for (row, triggers) in rows.iter_mut().zip(&triggers) {
         row.keys = key_labels(triggers.iter().map(String::as_str));
     }
+    rows.extend(keys_without_a_binding());
     rows.sort_by_key(|row| row.group);
     (rows, unknown)
 }
@@ -605,6 +695,69 @@ mod tests {
         assert!(shown_after("f3").contains(&"Search".to_owned()));
         assert!(shown_after("alt+p").contains(&"Details pane".to_owned()));
         dialog.finish();
+    }
+
+    /// The keys of Microsoft's File Explorer list that work here without
+    /// a binding of their own are listed too, in Microsoft's words
+    /// (<https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows>):
+    /// Backspace beside Alt+Left, the arrow keys with Shift and Ctrl, Home
+    /// and End, Left and Right in the navigation pane, Ctrl with the scroll
+    /// wheel and Alt alone; and Enter is named Enter, as Windows names it.
+    ///
+    /// parity: CMD-032
+    #[gtk::test]
+    fn the_shortcuts_window_lists_the_keys_that_work_without_a_binding() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let (rows, _) = test.window.shortcut_rows();
+        let row = |label: &str| {
+            rows.iter()
+                .find(|row| row.label == label)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{label} is listed: {:?}",
+                        rows.iter().map(|row| &row.label).collect::<Vec<_>>()
+                    )
+                })
+                .clone()
+        };
+        assert!(
+            row("Back").keys.contains(&"Backspace".to_owned()),
+            "{:?}",
+            row("Back").keys
+        );
+        assert_eq!(row("Properties").keys, ["Alt+Enter"]);
+        for (label, keys, group) in [
+            ("Select several items", "Shift+arrow keys", Group::Selection),
+            (
+                "Move to an item without selecting it",
+                "Ctrl+arrow keys",
+                Group::Selection,
+            ),
+            (
+                "Select or clear the item the keyboard is on",
+                "Ctrl+Space",
+                Group::Selection,
+            ),
+            ("First item", "Home", Group::Selection),
+            ("Last item", "End", Group::Selection),
+            (
+                "Collapse the folder, or go to the folder it is in (navigation pane)",
+                "Left",
+                Group::Navigation,
+            ),
+            (
+                "Expand the folder, or go to its first subfolder (navigation pane)",
+                "Right",
+                Group::Navigation,
+            ),
+            ("Move to the command bar", "Alt", Group::Navigation),
+            ("Change the view", "Ctrl+scroll wheel", Group::View),
+        ] {
+            let listed = row(label);
+            assert_eq!(listed.keys, [keys], "{label}");
+            assert_eq!(listed.group, group, "{label}");
+        }
     }
 
     /// The search's words: one spelling, the separators between keys

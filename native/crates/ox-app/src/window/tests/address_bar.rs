@@ -382,3 +382,30 @@ fn the_title_shows_the_full_path_when_the_settings_ask() {
         test.window.title().as_deref() == Some(&format!("{path} — OpenXplorer"))
     });
 }
+
+/// Down on a crumb opens its folder's subfolders; Escape closes the menu
+/// and gives the keyboard back to that crumb, so Left, Right and Down go
+/// on from there. It went on to the search box.
+///
+/// parity: NAV-017, ACC-005
+#[gtk::test]
+fn closing_a_crumbs_menu_gives_the_keyboard_back_to_the_crumb() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let crumbs = test.window.address_bar().crumb_buttons();
+    // The folder above Documents, which has subfolders to list.
+    let current = crumbs[crumbs.len() - 2].clone();
+    current.grab_focus();
+    assert!(press_key(&current, gdk::Key::Down), "Down opens the crumb's menu");
+    let menu = open_menu(&test);
+    crate::test_support::harness::wait_for_frames(&menu, 2);
+    // Escape closes a menu as GTK's popovers do.
+    menu.popdown();
+    wait_until("the menu to close", || !menu.is_visible());
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    assert_eq!(
+        GtkWindowExt::focus(&test.window),
+        Some(current.clone().upcast()),
+        "the keyboard is back on the crumb"
+    );
+}

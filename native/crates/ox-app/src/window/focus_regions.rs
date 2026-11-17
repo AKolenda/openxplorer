@@ -4,7 +4,9 @@
 //!
 //! Windows Explorer cycles its panes with F6; here the regions are, in
 //! order, the tab strip, the address bar, the search box, the command
-//! bar, the sidebar, the file list and the Details pane, wrapping round.
+//! bar, the sidebar, the file list (each pane of a split tab, the left
+//! one first, as Tab visits them, `tab_order.rs`) and the Details pane,
+//! wrapping round.
 //! A hidden or disabled region is skipped. Focus lands on the region's
 //! current item: the front tab, the highlighted sidebar row, the item that
 //! last had focus in the file list; elsewhere on the region's first
@@ -24,6 +26,7 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
+use super::session::PaneSide;
 use super::BrowserWindow;
 
 /// A region F6 visits, in the order it visits them.
@@ -34,19 +37,23 @@ pub(super) enum Region {
     Search,
     Commands,
     Sidebar,
+    /// The file list; the left pane of a split tab.
     Files,
+    /// The right pane of a split tab, shown only then.
+    EndPane,
     Details,
 }
 
 impl Region {
     /// Every region, in F6's order.
-    const ALL: [Region; 7] = [
+    const ALL: [Region; 8] = [
         Region::Tabs,
         Region::Address,
         Region::Search,
         Region::Commands,
         Region::Sidebar,
         Region::Files,
+        Region::EndPane,
         Region::Details,
     ];
 }
@@ -239,7 +246,8 @@ impl BrowserWindow {
             Region::Search => self.search_box().clone().upcast(),
             Region::Commands => self.command_bar().clone().upcast(),
             Region::Sidebar => self.sidebar().clone().upcast(),
-            Region::Files => self.folder_pane().clone().upcast(),
+            Region::Files => self.pane_on(PaneSide::Start).clone().upcast(),
+            Region::EndPane => self.pane_on(PaneSide::End).clone().upcast(),
             Region::Details => self.details_pane().clone().upcast(),
         }
     }
@@ -254,8 +262,13 @@ impl BrowserWindow {
     /// false when it has nothing to focus.
     fn focus_region(&self, region: Region) -> bool {
         match region {
-            Region::Files => {
-                let pane = self.folder_pane();
+            Region::Files | Region::EndPane => {
+                let side = if region == Region::Files {
+                    PaneSide::Start
+                } else {
+                    PaneSide::End
+                };
+                let pane = self.pane_on(side);
                 match pane.focused_position() {
                     Some(position) => pane.focus_item(position),
                     None => pane.focus_view(),

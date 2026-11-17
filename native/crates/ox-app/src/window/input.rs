@@ -26,6 +26,10 @@ use super::type_to_select::monotonic_now;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
+/// Backspace, which goes back one step in the file list, as the keyboard
+/// shortcuts window lists it beside Alt+Left.
+pub(super) const BACK_KEY: &str = "BackSpace";
+
 /// What screen readers call a folder view (`#main`'s `aria-label`).
 const FOLDER_VIEW_LABEL: &str = crate::i18n::message_id("Folder contents — type a filename prefix to select");
 
@@ -553,6 +557,7 @@ impl BrowserWindow {
             // even with items selected.
             gdk::Key::Escape if self.is_picking() => self.cancel_picking(),
             gdk::Key::Escape => self.clear_selection(),
+            // BACK_KEY, as the keyboard shortcuts window lists it.
             gdk::Key::BackSpace if prefix_active => self.erase_typed_character(now),
             gdk::Key::BackSpace => {
                 let composing = controller

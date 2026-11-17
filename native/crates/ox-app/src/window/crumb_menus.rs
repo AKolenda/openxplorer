@@ -303,10 +303,29 @@ impl BrowserWindow {
             bounds.height() as i32,
         );
         popover.set_pointing_to(Some(&pointing));
-        popover.connect_closed(|popover| {
-            let closed = popover.clone();
-            glib::idle_add_local_once(move || closed.unparent());
-        });
+        // A menu closed without a choice, by Escape or a click elsewhere,
+        // gives the keyboard back to where it was when it opened, such as
+        // the crumb Down opened it from; GTK moved it on to the next
+        // control, the search box.
+        let opener = GtkWindowExt::focus(self).map(|focus| focus.downgrade());
+        popover.connect_closed(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |popover| {
+                let closed = popover.clone();
+                let chose = popover.chose_an_item();
+                let opener = opener.clone();
+                glib::idle_add_local_once(move || {
+                    closed.unparent();
+                    let opener = opener.and_then(|opener| opener.upgrade());
+                    if let Some(opener) = opener.filter(|opener| !chose && opener.is_drawable()) {
+                        if GtkWindowExt::focus(&window).as_ref() != Some(&opener) {
+                            opener.grab_focus();
+                        }
+                    }
+                });
+            }
+        ));
         popover.popup();
         Some(popover)
     }

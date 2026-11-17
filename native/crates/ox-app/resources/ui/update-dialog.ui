@@ -61,6 +61,7 @@
                         <property name="wrap">true</property>
                         <property name="selectable">true</property>
                         <property name="focusable">false</property>
+                        <property name="can-focus">false</property>
                         <style>
                           <class name="dialog-message"/>
                         </style>

@@ -139,7 +139,8 @@ impl Sidebar {
     /// focus, and Right expands it, as in Explorer's navigation pane and
     /// the folder tree; the chevron itself takes no focus. As in Windows
     /// 11's tree, Right on an expanded head moves to its first row, and
-    /// Left on a row inside This PC or Network moves to the head.
+    /// Left on a row inside This PC or Network moves to the head. With
+    /// nowhere to go, the keyboard stays on its row.
     pub(super) fn collapse_sections_with_arrow_keys(&self, list: &gtk::ListBox) {
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -178,7 +179,12 @@ impl Sidebar {
                     gdk::Key::Left | gdk::Key::KP_Left => false,
                     _ => return glib::Propagation::Proceed,
                 };
-                if sidebar.expand_focused_section(expand) || sidebar.step_through_tree(expand) {
+                let moved = sidebar.expand_focused_section(expand) || sidebar.step_through_tree(expand);
+                // With nowhere to go the keyboard stays on its row, as in
+                // Windows' tree; GTK moved it out of the pane, to the
+                // resize handle beside it.
+                let on_a_row = sidebar.list().focus_child().is_some();
+                if moved || on_a_row {
                     glib::Propagation::Stop
                 } else {
                     glib::Propagation::Proceed

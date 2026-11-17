@@ -335,6 +335,7 @@ impl PropertiesWindow {
         // widening the window.
         self.set_child(Some(&super::fixed_width::FixedWidth::new(&column, WINDOW_WIDTH)));
         self.add_controller(crate::modal::escape_closes());
+        self.add_controller(crate::modal::f4_shows_a_list());
         self.add_controller(self.refresh_key());
         self.add_controller(self.tab_keys());
         self.update_relation(&[gtk::accessible::Relation::LabelledBy(&[imp.title.upcast_ref()])]);

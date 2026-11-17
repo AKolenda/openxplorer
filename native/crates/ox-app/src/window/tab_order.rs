@@ -33,8 +33,10 @@
 //! GTK emits `move-focus` for Tab only once the focused widget and its
 //! parents let the key go, so what takes Tab itself keeps it: Tab between
 //! split panes (VIEW-059), the fields of a rename in place, the message
-//! and Try again of "This location is unavailable". Dialogs, menus and
-//! the Settings page keep GTK's order.
+//! and Try again of "This location is unavailable". A dialog shown inside
+//! the window keeps Tab within itself, going round its controls in GTK's
+//! order, as a dialog window does (ACC-004); menus and the Settings page
+//! keep GTK's order.
 
 use std::rc::Rc;
 
@@ -143,6 +145,15 @@ impl BrowserWindow {
                 gtk::DirectionType::TabBackward => true,
                 _ => return,
             };
+            // A dialog shown inside the window keeps Tab within itself, as
+            // its own window would (ACC-004), and takes it in its body
+            // only for what it has for the keyboard (src/modal.rs).
+            if let Some(frame) = window.dialog_layer().shown() {
+                crate::modal::update_body_tab_stop(&frame.scroller());
+                window.tab_round_dialog(&frame, direction);
+                window.stop_signal_emission_by_name("move-focus");
+                return;
+            }
             if window.keeps_gtk_tab_order() {
                 return;
             }
@@ -183,6 +194,19 @@ impl BrowserWindow {
             scroller.add_css_class(KEYBOARD_ON_ITSELF);
         }
         ringed.set(focus.as_ref());
+    }
+
+    /// Moves the keyboard to the next control of `frame`, the dialog shown
+    /// inside the window, in `direction`; past its last control (before
+    /// its first, backward) to its first (last), never out of it.
+    fn tab_round_dialog(&self, frame: &crate::dialog::DialogFrame, direction: gtk::DirectionType) {
+        let inside = gtk::prelude::GtkWindowExt::focus(self).is_some_and(|focus| focus.is_ancestor(frame));
+        if inside && frame.child_focus(direction) {
+            return;
+        }
+        // Start again from the dialog's first control (its last).
+        gtk::prelude::GtkWindowExt::set_focus(self, None::<&gtk::Widget>);
+        frame.child_focus(direction);
     }
 
     /// Whether Tab follows GTK's order: while a dialog, a menu or the

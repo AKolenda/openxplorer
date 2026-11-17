@@ -101,7 +101,8 @@ fn the_this_pc_chevron_collapses_and_expands_its_section() {
 /// Left on This PC's row collapses the section and Right expands it
 /// again, as in Explorer's navigation pane. As in Windows 11's tree,
 /// Right on the expanded head moves to its first drive and Left on a
-/// drive back to the head; a key with nowhere to go is left to the list.
+/// drive back to the head; a key with nowhere to go keeps the keyboard
+/// where it is.
 ///
 /// parity: SIDE-033, ACC-006
 #[gtk::test]
@@ -115,7 +116,11 @@ fn left_and_right_on_a_section_head_collapse_and_expand_it() {
     assert!(press(&test, gdk::Key::Left), "Left collapses This PC");
     assert!(sidebar.section_is_collapsed("thisPc"));
     assert!(!shows(&test, "Local Disk"));
-    assert!(!press(&test, gdk::Key::Left), "already collapsed");
+    assert!(
+        press(&test, gdk::Key::Left),
+        "already collapsed: taken, nothing changes"
+    );
+    assert!(sidebar.section_is_collapsed("thisPc"));
     assert!(press(&test, gdk::Key::Right), "Right expands it");
     assert!(!sidebar.section_is_collapsed("thisPc"));
     assert!(shows(&test, "Local Disk"));
@@ -138,8 +143,13 @@ fn left_and_right_on_a_section_head_collapse_and_expand_it() {
     );
 
     row_named(&test, "Home").grab_focus();
-    assert!(!press(&test, gdk::Key::Left), "Home has nowhere to go");
-    assert!(!press(&test, gdk::Key::Right));
+    let home = row_named(&test, "Home");
+    assert!(
+        press(&test, gdk::Key::Left),
+        "Home has nowhere to go: the key is taken"
+    );
+    assert!(press(&test, gdk::Key::Right));
+    assert_eq!(focused(), Some(home), "and the keyboard stays on Home");
 }
 
 /// While the open place is inside a collapsed section, the section's head
@@ -187,4 +197,34 @@ fn a_click_on_a_chevron_opens_no_place() {
     middle_click_at(sidebar.list(), chevron);
     wait_for_frames(&test.window, 2);
     assert_eq!(test.tab_listing_needs().len(), tabs, "no tab opened");
+}
+
+/// Left and Right with nowhere to go keep the keyboard on the row, as in
+/// Windows' navigation pane, where Right expands the selection or selects
+/// its first subfolder and Left collapses it or selects the folder it is
+/// in (<https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows>,
+/// File Explorer keyboard shortcuts). GTK moved the keyboard out of the
+/// pane instead, to the resize handle beside it, where the next Left or
+/// Right resized the pane.
+///
+/// parity: SIDE-033, ACC-006
+#[gtk::test]
+fn left_and_right_with_nowhere_to_go_keep_the_keyboard_on_the_row() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    for name in ["Local Disk", "Home"] {
+        let row = row_named(&test, name);
+        row.grab_focus();
+        for key in [gdk::Key::Right, gdk::Key::Left] {
+            if name == "Local Disk" && key == gdk::Key::Left {
+                continue; // Left steps out to This PC.
+            }
+            assert!(press(&test, key), "{key:?} on {name} is taken");
+            assert_eq!(
+                gtk::prelude::GtkWindowExt::focus(&test.window),
+                Some(row.clone().upcast()),
+                "{key:?} keeps the keyboard on {name}"
+            );
+        }
+    }
 }
