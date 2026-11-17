@@ -26,7 +26,7 @@ use ox_core::i18n::{gettext, gettext_static};
 use ox_core::grouping::{Calendar, DateRanges, GroupBy, NameGroup};
 
 use crate::folder_view::item::FileItem;
-use crate::folder_view::sort_roles::{extension, SortBy, SortRole, SortState};
+use crate::folder_view::sort_roles::{extension, photo_date, SortBy, SortRole, SortState};
 use crate::folder_view::sorting::{SortColumn, SortKey};
 use crate::i18n::message_id;
 
@@ -284,6 +284,7 @@ pub(crate) fn group_of(by: SortBy, item: &FileItem, clock: &GroupClock) -> Group
         SortBy::Column(SortColumn::Permissions) => group_of(SortBy::Role(SortRole::Permissions), item, clock),
         SortBy::Role(SortRole::Created) => clock.period(entry.meta.created),
         SortBy::Role(SortRole::Accessed) => clock.period(entry.meta.accessed),
+        SortBy::Role(SortRole::Taken) => clock.period(photo_date(entry)),
         SortBy::Role(SortRole::Extension) => {
             let extension = extension(&entry.name, entry.is_dir).map(str::to_uppercase);
             text_or(extension.as_deref(), &gettext("No extension"))

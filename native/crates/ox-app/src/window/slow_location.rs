@@ -65,7 +65,23 @@ impl Opening {
 /// The CSS class of the address bar while the tab in front is busy.
 const LOADING_CLASS: &str = "loading";
 
+/// The CSS class of the address bar while it shows progress that has no
+/// end it can know: Gallery's listing, whose number of photos is known
+/// only once every folder is read (HOME-034). The fill sweeps along the
+/// address instead of crawling toward the end.
+const INDETERMINATE_CLASS: &str = "indeterminate";
+
 impl BrowserWindow {
+    /// Whether the tab in front is going to, or listing, Gallery.
+    pub(super) fn lists_gallery(&self) -> bool {
+        let session = self.imp().session.borrow();
+        let Some(tab) = session.active() else {
+            return false;
+        };
+        let target = tab.opening.as_ref().map(Opening::target);
+        target.unwrap_or_else(|| tab.uri()) == ox_core::location::GALLERY_URI
+    }
+
     /// Whether tab `id` is opening or listing a location.
     pub(super) fn is_tab_busy(&self, id: TabId) -> bool {
         let session = self.imp().session.borrow();
@@ -254,6 +270,7 @@ impl BrowserWindow {
         } else {
             bar.remove_css_class(LOADING_CLASS);
         }
+        crate::window::widget_tree::toggle_class(bar, INDETERMINATE_CLASS, busy && self.lists_gallery());
         bar.update_state(&[gtk::accessible::State::Busy(busy)]);
         self.show_stop_or_refresh();
     }

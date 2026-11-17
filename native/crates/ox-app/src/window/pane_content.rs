@@ -57,7 +57,7 @@ impl PaneState {
     pub(super) fn of(tab: &Tab) -> Self {
         Self {
             uri: tab.uri().to_owned(),
-            // Search results from Home are listed in its place (HOME-017).
+            // Search results from Home are listed in its place (HOME-035).
             page: Page::drawn_at(tab.uri()).filter(|_| tab.history.current_search().is_none()),
             listing: match (tab.listing_state.is_listing(), tab.reloading) {
                 (false, _) => Listing::Idle,
@@ -102,7 +102,7 @@ pub(super) fn show_pane_state(
     // rows, and a location that answers sooner shows nothing.
     // A search that still runs is waited for as a listing is: the blank
     // list, never "No matching items" before the walk of the folder and
-    // its subfolders has ended (HOME-017, SRCH-035).
+    // its subfolders has ended (HOME-035, SRCH-035).
     let loading = listing != Listing::Idle || searching;
     let is_first_listing = listing == Listing::First && page.is_none() && error.is_none();
     if slow && (opening || (is_first_listing && pane.model().n_items() == 0)) {

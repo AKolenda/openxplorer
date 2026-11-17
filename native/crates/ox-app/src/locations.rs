@@ -21,7 +21,7 @@ use crate::volumes::{VolumeKind, VolumeRow};
 
 /// A place of the app's own rather than a folder: no file command, pin
 /// or Properties applies to it, and only Home is searched, as its home
-/// folder (HOME-017).
+/// folder (HOME-035).
 ///
 /// Only these of ox-core's [`VirtualPlace`]s are pages; the Recycle Bin
 /// and the recent lists are listed folders. Home is one only while

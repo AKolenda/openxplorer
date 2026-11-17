@@ -236,7 +236,7 @@ impl BrowserWindow {
     /// The folder the search box searches: the active tab's folder, or
     /// from Windows 11's Home the home folder, with its subfolders, as
     /// Windows 11 searches from Home ("To find relevant files from your PC
-    /// and the cloud, search from File Explorer Home", HOME-017); no
+    /// and the cloud, search from File Explorer Home", HOME-035); no
     /// other landing page.
     pub(super) fn searched_folder(&self) -> Option<String> {
         let uri = self.current_uri()?;
@@ -294,6 +294,9 @@ impl BrowserWindow {
     pub(crate) fn open_search_option(&self, name: &str) -> bool {
         if name == ox_core::i18n::gettext_static("Search options") || name == "Search options" {
             return self.open_search_options();
+        }
+        if name == ox_core::i18n::gettext_static("Collection") || name == "Collection" {
+            return self.open_gallery_collection();
         }
         self.search_strip().is_visible() && self.search_strip().open_option(name)
     }

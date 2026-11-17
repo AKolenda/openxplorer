@@ -153,6 +153,7 @@ fn listed_place_glyph(uri: &str) -> Option<Icon> {
         VirtualPlace::RecycleBin => Some(Icon::Delete),
         VirtualPlace::Recent => Some(Icon::History),
         VirtualPlace::RecentLocations => Some(Icon::Clock),
+        VirtualPlace::Gallery => Some(Icon::Image),
         VirtualPlace::Home | VirtualPlace::ThisPc | VirtualPlace::Network | VirtualPlace::Settings => None,
     }
 }
@@ -190,6 +191,10 @@ fn tab_icon(
         Some(page @ (Page::Home | Page::Network | Page::Settings)) => return Art::Glyph(page.icon()),
         Some(Page::ThisPc) => return Art::TintedGlyph(Page::ThisPc.icon(), Tint::ThisPc),
         None => {}
+    }
+    if VirtualPlace::from_uri(uri) == Some(VirtualPlace::Gallery) {
+        // In its navigation pane row's blue (HOME-017).
+        return Art::TintedGlyph(Icon::Image, Tint::Home);
     }
     if let Some(glyph) = listed_place_glyph(uri) {
         return Art::Glyph(glyph);
@@ -296,7 +301,7 @@ impl BrowserWindow {
         self.render_address(uri);
         let search = self.search_box();
         search.set_folder_title(&title);
-        // Windows 11's Home searches the home folder (HOME-017); the other
+        // Windows 11's Home searches the home folder (HOME-035); the other
         // pages search nothing.
         let searches_home = Page::from_uri(uri) == Some(Page::Home);
         search.set_enabled((!on_page || searches_home) && !in_zip && !is_device_location(uri));
@@ -606,6 +611,13 @@ mod tests {
                 uri: RECENT_LOCATIONS_URI,
                 tab: Art::Glyph(Icon::Clock),
                 address: Icon::Clock,
+            },
+            // Gallery shows its navigation pane row's blue photo glyph
+            // (HOME-017).
+            IconCase {
+                uri: ox_core::location::GALLERY_URI,
+                tab: Art::TintedGlyph(Icon::Image, Tint::Home),
+                address: Icon::Image,
             },
             IconCase {
                 uri: Page::Network.uri(),

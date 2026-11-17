@@ -147,7 +147,7 @@ impl BrowserWindow {
 
     /// Shows the item count and the selection in the status bar.
     pub(super) fn update_status(&self) {
-        // Search results from Home are counted as results (HOME-017).
+        // Search results from Home are counted as results (HOME-035).
         let page = self
             .current_uri()
             .as_deref()
@@ -170,7 +170,9 @@ impl BrowserWindow {
         } else {
             StatusSubject::Folder {
                 shown,
-                loading: self.is_busy() && self.is_slow(),
+                // Gallery's walk has no end it can know: its count says
+                // it is loading from the start (HOME-034).
+                loading: self.is_busy() && (self.is_slow() || self.lists_gallery()),
             }
         };
         let selected = self.folder_pane().model().summary();

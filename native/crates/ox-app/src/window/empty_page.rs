@@ -48,6 +48,8 @@ pub(super) enum EmptyState {
     NoShares,
     /// The phone and camera list (`mtp://`) has no devices.
     NoDevices,
+    /// Gallery found no photos, or no Pictures folder (HOME-023).
+    NoPhotos,
 }
 
 impl EmptyState {
@@ -92,7 +94,9 @@ impl EmptyState {
     /// server without shares and the device list, and "This folder is
     /// empty" elsewhere, the Recycle Bin included.
     pub(super) fn empty_listing(uri: &str) -> EmptyState {
-        if is_smb_server(uri) {
+        if uri == ox_core::location::GALLERY_URI {
+            EmptyState::NoPhotos
+        } else if is_smb_server(uri) {
             EmptyState::NoShares
         } else if split_location(uri)
             .is_ok_and(|parts| parts.scheme.eq_ignore_ascii_case("mtp") && parts.authority.is_empty())
@@ -236,6 +240,7 @@ impl EmptyPage {
     pub(super) fn show(&self, state: &EmptyState) {
         let glyph = match state {
             EmptyState::Unavailable { .. } => Icon::Organization,
+            EmptyState::NoPhotos => Icon::Image,
             _ => Icon::Folder,
         };
         icons::set_icon(&self.icon, glyph, STATE_GLYPH);
@@ -257,9 +262,17 @@ impl EmptyPage {
                 ox_core::i18n::gettext_static("No MTP-compatible devices found"),
                 "",
             ),
+            EmptyState::NoPhotos => (
+                ox_core::i18n::gettext_static("No photos to show"),
+                ox_core::i18n::gettext_static("Photos in your Pictures folder show here."),
+            ),
         };
         self.title.set_text(title);
         self.message.set_text(message);
+        // Only a message worth copying (an error, a search's reason) can
+        // be selected; Gallery's hint would show selected when focused.
+        self.message
+            .set_selectable(!matches!(state, EmptyState::NoPhotos));
         self.message.set_visible(!message.is_empty());
         let details = match state {
             EmptyState::Unavailable {
