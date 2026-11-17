@@ -392,23 +392,33 @@ impl TabStrip {
         forward.set_sensitive(value < adjustment.upper() - adjustment.page_size() - 0.5);
     }
 
-    /// Scrolls `tab` into view once the strip is laid out: on the second
-    /// frame from now, when the first has laid the tabs out. The frame
-    /// clock, unlike an idle callback, is never held back by busy tabs'
-    /// rings, which draw every frame.
+    /// Scrolls `tab` into view once the strip is laid out: right after
+    /// the next frame, which lays the tabs out, is drawn. The frame clock,
+    /// unlike an idle callback, is never held back by busy tabs' rings,
+    /// which draw every frame. It is one jump, not a motion.
     fn scroll_into_view_soon(&self, tab: &gtk::Box) {
         let viewport = self.imp().viewport.downgrade();
-        let frames = Cell::new(0);
-        tab.add_tick_callback(move |tab, _| {
-            frames.set(frames.get() + 1);
-            if frames.get() < 2 {
-                return glib::ControlFlow::Continue;
+        let shown = tab.downgrade();
+        let scroll = move || {
+            if let (Some(viewport), Some(tab)) = (viewport.upgrade(), shown.upgrade()) {
+                viewport.scroll_to(&tab, None);
             }
-            if let Some(viewport) = viewport.upgrade() {
-                viewport.scroll_to(tab, None);
+        };
+        let Some(clock) = self.frame_clock() else {
+            // Not shown yet: once the main loop is free.
+            glib::idle_add_local_once(scroll);
+            return;
+        };
+        let handler: std::rc::Rc<Cell<Option<glib::SignalHandlerId>>> = std::rc::Rc::default();
+        let once = std::rc::Rc::clone(&handler);
+        let id = clock.connect_after_paint(move |clock| {
+            if let Some(id) = once.take() {
+                clock.disconnect(id);
+                scroll();
             }
-            glib::ControlFlow::Break
         });
+        handler.set(Some(id));
+        clock.request_phase(gdk::FrameClockPhase::AFTER_PAINT);
     }
 
     /// Replaces the tabs with `tabs` and scrolls the active one into view.

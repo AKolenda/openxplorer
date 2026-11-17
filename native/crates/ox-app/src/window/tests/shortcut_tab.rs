@@ -17,7 +17,13 @@ use crate::test_support::harness::{descendants, wait_until, Fixture, TestWindow}
 fn shortcut_properties(test: &TestWindow, name: &str) -> (PropertiesWindow, gtk::Widget) {
     test.select_named(name);
     test.activate("properties", None);
-    let window = test.wait_for_properties(&format!("{name} Properties"));
+    // Titled as the view names it: known extensions are hidden by default.
+    let shown = crate::folder_view::shown_name::shown_name(
+        name,
+        false,
+        crate::folder_view::shown_name::Extensions::Hidden,
+    );
+    let window = test.wait_for_properties(&format!("{shown} Properties"));
     let page = tab(&window, "shortcut");
     wait_until("the shortcut to be read", || {
         value_after(&page, "Target type:").is_some()
