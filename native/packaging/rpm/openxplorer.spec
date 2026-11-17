@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.18
+Version:        2.0.19
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -142,6 +142,12 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Tue Nov 17 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.19-1
+- OpenXplorer 2.0.19: Gallery as in Windows 11, Windows search syntax,
+  responsive folders of 100,000 items, a fast Recycle Bin, type icons in
+  network folders by default, ZIP passwords, ZIP64 and 7z archives,
+  reworked Properties and Folder Options, and keyboard fixes.
+
 * Mon Nov 16 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.18-1
 - OpenXplorer 2.0.18: thumbnails in network folders by default, one-click
   switching between command bar menus, the keyboard menu at the focused
