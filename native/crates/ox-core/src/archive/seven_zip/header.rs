@@ -69,6 +69,8 @@ const FILTERS: [&[u8]; 8] = [
     &[0x0a],                   // ARM64
     &[0x0b],                   // RISC-V
 ];
+/// `BZip2`, decoded with the `bzip2` crate.
+const BZIP2: &[u8] = &[0x04, 0x02, 0x02];
 /// AES-256 with a SHA-256 key, 7-Zip's only encryption.
 pub(super) const AES: &[u8] = &[0x06, 0xf1, 0x07, 0x01];
 
@@ -365,7 +367,7 @@ fn block_problem(block: &RawBlock) -> Option<BlockProblem> {
             lzma_dictionary(&coder.properties)
         } else if method == LZMA2 {
             lzma2_dictionary(&coder.properties)
-        } else if method == COPY || method == DELTA || method == BCJ2 || FILTERS.contains(&method) {
+        } else if [COPY, DELTA, BCJ2, BZIP2].contains(&method) || FILTERS.contains(&method) {
             continue;
         } else {
             return Some(BlockProblem::Method);

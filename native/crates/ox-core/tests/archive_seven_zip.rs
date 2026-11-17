@@ -552,11 +552,12 @@ fn coders_linked_in_a_loop_are_refused_at_once() {
 }
 
 /// 7-Zip writes BZip2 and Deflate 7z archives when asked (`-m0=BZip2`,
-/// `-m0=Deflate`); they open like any other 7z.
+/// `-m0=Deflate`). A BZip2 one opens like any other 7z; a Deflate one is
+/// listed and refused plainly, as the reader does not decode Deflate.
 ///
 /// parity: ARC-024
 #[test]
-fn bzip2_and_deflate_7z_archives_extract() {
+fn a_bzip2_7z_extracts_and_a_deflate_one_is_refused_plainly() {
     use std::io::Write;
 
     let data = "Fictional field notes, written twice. ".repeat(200);
@@ -564,21 +565,28 @@ fn bzip2_and_deflate_7z_archives_extract() {
     bzip2.write_all(data.as_bytes()).expect("compressed");
     let mut deflate = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
     deflate.write_all(data.as_bytes()).expect("compressed");
-    for (method, packed) in [
-        (&BZIP2[..], bzip2.finish().expect("compressed")),
-        (&DEFLATE[..], deflate.finish().expect("compressed")),
-    ] {
+    let coded = |method: &[u8], packed: &[u8]| {
         let coders = [TestCoder {
             method,
             inputs: 1,
             properties: &[],
         }];
-        let bytes = coded_seven_zip("notes.txt", &coders, &[], &[0], &[&packed], &[data.len() as u64]);
-        let fixture = fixture_with(&bytes);
+        coded_seven_zip("notes.txt", &coders, &[], &[0], &[packed], &[data.len() as u64])
+    };
 
-        fixture.extract("Unpacked").expect("extracts");
+    let fixture = fixture_with(&coded(&BZIP2, &bzip2.finish().expect("compressed")));
+    fixture.extract("Unpacked").expect("a BZip2 7z extracts");
+    let notes = fixture.destination.join("Unpacked/notes.txt");
+    assert_eq!(fs::read(notes).expect("a file"), data.as_bytes());
 
-        let notes = fixture.destination.join("Unpacked/notes.txt");
-        assert_eq!(fs::read(notes).expect("a file"), data.as_bytes(), "{method:?}");
-    }
+    let bytes = coded(&DEFLATE, &deflate.finish().expect("compressed"));
+    let root = tempfile::tempdir().expect("a folder");
+    let listing = browser_of(bytes.clone(), root.path())
+        .list("file:///fixture/Bundle.7z", "", &Cancellation::new())
+        .expect("lists");
+    assert_eq!(listing.entries.len(), 1);
+    let fixture = fixture_with(&bytes);
+    let error = fixture.extract("Unpacked").expect_err("refused");
+    assert!(matches!(error, ArchiveError::SevenZipMethod), "{error:?}");
+    fixture.assert_no_output();
 }

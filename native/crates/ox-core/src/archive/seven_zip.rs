@@ -15,9 +15,9 @@
 //! decodes each block once; going back to an earlier file starts its
 //! block again, as 7-Zip does.
 //!
-//! The reader decodes LZMA, LZMA2, Copy, Delta and the branch filters
-//! 7-Zip pairs with them, BCJ2 included. Encrypted archives and other
-//! methods (`PPMd`, `BZip2`, Deflate) are listed when their names can be read, and
+//! The reader decodes LZMA, LZMA2, Copy, Delta, the branch filters 7-Zip
+//! pairs with them (BCJ2 included) and `BZip2`. Encrypted archives and other
+//! methods (`PPMd`, Deflate) are listed when their names can be read, and
 //! say plainly that they aren't supported when a file is opened or
 //! extracted.
 

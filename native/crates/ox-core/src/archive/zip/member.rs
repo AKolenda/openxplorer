@@ -38,11 +38,11 @@ pub(crate) enum CompressionMethod {
 /// is concerned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SevenZipCoding {
-    /// LZMA, LZMA2, Copy, Delta or a branch filter: decoded.
+    /// LZMA, LZMA2, Copy, Delta, a branch filter or `BZip2`: decoded.
     Readable,
     /// Encrypted with AES, which the reader does not decrypt.
     Encrypted,
-    /// Another method (`PPMd`, `BZip2`, Deflate and others).
+    /// Another method (`PPMd`, Deflate and others).
     Unsupported,
     /// A dictionary over the reader's memory limit.
     TooMuchMemory,

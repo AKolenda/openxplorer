@@ -80,10 +80,10 @@ is missing.
 - **Archives.** Browsing and extraction support ZIP (including ZIP64),
   compressed TAR and 7z, and ZIPs with the traditional ZIP password, which
   ask for it. Compress to › 7z File writes 7z archives (sevenz-rust2). 7z
-  archives made with LZMA, LZMA2 (with their filters and BCJ2), BZip2 or
-  Deflate are browsed and extracted like ZIP; encrypted 7z archives and other
-  methods such as PPMd are refused plainly, as Windows 11 refuses encrypted
-  archives. RAR and AES-encrypted ZIPs still need additional codecs. A TAR's
+  archives made with LZMA, LZMA2 (with their filters and BCJ2) or BZip2 are
+  browsed and extracted like ZIP; encrypted 7z archives and other methods
+  such as PPMd and Deflate are refused plainly, as Windows 11 refuses
+  encrypted archives. RAR and AES-encrypted ZIPs still need additional codecs. A TAR's
   relative links that stay inside the archive are listed and extracted; ZIP
   links stay hidden and refused. Search inside an opened archive is still
   unavailable.

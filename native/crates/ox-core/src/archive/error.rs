@@ -62,7 +62,7 @@ pub enum ArchiveError {
     SevenZipEncryption,
 
     /// ARC-016: a 7z archive uses a compression method other than LZMA,
-    /// LZMA2 or the filters 7-Zip pairs with them.
+    /// LZMA2, the filters 7-Zip pairs with them or `BZip2`.
     #[error(
         "{}",
         crate::i18n::gettext(
