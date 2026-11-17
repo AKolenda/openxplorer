@@ -51,6 +51,16 @@ is missing.
   focus rings show only after keyboard navigation (ACC-009). Windows 11
   opens Home with Quick access by default; "Open Quick access on Home"
   stays off here, the owner's choice.
+- **Advanced Query Syntax in the search box (2026-11-15).** Quoted phrases,
+  upper-case `AND`, `OR` and `NOT`, `name:`, `ext:`, `date:` with dates,
+  comparisons and ranges, and sizes in KB, MB or GB are read as Microsoft
+  documents them (SRCH-047). Not read yet: other properties (`author:`,
+  `folder:`, `datecreated:`), day and month names and future dates, dates
+  written day first, and a search option (`kind:`, `date:`, `size:`) after
+  `NOT` or next to `OR`, which stays a word to search for. Not built: a
+  recent-searches list under the search box and the Search options menu's
+  Other properties and Advanced options, which no Microsoft page found so
+  far documents.
 - **Checks this environment cannot run.** LOOK-028 (fractional scales and a
   window moving between monitors of different scales need a Wayland
   compositor), ACC-003 (nobody has checked the file list with Orca; the icon

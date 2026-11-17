@@ -19,6 +19,8 @@
 //! M5753RA.pdf` but not `WO - M5753.pdf`, whose only `pd` is in `.pdf`,
 //! while `pdf`, `.pdf`, `p?f` and `66873.pdf` still find PDF files.
 
+use super::expression::{self, Clauses};
+
 /// The characters that make a word a wildcard pattern.
 const WILDCARDS: [char; 3] = ['*', '?', '['];
 
@@ -27,28 +29,60 @@ pub fn is_wildcard(word: &str) -> bool {
     word.contains(WILDCARDS)
 }
 
-/// The words of a search, lower-cased.
+/// What a search's words ask of a name: the clauses of
+/// [`super::expression`], lower-cased.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NamePattern {
-    words: Vec<String>,
+    clauses: Clauses,
 }
 
 impl NamePattern {
-    /// The pattern of the search text `text`: its whitespace-separated
-    /// words, lower-cased, each once.
+    /// The pattern of the search text `text`: its words, quoted phrases,
+    /// operators and properties, lower-cased, each word once.
     pub fn new(text: &str) -> Self {
-        let mut words: Vec<String> = Vec::new();
-        for word in text.to_lowercase().split_whitespace() {
-            if !words.iter().any(|known| known == word) {
-                words.push(word.to_owned());
-            }
+        Self::normalised(text, &str::to_lowercase)
+    }
+
+    /// The pattern of `text` with every value passed through `normalise`,
+    /// as the cache folds its words.
+    pub(crate) fn normalised(text: &str, normalise: &dyn Fn(&str) -> String) -> Self {
+        Self {
+            clauses: expression::parse(text, normalise),
         }
-        Self { words }
     }
 
     /// Whether the search has no words, so it matches everything.
     pub fn is_empty(&self) -> bool {
-        self.words.is_empty()
+        self.clauses.is_empty()
+    }
+
+    /// Keeps the clauses whose terms, counted in order, are at most
+    /// `most`, as the cache matches at most 20 words.
+    pub(crate) fn keep_terms(&mut self, most: usize) {
+        let mut counted = 0;
+        self.clauses.retain(|clause| {
+            counted += clause.len();
+            counted <= most
+        });
+    }
+
+    /// The clauses that must all hold.
+    pub(crate) fn clauses(&self) -> &Clauses {
+        &self.clauses
+    }
+
+    /// The words and phrases a match holds in its name, for marking
+    /// them; not those a match must lack, nor wildcards or extensions.
+    pub fn marked_words(&self) -> Vec<String> {
+        let mut words: Vec<String> = Vec::new();
+        for term in self.clauses.iter().flatten() {
+            if let Some(word) = term.marked_text() {
+                if !words.iter().any(|known| known == word) {
+                    words.push(word.to_owned());
+                }
+            }
+        }
+        words
     }
 
     /// Whether `name` matches, ignoring case.
@@ -56,17 +90,16 @@ impl NamePattern {
         self.matches_lowercase(&name.to_lowercase(), "")
     }
 
-    /// Whether `lowercase_name`, a lower-cased name, matches: each
-    /// wildcard word is found within the name ([`wildcard_in_name`]), and
-    /// each other word occurs in the name or in `lowercase_context`, such
-    /// as the folder that holds the item (SRCH-008), which may be empty.
+    /// Whether `lowercase_name`, a lower-cased name, matches: in every
+    /// clause one term holds. A wildcard word is found within the name
+    /// ([`wildcard_in_name`]), and another word occurs in the name or in
+    /// `lowercase_context`, such as the folder that holds the item
+    /// (SRCH-008) or the file's text, which may be empty.
     pub fn matches_lowercase(&self, lowercase_name: &str, lowercase_context: &str) -> bool {
-        self.words.iter().all(|word| {
-            if is_wildcard(word) {
-                wildcard_in_name(word, lowercase_name)
-            } else {
-                word_in_name(word, lowercase_name) || lowercase_context.contains(word.as_str())
-            }
+        self.clauses.iter().all(|clause| {
+            clause
+                .iter()
+                .any(|term| term.holds(lowercase_name, lowercase_context))
         })
     }
 }
@@ -135,9 +168,9 @@ pub(crate) fn wildcard_in_name(pattern: &str, lowercase_name: &str) -> bool {
     extension.is_some_and(|extension| matches_tokens(&tokens, &lowercase_name[extension..]))
 }
 
-/// Whether the whole of `name` matches the wildcard `pattern`.
-#[cfg(test)]
-fn wildcard_matches(pattern: &str, name: &str) -> bool {
+/// Whether the whole of `name` matches the wildcard `pattern`, as
+/// `name:~` asks ([`super::expression`]).
+pub(crate) fn wildcard_matches(pattern: &str, name: &str) -> bool {
     let pattern: Vec<char> = pattern.chars().collect();
     matches_tokens(&tokens(&pattern), name)
 }
@@ -419,6 +452,62 @@ mod tests {
         assert_eq!(found("p?f"), ["plan.pdf"]);
         assert_eq!(found("?df"), ["plan.pdf"]);
         assert_eq!(found("d?"), Vec::<&str>::new());
+    }
+
+    /// As Windows Search's Advanced Query Syntax reads them
+    /// (<https://learn.microsoft.com/en-us/windows/win32/search/-search-3x-advancedquerysyntax>,
+    /// <https://learn.microsoft.com/en-us/windows/win32/lwef/-search-2x-wds-aqsreference>):
+    /// a quoted phrase is found as typed, upper-case `AND`, `OR` and `NOT`
+    /// combine words, and `name:`, `filename:`, `ext:` and `fileext:` test
+    /// the name and its extension.
+    ///
+    /// parity: SRCH-047
+    #[test]
+    fn phrases_operators_and_properties_follow_advanced_query_syntax() {
+        let names = [
+            "Annual report 2026.docx",
+            "Report draft.txt",
+            "report final.pdf",
+            "Invoice 1042.pdf",
+            "annual budget.xlsx",
+        ];
+        let found = |text: &str| -> Vec<&str> {
+            let pattern = NamePattern::new(text);
+            names.into_iter().filter(|name| pattern.matches(name)).collect()
+        };
+        assert_eq!(found("\"annual report\""), ["Annual report 2026.docx"]);
+        assert_eq!(found("\"report annual\""), Vec::<&str>::new());
+        assert_eq!(
+            found("report NOT draft"),
+            ["Annual report 2026.docx", "report final.pdf"]
+        );
+        assert_eq!(
+            found("budget OR invoice"),
+            ["Invoice 1042.pdf", "annual budget.xlsx"]
+        );
+        assert_eq!(found("report AND annual"), ["Annual report 2026.docx"]);
+        assert_eq!(found("ext:pdf"), ["report final.pdf", "Invoice 1042.pdf"]);
+        assert_eq!(found("ext:.PDF NOT invoice"), ["report final.pdf"]);
+        assert_eq!(
+            found("ext:(docx OR xlsx)"),
+            ["Annual report 2026.docx", "annual budget.xlsx"]
+        );
+        assert_eq!(found("name:draft"), ["Report draft.txt"]);
+        assert_eq!(
+            found("filename:~<report"),
+            ["Report draft.txt", "report final.pdf"]
+        );
+        assert_eq!(
+            found("annual (budget OR 2026)"),
+            ["Annual report 2026.docx", "annual budget.xlsx"]
+        );
+        // Lower-case operators are words, as Microsoft documents.
+        assert_eq!(found("final or draft"), Vec::<&str>::new());
+        assert_eq!(found("report and"), Vec::<&str>::new());
+        assert_eq!(
+            NamePattern::new("\"annual report\" NOT budget ext:docx").marked_words(),
+            ["annual report"]
+        );
     }
 
     #[test]
