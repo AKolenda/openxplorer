@@ -300,29 +300,37 @@ fn an_indexed_folder_is_searched_in_the_cache_with_its_subfolders() {
     capture(&test.window, "search-cached.png");
 }
 
-/// A folder with only an indexed subfolder shows its own matches and the
-/// cached ones below it (the 1.1.0 fix).
+/// A folder on this computer with only an indexed subfolder shows its
+/// own matches first, then those below it (the 1.1.0 fix), and, as its
+/// tree is walked whole, also those in the subfolders nobody indexed.
 ///
 /// parity: SRCH-007, SRCH-012
 #[gtk::test]
 fn a_folder_with_an_indexed_subfolder_shows_both() {
     let fixture = Fixture::standard();
     fs::write(fixture.path("Documents/notes inside.txt"), b"x").expect("fixture file");
+    fs::create_dir_all(fixture.path("Archive/2026")).expect("fixture folder");
+    fs::write(fixture.path("Archive/2026/old notes.txt"), b"x").expect("fixture file");
     let test = TestWindow::open(&fixture.uri());
     test.show_search_filter_bar(true);
     test.start_search_cache();
     test.index_folder(&fixture.uri_of("Documents"));
 
     test.search_for("notes");
+    wait_until("the matches below", || test.names().len() == 4);
 
-    assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt", "notes inside.txt"]);
-    let strip = test.window.search_strip();
-    assert_eq!(strip.caption(), "Current folder + cached subfolders");
-    assert!(strip.offers_to_cache_folder());
+    let names = test.names();
     assert_eq!(
-        strip.shown_note().as_deref(),
-        Some("Other subfolders are not indexed.")
+        names[..2],
+        ["Notes 2.txt", "Notes 10.txt"],
+        "its own matches first"
     );
+    let mut below = names[2..].to_vec();
+    below.sort();
+    assert_eq!(below, ["notes inside.txt", "old notes.txt"]);
+    let strip = test.window.search_strip();
+    assert_eq!(strip.caption(), "Current folder + subfolders");
+    assert!(strip.offers_to_cache_folder());
 }
 
 /// parity: SRCH-011

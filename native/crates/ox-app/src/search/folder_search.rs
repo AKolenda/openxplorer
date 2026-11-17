@@ -128,8 +128,9 @@ impl FolderSearch {
     }
 
     /// Where a search of `folder` looks: a search of contents walks the
-    /// folder, because the cache holds names only, and a folder on the
-    /// network is only filtered.
+    /// folder, because the cache holds names only, a folder on the
+    /// network is only filtered, and a local folder that only some cached
+    /// subfolders cover is walked whole.
     fn source(&self, roots: &[IndexRoot], folder: &str) -> SearchSource {
         let reads_contents = self.search_in == SearchIn::NamesAndContents;
         // The cache finds names by their words: options typed alone, as
@@ -150,10 +151,17 @@ impl FolderSearch {
                 SearchSource::CurrentFolderOnly
             };
         }
-        if source == SearchSource::CurrentFolder && !walks_subfolders(folder) {
-            SearchSource::CurrentFolderOnly
-        } else {
-            source
+        match source {
+            SearchSource::CurrentFolder if !walks_subfolders(folder) => SearchSource::CurrentFolderOnly,
+            // A folder on this computer with only some subfolders cached,
+            // such as the home folder with pinned folders, or Windows 11's
+            // Home, which has no listing of its own: its whole tree is
+            // walked, its own matches first, so files in the subfolders
+            // nobody cached are found too (SRCH-007, HOME-017).
+            SearchSource::CurrentFolderAndCachedSubfolders if walks_subfolders(folder) => {
+                SearchSource::CurrentFolder
+            }
+            source => source,
         }
     }
 
