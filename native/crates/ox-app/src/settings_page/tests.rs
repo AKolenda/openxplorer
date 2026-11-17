@@ -584,7 +584,7 @@ fn every_setting_of_the_python_page_has_a_row() {
             "Network / fallback checks",
             "Check network and unwatched folders every",
         ),
-        offered_by("Calculate folder sizes", "Calculate folder sizes"),
+        offered_by("Calculate folder sizes", "How sizes are counted"),
         offered_by("Folders", "Folders"),
         offered_by("SMB links", "Network (SMB) links"),
         offered_by("ZIP files", "Open ZIP files from other apps with OpenXplorer"),
@@ -1372,4 +1372,46 @@ fn every_settings_page_is_captured_light_and_dark() {
             );
         }
     }
+}
+
+/// Common words find the settings they mean: "extensions" the file name
+/// extensions, "hidden files" the hidden items before anything that only
+/// mentions them, and "language" where the app's language comes from.
+///
+/// parity: SET-004
+#[gtk::test]
+fn the_search_finds_settings_by_common_words() {
+    let settings = SettingsTest::open();
+    for (typed, first) in [
+        ("extensions", "Hide extensions for known file types"),
+        ("file extensions", "Hide extensions for known file types"),
+        ("hidden files", "Show hidden files, folders, and drives"),
+        ("language", "Language"),
+    ] {
+        settings.page.search(typed);
+        let shown = settings.shown_rows();
+        assert_eq!(shown.first().copied(), Some(first), "{typed}: {shown:?}");
+        if typed == "hidden files" {
+            assert!(!shown.contains(&"How sizes are counted"), "{typed}: {shown:?}");
+        }
+    }
+}
+
+/// Every row has something to change or open, or says something of its
+/// own under its name: none is a title and an ⓘ alone, as "Calculate
+/// folder sizes" was.
+///
+/// parity: SET-004
+#[gtk::test]
+fn every_settings_row_has_a_control_or_a_status() {
+    let settings = SettingsTest::open();
+    let mut bare = Vec::new();
+    for category in Category::ALL {
+        for row in settings.page.category_section(category).rows() {
+            if row.controls().is_empty() && row.shown_description().is_empty() {
+                bare.push(row.text().title);
+            }
+        }
+    }
+    assert!(bare.is_empty(), "rows with nothing to change: {bare:?}");
 }

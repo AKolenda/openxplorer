@@ -250,12 +250,13 @@ fn address_group(page: &SettingsPage) -> SettingsGroup {
     group
 }
 
-/// Dragging tabs and files, which always works: folded away, with the
-/// rest of the Python paragraph in the first row's ⓘ.
+/// Dragging tabs and files, which always works: folded away, each row
+/// help with its text under its title, and the rest of the Python
+/// paragraph in the first row's ⓘ.
 fn dragging_group() -> SettingsGroup {
     let group = SettingsGroup::new_folded(&ox_core::i18n::gettext("Dragging tabs and files"));
     for text in [MOVE_TABS, DRAG_TO_APPS, DROP_ON_FOLDERS] {
-        let row = SettingRow::new(text);
+        let row = SettingRow::new_help(text);
         if text == MOVE_TABS {
             row.add_details(ox_core::i18n::gettext_static(DRAGGING_NOTE));
         }

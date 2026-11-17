@@ -70,7 +70,7 @@ const MOVED_ROWS: [(&str, &str); 77] = [
         "Network / fallback checks",
         "Check network and unwatched folders every",
     ),
-    ("Calculate folder sizes", "Calculate folder sizes"),
+    ("Calculate folder sizes", "How sizes are counted"),
     (
         "When replacing a file, move the old one to the Recycle Bin",
         "When replacing a file, move the old one to the Recycle Bin",

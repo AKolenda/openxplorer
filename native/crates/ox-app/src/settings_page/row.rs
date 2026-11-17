@@ -128,6 +128,18 @@ impl SettingRow {
         row
     }
 
+    /// A row of help with nothing to change, such as how dragging works:
+    /// `text`'s description shows under its title, where it reads as help
+    /// rather than a setting whose control is missing, and it has no ⓘ.
+    pub(crate) fn new_help(text: RowText) -> Self {
+        let row: Self = glib::Object::new();
+        let imp = row.imp();
+        imp.title_label.set_text(&gettext(text.title));
+        imp.text.set(text).expect("a new row has no text yet");
+        row.set_description(&gettext(text.description));
+        row
+    }
+
     /// Adds `details` to the ⓘ's bubble, opening one if the row has none
     /// yet, such as a note that used to follow the row's group. The
     /// settings search finds the row by them too.

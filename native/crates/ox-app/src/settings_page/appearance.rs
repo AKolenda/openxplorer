@@ -49,6 +49,14 @@ const DESKTOP_FONT: RowText = RowText {
     keywords: "font typeface family desktop system interface noto segoe size accessibility",
 };
 
+const LANGUAGE: RowText = RowText {
+    title: "Language",
+    description: "OpenXplorer shows its menus, buttons and messages in your desktop's language. Change \
+                  it in your desktop's language or region settings, then start OpenXplorer again.",
+    keywords: "language languages translation translations locale localization interface display \
+               chinese english region",
+};
+
 const RIGHT_CLICK_MENU: RowText = RowText {
     title: "Right-click menu",
     description: "Windows 10 is compact and shows familiar text commands.",
@@ -179,7 +187,25 @@ fn theme_group(page: &SettingsPage) -> SettingsGroup {
     text_size.add_control(&text_size_choice(page), ControlName::RowTitle);
     group.add_row(&text_size);
     group.add_row(&desktop_font_row(page));
+    group.add_row(&language_row());
     group
+}
+
+/// "Language": the desktop's language, which the app follows, under the
+/// title, as Windows sets the display language in its own settings and
+/// not in File Explorer's.
+fn language_row() -> SettingRow {
+    let row = SettingRow::new(LANGUAGE);
+    let language = glib::language_names()
+        .into_iter()
+        .map(|name| name.split(['.', '@']).next().unwrap_or_default().to_owned())
+        .find(|name| !name.is_empty() && name != "C" && name != "POSIX")
+        .unwrap_or_else(|| "en".to_owned());
+    row.set_description(&ox_core::i18n::format_message(
+        "Your desktop's language ({language})",
+        &[("language", &language)],
+    ));
+    row
 }
 
 /// The three theme cards, in a row that wraps in a narrow window, their
