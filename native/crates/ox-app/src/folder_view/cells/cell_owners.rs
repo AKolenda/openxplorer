@@ -225,6 +225,9 @@ pub(crate) struct CellOwners {
     extensions: Cell<Extensions>,
     /// The words marked in the names, lower-cased (SRCH-046).
     marked_words: RefCell<Vec<String>>,
+    /// The Details rows bound now, named after their items as the names
+    /// show, which [`CellOwners::show_names_again`] names again.
+    detail_rows: RefCell<Vec<glib::WeakRef<gtk::ColumnViewRow>>>,
 }
 
 impl CellOwners {
@@ -553,9 +556,43 @@ impl CellOwners {
         }
     }
 
+    /// Names the Details row `row`, bound to `item`, as its name shows
+    /// ("Budget 2026" while extensions are hidden), so a screen reader
+    /// reads what the list shows, and names it again when that changes.
+    pub(crate) fn name_detail_row(&self, row: &gtk::ColumnViewRow, item: &FileItem) {
+        row.set_accessible_label(&self.shown_name(item));
+        let mut rows = self.detail_rows.borrow_mut();
+        rows.retain(|kept| kept.upgrade().is_some_and(|kept| kept.item().is_some()));
+        if !rows.iter().any(|kept| kept.upgrade().as_ref() == Some(row)) {
+            rows.push(row.downgrade());
+        }
+    }
+
+    /// The names of the Details rows bound now, for tests.
+    #[cfg(test)]
+    pub(crate) fn detail_row_names(&self) -> Vec<String> {
+        let rows = self.detail_rows.borrow();
+        rows.iter()
+            .filter_map(glib::WeakRef::upgrade)
+            .filter(|row| row.item().is_some_and(|item| item.is::<FileItem>()))
+            .map(|row| row.accessible_label().to_string())
+            .collect()
+    }
+
     /// Shows the names of the bound cells again, after what they show of
     /// them changed.
     fn show_names_again(&self) {
+        let rows: Vec<gtk::ColumnViewRow> = self
+            .detail_rows
+            .borrow()
+            .iter()
+            .filter_map(glib::WeakRef::upgrade)
+            .collect();
+        for row in rows {
+            if let Some(item) = row.item().and_downcast::<FileItem>() {
+                row.set_accessible_label(&self.shown_name(&item));
+            }
+        }
         let bound: Vec<(gtk::ListItem, gtk::Widget, FileItem)> = self
             .owners
             .borrow()

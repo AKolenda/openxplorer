@@ -90,15 +90,27 @@ fn order_after_sort_key(column: SortColumn, current: SortOrder) -> SortOrder {
 }
 
 /// Makes every column title of `view` focusable and gives it the keys.
+/// The titles are paired with their columns in the order the view lays
+/// them out now, not the order it built them in, so "Date modified" is
+/// never named or sorted as another column. The row of titles is named
+/// and described once, where a screen reader would otherwise read it as
+/// every title's name and hint joined.
 pub(crate) fn make_titles_keyboard_operable(view: &DetailsView) {
+    let hint = ox_core::i18n::gettext(
+        "Enter sorts by this column; Left and Right resize it; Home fits it to the listed items",
+    );
+    if let Some(header) = view.header() {
+        header.update_property(&[
+            gtk::accessible::Property::Label(&ox_core::i18n::gettext("Column headers")),
+            gtk::accessible::Property::Description(&hint),
+        ]);
+    }
     let titles = title_buttons(view.column_view());
-    for (column, title) in SortColumn::ALL.into_iter().zip(titles) {
+    for (column, title) in view.column_order().into_iter().zip(titles) {
         title.set_focusable(true);
         // A click sorts and leaves focus in the list, as before.
         title.set_focus_on_click(false);
-        title.update_property(&[gtk::accessible::Property::Description(&ox_core::i18n::gettext(
-            "Enter sorts by this column; Left and Right resize it; Home fits it to the listed items",
-        ))]);
+        title.update_property(&[gtk::accessible::Property::Description(&hint)]);
         let keys = gtk::EventControllerKey::new();
         keys.connect_key_pressed(glib::clone!(
             #[weak]

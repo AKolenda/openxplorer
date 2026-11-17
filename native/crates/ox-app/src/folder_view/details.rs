@@ -492,12 +492,15 @@ impl DetailsView {
         // does not bind the row again for the same object.
         let titles: HeadingTitles = Rc::default();
         let unbind_titles = Rc::clone(&titles);
+        let owners = Rc::clone(&self.cells().owners);
         rows.connect_bind(move |_, object| {
             if let Some(row) = object.downcast_ref::<gtk::ColumnViewRow>() {
                 forget_heading_title(&titles, row);
                 let item = row.item();
                 if let Some(item) = item.and_downcast_ref::<FileItem>() {
-                    row.set_accessible_label(&item.entry().name);
+                    // Named as the Name column shows it, without a hidden
+                    // extension.
+                    owners.name_detail_row(row, item);
                     row.set_selectable(true);
                     row.set_activatable(true);
                 } else if let Some(heading) = item.and_downcast_ref::<GroupSlot>() {
