@@ -594,6 +594,33 @@ fn a_refused_address_is_explained_and_the_field_stays_open() {
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
 }
 
+/// A mistyped address says in plain words that it was not found and names
+/// what was typed, as Windows' "Windows can't find '…'. Make sure you
+/// typed the name correctly, and then try again." does; GIO's own
+/// "Error when getting information for file" text is not shown, and the
+/// tab stays where it was.
+///
+/// parity: NAV-033
+#[gtk::test]
+fn a_mistyped_address_says_it_was_not_found_in_plain_words() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the fixture");
+    for typed in [
+        "Documnets",
+        fixture.path("Documnets").to_str().expect("UTF-8 fixture"),
+    ] {
+        test.activate("location", None);
+        test.window.submit_address(typed);
+        let expected = format!(
+            "OpenXplorer can’t find “{typed}”. Make sure you typed the name \
+             correctly, and then try again."
+        );
+        wait_until("the message", || test.window.shown_message().as_str() == expected);
+        assert_eq!(test.window.current_uri(), Some(fixture.uri()), "the folder stays");
+    }
+}
+
 /// parity: NAV-036
 #[gtk::test]
 fn a_typed_web_address_opens_in_the_browser_and_other_schemes_are_refused() {

@@ -279,6 +279,12 @@ impl BrowserWindow {
         super::home_page::leave(body);
         let locations = self.imp().locations.borrow();
         landing::render(body, page, places, &locations, self.skin().drawn_text_size());
+        drop(locations);
+        // This PC counts its tiles, which a drive coming or going changes.
+        if page == Page::ThisPc {
+            self.update_status();
+            self.update_details_pane();
+        }
     }
 }
 

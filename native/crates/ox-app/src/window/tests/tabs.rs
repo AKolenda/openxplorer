@@ -408,3 +408,46 @@ fn a_background_network_tab_is_listed_again_only_when_shown() {
     assert_eq!(behind, (true, false), "marked, not listed");
     assert_eq!(tab_state(&test), (false, true), "listed once shown");
 }
+
+/// With "Reopen my tabs" on, the open tabs are saved while the window is
+/// open, soon after they change, not only when the last window closes:
+/// an app ended by a signal (SIGTERM at logout) keeps the tabs it had.
+///
+/// parity: TAB-053
+#[gtk::test]
+fn the_open_tabs_are_saved_while_the_window_is_open() {
+    use ox_core::session::SavedSession;
+    use ox_core::settings::{PreferencesUpdate, Settings};
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let update = PreferencesUpdate {
+        restore_session: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    // As a window the user opened, which saves its size and tabs.
+    test.window.imp().remembers_session.set(true);
+
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("the new tab");
+
+    let saved_uris = || {
+        SavedSession::load(test.settings_directory()).map(|saved| {
+            saved
+                .tabs
+                .iter()
+                .map(|tab| tab.panes[tab.active_pane].uri.clone())
+                .collect::<Vec<_>>()
+        })
+    };
+    wait_until("the tabs to be saved", || {
+        saved_uris() == Some(vec![fixture.uri(), fixture.uri_of("Documents")])
+    });
+    assert!(test.window.is_visible(), "saved while the window is open");
+}

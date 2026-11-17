@@ -71,6 +71,15 @@ is missing.
   Settings category is a Tab stop; Home tiles are a Tab stop each; the
   message boxes Delete File and Rename File have no Alt+letter keys; a
   folder opened from the command line has Home before it in Back's history.
+- **Review fixes (2026-11-17).** Still open after these fixes: the open
+  tabs are saved every 3 s and at logout, but there is no SIGTERM or SIGINT
+  handler, which needs unsafe code or a new dependency (TAB-053); the
+  Preview pane shows an RTF document's text without its bold, italics,
+  fonts or colors (VIEW-070); at 200% text the command bar's and panes'
+  icons stay 16 pixels (ACC-012); a selected This PC tile lists its space
+  as "Space" in the Details pane, not checked against Windows (HOME-001);
+  the Chinese sentence for ZIP files opened by the desktop's choice reuses
+  the catalogue's own wording and still needs a translator's review.
 - **Checks this environment cannot run.** LOOK-028 (fractional scales and a
   window moving between monitors of different scales need a Wayland
   compositor), ACC-003 (nobody has checked the file list with Orca; the icon

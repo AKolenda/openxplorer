@@ -498,6 +498,51 @@ fn large_text_grows_rows_and_dialogs_still_fit_800_by_600() {
     assert!(dialog_height <= 600, "{dialog_height} pixels high");
 }
 
+/// At 200% text, the columns nobody resized and the navigation pane at
+/// its default width grow with the text, so dates, types and folder names
+/// are not cut short; back at 100% they return to their default widths.
+/// A width the user dragged is kept.
+///
+/// parity: ACC-012, VIEW-028
+#[gtk::test]
+fn large_text_widens_default_columns_and_the_navigation_pane() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.set_default_size(1800, 900);
+    wait_for_frames(&test.window, 3);
+    let skin = skin();
+    let before = skin.text_size();
+    let details = test.window.folder_pane().details();
+    let width_of = |column: SortColumn| details.column(column).expect("a column").fixed_width();
+    let widths = || {
+        (
+            width_of(SortColumn::Modified),
+            width_of(SortColumn::Type),
+            test.window.workspace().position(),
+        )
+    };
+    assert_eq!(widths(), (176, 135, 210), "the 100% defaults");
+
+    skin.set_text_size(TextSize::from_percent(200));
+    wait_for_frames(&test.window, 3);
+    let large = widths();
+    skin.set_text_size(TextSize::from_percent(100));
+    wait_for_frames(&test.window, 3);
+    let back = widths();
+    details
+        .column(SortColumn::Type)
+        .expect("Type")
+        .set_fixed_width(150);
+    skin.set_text_size(TextSize::from_percent(200));
+    wait_for_frames(&test.window, 3);
+    let dragged = width_of(SortColumn::Type);
+    skin.set_text_size(before);
+
+    assert_eq!(large, (282, 270, 420), "twice the text, wider columns and pane");
+    assert_eq!(back, (176, 135, 210));
+    assert_eq!(dragged, 150, "a width the user chose stays");
+}
+
 /// The desktop's text scaling (GTK's font resolution) grows the rows on
 /// top of the app's own text size. The test follows the display's
 /// settings as the application does at startup.

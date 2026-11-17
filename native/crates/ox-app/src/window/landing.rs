@@ -74,6 +74,10 @@ const THIS_PC_CLASS: &str = "this-pc";
 /// The class of a mounted drive's tile, which Copy copies when selected.
 const DRIVE_TILE_CLASS: &str = "drive-tile";
 
+/// The class of a phone's or camera's tile, which the Details pane draws
+/// with the phone.
+const DEVICE_TILE_CLASS: &str = "device-tile";
+
 /// How full a file system is, in bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Capacity {
@@ -285,6 +289,9 @@ fn drive_tile(row: &VolumeRow, cell: CellSize) -> Tile {
         VolumeState::Mountable { id } => id,
     };
     let (child, lines) = tile_frame(&icons::image(glyph, TILES_ICON), &row.label, key, cell);
+    if row.kind == VolumeKind::Device {
+        child.add_css_class(DEVICE_TILE_CLASS);
+    }
     match &row.state {
         VolumeState::Mounted { uri, controls } => {
             show_capacity(&lines, uri, true);
@@ -904,6 +911,7 @@ fn tile_group(page: &gtk::Box, group: Group, tiles: Vec<Tile>) {
     ));
     connect_menus(&flow, &tiles);
     connect_keys(&flow, &tiles);
+    recount_on_selection(&flow);
     connect_edge_keys(&flow);
 }
 
@@ -942,6 +950,99 @@ pub(super) fn selected_drives(page: &gtk::Box) -> Vec<String> {
         .filter(|child| child.has_css_class(DRIVE_TILE_CLASS))
         .map(|child| child.widget_name().to_string())
         .collect()
+}
+
+/// What This PC shows, as the status bar and the Details pane count and
+/// describe it: its tiles as items, as Windows 11 counts them.
+pub(super) struct ThisPcTiles {
+    /// Every tile, a collapsed group's too.
+    pub(super) count: u32,
+    /// The selected tiles, in order.
+    pub(super) selected: Vec<TileFacts>,
+}
+
+/// A tile as the Details pane describes it.
+pub(super) struct TileFacts {
+    /// The drive's, device's or share's name.
+    pub(super) name: String,
+    /// Its picture.
+    pub(super) art: Art,
+    /// What the tile says under its name: "27.6 GB free of 252 GB", or
+    /// that it connects when opened.
+    pub(super) note: Option<String>,
+}
+
+/// The tiles of This PC in `page`, or `None` when `page` shows another
+/// page.
+pub(super) fn this_pc_tiles(page: &gtk::Box) -> Option<ThisPcTiles> {
+    if !page.has_css_class(THIS_PC_CLASS) {
+        return None;
+    }
+    let mut count = 0_u32;
+    let mut selected = Vec::new();
+    for flow in tile_boxes(page) {
+        for child in tiles_in(&flow) {
+            count = count.saturating_add(1);
+            if child.is_selected() {
+                selected.push(tile_facts(&child));
+            }
+        }
+    }
+    Some(ThisPcTiles { count, selected })
+}
+
+/// The name, picture and note of the tile `child`.
+fn tile_facts(child: &gtk::FlowBoxChild) -> TileFacts {
+    let labels = super::widget_tree::descendants::<gtk::Label>(child);
+    let text_with = |class: &str| {
+        labels
+            .iter()
+            .find(|label| label.has_css_class(class))
+            .map(|label| label.text().to_string())
+    };
+    let art = super::widget_tree::descendants::<ArtImage>(child)
+        .iter()
+        .find_map(ArtImage::art)
+        .unwrap_or(if child.has_css_class(DEVICE_TILE_CLASS) {
+            Art::Glyph(Icon::Phone)
+        } else {
+            Art::Glyph(Icon::HardDrive)
+        });
+    TileFacts {
+        name: text_with("tile-name").unwrap_or_default(),
+        art,
+        note: text_with("card-sub"),
+    }
+}
+
+/// Selects only This PC's tile named `name` in `page`, as the snapshot
+/// hook's scene asks; `false` when `page` shows no such tile.
+pub(super) fn select_named(page: &gtk::Box, name: &str) -> bool {
+    if !page.has_css_class(THIS_PC_CLASS) {
+        return false;
+    }
+    let found = tile_boxes(page).find_map(|flow| {
+        let child = tiles_in(&flow).find(|child| tile_facts(child).name == name)?;
+        Some((flow, child))
+    });
+    let Some((flow, child)) = found else {
+        return false;
+    };
+    flow.unselect_all();
+    flow.select_child(&child);
+    child.grab_focus();
+    true
+}
+
+/// Has the window count This PC's tiles again whenever `flow`'s selection
+/// changes.
+fn recount_on_selection(flow: &gtk::FlowBox) {
+    flow.connect_selected_children_changed(|flow| {
+        if let Some(window) = flow.root().and_downcast::<BrowserWindow>() {
+            window.update_status();
+            window.update_details_pane();
+        }
+    });
 }
 
 /// The tiles of `flow`.

@@ -73,5 +73,17 @@ class I18nTest(unittest.TestCase):
         self.assertEqual(catalogue.gettext('Terminal'), 'Terminal', 'fuzzy messages stay English')
 
 
+    def test_the_zip_line_without_a_handler_is_one_whole_chinese_sentence(self) -> None:
+        # Settings > ZIP & archives once read "ZIP 打开使用 the desktop
+        # choice，…": the app put an untranslated English phrase into a
+        # translated sentence. The sentence is now a message of its own,
+        # extracted from the sources and translated whole.
+        line = 'ZIP opening uses the desktop choice. Opening a download is not Show in folder.'
+        self.assertIn(line, [message.msgid for message in i18n.extract()])
+        po = (i18n.PO_FOLDER / 'zh_CN.po').read_text(encoding='utf-8')
+        translations = dict(i18n.parse_po(po))
+        self.assertIn(line, translations)
+        self.assertNotRegex(translations[line], r'[A-Za-z]{3,}(?<!ZIP)', translations[line])
+
 if __name__ == '__main__':
     unittest.main()

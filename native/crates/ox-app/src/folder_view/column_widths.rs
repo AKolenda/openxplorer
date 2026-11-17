@@ -65,12 +65,46 @@ const fn default_width(column: SortColumn) -> Option<u32> {
     }
 }
 
+/// The text size, in percent, at which `column`'s default width was
+/// chosen: the dates' at 125%, which their default already fits, the
+/// others' at 100%.
+const fn default_fits_percent(column: SortColumn) -> f64 {
+    match column {
+        SortColumn::Modified | SortColumn::Created | SortColumn::Deleted => 125.0,
+        _ => 100.0,
+    }
+}
+
+/// The default width of `column` at a text drawn `scale` times its 100%
+/// size: as much wider as the text is larger than the size the default
+/// was chosen for, never narrower than the default, within the column's
+/// limits. Size has its own measured minimum ([`size_minimum`]) and is
+/// not scaled. `None` for Name, which fills the space.
+pub(crate) fn scaled_default_width(column: SortColumn, scale: f64) -> Option<u32> {
+    let width = default_width(column)?;
+    if column == SortColumn::Size {
+        return Some(width);
+    }
+    let growth = (scale * 100.0 / default_fits_percent(column)).max(1.0);
+    let limits = width_limits(column);
+    let scaled = (f64::from(width) * growth).round();
+    Some(fitted_pixels(
+        scaled.clamp(f64::from(*limits.start()), f64::from(*limits.end())),
+    ))
+}
+
 /// The width `column` starts with: the saved width within the Python
 /// app's limits, else its default. `None` lets Name fill the space.
 pub(crate) fn start_width(column: SortColumn, saved: Option<&ColumnWidths>) -> Option<u32> {
+    start_width_at(column, saved, 1.0)
+}
+
+/// [`start_width`] with text drawn `scale` times its 100% size: a column
+/// without a saved width starts at [`scaled_default_width`].
+pub(crate) fn start_width_at(column: SortColumn, saved: Option<&ColumnWidths>, scale: f64) -> Option<u32> {
     let limits = settings_column(column).width_range();
     let saved = saved.and_then(|widths| widths.get(settings_column(column)));
-    let width = saved.or(default_width(column))?;
+    let width = saved.or(scaled_default_width(column, scale))?;
     Some(width.clamp(*limits.start(), *limits.end()))
 }
 
@@ -235,6 +269,31 @@ mod tests {
             None,
             "Name still fills the space"
         );
+    }
+
+    /// Larger text widens the default widths by as much as the text grew
+    /// past the size each default was chosen for; smaller text keeps them.
+    ///
+    /// parity: ACC-012, VIEW-028
+    #[test]
+    fn default_widths_grow_with_the_text() {
+        assert_eq!(scaled_default_width(SortColumn::Type, 1.0), Some(135));
+        assert_eq!(scaled_default_width(SortColumn::Type, 2.0), Some(270));
+        assert_eq!(scaled_default_width(SortColumn::Type, 0.8), Some(135));
+        assert_eq!(scaled_default_width(SortColumn::Modified, 1.25), Some(176));
+        assert_eq!(scaled_default_width(SortColumn::Modified, 2.0), Some(282));
+        assert_eq!(
+            scaled_default_width(SortColumn::Size, 2.0),
+            Some(90),
+            "Size is measured"
+        );
+        assert_eq!(scaled_default_width(SortColumn::Name, 2.0), None);
+        assert_eq!(start_width_at(SortColumn::Type, None, 2.0), Some(270));
+        let saved = ColumnWidths {
+            file_type: Some(150),
+            ..ColumnWidths::default()
+        };
+        assert_eq!(start_width_at(SortColumn::Type, Some(&saved), 2.0), Some(150));
     }
 
     /// Size's narrowest width is its measured text and padding, never

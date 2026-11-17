@@ -65,6 +65,11 @@ impl TextSize {
         LEVELS[self.level]
     }
 
+    /// How many times its 100% size text is drawn at this size.
+    pub(crate) fn scale(self) -> f64 {
+        f64::from(self.percent()) / 100.0
+    }
+
     /// The size `levels` levels larger (smaller when negative), kept
     /// between the smallest and the largest level.
     pub(crate) fn moved_by(self, levels: isize) -> TextSize {

@@ -19,6 +19,9 @@
 //!   that never overwrites. A failed stage is deleted. The template's
 //!   permissions, execute bits included, are never copied, and a template
 //!   is never run.
+//! - Once written in full, the stage gets the mode any app's new file
+//!   gets, 0666 less the umask (0644 or 0664), before it is published, so
+//!   a new document is as readable as other new files in a shared folder.
 
 use std::fs::File;
 use std::io::{ErrorKind, Read};
@@ -42,6 +45,9 @@ use crate::transfer::{already_removed, Cancellation, Node, StagedName};
 /// Templates are read in blocks of this many bytes, with a cancellation
 /// check before each.
 const READ_BLOCK_BYTES: usize = 64 * 1024;
+
+/// The mode `creat(2)` asks for a new file, before the umask.
+const NEW_FILE_MODE: u32 = 0o666;
 
 /// The stage file is `.winspace-new-<32 hex>` in the target folder.
 const STAGE_PREFIX: &str = ".winspace-new-";
@@ -342,6 +348,14 @@ fn publish_new_file(
     let staged = StagedName::new(&stage_name, &[], &target.display_name());
     let stage = folder.child(&stage_name);
     write_private_stage(&stage, contents, context, &staged)?;
+    // Written in full: the new file gets the mode other apps give new
+    // files, as `creat(2)` with 0666 would, rather than the stage's 0600.
+    if let Err(error) = share_as_new_file(&stage) {
+        return Err(discard_stage(
+            &GioNode::from_file(stage.clone()),
+            naming(error, &staged),
+        ));
+    }
     // Same folder, never overwriting: the kernel's no-replace rename
     // locally, `set_display_name` on a phone (XFER-007, XFER-024).
     let published = GioNode::from_file(stage.clone()).publish(target, Some(&context.cancel));
@@ -353,6 +367,19 @@ fn publish_new_file(
         // OPS-048: a stage that was not published is deleted.
         discard_stage(&GioNode::from_file(stage.clone()), cause)
     })
+}
+
+/// Gives the written stage file at `stage` the mode a new file gets:
+/// 0666 less the process's umask (0644 or 0664), so the group and others
+/// may read it as they may read files other apps make. A stage elsewhere
+/// than on this computer keeps the mode its backend gave it.
+fn share_as_new_file(stage: &gio::File) -> Result<(), OpsError> {
+    let Some(path) = stage.path() else {
+        return Ok(());
+    };
+    let mode = NEW_FILE_MODE & !crate::permissions::process_umask();
+    std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(mode))
+        .map_err(OpsError::from)
 }
 
 /// `error` naming the new file rather than its stage file `staged`.
@@ -482,6 +509,36 @@ mod tests {
             .map(|entry| entry.expect("a folder entry").file_name())
             .collect();
         assert_eq!(names, ["New document.txt"], "no {STAGE_PREFIX} file is left");
+    }
+
+    /// Every New document (a bitmap, a Rich Text Document, a text
+    /// document and a ZIP) is published with the mode other apps give new
+    /// files, 0666 less the umask (0644 or 0664), not its private stage's
+    /// 0600, so the group and others can read it in a shared folder.
+    ///
+    /// parity: OPS-048
+    #[test]
+    fn a_new_document_gets_the_umask_mode_not_the_private_stage_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        let folder = gio::File::for_path(temp.path());
+        let wanted = 0o666 & !crate::permissions::process_umask();
+        for document in NewDocument::ALL {
+            let name = format!("New document.{}", document.extension());
+            let target = GioNode::from_file(folder.child(&name));
+            publish_new_file(
+                &folder,
+                &target,
+                document.contents(),
+                &OperationContext::default(),
+            )
+            .expect("the new document");
+            let mode = fs::metadata(temp.path().join(&name))
+                .expect("the new document")
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, wanted, "{name}: {:o}", mode & 0o777);
+        }
     }
 
     #[test]

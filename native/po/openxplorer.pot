@@ -1322,6 +1322,10 @@ msgstr ""
 msgid "Show in folder: not enabled. Folder associations alone do not control every browser route."
 msgstr ""
 
+#: crates/ox-app/src/integration/status.rs
+msgid "ZIP opening uses the desktop choice. Opening a download is not Show in folder."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/integration/status.rs
 msgid "ZIP opening uses {handler}. Opening a download is not Show in folder."
@@ -4579,6 +4583,11 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/activation.rs
+msgid "OpenXplorer can’t find “{address}”. Make sure you typed the name correctly, and then try again."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/activation.rs
 msgid "Opening {address} in your web browser."
 msgstr ""
 
@@ -5419,6 +5428,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-app/src/window/home_page.rs
 msgid "File location"
+msgstr ""
+
+#: crates/ox-app/src/window/details_pane/content.rs
+msgid "Space"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

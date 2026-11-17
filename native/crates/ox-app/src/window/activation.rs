@@ -115,6 +115,17 @@ pub(super) fn activation_for(entry: &Entry) -> Activation {
     Activation::File
 }
 
+/// What a typed address that names nothing says: Windows' "Windows can't
+/// find '…'. Make sure you typed the name correctly, and then try again.",
+/// with the app's name and the address as it was typed.
+fn not_found_message(typed: &str) -> String {
+    ox_core::i18n::format_message(
+        "OpenXplorer can’t find “{address}”. Make sure you typed the name correctly, \
+         and then try again.",
+        &[("address", typed)],
+    )
+}
+
 /// Whether `typed` is an `http:` or `https:` address with a host, which
 /// the address bar hands to the web browser.
 fn is_web_address(typed: &str) -> bool {
@@ -717,6 +728,12 @@ impl BrowserWindow {
             (Err(EntryError::NotMounted(_)), _) => {
                 self.accept_address(request.typed, request.source);
                 self.navigate_or_report(request.uri);
+                return;
+            }
+            // Plain words that name what was typed, as Windows says it,
+            // rather than GIO's own text (NAV-033).
+            (Err(EntryError::NotFound(_)), None) => {
+                self.show_message(&not_found_message(request.typed));
                 return;
             }
             (Err(error), _) => {

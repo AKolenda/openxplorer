@@ -157,6 +157,15 @@ fn start_sidebar_width(saved: Option<u32>) -> i32 {
         .map_or(DEFAULT_SIDEBAR_WIDTH, clamp_sidebar_width)
 }
 
+/// The sidebar's default width with text drawn `scale` times its 100%
+/// size: 210 pixels, as much wider as the text is larger, so folder names
+/// are not cut short at large text (ACC-012); never narrower than 210.
+fn scaled_sidebar_width(scale: f64) -> i32 {
+    #[expect(clippy::cast_possible_truncation, reason = "sidebar widths are small")]
+    let width = (f64::from(DEFAULT_SIDEBAR_WIDTH) * scale.max(1.0)).round() as i32;
+    clamp_sidebar_width(width)
+}
+
 /// The widest the sidebar may be in a workspace `workspace_width` pixels
 /// wide beside a details pane `details_width` wide, so the folder pane
 /// keeps its room (`sidebarLimit` in app.js).
@@ -257,10 +266,42 @@ impl BrowserWindow {
         self.show_pane_view_state();
     }
 
-    /// Shows the 210-pixel sidebar and the columns' default widths, without
+    /// The sidebar's default width at the text size drawn now: 210
+    /// pixels at 100% ([`scaled_sidebar_width`]).
+    pub(super) fn default_sidebar_width(&self) -> i32 {
+        scaled_sidebar_width(self.sidebar_text_scale())
+    }
+
+    /// How many times its 100% size the window's text is drawn.
+    fn sidebar_text_scale(&self) -> f64 {
+        let scale = self.imp().sidebar_text_scale.get();
+        if scale > 0.0 {
+            scale
+        } else {
+            1.0
+        }
+    }
+
+    /// Text is now drawn `scale` times its 100% size: a sidebar at its
+    /// default width for the old size takes the default for the new one,
+    /// within the room the folder pane keeps; a width the user chose stays.
+    /// Nothing is saved.
+    pub(super) fn fit_sidebar_to_text(&self, scale: f64) {
+        let old = self.default_sidebar_width();
+        self.imp().sidebar_text_scale.set(scale);
+        let workspace = self.workspace();
+        if workspace.position() != old {
+            return;
+        }
+        let wanted = self.default_sidebar_width();
+        let limit = self.sidebar_limit().unwrap_or(i32::MAX);
+        workspace.set_position(wanted.min(limit));
+    }
+
+    /// Shows the default sidebar and the columns' default widths, without
     /// saving them: the window that reset the layout saves it once.
     fn show_default_layout(&self) {
-        self.workspace().set_position(DEFAULT_SIDEBAR_WIDTH);
+        self.workspace().set_position(self.default_sidebar_width());
         for pane in self.folder_panes() {
             pane.details().apply_column_widths(None);
         }
@@ -292,7 +333,8 @@ impl BrowserWindow {
         ));
     }
 
-    /// A double-click on the pane handle returns the sidebar to 210 pixels
+    /// A double-click on the pane handle returns the sidebar to its default
+    /// width (210 pixels at 100% text)
     /// and saves that, as the Python app's resizer does.
     fn reset_sidebar_on_double_click(&self) {
         let click = gtk::GestureClick::new();
@@ -304,8 +346,9 @@ impl BrowserWindow {
                 let workspace = window.workspace();
                 let on_handle = (x - f64::from(workspace.position())).abs() <= HANDLE_REACH;
                 if presses == 2 && on_handle {
-                    workspace.set_position(DEFAULT_SIDEBAR_WIDTH);
-                    window.save_preference(Preference::SidebarWidth(DEFAULT_SIDEBAR_WIDTH));
+                    let width = window.default_sidebar_width();
+                    workspace.set_position(width);
+                    window.save_preference(Preference::SidebarWidth(width));
                 }
             }
         ));
@@ -389,6 +432,9 @@ mod tests {
     /// parity: SIDE-023
     #[test]
     fn the_sidebar_starts_at_210_within_the_python_limits() {
+        assert_eq!(scaled_sidebar_width(1.0), 210);
+        assert_eq!(scaled_sidebar_width(2.0), 420);
+        assert_eq!(scaled_sidebar_width(0.8), 210);
         assert_eq!(start_sidebar_width(None), 210);
         assert_eq!(start_sidebar_width(Some(300)), 300);
         assert_eq!(start_sidebar_width(Some(90)), 140);

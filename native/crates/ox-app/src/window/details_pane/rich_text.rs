@@ -1,0 +1,314 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+//! The text of a Rich Text Format document, for the Preview pane (VIEW-070).
+//!
+//! Windows' Preview pane shows an RTF file's text, not its markup. This
+//! reads the text the way an RTF reader does, without its formatting:
+//! paragraphs and line breaks become new lines, `\tab` a tab, `\'hh`
+//! escapes a Windows-1252 character, `\uN` a Unicode character (skipping
+//! the `\ucN` fallback characters after it), and the groups a reader
+//! does not show (the font, color and style tables, document information,
+//! pictures, fields' instructions and every `{\*…}` destination) are
+//! left out. Bold, italics, fonts and colors are not drawn: the pane shows
+//! the text in its usual font.
+
+/// The destinations whose text is never shown.
+const HIDDEN_DESTINATIONS: [&str; 16] = [
+    "fonttbl",
+    "colortbl",
+    "stylesheet",
+    "info",
+    "pict",
+    "object",
+    "fldinst",
+    "header",
+    "footer",
+    "headerl",
+    "headerr",
+    "footerl",
+    "footerr",
+    "listtable",
+    "listoverridetable",
+    "themedata",
+];
+
+/// The characters 0x80 to 0x9F of Windows-1252, the code page of almost
+/// every RTF file (`\ansi`, `\ansicpg1252`); the other bytes are Latin-1.
+const WINDOWS_1252_HIGH: [char; 32] = [
+    '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž', '\u{8f}', '\u{90}',
+    '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9d}', 'ž', 'Ÿ',
+];
+
+/// The deepest group nesting followed; deeper groups are read as text of
+/// their parent, so a hostile file cannot grow the stack without end.
+const MAX_DEPTH: usize = 256;
+
+/// The state of one group: whether its text is hidden, and how many
+/// fallback characters follow a `\uN`.
+#[derive(Debug, Clone, Copy)]
+struct Group {
+    hidden: bool,
+    fallback: usize,
+}
+
+/// The character of the Windows-1252 byte `byte`.
+fn windows_1252(byte: u8) -> char {
+    match byte {
+        0x80..=0x9f => WINDOWS_1252_HIGH[usize::from(byte - 0x80)],
+        _ => char::from(byte),
+    }
+}
+
+/// The character a control word stands for, if it is one.
+fn word_character(word: &str) -> Option<char> {
+    Some(match word {
+        "par" | "line" | "sect" | "page" | "row" => '\n',
+        "tab" | "cell" => '\t',
+        "emdash" => '—',
+        "endash" => '–',
+        "lquote" => '‘',
+        "rquote" => '’',
+        "ldblquote" => '“',
+        "rdblquote" => '”',
+        "bullet" => '•',
+        _ => return None,
+    })
+}
+
+/// Whether `bytes` start as an RTF document does.
+pub(super) fn is_rtf(bytes: &[u8]) -> bool {
+    bytes.trim_ascii_start().starts_with(b"{\\rtf")
+}
+
+/// The text of the RTF document `bytes`, without its markup.
+pub(super) fn rtf_text(bytes: &[u8]) -> String {
+    let mut reader = Reader {
+        bytes,
+        index: 0,
+        text: String::new(),
+        stack: Vec::new(),
+        group: Group {
+            hidden: false,
+            fallback: 1,
+        },
+        skip: 0,
+        starred: false,
+        group_start: false,
+    };
+    reader.read();
+    reader.text
+}
+
+/// Reads an RTF document's text.
+struct Reader<'a> {
+    bytes: &'a [u8],
+    index: usize,
+    text: String,
+    stack: Vec<Group>,
+    group: Group,
+    /// Fallback characters still to skip after a `\uN`.
+    skip: usize,
+    /// A `{\*` group started: its destination is hidden.
+    starred: bool,
+    /// Just after `{`: the first control word may name a destination.
+    group_start: bool,
+}
+
+impl Reader<'_> {
+    /// Adds `character` to the text unless it is a fallback to skip or
+    /// its group is hidden.
+    fn push(&mut self, character: char) {
+        if self.skip > 0 {
+            self.skip -= 1;
+        } else if !self.group.hidden {
+            self.text.push(character);
+        }
+    }
+
+    /// Adds `character`, never a fallback, unless its group is hidden.
+    fn push_always(&mut self, character: char) {
+        if !self.group.hidden {
+            self.text.push(character);
+        }
+    }
+
+    fn read(&mut self) {
+        while let Some(&byte) = self.bytes.get(self.index) {
+            self.index += 1;
+            match byte {
+                b'{' => {
+                    if self.stack.len() < MAX_DEPTH {
+                        self.stack.push(self.group);
+                    }
+                    self.group_start = true;
+                    self.skip = 0;
+                    continue;
+                }
+                b'}' => {
+                    if let Some(outer) = self.stack.pop() {
+                        self.group = outer;
+                    }
+                    self.skip = 0;
+                }
+                b'\\' => {
+                    if self.control() {
+                        continue;
+                    }
+                }
+                // Line ends in the file are not text.
+                b'\n' | b'\r' => {}
+                _ => self.character(byte),
+            }
+            self.group_start = false;
+            self.starred = false;
+        }
+    }
+
+    /// Reads a control word or symbol after its backslash; true when the
+    /// group's start or star still holds for what follows.
+    fn control(&mut self) -> bool {
+        let Some(&next) = self.bytes.get(self.index) else {
+            return false;
+        };
+        if next.is_ascii_alphabetic() {
+            self.control_word();
+            return true;
+        }
+        self.index += 1;
+        match next {
+            b'*' => {
+                self.starred = true;
+                return true;
+            }
+            b'\'' => {
+                let hex = self.bytes.get(self.index..self.index + 2);
+                let value = hex
+                    .and_then(|hex| std::str::from_utf8(hex).ok())
+                    .and_then(|hex| u8::from_str_radix(hex, 16).ok());
+                if let Some(value) = value {
+                    self.index += 2;
+                    self.push(windows_1252(value));
+                }
+            }
+            b'~' => self.push('\u{a0}'),
+            b'_' => self.push('\u{2011}'),
+            b'\n' | b'\r' => self.push_always('\n'),
+            b'\\' | b'{' | b'}' => self.push(char::from(next)),
+            _ => {}
+        }
+        false
+    }
+
+    /// Reads a control word, its number and the space that ends it.
+    fn control_word(&mut self) {
+        let bytes = self.bytes;
+        let start = self.index;
+        while bytes.get(self.index).is_some_and(u8::is_ascii_alphabetic) {
+            self.index += 1;
+        }
+        let word = std::str::from_utf8(&bytes[start..self.index]).unwrap_or_default();
+        let number_start = self.index;
+        if bytes.get(self.index) == Some(&b'-') {
+            self.index += 1;
+        }
+        while bytes.get(self.index).is_some_and(u8::is_ascii_digit) {
+            self.index += 1;
+        }
+        let parameter = std::str::from_utf8(&bytes[number_start..self.index])
+            .ok()
+            .and_then(|number| number.parse::<i64>().ok());
+        // One space ends a control word and is part of it.
+        if bytes.get(self.index) == Some(&b' ') {
+            self.index += 1;
+        }
+        if (self.group_start && HIDDEN_DESTINATIONS.contains(&word)) || self.starred {
+            self.group.hidden = true;
+        }
+        self.starred = false;
+        self.group_start = false;
+        match word {
+            "par" | "line" | "sect" | "page" | "row" | "tab" | "cell" => {
+                self.push_always(word_character(word).unwrap_or('\n'));
+            }
+            "uc" => self.group.fallback = parameter.and_then(|n| usize::try_from(n).ok()).unwrap_or(1),
+            "u" => {
+                // A negative value is a code unit above 32767.
+                let unit = parameter.map(|n| if n < 0 { n + 65_536 } else { n });
+                let character = unit
+                    .and_then(|n| u32::try_from(n).ok())
+                    .and_then(char::from_u32)
+                    .unwrap_or('\u{fffd}');
+                self.push_always(character);
+                self.skip = self.group.fallback;
+            }
+            "bin" => {
+                // Binary data of that many bytes follows.
+                let length = parameter.and_then(|n| usize::try_from(n).ok()).unwrap_or(0);
+                self.index = self.index.saturating_add(length).min(bytes.len());
+            }
+            _ => {
+                if let Some(character) = word_character(word) {
+                    self.push(character);
+                }
+            }
+        }
+    }
+
+    /// Reads a character of text: ASCII, or UTF-8 a hand-written file may
+    /// hold (bytes above 127 are not RTF), else Windows-1252.
+    fn character(&mut self, byte: u8) {
+        let start = self.index - 1;
+        let character = if byte.is_ascii() {
+            char::from(byte)
+        } else {
+            let end = (start + 4).min(self.bytes.len());
+            let decoded = (start + 2..=end)
+                .find_map(|end| std::str::from_utf8(&self.bytes[start..end]).ok())
+                .and_then(|text| text.chars().next());
+            match decoded {
+                Some(character) => {
+                    self.index = start + character.len_utf8();
+                    character
+                }
+                None => windows_1252(byte),
+            }
+        };
+        self.push(character);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// parity: VIEW-070
+    #[test]
+    fn rtf_markup_becomes_its_text() {
+        let letter = b"{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0\\fswiss Calibri;}}\
+            {\\colortbl;\\red255\\green0\\blue0;}{\\*\\generator Example;}\
+            {\\info{\\title Secret title}}\\f0\\fs22 Dear \\b Sam\\b0 ,\\par\n\
+            Caf\\'e9 \\'93costs\\'94 5\\u8364?.\\line Two\\tab cols\\par\
+            {\\field{\\*\\fldinst HYPERLINK \"x\"}{\\fldrslt link}}\\par}";
+        assert_eq!(
+            rtf_text(letter),
+            "Dear Sam,\nCafé \u{201c}costs\u{201d} 5€.\nTwo\tcols\nlink\n"
+        );
+    }
+
+    #[test]
+    fn unicode_fallbacks_and_escapes_are_read_as_characters() {
+        assert_eq!(
+            rtf_text(b"{\\rtf1\\uc2\\u-3913 ab c\\{\\}\\\\}"),
+            "\u{f0b7} c{}\\"
+        );
+        assert_eq!(rtf_text("{\\rtf1 Gr\u{fc}\u{df}e}".as_bytes()), "Grüße");
+        assert_eq!(rtf_text(b"{\\rtf1 x\\bin3 {}}y}"), "xy");
+    }
+
+    #[test]
+    fn a_new_rich_text_document_has_one_empty_paragraph() {
+        let new = ox_core::ops::NewDocument::RichTextDocument.contents();
+        assert!(is_rtf(new));
+        assert_eq!(rtf_text(new), "\n");
+        assert!(!is_rtf(b"plain text"));
+    }
+}

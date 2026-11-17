@@ -320,6 +320,10 @@ mod imp {
         /// Size's narrowest width when the view was last laid out, so a
         /// new font or text size is noticed ([`super::DetailsView::fit_size_to_its_font`]).
         pub(super) size_minimum: Cell<u32>,
+        /// How many times its 100% size the list's text is drawn, which
+        /// widens the default column widths; 0 until a text size is set,
+        /// which counts as 1 ([`super::DetailsView::text_scale`]).
+        pub(super) text_scale: Cell<f64>,
         /// What the cells share, set by [`super::DetailsView::new`].
         pub(super) cells: OnceCell<super::CellContext>,
         /// The folder's selection model, while the view shows it.
@@ -703,8 +707,9 @@ impl DetailsView {
     /// saved a width for it, as in `applyColumnLayout`.
     pub(crate) fn apply_column_widths(&self, saved: Option<&ColumnWidths>) {
         let size_minimum = self.size_minimum();
+        let scale = self.text_scale();
         for (column, view_column) in self.view_columns() {
-            let mut width = column_widths::start_width(column, saved);
+            let mut width = column_widths::start_width_at(column, saved, scale);
             // Size starts wide enough for its text in the list's font, also
             // from a saved width narrower than that.
             if column == SortColumn::Size {
@@ -715,6 +720,40 @@ impl DetailsView {
         }
         // Applying widths is not a resize by the user: reporting it would
         // save widths the user never set.
+        self.cancel_resize_report();
+    }
+
+    /// How many times its 100% size the list's text is drawn.
+    fn text_scale(&self) -> f64 {
+        let scale = self.imp().text_scale.get();
+        if scale > 0.0 {
+            scale
+        } else {
+            1.0
+        }
+    }
+
+    /// Draws the list's text `scale` times its 100% size: each column
+    /// still at its default width for the old size takes its default for
+    /// the new one, so larger text is not cut short (ACC-012); a width the
+    /// user chose stays. Not a resize by the user, so nothing is saved.
+    pub(crate) fn set_text_scale(&self, scale: f64) {
+        let old = self.text_scale();
+        self.imp().text_scale.set(scale);
+        if (old - scale).abs() < f64::EPSILON {
+            return;
+        }
+        for (column, view_column) in self.view_columns() {
+            if column == SortColumn::Size {
+                continue;
+            }
+            let at_default =
+                column_widths::fixed_width(column, column_widths::scaled_default_width(column, old));
+            if view_column.fixed_width() >= 0 && view_column.fixed_width() == at_default {
+                let width = column_widths::scaled_default_width(column, scale);
+                view_column.set_fixed_width(column_widths::fixed_width(column, width));
+            }
+        }
         self.cancel_resize_report();
     }
 
