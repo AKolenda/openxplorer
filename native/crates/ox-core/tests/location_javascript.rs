@@ -317,7 +317,14 @@ fn same_location_ignores_one_trailing_slash_like_app_js() {
 fn sizes_match_app_js() {
     let mut mismatches = Mismatches::new("prettyBytes");
     for case in &fixture().sizes {
-        mismatches.expect_equal(case.bytes, &case.text, &pretty_bytes(case.bytes));
+        // The web interface wrote "1 bytes"; the native app picks the
+        // singular through ngettext, as Windows writes "1 byte".
+        let expected = if case.bytes == 1 {
+            "1 byte".to_owned()
+        } else {
+            case.text.clone()
+        };
+        mismatches.expect_equal(case.bytes, &expected, &pretty_bytes(case.bytes));
     }
     mismatches.assert_none();
 }

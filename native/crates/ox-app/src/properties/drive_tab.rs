@@ -66,13 +66,7 @@ fn append_space(page: &gtk::Box, free: u64, total: u64) {
     let capacity = SpaceRows::new();
     capacity.add(&ox_core::i18n::gettext("Capacity"), None, total);
     page.append(&capacity.grid);
-    let text = ox_core::i18n::format_message(
-        "{value1} free of {value2}",
-        &[
-            ("value1", &format::short_size(free)),
-            ("value2", &format::short_size(total)),
-        ],
-    );
+    let text = format::free_of_text(free, total);
     let ring = SpaceRing::new(free, total, &text);
     ring.add_css_class("drive-ring");
     page.append(&ring);
@@ -174,7 +168,7 @@ impl SpaceRows {
             .css_classes(["property-name"])
             .build();
         self.grid.attach(&label, 1, line, 1, 1);
-        let exact = ox_core::i18n::format_message("{bytes} bytes", &[("bytes", &format::grouped(bytes))]);
+        let exact = format::exact_bytes(bytes);
         let short = format::short_size(bytes);
         for (column, text) in [(2, exact), (3, short)] {
             let value = gtk::Label::builder()
