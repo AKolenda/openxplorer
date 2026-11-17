@@ -260,7 +260,7 @@ const WINDOWS_MODIFIER_ORDER: [gdk::ModifierType; 4] = [
 ];
 
 /// A key's name where Microsoft's list names it otherwise than GTK
-/// ("Return", "BackSpace", "Escape", "Space", "Left").
+/// (`Return`, `BackSpace`, `Escape`, `space`, `Left`).
 fn windows_key_name(key: gdk::Key) -> Option<&'static str> {
     let name = match key {
         gdk::Key::Return | gdk::Key::KP_Enter => crate::i18n::message_id("Enter"),
@@ -361,6 +361,22 @@ fn keys_without_a_binding() -> Vec<ShortcutRow> {
             ox_core::i18n::gettext_static("Open the selected items"),
             key("Return"),
         ),
+    ]
+    .into_iter()
+    .chain(mouse_keys())
+    .map(|(group, label, keys)| ShortcutRow {
+        group,
+        label: label.to_owned(),
+        keys: vec![keys],
+    })
+    .collect()
+}
+
+/// The keys held with the mouse that Microsoft's list names: Shift with a
+/// right-click, Ctrl, Shift or Alt with a drag, and Ctrl with the scroll
+/// wheel, each a phrase of its own.
+fn mouse_keys() -> [(Group, &'static str, String); 5] {
+    [
         (
             Group::Selection,
             ox_core::i18n::gettext_static("Open the classic context menu (Show more options)"),
@@ -387,13 +403,6 @@ fn keys_without_a_binding() -> Vec<ShortcutRow> {
             ox_core::i18n::gettext_static("Ctrl+scroll wheel").to_owned(),
         ),
     ]
-    .into_iter()
-    .map(|(group, label, keys)| ShortcutRow {
-        group,
-        label: label.to_owned(),
-        keys: vec![keys],
-    })
-    .collect()
 }
 
 /// Every binding: the action's detailed name and its keys as GTK parses
