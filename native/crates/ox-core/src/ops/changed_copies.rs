@@ -29,6 +29,12 @@ const ATTRIBUTES: &str = "standard::name,standard::display-name,standard::type,t
 /// anything inside which, were modified after `since` (seconds since the
 /// Unix epoch), or could not be checked completely. Empty for every other step.
 pub async fn changed_copies(record: &UndoRecord, since: u64) -> Vec<String> {
+    changed_copies_except(record, since, &[]).await
+}
+
+/// As [`changed_copies`], leaving out the copies in `skip`: those Undo
+/// deletes permanently, which their own question has already named.
+pub async fn changed_copies_except(record: &UndoRecord, since: u64, skip: &[String]) -> Vec<String> {
     let copies = match record {
         UndoRecord::Copy { copies } | UndoRecord::Duplicate { copies } => copies,
         // A copy that replaced files: its copies are in its Copy step, or,
@@ -48,11 +54,23 @@ pub async fn changed_copies(record: &UndoRecord, since: u64) -> Vec<String> {
                 })
                 .cloned()
                 .collect();
-            return changed_among(copies, since).await;
+            return changed_among(without(copies, skip), since).await;
         }
         _ => return Vec::new(),
     };
-    changed_among(copies.clone(), since).await
+    changed_among(without(copies.clone(), skip), since).await
+}
+
+/// `copies` without those in `skip`.
+fn without(copies: Vec<String>, skip: &[String]) -> Vec<String> {
+    if skip.is_empty() {
+        return copies;
+    }
+    let skip: std::collections::HashSet<&str> = skip.iter().map(String::as_str).collect();
+    copies
+        .into_iter()
+        .filter(|uri| !skip.contains(uri.as_str()))
+        .collect()
 }
 
 /// The names of `copies` that, or anything inside which, changed after
