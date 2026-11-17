@@ -67,7 +67,7 @@ const AFTER_DIVIDER: &str = "after-divider";
 /// How long the pointer rests on a row before its submenu opens, or on
 /// another row before an open submenu closes: Windows' default menu show
 /// delay (`SPI_GETMENUSHOWDELAY`, the `MenuShowDelay` setting), 400 ms.
-pub(super) const SUBMENU_DELAY: Duration = Duration::from_millis(400);
+pub(crate) const SUBMENU_DELAY: Duration = Duration::from_millis(400);
 
 /// The class of a row whose submenu is open, which stays highlighted.
 const SUBMENU_OPEN: &str = "submenu-open";
@@ -1039,6 +1039,18 @@ impl MenuPopover {
         self.open_submenu_index() == Some(index)
     }
 
+    /// Rests the pointer on the row labelled `label`, as the pointer coming
+    /// onto it does, for the snapshot hook's `hover=` step: its submenu, if
+    /// it has one, opens after [`SUBMENU_DELAY`]. False when the menu has
+    /// no such row.
+    pub(crate) fn rest_pointer_on_row(&self, label: &str) -> bool {
+        let Some(index) = self.items().iter().position(|item| item.label == label) else {
+            return false;
+        };
+        self.pointer_moved(Some(index), None);
+        true
+    }
+
     /// Closes the open submenu and gives the keyboard to its row, as Left
     /// and Escape do.
     fn close_submenu_to_its_row(&self) {
@@ -1144,10 +1156,7 @@ impl MenuPopover {
     /// when the windowing system does not say where it is, as Wayland
     /// does only for the surface under the pointer.
     fn pointer_is_over_rows(&self) -> bool {
-        let device = self
-            .display()
-            .default_seat()
-            .and_then(|seat| seat.pointer());
+        let device = self.display().default_seat().and_then(|seat| seat.pointer());
         let Some((x, y)) = self
             .surface()
             .zip(device)
@@ -1390,6 +1399,20 @@ pub(super) fn close_menus_in(
         if !menu.is_visible() && left_on_screen {
             WidgetExt::unrealize(menu);
         }
+    }
+}
+
+impl crate::window::BrowserWindow {
+    /// Rests the pointer on the row labelled `label` of the innermost open
+    /// menu that has one, for the snapshot hook's `hover=` step.
+    pub(crate) fn rest_pointer_on_menu_row(&self, label: &str) -> bool {
+        let mut menus = Vec::new();
+        collect_menus(self.upcast_ref(), &mut menus);
+        menus
+            .iter()
+            .rev()
+            .filter(|menu| menu.is_mapped())
+            .any(|menu| menu.rest_pointer_on_row(label))
     }
 }
 
