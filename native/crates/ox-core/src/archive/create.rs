@@ -1014,6 +1014,46 @@ mod tests {
         assert!(!names_in(root.path()).iter().any(is_staging));
     }
 
+    /// The folders of a new 7z are folders to every reader: none is
+    /// marked as an item that deletes another (an "anti-item"), which
+    /// 7-Zip and Windows skip when they extract, losing empty folders.
+    ///
+    /// parity: ARC-023
+    #[test]
+    fn a_7z_keeps_its_empty_folders_for_every_reader() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(root.path().join("Trip/Empty")).unwrap();
+        fs::write(root.path().join("Trip/notes.txt"), "notes").unwrap();
+        let uris = vec![file_uri(&root.path().join("Trip"))];
+
+        ZipCompressor::new()
+            .compress(&request(root.path(), uris, "Trip.7z"), &Cancellation::new())
+            .unwrap();
+
+        let mut file = fs::File::open(root.path().join("Trip.7z")).unwrap();
+        let archive = sevenz_rust2::Archive::read(&mut file, &sevenz_rust2::Password::empty()).unwrap();
+        let anti: Vec<&str> = archive
+            .files
+            .iter()
+            .filter(|entry| entry.is_anti_item)
+            .map(|entry| entry.name.as_str())
+            .collect();
+        assert_eq!(anti, Vec::<&str>::new());
+        let browser = crate::archive::ArchiveBrowser::new(
+            std::sync::Arc::new(crate::archive::GioArchiveOpener),
+            root.path().join("previews"),
+        );
+        let listing = browser
+            .list(
+                &file_uri(&root.path().join("Trip.7z")),
+                "Trip",
+                &Cancellation::new(),
+            )
+            .unwrap();
+        let names: Vec<&str> = listing.entries.iter().map(|entry| entry.name.as_str()).collect();
+        assert_eq!(names, ["Empty", "notes.txt"]);
+    }
+
     /// Cancelled while it writes a file, a 7z compression stops and
     /// leaves no archive behind, as a ZIP's does.
     ///
