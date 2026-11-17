@@ -675,6 +675,25 @@ fn show_in_front(widget: &gtk::Box, active: bool) {
     super::widget_tree::toggle_class(widget, "active", active);
     widget.set_focusable(active);
     widget.update_state(&[gtk::accessible::State::Selected(Some(active))]);
+    show_close_button_when_wanted(widget);
+}
+
+/// As in Windows 11, only the tab in front, a hovered tab, a tab holding
+/// the keyboard focus and a tab being dragged show their close button.
+/// Elsewhere it takes no room, so the title reaches the tab's end and is
+/// cut only where it runs out of room there.
+pub(super) fn show_close_button_when_wanted(tab: &gtk::Box) {
+    let Some(close) = tab.last_child().filter(|child| child.has_css_class("tab-close")) else {
+        return;
+    };
+    let shown = tab.has_css_class("active")
+        || tab.has_css_class(drag_marks::DRAGGED_CLASS)
+        || tab
+            .state_flags()
+            .intersects(gtk::StateFlags::PRELIGHT | gtk::StateFlags::FOCUS_WITHIN);
+    if close.is_visible() != shown {
+        close.set_visible(shown);
+    }
 }
 
 fn tab_icon(icon: Art) -> ArtImage {
@@ -706,6 +725,9 @@ fn tab_widget(tab: &TabView) -> gtk::Box {
         mark_previous_version(&widget, &tab.title, snapshot);
     }
     widget.append(&close_button(tab));
+    show_close_button_when_wanted(&widget);
+    // The pointer coming or going, and the keyboard, show or hide it.
+    widget.connect_state_flags_changed(|widget, _| show_close_button_when_wanted(widget));
     let id = tab.id.to_variant();
     widget.add_controller(select_on_click(id.clone()));
     widget.add_controller(select_on_enter(id.clone()));

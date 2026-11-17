@@ -533,3 +533,88 @@ fn overflowing_tabs_keep_a_few_letters_and_scroll_with_arrows_at_both_ends() {
         !back.is_visible() && !forward.is_visible()
     });
 }
+
+/// The bounds of `widget` in `tab`, left edge and right edge.
+fn span_in(widget: &impl IsA<gtk::Widget>, tab: &gtk::Widget) -> (f64, f64) {
+    let bounds = widget.compute_bounds(tab).expect("laid out in its tab");
+    (f64::from(bounds.x()), f64::from(bounds.x() + bounds.width()))
+}
+
+/// The icon, title and close button of `tab`.
+fn tab_parts(tab: &gtk::Widget) -> (gtk::Widget, gtk::Label, gtk::Button) {
+    let icon = tab.first_child().expect("an icon");
+    let title = descendants::<gtk::Label>(tab)
+        .into_iter()
+        .find(|label| label.has_css_class("tab-title"))
+        .expect("a title");
+    let close = descendants::<gtk::Button>(tab)
+        .into_iter()
+        .find(|button| button.has_css_class("tab-close"))
+        .expect("a close button");
+    (icon, title, close)
+}
+
+/// A tab at its narrowest gives its title all the room after its icon,
+/// as Windows 11 does: up to its close button on the tab in front or a
+/// hovered tab, and up to the tab's end on the others, whose close button
+/// takes no room then. The title is cut only where it runs out of that
+/// room, so a wider tab shows more of it.
+///
+/// parity: TAB-019
+#[gtk::test]
+fn a_tab_at_its_narrowest_gives_its_title_all_the_room_after_its_icon() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    super::narrow_windows::resize(&test, 1366);
+    have_tabs(&test, &fixture, 5);
+    let wide_title = tab_parts(&tab_widget(&test, 0)).1.width();
+    have_tabs(&test, &fixture, 40);
+    let adjustment = strip_scroll(&test);
+    assert!(
+        adjustment.upper() > adjustment.page_size() + 1.0,
+        "40 tabs overflow"
+    );
+
+    // A tab behind, at the minimum width: the title runs from after the
+    // icon to the tab's end, less its padding.
+    let behind = tab_widget(&test, 0);
+    let (icon, title, close) = tab_parts(&behind);
+    assert!(!close.is_visible(), "a tab behind shows no close button");
+    let (_, icon_end) = span_in(&icon, &behind);
+    let (title_start, title_end) = span_in(&title, &behind);
+    let tab_end = f64::from(behind.width());
+    assert!(title_start - icon_end <= 10.5, "the title starts after the icon");
+    assert!(
+        tab_end - title_end <= 10.5,
+        "the title reaches the tab's end: it ends at {title_end} of {tab_end}"
+    );
+    assert!(
+        title.width() < wide_title,
+        "a wider tab gives its title more room"
+    );
+
+    // Hovered, it shows its close button, and the title ends before it.
+    behind.set_state_flags(gtk::StateFlags::PRELIGHT, false);
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    assert!(close.is_visible(), "a hovered tab shows its close button");
+    let (close_start, _) = span_in(&close, &behind);
+    let (_, hovered_end) = span_in(&title, &behind);
+    assert!(
+        (close_start - hovered_end - 10.0).abs() <= 1.0,
+        "the title fills the room up to the close button: {hovered_end} then {close_start}"
+    );
+    behind.unset_state_flags(gtk::StateFlags::PRELIGHT);
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    assert!(!close.is_visible(), "and hides it again");
+
+    // The tab in front fills the room up to its close button.
+    let front = tab_widget(&test, 39);
+    let (_, title, close) = tab_parts(&front);
+    assert!(close.is_visible(), "the tab in front shows its close button");
+    let (close_start, _) = span_in(&close, &front);
+    let (_, title_end) = span_in(&title, &front);
+    assert!(
+        (close_start - title_end - 10.0).abs() <= 1.0,
+        "the front tab's title fills the room up to its close button"
+    );
+}

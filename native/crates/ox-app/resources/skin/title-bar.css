@@ -63,10 +63,9 @@ window.ox:backdrop .ox-titlebar { background-color: @ox_title_backdrop; }
    @ox_hover would barely show (§4.1). */
 .tab:not(.active) button.tab-close:hover { background-color: @ox_title_hover; }
 /* As in Windows 11, only the tab in front and the tab under the pointer
-   show their close button (or a tab holding the keyboard focus); the
-   others keep its room, so no title moves when the pointer comes. A tab
-   carried out of its strip keeps its own, which the carried tab copies. */
-.tab:not(.active):not(:hover):not(:focus-within):not(.tab-drag-source) button.tab-close { opacity: 0; }
+   show their close button (or a tab holding the keyboard focus, or one
+   being dragged); on the others it takes no room, so the title reaches the
+   tab's end (src/window/tab_strip.rs, show_close_button_when_wanted). */
 /* An inactive window dims the inactive tabs and the caption glyphs (§4.1). */
 window.ox:backdrop .tab:not(.active),
 window.ox:backdrop .ox-titlebar button.caption { color: @ox_text_tertiary; }

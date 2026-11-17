@@ -159,14 +159,19 @@ fn tabs_are_separated_flared_and_show_close_as_in_windows_11() {
     let end_flare = colour_at(&rows, front_place.right(), bottom - 1);
     let past_start_flare = colour_at(&rows, front_place.x - 4, bottom - 4);
     let front_close = shows_glyph(&rows, close_of(front));
-    let inactive_close = shows_glyph(&rows, close_of(second));
+    // An inactive tab's close button takes no room until it is hovered.
+    let inactive_close = descendants::<gtk::Button>(second)
+        .into_iter()
+        .any(|button| button.has_css_class("tab-close") && button.is_visible());
     second.set_state_flags(gtk::StateFlags::PRELIGHT, false);
     wait_for(TRANSITION_TIME);
     wait_for_frames(&test.window, 2);
     let hovered_rows = pixel_rows(&painted(&bar));
+    // Where its close button is while it shows.
+    let hovered_close_place = close_of(second);
     second.unset_state_flags(gtk::StateFlags::PRELIGHT);
     let beside_hovered = gap_colours(&hovered_rows, first_place, second_place);
-    let hovered_close = shows_glyph(&hovered_rows, close_of(second));
+    let hovered_close = shows_glyph(&hovered_rows, hovered_close_place);
 
     // alpha(white, .08) over #202020.
     let separator = css_colour("#323232");
