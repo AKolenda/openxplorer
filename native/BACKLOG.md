@@ -304,4 +304,3 @@ braveSync, cacheClear, cacheRefresh, cacheRemove, cacheSet, cacheStatus,
 cacheStop, chrome, connect, environment, focusWindow, list, locationApply,
 locationCheck, mountPlan, mountVolume, normalise, open, openTerminal, pin,
 preferences, quit, search, uiReady, unmount, window, windowMetadata, windows.
-

@@ -61,4 +61,3 @@ popover.ox-menu list > row:focus-visible { box-shadow: inset 0 0 0 2px @ox_focus
 .settings-categories image { color: @ox_text; }
 window.ox .settings switch { border-color: @ox_text; }
 .settings .group-rows { border-color: @ox_text_tertiary; }
-

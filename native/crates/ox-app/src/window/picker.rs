@@ -260,7 +260,7 @@ impl Picker {
 /// network address (`\\nas\projects\Plans`), never by the `GVfs` FUSE
 /// path the caller gets; a local folder by its path.
 fn shown_path(path: &Path) -> String {
-    let uri = gio::File::for_path(path).uri();
+    let uri = ox_core::network::outside_location(gio::File::for_path(path).uri().to_string());
     if uri.starts_with("file:") {
         return path.display().to_string();
     }

@@ -105,7 +105,7 @@ mod undo_apply;
 mod unfinished;
 
 pub use batch_rename::{rename_batch, BatchItem, BatchRename, DEFAULT_BATCH_NAME, NUMBER_PLACEHOLDER};
-pub use changed_copies::changed_copies;
+pub use changed_copies::{changed_copies, changed_copies_except};
 pub use conflicts::{scan_name_conflicts, ConflictScan, ItemFacts, NameConflict, PlannedItem, PlannedKind};
 pub use context::{
     FailureAsker, MoveByCopyingAsker, OperationContext, ReplacedFiles, UnstorableAsker, WriteProtection,
