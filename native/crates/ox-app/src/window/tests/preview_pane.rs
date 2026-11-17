@@ -107,6 +107,43 @@ fn preview_window(fixture: &Fixture) -> TestWindow {
     test
 }
 
+/// A text preview stands off the pane's edges as the other previews do
+/// (a document's pages are 12 pixels in): its text never starts at the
+/// pane's top-left corner.
+///
+/// parity: VIEW-070
+#[gtk::test]
+fn a_text_preview_has_the_margin_of_the_other_previews() {
+    let fixture = Fixture::standard();
+    let test = preview_window(&fixture);
+    let pane = test.window.imp().details_pane.get();
+    test.select_named("Notes 2.txt");
+    wait_until("the text", || pane.preview_text().is_some());
+    wait_for_frames(&test.window, 3);
+
+    let contents = crate::test_support::harness::descendants::<gtk::Stack>(&pane)
+        .into_iter()
+        .find(|stack| stack.has_css_class("preview-contents"))
+        .expect("the preview's contents");
+    let text = crate::test_support::harness::descendants::<gtk::TextView>(&pane)
+        .into_iter()
+        .find(|view| view.has_css_class("preview-text"))
+        .expect("the text preview");
+    let bounds = text.compute_bounds(&contents).expect("laid out");
+    let (left, top) = (f64::from(bounds.x()), f64::from(bounds.y()));
+    let right = f64::from(bounds.x() + bounds.width());
+    let room = f64::from(contents.width());
+    assert!(
+        left >= 12.0 && top >= 12.0,
+        "the text box is at ({left}, {top}) in the pane"
+    );
+    assert!(
+        room - right >= 12.0,
+        "the text box ends {} px before the pane's edge",
+        room - right
+    );
+}
+
 /// The Preview pane shows a text file's text, read-only and in a
 /// fixed-width font, and a source file's too; a file larger than the
 /// limit shows its beginning only, and a binary file, a ZIP, a folder

@@ -420,10 +420,6 @@ msgid "Use an archive manager for encrypted, large or unsupported members."
 msgstr "加密、过大或不受支持的成员需要使用归档管理器。"
 
 #: crates/ox-app/src/archive_view/browser.rs
-msgid "{hidden_unsafe_count} unsafe names or links are hidden."
-msgstr "已隐藏 {hidden_unsafe_count} 个不安全的名称或链接。"
-
-#: crates/ox-app/src/archive_view/browser.rs
 msgid "{name} — Compressed folder"
 msgstr "{name} — 压缩文件夹"
 
@@ -8009,3 +8005,388 @@ msgstr "在侧边栏和此电脑中显示已连接的 Android、相机/PTP 和 i
 #: packaging/data/io.winspace.Development.metainfo.xml
 msgid "ZIPs can open like folders, and Extract all, the Open and Save dialogs and Shift with Delete work as in Windows. Adds Windows 11's Compact view, collapsible This PC and Network sections and an option to hide the navigation pane's expand arrows."
 msgstr "ZIP 压缩包可以像文件夹一样打开，全部解压缩、打开和保存对话框以及 Shift+Delete 的行为与 Windows 相同。新增 Windows 11 的紧凑视图、可折叠的此电脑和网络分区，以及隐藏导航窗格展开箭头的选项。"
+
+msgid "Opened a temporary copy. Changes are not saved back to the archive."
+msgstr "已打开临时副本。所做的更改不会保存回存档。"
+
+msgid "Read-only archive. Double-click a folder to browse it. Opening a supported file creates only that file’s temporary copy; it does not update the archive."
+msgstr "只读存档。双击文件夹可浏览其内容。打开受支持的文件只会创建该文件的临时副本，不会更新存档。"
+
+msgid "Reading the archive…"
+msgstr "正在读取存档…"
+
+msgid "{hidden_unsafe_count} unsafe name or link is hidden."
+msgid_plural "{hidden_unsafe_count} unsafe names or links are hidden."
+msgstr[0] "已隐藏 {hidden_unsafe_count} 个不安全的名称或链接。"
+
+msgid "Add a network location"
+msgstr "添加一个网络位置"
+
+msgid "Map network drive"
+msgstr "映射网络驱动器"
+
+msgid "Content"
+msgstr "内容"
+
+msgid "Administrators at this computer install OpenXplorer updates without typing their password. Turning it on asks for an administrator's password."
+msgstr "此计算机上的管理员安装 OpenXplorer 更新时无需输入密码。打开此选项时需要输入管理员密码。"
+
+msgid "Check for updates automatically"
+msgstr "自动检查更新"
+
+msgid "Every key OpenXplorer has, grouped by task. Ctrl+? opens them too."
+msgstr "OpenXplorer 的所有快捷键，按任务分组。按 Ctrl+? 也可打开。"
+
+msgid "Install updates without asking for a password"
+msgstr "安装更新时不询问密码"
+
+msgid "Install updates without asking for a password could not be changed."
+msgstr "无法更改“安装更新时不询问密码”。"
+
+msgid "Once a day, when OpenXplorer starts, ask GitHub whether a newer release exists. Nothing installs without you."
+msgstr "每天一次，在 OpenXplorer 启动时向 GitHub 查询是否有更新的版本。未经你的同意不会安装任何内容。"
+
+msgid "Open the manual"
+msgstr "打开手册"
+
+msgid "Show keyboard shortcuts"
+msgstr "显示键盘快捷方式"
+
+msgid "Show the Update button in the command bar"
+msgstr "在命令栏中显示“更新”按钮"
+
+msgid "The OpenXplorer manual, which needs no network connection. F1 opens it too."
+msgstr "OpenXplorer 手册，无需网络连接。按 F1 也可打开。"
+
+msgid "While a newer release is available, show Update beside the Settings gear, as well as Update available in the status bar. While the status bar is hidden, the command bar shows Update anyway."
+msgstr "有更新的版本可用时，在“设置”齿轮旁显示“更新”，并在状态栏中显示“有可用更新”。隐藏状态栏时，命令栏仍会显示“更新”。"
+
+msgid "automatic update check daily launch startup notify notification network github privacy"
+msgstr "自动 更新 检查 每天 启动 通知 网络 github 隐私 automatic update check daily launch startup notify notification network github privacy"
+
+msgid "help manual guide documentation f1 how to user manual offline"
+msgstr "帮助 手册 指南 文档 f1 使用方法 用户手册 离线 help manual guide documentation f1 how to user manual offline"
+
+msgid "keys keyboard shortcuts hotkeys accelerators bindings list ctrl+? cheat sheet"
+msgstr "键 键盘 快捷方式 快捷键 列表 ctrl+? 速查表 keys keyboard shortcuts hotkeys accelerators bindings list ctrl+? cheat sheet"
+
+msgid "password prompt administrator admin sudo polkit pkexec authentication install update without password passwordless"
+msgstr "密码 提示 管理员 sudo polkit pkexec 身份验证 安装 更新 无需密码 免密码 password prompt administrator admin sudo polkit pkexec authentication install update without password passwordless"
+
+msgid "update button command bar toolbar accent restart show hide notify"
+msgstr "更新 按钮 命令栏 工具栏 强调色 重新启动 显示 隐藏 通知 update button command bar toolbar accent restart show hide notify"
+
+msgid "Adds Move tab to new window, Move tab to window… and Open windows… to the menu you get when you right-click a tab. Off, the tab menu looks like Windows 11's."
+msgstr "在右键单击标签页时出现的菜单中添加“将标签页移动到新窗口”、“将标签页移动到窗口…”和“已打开的窗口…”。关闭时，标签页菜单与 Windows 11 相同。"
+
+msgid "Adds Recent files, Recent locations, the Recycle Bin and a bar under each drive that shows how full it is. Off, the navigation pane looks like Windows 11's."
+msgstr "添加“最近使用的文件”、“最近去过的位置”、“回收站”，并在每个驱动器下方显示一个指示其已用空间的条。关闭时，导航窗格与 Windows 11 相同。"
+
+msgid "Always at the bottom"
+msgstr "始终在底部"
+
+msgid "Always at the top"
+msgstr "始终在顶部"
+
+msgid "Buttons in the right-click menu"
+msgstr "右键菜单中的按钮"
+
+msgid "Near the pointer (default)"
+msgstr "靠近指针(默认)"
+
+msgid "Shift+F10 opens the classic menu"
+msgstr "Shift+F10 打开经典菜单"
+
+msgid "Show more items in the navigation pane"
+msgstr "在导航窗格中显示更多项目"
+
+msgid "Show more items in the tab menu"
+msgstr "在标签页菜单中显示更多项目"
+
+msgid "When on, Shift+F10 opens the Windows 10 menu. When off, it opens the same menu as a right-click and the Menu key, as in Windows 11."
+msgstr "打开时，Shift+F10 打开 Windows 10 菜单。关闭时，它打开的菜单与右键单击和菜单键相同，与 Windows 11 一致。"
+
+msgid "Where the Cut, Copy, Rename and Delete buttons appear in the right-click menu. Near the pointer puts them at the top of a menu that opens downward and at the bottom of one that opens upward, as Windows does."
+msgstr "“剪切”、“复制”、“重命名”和“删除”按钮在右键菜单中出现的位置。“靠近指针”会将它们放在向下展开的菜单顶部、向上展开的菜单底部，与 Windows 相同。"
+
+msgid "context menu right-click strip buttons icons cut copy rename share delete paste top bottom pointer position windows 11 compact"
+msgstr "上下文菜单 右键 按钮 图标 剪切 复制 重命名 共享 删除 粘贴 顶部 底部 指针 位置 紧凑 context menu right-click strip buttons icons cut copy rename share delete paste top bottom pointer position windows 11 compact"
+
+msgid "navigation pane sidebar recent files locations recycle bin trash drive space capacity usage bar extra more rows windows"
+msgstr "导航窗格 侧边栏 最近使用的文件 位置 回收站 驱动器 空间 容量 使用量 条 更多 行 navigation pane sidebar recent files locations recycle bin trash drive space capacity usage bar extra more rows windows"
+
+msgid "shift f10 keyboard key context menu right-click classic windows 10 11 compact show more options"
+msgstr "shift f10 键盘 按键 上下文菜单 右键 经典 windows 10 11 紧凑 显示更多选项 shift f10 keyboard key context menu right-click classic compact show more options"
+
+msgid "tab menu right-click move tab new window open windows extra more items windows"
+msgstr "标签页菜单 右键 移动标签页 新窗口 已打开的窗口 更多项目 tab menu right-click move tab new window open windows extra more items windows"
+
+msgid "Also copy paths as text"
+msgstr "同时以文本形式复制路径"
+
+msgid "Clipboard"
+msgstr "剪贴板"
+
+msgid "Copy and Cut also put the items' paths on the clipboard, so a terminal or text editor pastes them. Off: only the files are copied, as in Windows; Copy as path still copies paths."
+msgstr "“复制”和“剪切”还会将项目的路径放到剪贴板上，以便在终端或文本编辑器中粘贴。关闭时：只复制文件，与 Windows 相同；“复制为路径”仍会复制路径。"
+
+msgid "Copying and moving"
+msgstr "复制和移动"
+
+msgid "Paste in a folder saves a copied picture, such as a screenshot, as a new image file. Off: Paste is unavailable for a picture, as in Windows."
+msgstr "在文件夹中粘贴时，会将复制的图片(例如屏幕截图)另存为新的图像文件。关闭时：图片无法粘贴，与 Windows 相同。"
+
+msgid "Paste pictures as new files"
+msgstr "将图片粘贴为新文件"
+
+msgid "Replace in a copy, move or restore keeps the old file in the Recycle Bin, so Undo can bring it back. Off: the new file overwrites it, as in Windows, and it is gone."
+msgstr "在复制、移动或还原中选择“替换”时，旧文件会保留在回收站中，以便“撤销”可以将其恢复。关闭时：新文件会覆盖旧文件，与 Windows 相同，旧文件将不复存在。"
+
+msgid "When replacing a file, move the old one to the Recycle Bin"
+msgstr "替换文件时，将旧文件移到回收站"
+
+msgid "copy cut paths text clipboard terminal editor plain ctrl+c paste location"
+msgstr "复制 剪切 路径 文本 剪贴板 终端 编辑器 纯文本 ctrl+c 粘贴 位置 copy cut paths text clipboard terminal editor plain ctrl+c paste location"
+
+msgid "paste picture image screenshot clipboard png new file ctrl+v save"
+msgstr "粘贴 图片 图像 屏幕截图 剪贴板 png 新文件 ctrl+v 保存 paste picture image screenshot clipboard png new file ctrl+v save"
+
+msgid "replace overwrite file conflict copy move paste drag restore recycle bin trash undo old replaced keep windows"
+msgstr "替换 覆盖 文件 冲突 复制 移动 粘贴 拖动 还原 回收站 撤销 旧文件 保留 replace overwrite file conflict copy move paste drag restore recycle bin trash undo old replaced keep windows"
+
+msgid "New windows show two folders side by side. View > Split view splits or unsplits a tab."
+msgstr "新窗口并排显示两个文件夹。“查看”>“分屏视图”可拆分或取消拆分标签页。"
+
+msgid "split view dual pane two panes side by side commander"
+msgstr "分屏视图 双窗格 两个窗格 并排 split view dual pane two panes side by side commander"
+
+msgid "Home shows your Quick access folders, the files you opened lately and your favorite files, as in Windows 11, instead of the home folder's contents. Off by default."
+msgstr "“主文件夹”显示你的快速访问文件夹、最近打开的文件和收藏的文件(与 Windows 11 相同)，而不是主文件夹的内容。默认关闭。"
+
+msgid "Open Quick access on Home"
+msgstr "在主文件夹中打开快速访问"
+
+msgid "home page quick access recent files favorites favourites pinned folders windows 11 start page landing"
+msgstr "主文件夹 主页 快速访问 最近使用的文件 收藏夹 固定的文件夹 起始页 home page quick access recent files favorites favourites pinned folders windows 11 start page landing"
+
+msgid "Couldn't check for updates (HTTP {status}). Try again later."
+msgstr "无法检查更新(HTTP {status})。请稍后重试。"
+
+msgid "Couldn't check for updates. {reason}"
+msgstr "无法检查更新。{reason}"
+
+msgid "Details…"
+msgstr "详细信息…"
+
+msgid "OpenXplorer {latest} is available. You have {current}."
+msgstr "OpenXplorer {latest} 已可用。你的版本是 {current}。"
+
+msgid "OpenXplorer {latest} is ready to install. You have {current}."
+msgstr "OpenXplorer {latest} 已可以安装。你的版本是 {current}。"
+
+msgid "Restart"
+msgstr "重新启动"
+
+msgid "Restart to finish updating"
+msgstr "重新启动以完成更新"
+
+msgid "Update"
+msgstr "更新"
+
+msgid "Update available"
+msgstr "有可用更新"
+
+msgid "Choose Details"
+msgstr "选择详细信息"
+
+msgid "Details:"
+msgstr "详细信息:"
+
+msgid "Move Down"
+msgstr "下移"
+
+msgid "Move Up"
+msgstr "上移"
+
+msgid "Select the details you want to display for the items in this folder."
+msgstr "选择要为此文件夹中的项目显示的详细信息。"
+
+msgid "Width of selected column (in pixels):"
+msgstr "所选列的宽度(以像素为单位):"
+
+msgid "Close search"
+msgstr "关闭搜索"
+
+msgid "Restore all items"
+msgstr "还原所有项目"
+
+msgid "Restore the selected items"
+msgstr "还原选定的项目"
+
+msgid "Search options"
+msgstr "搜索选项"
+
+msgid "All subfolders"
+msgstr "所有子文件夹"
+
+msgid "Bitmap image"
+msgstr "位图图像"
+
+msgid "Current folder"
+msgstr "当前文件夹"
+
+msgid "Disconnect network drive"
+msgstr "断开网络驱动器的连接"
+
+msgid "File contents"
+msgstr "文件内容"
+
+msgid "File name extensions"
+msgstr "文件扩展名"
+
+msgid "No network drive is connected."
+msgstr "未连接网络驱动器。"
+
+msgid "Preview pane"
+msgstr "预览窗格"
+
+msgid "Rich Text Document"
+msgstr "RTF 文档"
+
+msgid "Tiles"
+msgstr "平铺"
+
+msgid "Add to Favorites"
+msgstr "添加到收藏夹"
+
+msgid "Additional options"
+msgstr "其他选项"
+
+msgid "Bluetooth device"
+msgstr "蓝牙设备"
+
+msgid "Choose another app"
+msgstr "选择其他应用"
+
+msgid "Compress to"
+msgstr "压缩为"
+
+msgid "Compressed (zipped) folder"
+msgstr "压缩(zipped)文件夹"
+
+msgid "Desktop (create shortcut)"
+msgstr "桌面快捷方式"
+
+msgid "Mail recipient"
+msgstr "邮件收件人"
+
+msgid "Only files can be sent to a Bluetooth device."
+msgstr "只有文件才能发送到蓝牙设备。"
+
+msgid "Remove from Favorites"
+msgstr "从收藏夹中删除"
+
+msgid "Rename items…"
+msgstr "重命名项目…"
+
+msgid "Restore previous versions"
+msgstr "还原以前的版本"
+
+msgid "Send to"
+msgstr "发送到"
+
+msgid "Share with"
+msgstr "共享对象"
+
+msgid "TAR File"
+msgstr "TAR 文件"
+
+msgid "ZIP File"
+msgstr "ZIP 文件"
+
+msgid "File location"
+msgstr "文件位置"
+
+msgid "{location} is unavailable. Make sure you are connected to the network and the server is turned on, and then try again."
+msgstr "{location} 不可用。请确保已连接到网络并且服务器已打开，然后重试。"
+
+msgid "Rename File"
+msgstr "重命名文件"
+
+msgid "There is already a file with the same name in this location."
+msgstr "此位置已经存在同名文件。"
+
+msgid "Would you like to rename \"{name}\" to \"{numbered}\"?"
+msgstr "是否要将“{name}”重命名为“{numbered}”?"
+
+msgid "Could not save Favorites: {error}"
+msgstr "无法保存收藏夹: {error}"
+
+msgid "Favorites"
+msgstr "收藏夹"
+
+msgid "Files you add to Favorites show here."
+msgstr "添加到收藏夹的文件将显示在此处。"
+
+msgid "Files you open recently show here."
+msgstr "最近打开的文件将显示在此处。"
+
+msgid "Folders you pin to Quick access show here."
+msgstr "固定到快速访问的文件夹将显示在此处。"
+
+msgid "Open file location"
+msgstr "打开文件所在的位置"
+
+msgid "Recent and Favorites"
+msgstr "最近使用和收藏夹"
+
+msgid "Location is not available"
+msgstr "位置不可用"
+
+msgid "{path} is not accessible.\n\nAccess is denied."
+msgstr "无法访问 {path}。\n\n拒绝访问。"
+
+msgid "Back to {place}"
+msgstr "返回到 {place}"
+
+msgid "Forward to {place}"
+msgstr "前进到 {place}"
+
+msgid "Refresh \"{place}\""
+msgstr "刷新“{place}”"
+
+msgid "Up to \"{place}\""
+msgstr "向上到“{place}”"
+
+msgid "Confirm Save"
+msgstr "确认保存"
+
+msgid "Confirm Save As"
+msgstr "确认另存为"
+
+msgid "Replace"
+msgstr "替换"
+
+msgid "There is not enough space in “{folder}” to save the file."
+msgstr "“{folder}”中没有足够的空间来保存该文件。"
+
+msgid "You don't have permission to save in this location. Contact the administrator to obtain permission."
+msgstr "你没有在此位置保存的权限。请与管理员联系以获取权限。"
+
+msgid "{count} files already exist in this folder. Replace them?"
+msgstr "此文件夹中已存在 {count} 个文件。要替换它们吗?"
+
+msgid "{name} already exists.\nDo you want to replace it?"
+msgstr "{name} 已存在。\n要替换它吗?"
+
+msgid "“{folder}” is not available. If it is on a network, make sure the share is still connected."
+msgstr "“{folder}”不可用。如果它位于网络上，请确保共享仍处于连接状态。"
+
+msgid "“{name}” is set to read-only. Try again with a different file name."
+msgstr "“{name}”已设置为只读。请使用其他文件名重试。"
+
+msgid "Map network drive…"
+msgstr "映射网络驱动器…"
+
+msgid "Close tabs to the right"
+msgstr "关闭右侧的标签页"

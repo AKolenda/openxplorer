@@ -672,10 +672,16 @@ impl TransferEngine {
             Ok(ItemOutcome::Skipped) => result.skipped.push(uri.to_owned()),
             Ok(ItemOutcome::Done) => {
                 result.done.push(uri.to_owned());
-                // A published copy leaves its private folder empty. Failing
-                // to remove it is told, but the copy stays done.
-                if let Err(error) = staging.remove_empty_folder() {
-                    self.record_failure(batch, uri, &error, false, result);
+                // A published copy leaves its private folder empty. When it
+                // cannot be removed, typically because a share's server
+                // stopped right after the copy, the item is still done:
+                // its copy is complete under its final name and, for a
+                // move, the original is gone. Nothing of the user's is
+                // missing or partial, so this is no failure and no
+                // "Incomplete staging folder" either: the empty, hidden
+                // folder is left alone rather than tried again.
+                if staging.remove_empty_folder().is_err() {
+                    staging.stage = None;
                 }
             }
             Err(error) => {

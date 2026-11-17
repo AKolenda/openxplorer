@@ -32,6 +32,7 @@ mod lift;
 mod limits;
 mod output;
 mod plan;
+pub(super) use plan::check_link_target;
 mod staging;
 mod unpack;
 
