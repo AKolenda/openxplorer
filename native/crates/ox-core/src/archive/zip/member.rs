@@ -30,6 +30,22 @@ pub(crate) enum CompressionMethod {
     Lzma,
     /// Any other method, which only an archive manager can read.
     Other(u16),
+    /// A 7z member, and whether the built-in reader decodes its block.
+    SevenZip(SevenZipCoding),
+}
+
+/// How the block of a 7z member is coded, as far as the built-in reader
+/// is concerned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SevenZipCoding {
+    /// LZMA, LZMA2, Copy, Delta or a branch filter: decoded.
+    Readable,
+    /// Encrypted with AES, which the reader does not decrypt.
+    Encrypted,
+    /// Another method (`PPMd`, `BZip2`, Deflate and others).
+    Unsupported,
+    /// A dictionary over the reader's memory limit.
+    TooMuchMemory,
 }
 
 impl CompressionMethod {
@@ -46,7 +62,11 @@ impl CompressionMethod {
 
     /// True for the four methods Python's `zipfile` can read.
     pub(crate) fn is_supported(self) -> bool {
-        !matches!(self, CompressionMethod::Other(_))
+        !matches!(
+            self,
+            CompressionMethod::Other(_)
+                | CompressionMethod::SevenZip(SevenZipCoding::Unsupported | SevenZipCoding::TooMuchMemory)
+        )
     }
 }
 
@@ -182,6 +202,32 @@ impl ZipMember {
     /// The byte the decrypted encryption header ends with: the high byte
     /// of the modification time when the sizes follow the data, else of
     /// the CRC-32 (`_ZipDecrypter` in `zipfile`).
+    /// ARC-016: the error opening or extracting this member gives when
+    /// its encryption is one the reader cannot decrypt, in the words of
+    /// its format.
+    pub(crate) fn encryption_refusal(&self) -> Option<crate::archive::ArchiveError> {
+        use crate::archive::ArchiveError;
+        let refusal = match self.method {
+            CompressionMethod::SevenZip(_) => ArchiveError::SevenZipEncryption,
+            _ => ArchiveError::UnsupportedEncryption,
+        };
+        (self.encryption() == Encryption::Unsupported).then_some(refusal)
+    }
+
+    /// ARC-016: the error opening or extracting this member gives when
+    /// the reader cannot decompress it, in the words of its format.
+    pub(crate) fn method_refusal(&self) -> Option<crate::archive::ArchiveError> {
+        use crate::archive::ArchiveError;
+        match self.method {
+            CompressionMethod::SevenZip(SevenZipCoding::Unsupported) => Some(ArchiveError::SevenZipMethod),
+            CompressionMethod::SevenZip(SevenZipCoding::TooMuchMemory) => {
+                Some(ArchiveError::DecoderMemoryLimit)
+            }
+            method if !method.is_supported() => Some(ArchiveError::UnsupportedCompression),
+            _ => None,
+        }
+    }
+
     pub(crate) fn encryption_check_byte(&self) -> u8 {
         if self.flags & DATA_DESCRIPTOR_FLAG != 0 {
             self.modified.time.to_be_bytes()[0]

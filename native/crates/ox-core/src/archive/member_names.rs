@@ -78,14 +78,18 @@ pub fn suggested_folder_name(archive_name: &str) -> Result<String, LocationError
 }
 
 /// The endings of the archives the app browses and extracts itself:
-/// ZIP, and TAR plain or compressed (ARC-022, ARC-024). Longer endings
-/// come first, so `.tar.gz` is removed whole.
-const ARCHIVE_EXTENSIONS: [&str; 11] = [
+/// ZIP, TAR plain or compressed, and 7z (ARC-022, ARC-024). Longer
+/// endings come first, so `.tar.gz` is removed whole.
+const ARCHIVE_EXTENSIONS: [&str; 12] = [
     ".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tgz", ".tbz2", ".tbz", ".txz", ".tzst", ".tar", ".zip",
+    ".7z",
 ];
 
+/// The ending of a 7z archive.
+const SEVEN_ZIP_EXTENSION: &str = ".7z";
+
 /// The content types of those archives.
-const ARCHIVE_TYPES: [&str; 10] = [
+const ARCHIVE_TYPES: [&str; 11] = [
     "application/zip",
     "application/x-zip",
     "application/x-zip-compressed",
@@ -96,11 +100,12 @@ const ARCHIVE_TYPES: [&str; 10] = [
     "application/x-xz-compressed-tar",
     "application/x-zstd-compressed-tar",
     "application/x-gtar",
+    "application/x-7z-compressed",
 ];
 
 /// Whether the app browses and extracts the file named `name` of
-/// `content_type` itself: a ZIP, or a TAR plain or compressed with gzip,
-/// bzip2, XZ or Zstandard.
+/// `content_type` itself: a ZIP, a TAR plain or compressed with gzip,
+/// bzip2, XZ or Zstandard, or a 7z.
 pub fn is_supported_archive(name: &str, content_type: Option<&str>) -> bool {
     let by_type = content_type.is_some_and(|content_type| ARCHIVE_TYPES.contains(&content_type));
     by_type || archive_extension(name).is_some()
@@ -108,7 +113,15 @@ pub fn is_supported_archive(name: &str, content_type: Option<&str>) -> bool {
 
 /// Whether `name` ends as a TAR does, plain or compressed.
 pub(crate) fn has_tar_name(name: &str) -> bool {
-    archive_extension(name).is_some_and(|start| !name[start..].eq_ignore_ascii_case(".zip"))
+    archive_extension(name).is_some_and(|start| {
+        let ending = &name[start..];
+        !ending.eq_ignore_ascii_case(".zip") && !ending.eq_ignore_ascii_case(SEVEN_ZIP_EXTENSION)
+    })
+}
+
+/// Whether `name` ends as a 7z does.
+pub(crate) fn has_seven_zip_name(name: &str) -> bool {
+    archive_extension(name).is_some_and(|start| name[start..].eq_ignore_ascii_case(SEVEN_ZIP_EXTENSION))
 }
 
 /// The archive ending of `name`, in any case.

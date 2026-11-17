@@ -19,9 +19,9 @@ use ox_core::archive::{
 use ox_core::transfer::Cancellation;
 
 use archive_support::{
-    encoded_header_seven_zip, gio_factory, memory_opener, one_file_seven_zip, raw_seven_zip, seven_zip_bytes,
-    seven_zip_claiming_files, ExtractionFixture, LocalFileOutput, SevenEntry, AES, LZMA2, PPMD,
-    SEVEN_ZIP_MODIFIED,
+    coded_seven_zip, encoded_header_seven_zip, gio_factory, memory_opener, one_file_seven_zip, raw_seven_zip,
+    seven_zip_bytes, seven_zip_claiming_files, ExtractionFixture, LocalFileOutput, SevenEntry, TestCoder,
+    AES, BCJ2, COPY, LZMA2, PPMD, SEVEN_ZIP_MODIFIED,
 };
 
 /// A folder, a file in it, a folder in that and an empty file, with a
@@ -413,8 +413,11 @@ fn browsing_a_7z_again_reuses_its_header() {
         .list(uri, "Folder 3", &Cancellation::new())
         .expect("lists");
     let again = reads.bytes.load(Ordering::SeqCst);
-    assert!(first > 10_000, "the header was read: {first}");
-    assert!(again <= 64, "only the start header was read again: {again}");
+    // The header of 2,000 names is packed into about 2 KB.
+    assert!(first > 1500, "the header was read: {first}");
+    // The first bytes, which tell a 7z from a ZIP or TAR, and the start
+    // header.
+    assert!(again <= 262 + 32, "only the start header was read again: {again}");
 
     let changed = seven_zip_bytes(&[SevenEntry::file("new.txt", b"new")], true);
     let browser = ArchiveBrowser::new(counting_opener(changed, &reads), root.path().to_path_buf());
@@ -476,4 +479,74 @@ fn a_solid_7z_of_10000_files_lists_quickly_and_extracts_in_one_pass() {
         "opened {:?} times",
         reads.opened
     );
+}
+
+/// BCJ2, which 7-Zip's Ultra level uses for programs, splits a file into
+/// four streams; its block is decoded like any other.
+///
+/// parity: ARC-024
+#[test]
+fn a_bcj2_block_as_7zip_ultra_writes_for_programs_extracts() {
+    let data = b"program text without branch opcodes";
+    // Main data, calls, jumps and the range coder's five starting bytes.
+    let streams: [&[u8]; 4] = [data, b"", b"", &[0; 5]];
+    let coders = [TestCoder {
+        method: &BCJ2,
+        inputs: 4,
+        properties: &[],
+    }];
+    let bytes = coded_seven_zip(
+        "tool.bin",
+        &coders,
+        &[],
+        &[0, 1, 2, 3],
+        &streams,
+        &[data.len() as u64],
+    );
+    let fixture = fixture_with(&bytes);
+
+    fixture.extract("Unpacked").expect("extracts");
+
+    let tool = fixture.destination.join("Unpacked/tool.bin");
+    assert_eq!(fs::read(tool).expect("a file"), data);
+}
+
+/// A forged BCJ2 block whose second coder reads its own output never
+/// decodes: the archive is refused at once instead of following the loop
+/// until the stack runs out.
+///
+/// parity: ARC-017
+#[test]
+fn coders_linked_in_a_loop_are_refused_at_once() {
+    let coder = |method, inputs| TestCoder {
+        method,
+        inputs,
+        properties: &[],
+    };
+    let coders = [coder(&BCJ2[..], 4), coder(&COPY[..], 1), coder(&COPY[..], 1)];
+    // BCJ2's first input is coder 1's output, and so is coder 1's input.
+    let bind_pairs = [(0, 1), (4, 1)];
+    let streams: [&[u8]; 4] = [b"", b"", &[0; 5], b"data"];
+    let bytes = coded_seven_zip(
+        "loop.bin",
+        &coders,
+        &bind_pairs,
+        &[1, 2, 3, 5],
+        &streams,
+        &[4, 4, 4],
+    );
+    let fixture = fixture_with(&bytes);
+    let started = Instant::now();
+
+    let error = fixture.extract("Unpacked").expect_err("refused");
+
+    assert!(started.elapsed() < Duration::from_secs(5));
+    assert!(
+        matches!(
+            error,
+            ArchiveError::SevenZipMethod | ArchiveError::DamagedSevenZip
+        ),
+        "{error:?}"
+    );
+    fixture.assert_no_output();
 }

@@ -265,7 +265,9 @@ fn decompressor<'a, R: Read + 'a>(
         CompressionMethod::Deflated => Ok(Box::new(flate2::read::DeflateDecoder::new(compressed))),
         CompressionMethod::Bzip2 => Ok(Box::new(bzip2::read::BzDecoder::new(compressed))),
         CompressionMethod::Lzma => lzma_decompressor(member, compressed),
-        CompressionMethod::Other(_) => Err(ZipFormatError::UnsupportedMethod.into()),
+        CompressionMethod::Other(_) | CompressionMethod::SevenZip(_) => {
+            Err(ZipFormatError::UnsupportedMethod.into())
+        }
     }
 }
 

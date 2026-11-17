@@ -206,6 +206,84 @@ pub fn seven_zip_claiming_files(count: u64) -> Vec<u8> {
     raw_seven_zip(&[], &header)
 }
 
+/// One coder of a hand-made block: its method id, how many streams it
+/// reads and its properties.
+pub struct TestCoder<'a> {
+    pub method: &'a [u8],
+    pub inputs: u64,
+    pub properties: &'a [u8],
+}
+
+/// A 7z holding one file `name` of `unpack_size` bytes, whose one block
+/// has `coders` linked by `bind_pairs` (input stream, coder output) and
+/// reads `packed` input streams from the `streams` given, in order.
+pub fn coded_seven_zip(
+    name: &str,
+    coders: &[TestCoder<'_>],
+    bind_pairs: &[(u64, u64)],
+    packed: &[u64],
+    streams: &[&[u8]],
+    unpack_sizes: &[u64],
+) -> Vec<u8> {
+    let mut header = vec![0x01, 0x04, 0x06];
+    header.extend(number(0));
+    header.extend(number(streams.len() as u64));
+    header.push(0x09);
+    for stream in streams {
+        header.extend(number(stream.len() as u64));
+    }
+    header.push(0x00);
+    header.extend([0x07, 0x0b]);
+    header.extend(number(1));
+    header.push(0x00);
+    header.extend(number(coders.len() as u64));
+    for coder in coders {
+        let mut flags = u8::try_from(coder.method.len()).expect("short id");
+        if coder.inputs != 1 {
+            flags |= 0x10;
+        }
+        if !coder.properties.is_empty() {
+            flags |= 0x20;
+        }
+        header.push(flags);
+        header.extend_from_slice(coder.method);
+        if coder.inputs != 1 {
+            header.extend(number(coder.inputs));
+            header.extend(number(1));
+        }
+        if !coder.properties.is_empty() {
+            header.extend(number(coder.properties.len() as u64));
+            header.extend_from_slice(coder.properties);
+        }
+    }
+    for (input, output) in bind_pairs {
+        header.extend(number(*input));
+        header.extend(number(*output));
+    }
+    if packed.len() > 1 {
+        for input in packed {
+            header.extend(number(*input));
+        }
+    }
+    header.push(0x0c);
+    for size in unpack_sizes {
+        header.extend(number(*size));
+    }
+    header.push(0x00);
+    header.extend([0x08, 0x00, 0x00]);
+    header.push(0x05);
+    header.extend(number(1));
+    header.extend(names_property(&[name]));
+    header.extend([0x00, 0x00]);
+    let data: Vec<u8> = streams.concat();
+    raw_seven_zip(&data, &header)
+}
+
+/// The BCJ2 method id.
+pub const BCJ2: [u8; 4] = [0x03, 0x03, 0x01, 0x1b];
+/// The Copy method id.
+pub const COPY: [u8; 1] = [0x00];
+
 /// The LZMA2 method id and a dictionary property of `property` (40 is
 /// 4 GiB).
 pub const LZMA2: [u8; 1] = [0x21];
