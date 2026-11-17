@@ -1110,6 +1110,32 @@ fn a_quick_access_tiles_menu_is_windows_11s() {
     classic.popdown();
 }
 
+/// Ctrl+C on a Quick access tile copies its folder, as the menu's Copy,
+/// which shows Ctrl+C, does.
+///
+/// parity: HOME-013
+#[gtk::test]
+fn ctrl_c_on_a_quick_access_tile_copies_its_folder() {
+    use super::recent_rows::copied_uris;
+
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Projects")).expect("fixture subfolder");
+    let test = home_window(&fixture);
+    test.activate("pin-location", Some(&fixture.uri_of("Projects")));
+    wait_until("the Projects tile", || {
+        home_page::tile_names(body(&test)).contains(&"Projects".to_owned())
+    });
+    test.window.clipboard().set_text("Synthetic text");
+
+    let handled = home_page::press_on_item(body(&test), "Projects", "<Control>c");
+
+    assert!(handled, "the tile handles Ctrl+C");
+    let projects = fixture.uri_of("Projects");
+    wait_until("the copied folder", || {
+        copied_uris(&test).as_deref() == Some(projects.as_str())
+    });
+}
+
 /// The open menu in the folder pane, once it has the keyboard.
 fn open_tile_menu(test: &TestWindow) -> crate::window::menu_popover::MenuPopover {
     use crate::test_support::harness::descendants;
@@ -1247,7 +1273,7 @@ fn shows_home_page(test: &TestWindow) -> bool {
 /// home folder and its subfolders with the usual results: "<query> -
 /// Search Results in Home". Back and Close search return to Home.
 ///
-/// parity: HOME-033
+/// parity: HOME-035
 #[gtk::test]
 fn searching_from_home_searches_the_home_folder_and_its_subfolders() {
     let _home_files = file_in_home_folder("Quarterly zebra plan.txt");
@@ -1293,7 +1319,7 @@ fn searching_from_home_searches_the_home_folder_and_its_subfolders() {
 /// With "Open Quick access on Home" off, Home is the home folder, which
 /// is searched as any folder is, with its subfolders.
 ///
-/// parity: HOME-033, NAV-038
+/// parity: HOME-035, NAV-038
 #[gtk::test]
 fn searching_the_home_folder_finds_files_in_its_subfolders() {
     let _home_files = file_in_home_folder("Quarterly zebra plan.txt");
@@ -1376,7 +1402,7 @@ fn home_with_cached_and_uncached_folders() -> tempfile::TempDir {
 /// its own, so its search walks the home folder. The home folder itself
 /// finds them too.
 ///
-/// parity: HOME-033
+/// parity: HOME-035
 #[gtk::test]
 fn searching_from_home_finds_files_deep_in_uncached_folders() {
     let home = home_with_cached_and_uncached_folders();
@@ -1412,4 +1438,69 @@ fn searching_from_home_finds_files_deep_in_uncached_folders() {
     test.wait_for_listing("the home folder");
     test.search_for("extra");
     wait_until("every extra file from the home folder", || found(&test));
+}
+
+/// What the active pane shows of a search from Home, sampled once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SearchSample {
+    rows: u32,
+    searching: bool,
+    empty_page: bool,
+}
+
+/// Searching from Home in a big home folder with a cached folder in it:
+/// the files are listed as the walk finds them, and the pane never says "No matching items" while
+/// the search still runs or while it has rows; at the end every match is
+/// shown. Before, the empty page stayed up until the whole home folder
+/// had been walked, which on a real home can take minutes.
+///
+/// parity: HOME-035, SRCH-035
+#[gtk::test]
+fn searching_from_a_big_home_shows_matches_as_they_are_found() {
+    let home = home_with_cached_and_uncached_folders();
+    for folder in 0..1500 {
+        let path = home.path().join(format!("snap/part{}/dir{folder}", folder / 50));
+        fs::create_dir_all(&path).expect("fixture folder");
+        for file in 0..4 {
+            fs::write(path.join(format!("item_{file}.dat")), b"").expect("fixture file");
+        }
+    }
+    let fixture = Fixture::standard();
+    let test = home_window(&fixture);
+    test.start_search_cache();
+    test.index_folder(&ox_core::location::file_uri(&home.path().join("Documents")));
+    let tooltip = test.window.search_box().entry().tooltip_text();
+    assert_eq!(
+        tooltip.as_deref(),
+        Some("Search names in this folder and its subfolders. Folders cached in Settings → Search are searched faster."),
+        "the box does not claim to search cached names only"
+    );
+    let pane = test.window.folder_pane();
+    let sample = || SearchSample {
+        rows: test.window.folder_model().n_items(),
+        searching: test.status_count().starts_with("Searching"),
+        empty_page: pane.page() == Some(crate::window::folder_pane::PanePage::Empty),
+    };
+    let samples = std::cell::RefCell::new(Vec::new());
+
+    test.window.search_box().entry().set_text("extra");
+    wait_until("the search to end with every match", || {
+        let now = sample();
+        samples.borrow_mut().push(now);
+        !now.searching && now.rows == 5
+    });
+    let samples = samples.into_inner();
+
+    let wrong: Vec<_> = samples
+        .iter()
+        .filter(|sample| sample.empty_page && (sample.searching || sample.rows > 0))
+        .collect();
+    assert!(
+        wrong.is_empty(),
+        "no empty page while searching or with rows: {wrong:?}"
+    );
+    assert!(
+        samples.iter().any(|sample| sample.searching),
+        "the search was seen running"
+    );
 }

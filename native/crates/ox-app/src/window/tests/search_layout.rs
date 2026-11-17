@@ -414,3 +414,99 @@ fn the_filter_bar_setting_brings_back_the_filter_bar_and_its_titles() {
         !test.window.search_strip().is_visible() && shows_command(&test, "Search options")
     });
 }
+
+/// The progress rings the tab strip shows in place of tab icons.
+fn tab_progress_rings(test: &TestWindow) -> usize {
+    crate::window::widget_tree::descendants::<gtk::Widget>(test.window.tab_strip())
+        .into_iter()
+        .filter(|widget| widget.css_name() == "progressring" && widget.is_visible())
+        .count()
+}
+
+/// As in Windows 11 File Explorer (build 26200), the tab in front shows a
+/// spinning progress ring in place of its icon while a search's results
+/// are still coming in, and the magnifier once the search has finished.
+///
+/// parity: SRCH-048
+#[gtk::test]
+fn the_tab_shows_a_progress_ring_while_the_search_runs() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    assert_eq!(tab_progress_rings(&test), 0, "a listed folder shows its icon");
+
+    test.window.search_box().entry().set_text("notes");
+    assert_eq!(tab_progress_rings(&test), 1, "the search has started");
+
+    wait_until("the search to finish", || {
+        let (count, _) = test.window.status_bar().texts();
+        !count.starts_with("Searching")
+    });
+    wait_until("the ring to give way to the magnifier", || {
+        tab_progress_rings(&test) == 0
+    });
+    assert!(test.window.is_searching(), "the results still show");
+}
+
+/// A search that is canceled, by emptying the box, takes its ring away.
+///
+/// parity: SRCH-048
+#[gtk::test]
+fn a_canceled_search_takes_the_ring_away() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.search_box().entry().set_text("notes");
+    assert_eq!(tab_progress_rings(&test), 1);
+
+    test.window.search_box().clear();
+
+    assert_eq!(tab_progress_rings(&test), 0);
+}
+
+/// A tab listing a folder shows the ring too, as Windows 11 shows it
+/// while a folder loads, and its icon once the folder is listed.
+///
+/// parity: SRCH-048, VIEW-068
+#[gtk::test]
+fn a_tab_listing_a_folder_shows_the_ring_until_it_is_listed() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("a valid address");
+    assert!(test.window.is_loading(), "the new tab is still listing");
+    assert_eq!(tab_progress_rings(&test), 1);
+
+    wait_until("the listing", || !test.window.is_loading());
+    wait_until("the ring to go", || tab_progress_rings(&test) == 0);
+}
+
+/// The ring turns while the desktop's animations are on and stands still,
+/// at its first picture, while they are off (ACC-010).
+///
+/// parity: SRCH-048, ACC-010
+#[gtk::test]
+fn the_ring_stands_still_while_animations_are_off() {
+    let settings = gtk::Settings::default().expect("a display");
+    let before = settings.is_gtk_enable_animations();
+    settings.set_gtk_enable_animations(true);
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.search_box().entry().set_text("notes");
+    let ring = crate::window::widget_tree::descendants::<crate::progress_ring::ProgressRing>(
+        test.window.tab_strip(),
+    )
+    .into_iter()
+    .next()
+    .expect("the tab's progress ring");
+    wait_until("the ring to be shown", || ring.is_mapped());
+    let first = ring.shown_frame();
+    wait_until("the arc to turn", || ring.shown_frame() != first);
+    let turning = ring.is_turning();
+
+    settings.set_gtk_enable_animations(false);
+    let still = !ring.is_turning() && ring.shown_frame() == 0;
+    settings.set_gtk_enable_animations(before);
+
+    assert!(turning, "the ring turns with animations on");
+    assert!(still, "the ring stands still with animations off");
+}

@@ -348,6 +348,7 @@ fn empty_recycle_bin_asks_then_deletes_everything_in_it() {
     let dialog = open_dialog(&test);
 
     assert_eq!(labels, ["Empty Recycle Bin", "Refresh"]);
+    super::file_ops_support::assert_windows_message_box(dialog.upcast_ref(), "Yes");
     assert_eq!(dialog.title_text(), "Delete Multiple Items");
     assert_eq!(
         dialog.message_text(),

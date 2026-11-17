@@ -135,70 +135,160 @@ pub(crate) fn word_in_name(word: &str, lowercase_name: &str) -> bool {
 /// Whether the wildcard `pattern` is found within `lowercase_name`, as a
 /// plain word is ([`word_in_name`]): the text it matches starts before
 /// the name's extension, or is the whole extension.
+///
+/// The search cache leaves wildcard words out of its trigram prefilter, so
+/// a search may test every cached name here: one pass over the name, in
+/// time proportional to the name's length times the pattern's, with a
+/// fixed number of allocations.
 pub(crate) fn wildcard_in_name(pattern: &str, lowercase_name: &str) -> bool {
-    // The pattern followed by `*` matches any text that starts with what
-    // the pattern matches.
-    let open_end = format!("{pattern}*");
+    let pattern: Vec<char> = pattern.chars().collect();
+    let tokens = tokens(&pattern);
     let extension = extension_start(lowercase_name);
-    let mut starts = lowercase_name
-        .char_indices()
-        .map(|(start, _)| start)
-        .chain(std::iter::once(lowercase_name.len()));
-    starts.any(|start| {
-        let rest = &lowercase_name[start..];
-        match extension {
-            Some(extension) if start >= extension => start == extension && wildcard_matches(pattern, rest),
-            _ => wildcard_matches(&open_end, rest),
+    let mut states = States::new(tokens.len());
+    // Every position before the extension may start a match, which may
+    // run on into the extension; reaching the pattern's end at any point
+    // means the pattern matches the text from that start.
+    for (at, character) in lowercase_name.char_indices() {
+        if extension.is_none_or(|extension| at < extension) {
+            states.start(&tokens);
         }
-    })
+        if states.is_complete() {
+            return true;
+        }
+        states.step(&tokens, character);
+    }
+    if extension.is_none() {
+        // The empty text at the end, which `*` matches.
+        states.start(&tokens);
+    }
+    if states.is_complete() {
+        return true;
+    }
+    // Inside the extension, only as the whole extension.
+    extension.is_some_and(|extension| matches_tokens(&tokens, &lowercase_name[extension..]))
 }
 
-/// Whether the whole of `name` matches the wildcard `pattern`.
+/// Whether the whole of `name` matches the wildcard `pattern`, as
+/// `name:~` asks ([`super::expression`]).
 pub(crate) fn wildcard_matches(pattern: &str, name: &str) -> bool {
     let pattern: Vec<char> = pattern.chars().collect();
-    let name: Vec<char> = name.chars().collect();
-    let (mut at_pattern, mut at_name) = (0, 0);
-    // Where to resume after the last `*`: the pattern after it, and the
-    // name position it has consumed up to.
-    let mut resume: Option<(usize, usize)> = None;
-    while at_name < name.len() {
-        match pattern.get(at_pattern) {
-            Some('*') => {
-                resume = Some((at_pattern + 1, at_name));
-                at_pattern += 1;
-                continue;
-            }
-            Some(&token) => {
-                if let Some(length) = token_matches(&pattern[at_pattern..], token, name[at_name]) {
-                    at_pattern += length;
-                    at_name += 1;
-                    continue;
-                }
-            }
-            None => {}
-        }
-        // A mismatch: the last `*` takes one more character, or the name
-        // does not match.
-        let Some((after_star, consumed)) = resume else {
-            return false;
-        };
-        resume = Some((after_star, consumed + 1));
-        at_pattern = after_star;
-        at_name = consumed + 1;
-    }
-    pattern[at_pattern..].iter().all(|token| *token == '*')
+    matches_tokens(&tokens(&pattern), name)
 }
 
-/// How many pattern characters matched `character`, when the pattern at
-/// `rest`, whose first character is `token`, matches it.
-fn token_matches(rest: &[char], token: char, character: char) -> Option<usize> {
-    match token {
-        '?' => Some(1),
-        '[' => match character_set(rest) {
-            Some((set, length)) => set.contains(character).then_some(length),
-            None => (character == '[').then_some(1),
-        },
-        _ => (token == character).then_some(1),
+/// Whether the whole of `name` matches the pattern `tokens`.
+fn matches_tokens(tokens: &[Token<'_>], name: &str) -> bool {
+    let mut states = States::new(tokens.len());
+    states.start(tokens);
+    for character in name.chars() {
+        if states.is_empty() {
+            return false;
+        }
+        states.step(tokens, character);
+    }
+    states.is_complete()
+}
+
+/// One element of a wildcard pattern.
+enum Token<'a> {
+    /// `*`: any text, also none.
+    Any,
+    /// `?`: one character.
+    One,
+    /// `[...]`: one character in or outside a set.
+    Set(CharacterSet<'a>),
+    /// A character standing for itself, also a `[` without its `]`.
+    Literal(char),
+}
+
+/// The elements of `pattern`, read once.
+fn tokens(pattern: &[char]) -> Vec<Token<'_>> {
+    let mut tokens = Vec::with_capacity(pattern.len());
+    let mut at = 0;
+    while let Some(&character) = pattern.get(at) {
+        let (token, length) = match character {
+            '*' => (Token::Any, 1),
+            '?' => (Token::One, 1),
+            '[' => match character_set(&pattern[at..]) {
+                Some((set, length)) => (Token::Set(set), length),
+                None => (Token::Literal('['), 1),
+            },
+            _ => (Token::Literal(character), 1),
+        };
+        tokens.push(token);
+        at += length;
+    }
+    tokens
+}
+
+impl Token<'_> {
+    /// Whether this element, other than `*`, matches `character`.
+    fn matches(&self, character: char) -> bool {
+        match self {
+            Token::Any | Token::One => true,
+            Token::Set(set) => set.contains(character),
+            Token::Literal(literal) => *literal == character,
+        }
+    }
+}
+
+/// The places in a pattern that the text read so far can have reached:
+/// `active[i]` when the elements before `i` matched, and `active[len]`
+/// when the whole pattern did.
+struct States {
+    active: Vec<bool>,
+    next: Vec<bool>,
+}
+
+impl States {
+    fn new(token_count: usize) -> Self {
+        Self {
+            active: vec![false; token_count + 1],
+            next: vec![false; token_count + 1],
+        }
+    }
+
+    /// Starts a match at the current place in the text.
+    fn start(&mut self, tokens: &[Token<'_>]) {
+        self.active[0] = true;
+        close(&mut self.active, tokens);
+    }
+
+    /// Whether the whole pattern matched up to the current place.
+    fn is_complete(&self) -> bool {
+        self.active.last().copied().unwrap_or(false)
+    }
+
+    /// Whether no match is under way.
+    fn is_empty(&self) -> bool {
+        !self.active.contains(&true)
+    }
+
+    /// Reads `character`: `*` takes it and stays, any other element that
+    /// matches it moves on.
+    fn step(&mut self, tokens: &[Token<'_>], character: char) {
+        self.next.fill(false);
+        for (index, token) in tokens.iter().enumerate() {
+            if !self.active[index] {
+                continue;
+            }
+            match token {
+                Token::Any => self.next[index] = true,
+                other if other.matches(character) => self.next[index + 1] = true,
+                _ => {}
+            }
+        }
+        close(&mut self.next, tokens);
+        std::mem::swap(&mut self.active, &mut self.next);
+    }
+}
+
+/// Adds to `active` the places after each reached `*`, which may match no
+/// text.
+fn close(active: &mut [bool], tokens: &[Token<'_>]) {
+    for (index, token) in tokens.iter().enumerate() {
+        if active[index] && matches!(token, Token::Any) {
+            active[index + 1] = true;
+        }
     }
 }
 
@@ -428,6 +518,75 @@ mod tests {
         assert!(wildcard_matches("draft [v2*", "draft [v2 final"));
         assert!(wildcard_matches("*", ""));
         assert!(!wildcard_matches("?", ""));
+    }
+
+    /// The one-pass search finds a pattern exactly where trying it from
+    /// every start of the name, as `pattern*` before the extension or as
+    /// the whole extension, finds it.
+    ///
+    /// parity: SRCH-004
+    #[test]
+    fn the_one_pass_search_agrees_with_trying_every_start() {
+        let patterns = [
+            "a?b",
+            "*",
+            "?",
+            "??",
+            "*.txt",
+            "a*b",
+            "[!a-c]*",
+            "[]x]",
+            "draft [v2*",
+            "p?f",
+            "?df",
+            "d?",
+            "*_3?.txt",
+            "x*y*z",
+            "[a-",
+            "**",
+            "a**b?",
+            ".pdf",
+            "[^p]df",
+        ];
+        let names = [
+            "",
+            "a",
+            "ab",
+            "a1b.txt",
+            "acb.txt",
+            "plan.pdf",
+            "draft [v2 final",
+            "]",
+            "extra_31.txt",
+            "xayaz.md",
+            "[a-b",
+            "aab.pdf.txt",
+            "über.pdf",
+            "v1.2",
+            ".bashrc",
+            "notes v2.final draft",
+        ];
+        for pattern in patterns {
+            for name in names {
+                let extension = extension_start(name);
+                let open_end = format!("{pattern}*");
+                let expected = name
+                    .char_indices()
+                    .map(|(start, _)| start)
+                    .chain(std::iter::once(name.len()))
+                    .any(|start| match extension {
+                        Some(extension) if start >= extension => {
+                            start == extension && wildcard_matches(pattern, &name[start..])
+                        }
+                        _ => wildcard_matches(&open_end, &name[start..]),
+                    });
+                assert_eq!(
+                    wildcard_in_name(pattern, name),
+                    expected,
+                    "{pattern:?} in {name:?}"
+                );
+            }
+        }
     }
 
     #[test]

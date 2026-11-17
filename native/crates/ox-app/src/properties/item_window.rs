@@ -29,6 +29,7 @@ use ox_core::integration::BraveIntegration;
 use ox_core::location::{is_smb_location, is_smb_server, is_smb_share_root, ItemKind, LocationContext};
 use ox_core::network::Usershares;
 use ox_core::ops::is_recycle_bin_item;
+use ox_core::places::KnownFolder;
 use ox_core::transfer::Cancellation;
 use ox_core::versions::{is_conventional_snapshot, PreviousVersions};
 
@@ -92,6 +93,18 @@ struct ItemPages {
     count: Cancellation,
 }
 
+/// Adds the Location tab of the standard folder `folder`, whose move
+/// waits for the window's other changes.
+fn add_location_tab(window: &PropertiesWindow, folder: KnownFolder, context: &PropertiesContext) {
+    let location = LocationPanel::new(folder, Arc::clone(&context.relocation), context.brave.clone());
+    window.add_pending_last(location.pending());
+    window.add_tab(
+        PropertiesTab::Location.page_name(),
+        PropertiesTab::Location.label(),
+        &location,
+    );
+}
+
 /// Opens the Properties window of `target` on `initial` (General when the
 /// item has no such tab), from `opener`.
 pub(crate) fn open_item_properties(
@@ -120,6 +133,10 @@ pub(crate) fn open_item_properties(
     );
     // An item in the Recycle Bin has only its General tab, as in Windows.
     let in_bin = is_recycle_bin_item(&target.uri);
+    if in_bin {
+        // Its one tab shows, as a property sheet's always does.
+        window.show_single_tab();
+    }
     let hardware = is_drive.then(|| add_hardware_tab(&window));
     let shortcut = add_shortcut_tab(&window, &target);
     let usershares = context.usershares.as_ref().filter(|_| !in_bin);
@@ -136,13 +153,7 @@ pub(crate) fn open_item_properties(
         );
     }
     if let Some(folder) = target.known_folder {
-        let location = LocationPanel::new(folder, Arc::clone(&context.relocation), context.brave.clone());
-        window.add_pending_last(location.pending());
-        window.add_tab(
-            PropertiesTab::Location.page_name(),
-            PropertiesTab::Location.label(),
-            &location,
-        );
+        add_location_tab(&window, folder, &context);
     }
     let details = (!in_bin)
         .then(|| add_details_tab(&window, &target, &context))

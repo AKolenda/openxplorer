@@ -423,12 +423,12 @@ fn name_moved_down_shows_after_the_column_above_it() {
         let index = order.iter().position(|shown| *shown == column).expect("a column");
         titles[index].measure(gtk::Orientation::Horizontal, -1).0
     };
+    // The Name title's own minimum (115 pixels, folder-views.css, the
+    // 140-pixel floor with its padding) goes with Name.
+    let name_minimum = minimum_of(SortColumn::Name);
+    assert!(name_minimum >= 115, "Name keeps its minimum width");
     assert!(
-        minimum_of(SortColumn::Name) >= 235,
-        "Name keeps its minimum width"
-    );
-    assert!(
-        minimum_of(SortColumn::Modified) < 235,
+        minimum_of(SortColumn::Modified) < name_minimum,
         "Date modified does not take it"
     );
     wait_until("the folder's columns to be saved", || {

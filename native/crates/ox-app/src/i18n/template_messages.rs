@@ -63,7 +63,7 @@ pub(super) const MESSAGES: &[(&str, &str, &str, bool, &str)] = &[
     ("progress-window.ui", "actions", "label", true, "Running actions"),
     ("progress-window.ui", "details_label", "label", false, "More details"),
     ("search-box.ui", "entry", "label", true, "Search filenames and paths"),
-    ("search-box.ui", "entry", "tooltip-text", false, "Search cached filenames and paths. Enable folders in Settings → Search."),
+    ("search-box.ui", "entry", "tooltip-text", false, "Search names in this folder and its subfolders. Folders cached in Settings → Search are searched faster."),
     ("search-info-strip.ui", ".", "label", true, "Search information"),
     ("search-info-strip.ui", "cache_button", "label", true, "Cache this folder"),
     ("search-info-strip.ui", "cache_button", "tooltip-text", false, "Cache this folder for search"),

@@ -51,16 +51,6 @@ is missing.
   focus rings show only after keyboard navigation (ACC-009). Windows 11
   opens Home with Quick access by default; "Open Quick access on Home"
   stays off here, the owner's choice.
-- **Keyboard and focus (2026-11-15).** Changed, replacing an earlier
-  choice: Left or Right with nowhere to go in the navigation pane keeps the
-  keyboard on its row (SIDE-033); it used to be left to the list, and GTK
-  then moved it to the pane's resize handle. Not checked against Windows,
-  so unchanged: Page Up and Page Down in List view move across columns, as
-  GTK's list does, so with every item in one column they do nothing; the
-  Properties windows' values and title-bar Close are Tab stops; each
-  Settings category is a Tab stop; Home tiles are a Tab stop each; the
-  message boxes Delete File and Rename File have no Alt+letter keys; a
-  folder opened from the command line has Home before it in Back's history.
 - **Advanced Query Syntax in the search box (2026-11-15).** Quoted phrases,
   upper-case `AND`, `OR` and `NOT`, `name:`, `ext:`, `date:` with dates,
   comparisons and ranges, and sizes in KB, MB or GB are read as Microsoft
@@ -71,6 +61,16 @@ is missing.
   recent-searches list under the search box and the Search options menu's
   Other properties and Advanced options, which no Microsoft page found so
   far documents.
+- **Keyboard and focus (2026-11-15).** Changed, replacing an earlier
+  choice: Left or Right with nowhere to go in the navigation pane keeps the
+  keyboard on its row (SIDE-033); it used to be left to the list, and GTK
+  then moved it to the pane's resize handle. Not checked against Windows,
+  so unchanged: Page Up and Page Down in List view move across columns, as
+  GTK's list does, so with every item in one column they do nothing; the
+  Properties windows' values and title-bar Close are Tab stops; each
+  Settings category is a Tab stop; Home tiles are a Tab stop each; the
+  message boxes Delete File and Rename File have no Alt+letter keys; a
+  folder opened from the command line has Home before it in Back's history.
 - **Checks this environment cannot run.** LOOK-028 (fractional scales and a
   window moving between monitors of different scales need a Wayland
   compositor), ACC-003 (nobody has checked the file list with Orca; the icon
@@ -99,11 +99,9 @@ is missing.
   supported build targets and Flatpak configuration.
 - **Archives.** Browsing and extraction support ZIP and compressed TAR, and
   ZIPs with the traditional ZIP password, which ask for it. 7z, RAR and
-  AES-encrypted ZIPs still need additional codecs for browsing and
-  extraction.
-  A TAR's relative links that stay inside the archive are listed and
-  extracted; ZIP links stay hidden and refused. Search inside an opened
-  archive is still unavailable.
+  AES-encrypted ZIPs still need additional codecs. A TAR's relative links
+  that stay inside the archive are listed and extracted; ZIP links stay
+  hidden and refused. Search inside an opened archive is still unavailable.
   Compress to › 7z File writes 7z archives (sevenz-rust2); browsing and
   extracting 7z is not supported yet.
 - **Flatpak:** "Show in folder" answers only while OpenXplorer runs unless the
@@ -306,3 +304,4 @@ braveSync, cacheClear, cacheRefresh, cacheRemove, cacheSet, cacheStatus,
 cacheStop, chrome, connect, environment, focusWindow, list, locationApply,
 locationCheck, mountPlan, mountVolume, normalise, open, openTerminal, pin,
 preferences, quit, search, uiReady, unmount, window, windowMetadata, windows.
+

@@ -208,6 +208,33 @@ fn the_browser_lists_safe_links_and_hides_the_rest() {
     assert!(!link.can_open, "a link is not opened as a copy of its own");
 }
 
+/// A link stored with a folder's ending (`link/`, `link//`) is hidden and
+/// counted, as extracting refuses its empty name segment: the browser
+/// never shows a row that extracting the same archive would refuse.
+///
+/// parity: ARC-004, ARC-016
+#[test]
+fn a_link_named_like_a_folder_is_hidden_as_extracting_refuses_it() {
+    for name in ["bundle/lib/folder/", "bundle/lib/folder//"] {
+        let temporary = tempfile::tempdir().expect("a temporary folder");
+        let archive = temporary.path().join("Bundle.tar.gz");
+        let link = format!("l:{name}:libx.so.1");
+        write_tar(&archive, &["f:bundle/lib/libx.so.1:library", &link]);
+        let browser = ArchiveBrowser::new(opener(), temporary.path().join("previews"));
+
+        let listing = browser
+            .list(&file_uri(&archive), "bundle/lib/", &Cancellation::new())
+            .expect("lists");
+
+        let names: Vec<&str> = listing.entries.iter().map(|entry| entry.name.as_str()).collect();
+        assert_eq!(names, ["libx.so.1"], "{name}");
+        assert_eq!(listing.hidden_unsafe_count, 1, "{name}");
+
+        let fixture = fixture_with(&["f:bundle/lib/libx.so.1:library", &link]);
+        assert!(fixture.extract("Unpacked").is_err(), "{name} is refused");
+    }
+}
+
 /// A TAR member whose time is 0, as tools that strip times write it, has
 /// no Date modified: a TAR counts from 1970, and 1/1/1980 (the earliest
 /// date a ZIP can hold) is no date it ever recorded. A real time shows.

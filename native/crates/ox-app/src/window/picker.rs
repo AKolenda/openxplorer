@@ -3834,42 +3834,6 @@ mod tests {
         assert_eq!(uris, [fixture.uri_of("extra_2.txt")]);
     }
 
-    /// No in Confirm Save As gives the keyboard back to File name, where
-    /// it was when the question came, so the name can be changed at once;
-    /// it went to the list of files.
-    ///
-    /// parity: INT-032, ACC-005
-    #[gtk::test]
-    fn no_in_confirm_save_as_gives_the_keyboard_back_to_file_name() {
-        let fixture = Fixture::empty();
-        fs::write(fixture.path("extra_2.txt"), "old").expect("a file");
-        let portal = Portal::hiding_extensions();
-        let _answer = dialog_on(
-            &portal,
-            &fixture,
-            "SaveFile",
-            vec![("current_name", "extra_2.txt".to_variant())],
-        );
-        let window = &portal.test.window;
-        let picker = window.picker().expect("a picker");
-        let name = picker.name.clone().expect("a name box");
-        name.grab_focus();
-        enter(&name);
-        let question = replace_question(&portal.test);
-        press_in(&question, "No");
-        wait_until("the question to close", || {
-            window.dialog_layer().shown().is_none()
-        });
-        crate::test_support::harness::wait_for_frames(window, 3);
-        let focus = gtk::prelude::GtkWindowExt::focus(window);
-        assert!(
-            focus.is_some_and(
-                |focus| focus == name.clone().upcast::<gtk::Widget>() || focus.is_ancestor(&name)
-            ),
-            "File name has the keyboard again"
-        );
-    }
-
     /// After Confirm Save As closes without saving (No, Escape or its
     /// close button), the keyboard is back in File name with the name
     /// selected, as a Windows dialog gives focus back to the control that
@@ -4021,6 +3985,42 @@ mod tests {
         let (response, uris) = Portal::finish(&answer);
         assert_eq!(response, RESPONSE_SUCCESS);
         assert_eq!(uris, [fixture.uri_of("list.txt")]);
+    }
+
+    /// No in Confirm Save As gives the keyboard back to File name, where
+    /// it was when the question came, so the name can be changed at once;
+    /// it went to the list of files.
+    ///
+    /// parity: INT-032, ACC-005
+    #[gtk::test]
+    fn no_in_confirm_save_as_gives_the_keyboard_back_to_file_name() {
+        let fixture = Fixture::empty();
+        fs::write(fixture.path("extra_2.txt"), "old").expect("a file");
+        let portal = Portal::hiding_extensions();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "SaveFile",
+            vec![("current_name", "extra_2.txt".to_variant())],
+        );
+        let window = &portal.test.window;
+        let picker = window.picker().expect("a picker");
+        let name = picker.name.clone().expect("a name box");
+        name.grab_focus();
+        enter(&name);
+        let question = replace_question(&portal.test);
+        press_in(&question, "No");
+        wait_until("the question to close", || {
+            window.dialog_layer().shown().is_none()
+        });
+        crate::test_support::harness::wait_for_frames(window, 3);
+        let focus = gtk::prelude::GtkWindowExt::focus(window);
+        assert!(
+            focus.is_some_and(
+                |focus| focus == name.clone().upcast::<gtk::Widget>() || focus.is_ancestor(&name)
+            ),
+            "File name has the keyboard again"
+        );
     }
 
     /// A long name wraps in Confirm Save As, which stays a compact box
@@ -5990,6 +5990,59 @@ mod tests {
             "Alt+T reaches the type list"
         );
         assert_eq!(picker.named(&name.text()), "notes.txt", "the name is kept");
+    }
+
+    /// An Open dialog about 1000 pixels wide with the Details pane open
+    /// shows every column of its list beside the pane, as Windows' common
+    /// dialog does: Name gives way first. Before, Name kept 260 pixels and
+    /// the pane cut Type mid-word ("Debian Packa") and hid Size, which only
+    /// a scroll bar shown under the pointer reached.
+    ///
+    /// parity: INT-032, LOOK-022
+    #[gtk::test]
+    fn the_details_pane_leaves_every_column_of_the_dialogs_list_in_view() {
+        let fixture = Fixture::empty();
+        for name in [
+            "openxplorer_2.0.17_amd64.deb",
+            "org.example.Notes.flatpakref",
+            "Meeting agenda.pdf",
+        ] {
+            fixture.write(name);
+        }
+        let portal = Portal::new();
+        let _answer = dialog_on(
+            &portal,
+            &fixture,
+            "OpenFile",
+            vec![("multiple", true.to_variant())],
+        );
+        let test = &portal.test;
+        let window = &test.window;
+        wait_until("the folder's listing", || window.is_listed());
+        test.open_details_pane();
+        window.set_default_size(1000, 630);
+        wait_until("the new width", || (window.width() - 1000).abs() <= 8);
+        crate::test_support::harness::wait_for_frames(window, 4);
+        let pane = window.details_pane();
+        assert!(pane.is_visible(), "the pane is open");
+        let view = window.folder_pane().details().column_view().clone();
+        let scroller = view
+            .parent()
+            .and_downcast::<gtk::ScrolledWindow>()
+            .expect("the list scrolls");
+        let columns = scroller.hadjustment().upper();
+        let shown = scroller.hadjustment().page_size();
+        assert!(
+            columns <= shown + 1.0,
+            "every column shows beside the pane: {shown} of {columns} pixels"
+        );
+        let list = view.compute_bounds(window).expect("shown");
+        let pane_left = pane.compute_bounds(window).expect("shown").x();
+        assert!(
+            list.x() + list.width() <= pane_left + 0.5,
+            "nothing lies under the pane"
+        );
+        window.cancel_picking();
     }
 
     /// The Properties window of the item called `name`, opened from the

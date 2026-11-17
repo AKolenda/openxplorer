@@ -220,8 +220,8 @@ msgid "Such as gimp %f (%f is the file, %u its address)"
 msgstr "例如 gimp %f（%f 是文件，%u 是其地址）"
 
 #: crates/ox-app/resources/ui/search-box.ui
-msgid "Search cached filenames and paths. Enable folders in Settings → Search."
-msgstr "搜索已缓存的文件名和路径。在设置 → 搜索中启用文件夹。"
+msgid "Search names in this folder and its subfolders. Folders cached in Settings → Search are searched faster."
+msgstr "搜索此文件夹及其子文件夹中的名称。在设置 → 搜索中缓存的文件夹搜索得更快。"
 
 #: crates/ox-app/resources/ui/search-box.ui
 msgid "Search filenames and paths"

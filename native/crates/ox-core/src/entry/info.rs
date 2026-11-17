@@ -324,6 +324,36 @@ mod tests {
         assert_eq!(folder.content_type, None, "a folder");
     }
 
+    /// The listing query itself asks for `standard::fast-content-type`, so
+    /// a network file that the backend reports only a fast type for is
+    /// typed by it: an item queried with the listing's attributes carries
+    /// the fast type, and with no content type it types the file.
+    ///
+    /// parity: VIEW-058
+    #[test]
+    fn the_listing_query_asks_for_the_fast_content_type() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let path = folder.path().join("Garden.png");
+        std::fs::write(&path, b"not really a picture").expect("the file is written");
+
+        let info = gio::File::for_path(&path)
+            .query_info(
+                super::super::ATTRIBUTES,
+                gio::FileQueryInfoFlags::NONE,
+                gio::Cancellable::NONE,
+            )
+            .expect("the file is queried");
+
+        assert_eq!(
+            info.attribute_string("standard::fast-content-type").as_deref(),
+            Some("image/png"),
+            "the listing's attributes include the fast type"
+        );
+        info.remove_attribute("standard::content-type");
+        let file = entry_for_uri("smb://fileserver.example/team/Photos/Garden.png", &info);
+        assert_eq!(file.content_type.as_deref(), Some("image/png"));
+    }
+
     /// A symbolic link named with no known type's extension is the app's
     /// shortcut, and its Type is "Shortcut", as Windows Explorer's is,
     /// whether it points to a file or a folder; one named for a type is
