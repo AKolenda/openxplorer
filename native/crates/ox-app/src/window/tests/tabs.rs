@@ -321,27 +321,56 @@ fn ctrl_tab_stays_out_of_text_fields_ctrl_t_works_from_search_and_properties_kee
     );
 }
 
-/// Many tabs keep the strip within 70% of the window; they shrink and the
-/// strip scrolls without a scrollbar.
+/// The empty part of the title bar between the "+" and the window
+/// buttons, which moves the window.
+fn drag_area(test: &TestWindow) -> gtk::Widget {
+    descendants::<gtk::Widget>(&test.window.titlebar().expect("the title bar"))
+        .into_iter()
+        .find(|widget| widget.has_css_class("title-drag"))
+        .expect("the drag area")
+}
+
+/// As Windows 11 lays out its title bar, the tab strip with its "+" grows
+/// up to the window buttons, leaving only the drag area (48 pixels) before
+/// them: tabs shrink toward their narrowest to fit all of that room, and
+/// the strip scrolls with its arrows only once every tab is at its
+/// narrowest and they still do not fit. Checked tab by tab up to 40 tabs,
+/// at the test display's full 1440 pixels and at 1000. (Windows 11, build
+/// 26200, leaves about 40 to 50 pixels at 1x.)
 ///
 /// parity: TAB-019
 #[gtk::test]
-fn many_tabs_keep_the_strip_within_seventy_percent_of_the_window() {
+fn tabs_fill_the_title_bar_up_to_the_drag_area_before_they_scroll() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    for _ in 0..12 {
-        test.window.add_tab(&fixture.uri()).expect("valid folder");
+    for width in [1440, 1000] {
+        super::narrow_windows::resize(&test, width);
+        have_tabs(&test, &fixture, 1);
+        let mut overflowed = false;
+        for count in 2..=40 {
+            have_tabs(&test, &fixture, count);
+            let (back, _) = scroll_arrows(&test);
+            let tab = tab_widget(&test, 0);
+            let narrowest = tab.measure(gtk::Orientation::Horizontal, -1).0.max(100);
+            let drag = drag_area(&test).width();
+            if back.is_visible() {
+                overflowed = true;
+                assert!(
+                    tab.width() <= narrowest + 1,
+                    "{count} tabs at {width} pixels: arrows only once the tabs are at their \
+                     narrowest ({} for {narrowest})",
+                    tab.width()
+                );
+                assert!(
+                    drag <= 60,
+                    "{count} tabs at {width} pixels: the strip reaches the window buttons but \
+                     for the drag area, which is {drag} pixels"
+                );
+            }
+            assert!(drag >= 48, "the window can still be grabbed: {drag} pixels");
+        }
+        assert!(overflowed, "40 tabs overflow at {width} pixels");
     }
-    let strip = test.window.tab_strip();
-    let limit = test.window.width() * 7 / 10;
-    wait_until("the strip to fit its share", || {
-        strip.width() > 0 && strip.width() <= limit
-    });
-    // The border box: the content width leaves out the tab's padding.
-    let tab = tab_widget(&test, 0);
-    let width = tab.compute_bounds(&tab).expect("a shown tab").width();
-    assert!(width < 215.0, "the tabs shrank");
-    assert!(width >= 100.0, "down to the narrowest tab");
 }
 
 /// A change to a background tab's folder lists it again behind, so it is

@@ -77,9 +77,6 @@ const SCROLL_GLYPH: i32 = 12;
 /// The clock in a snapshot tab's badge (`icon('clock', 12)`).
 const SNAPSHOT_BADGE_GLYPH: i32 = 12;
 
-/// The share of the window's width the strip takes at most, in percent.
-const MAX_STRIP_PERCENT: i32 = 70;
-
 /// The CSS class of a tab's icon.
 const TAB_ICON_CLASS: &str = "tab-icon";
 
@@ -178,9 +175,6 @@ mod imp {
         pub(super) edge_step: Cell<f64>,
         /// The timer of that scroll.
         pub(super) edge_scroll: RefCell<Option<glib::SourceId>>,
-        /// The widest the strip may be, arrows included: 70% of the
-        /// window's width.
-        pub(super) cap: Cell<i32>,
         /// Whether the arrows' showing or hiding waits for the next idle
         /// moment.
         pub(super) arrows_pending: Cell<bool>,
@@ -267,42 +261,6 @@ impl TabStrip {
         self.imp().layout.set_tab_width(width);
     }
 
-    /// Keeps the strip within 70% of a window `window_width` pixels wide
-    /// (`.tabs{max-width:70%}`), so the drag area beside it stays wide
-    /// enough to grab; tabs that do not fit shrink and then scroll. The
-    /// cap changes after the allocation that reports the width, because
-    /// changing it during one would start it again.
-    pub(super) fn cap_width(&self, window_width: i32) {
-        let cap = window_width * MAX_STRIP_PERCENT / 100;
-        if self.imp().cap.replace(cap) == cap {
-            return;
-        }
-        glib::idle_add_local_once(glib::clone!(
-            #[weak(rename_to = strip)]
-            self,
-            move || strip.apply_cap()
-        ));
-    }
-
-    /// Gives the scroller the strip's widest, less the arrows while they
-    /// show, so the strip with its arrows stays within its share.
-    fn apply_cap(&self) {
-        let imp = self.imp();
-        let cap = imp.cap.get();
-        if cap <= 0 {
-            return;
-        }
-        let arrows = if imp.scroll_back.is_visible() {
-            arrow_width(&imp.scroll_back) + arrow_width(&imp.scroll_forward)
-        } else {
-            0
-        };
-        let width = (cap - arrows).max(0);
-        if imp.scroller.max_content_width() != width {
-            imp.scroller.set_max_content_width(width);
-        }
-    }
-
     /// Shows the arrows while the tabs overflow and keeps them current:
     /// each is dimmed at its end of the strip. Each click scrolls a tab's
     /// width, without an animation, so reduced motion changes nothing.
@@ -384,7 +342,6 @@ impl TabStrip {
         if overflows != shown {
             back.set_visible(overflows);
             forward.set_visible(overflows);
-            self.apply_cap();
             if overflows {
                 // The tab in front stays in view as the arrows take room.
                 if let Some(front) = self.front_widget() {
