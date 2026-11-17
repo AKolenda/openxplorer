@@ -65,8 +65,8 @@ window.ox.ox-dialog .sign-in-choices button {
   color: @ox_muted;
 }
 .sign-in-dialog .sign-in-shield { color: @ox_accent; }
-window.ox .sign-in-dialog button.sign-in-close { min-width: 44px; min-height: 42px; border-radius: 0; }
-window.ox .sign-in-dialog button.sign-in-close:hover { background-color: @ox_critical_fill; color: @ox_on_critical; }
+window.ox.sign-in-dialog button.sign-in-close { min-width: 44px; min-height: 42px; border-radius: 0; }
+window.ox.sign-in-dialog button.sign-in-close:hover { background-color: @ox_critical_fill; color: @ox_on_critical; }
 .sign-in-dialog .sign-in-body { padding: 24px 28px 20px 28px; }
 .sign-in-dialog .sign-in-heading { margin-bottom: 19px; }
 .sign-in-dialog .sign-in-heading .dialog-title { margin-bottom: 0; }
@@ -90,8 +90,8 @@ window.ox .sign-in-dialog button.sign-in-close:hover { background-color: @ox_cri
 .sign-in-dialog .sign-in-target image { color: @ox_accent; }
 .sign-in-dialog .field-label { margin: 16px 0 7px 0; }
 .sign-in-dialog entry.sign-in-password { padding-right: 42px; }
-window.ox .sign-in-dialog button.sign-in-eye { min-width: 36px; min-height: 33px; margin-right: 1px; color: @ox_muted; }
+window.ox.sign-in-dialog button.sign-in-eye { min-width: 36px; min-height: 33px; margin-right: 1px; color: @ox_muted; }
 .sign-in-dialog checkbutton.sign-in-remember { margin-top: 22px; }
 .sign-in-dialog .sign-in-note { color: @ox_muted; margin-top: 12px; padding-left: 26px; }
-window.ox .sign-in-dialog button.sign-in-guest { color: @ox_accent; margin-top: 16px; padding: 0; }
+window.ox.sign-in-dialog button.sign-in-guest { color: @ox_accent; margin-top: 16px; padding: 0; }
 .sign-in-dialog .sign-in-choices { margin-top: 16px; }

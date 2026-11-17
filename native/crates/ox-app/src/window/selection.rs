@@ -147,10 +147,16 @@ impl BrowserWindow {
 
     /// Shows the item count and the selection in the status bar.
     pub(super) fn update_status(&self) {
-        let on_page = self.current_uri().as_deref().and_then(Page::drawn_at).is_some();
+        // Search results from Home are counted as results (HOME-035).
+        let page = self
+            .current_uri()
+            .as_deref()
+            .and_then(Page::drawn_at)
+            .filter(|_| !self.shows_search_step());
+        let on_page = page.is_some();
         let shown = self.folder_pane().model().n_items();
-        let home_items = super::home_page::item_count(self.folder_pane().landing())
-            .filter(|_| self.current_uri().as_deref() == Some(Page::Home.uri()));
+        let home_items =
+            super::home_page::item_count(self.folder_pane().landing()).filter(|_| page == Some(Page::Home));
         let subject = if let Some(shown) = home_items {
             // Home counts its tiles and rows, as Windows 11's does.
             StatusSubject::Folder {

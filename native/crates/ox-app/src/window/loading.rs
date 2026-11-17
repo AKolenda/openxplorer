@@ -33,6 +33,7 @@
 
 mod denied_folder;
 mod disconnected;
+pub(super) use disconnected::disconnected_message;
 mod mount_retry;
 mod removed_folder;
 
@@ -233,6 +234,10 @@ impl BrowserWindow {
             tab.listing_state = ListingState::Listed;
             tab.watch = None;
         }
+        // A page lists no files: the rows of the folder the tab left go,
+        // so nothing hidden behind the page can be selected, cut, copied
+        // or deleted (SEL-004).
+        self.clear_rows(id);
         if !self.imp().session.borrow().is_active(id) {
             self.redraw_pane(id);
             return;

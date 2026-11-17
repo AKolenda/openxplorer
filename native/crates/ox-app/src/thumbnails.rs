@@ -20,7 +20,9 @@
 //! reads back from the cache, goes through [`picture_guard`], so a huge,
 //! damaged or animated one keeps its icon instead of holding the app up.
 //! [`PreviewPolicy`] says which items of a folder get previews, from the
-//! Settings the user chose (VIEW-058).
+//! Settings the user chose (VIEW-058). Files on a server or a device are
+//! made on slots of their own ([`making`]), so a share that stops
+//! answering never holds up the thumbnails of this computer's files.
 
 mod network_fs;
 mod service;
@@ -52,6 +54,10 @@ use writer::Source;
 const DECODING_AT_ONCE: usize = 4;
 /// How many thumbnails are made at a time.
 const MAKING_AT_ONCE: usize = 2;
+/// How many thumbnails of files on a server or a device are made at a
+/// time, on slots of their own: a share that stops answering holds these,
+/// never the ones of this computer's files.
+const NETWORK_MAKING_AT_ONCE: usize = 2;
 /// How many decoded previews are kept.
 const MAX_KEPT: usize = 512;
 
@@ -76,6 +82,10 @@ pub(crate) struct PreviewPolicy {
     pub videos: bool,
     /// Every other type gets previews.
     pub documents: bool,
+    /// The folder shown is on the network, as a kernel CIFS mount is
+    /// though its files have `file:` URIs: its files' thumbnails are made
+    /// on the network's own slots without asking their file system first.
+    pub folder_on_network: bool,
 }
 
 impl PreviewPolicy {
@@ -89,6 +99,7 @@ impl PreviewPolicy {
             pictures: options.preview_pictures,
             videos: options.preview_videos,
             documents: options.preview_documents,
+            folder_on_network: is_remote,
         }
     }
 
@@ -108,6 +119,7 @@ impl PreviewPolicy {
         let request = PreviewRequest::for_entry(entry, pixels).filter(|_| self.allows(entry))?;
         Some(PreviewRequest {
             local_only: !self.remote,
+            on_network: self.folder_on_network || is_remote_item(entry),
             ..request
         })
     }
@@ -177,6 +189,11 @@ pub(crate) struct PreviewRequest {
     /// The file the item stands for, when it is another (a recent item's,
     /// a search result's), which [`Self::local_only`] looks at too.
     pub target_uri: Option<String>,
+    /// The item is on a server or a device, by its URI or the one it
+    /// stands for; [`preview`] adds a file of this computer's tree that is
+    /// on a network file system. Its thumbnail is made on the network's
+    /// own slots ([`making`]).
+    pub on_network: bool,
 }
 
 impl PreviewRequest {
@@ -190,6 +207,7 @@ impl PreviewRequest {
             pixels,
             local_only: false,
             target_uri: stands_for(entry).map(str::to_owned),
+            on_network: false,
         })
     }
 
@@ -201,6 +219,7 @@ impl PreviewRequest {
 thread_local! {
     static DECODING: Rc<Slots> = Rc::new(Slots::new(DECODING_AT_ONCE));
     static MAKING: Rc<Slots> = Rc::new(Slots::new(MAKING_AT_ONCE));
+    static NETWORK_MAKING: Rc<Slots> = Rc::new(Slots::new(NETWORK_MAKING_AT_ONCE));
     /// Decoded previews by item, version and size.
     static KEPT: RefCell<HashMap<PreviewKey, gdk::Texture>> = RefCell::new(HashMap::new());
     /// Sharp pictures decoded at a tile's size (Gallery), by item, version
@@ -234,15 +253,34 @@ fn pixbuf_may_read(content_type: &str, declared: &HashSet<String>) -> bool {
     is_picture || declared.contains(content_type)
 }
 
+/// The slots `request`'s thumbnail is made on: the network's own for a
+/// file on a server, a device or a network file system, so one that does
+/// not answer holds none of the slots of this computer's files.
+fn making(request: &PreviewRequest) -> Rc<Slots> {
+    if request.on_network {
+        NETWORK_MAKING.with(Rc::clone)
+    } else {
+        MAKING.with(Rc::clone)
+    }
+}
+
 /// The preview `request` asks for, or `None` when the item keeps its icon.
 pub(crate) async fn preview(request: PreviewRequest) -> Option<gdk::Texture> {
     let key = request.key();
-    if request.local_only && is_on_network(&request.uri, request.target_uri.as_deref()).await {
+    // A file of this computer's tree may be on a share mounted there (a
+    // kernel share, sshfs, GVfs's FUSE folder): it keeps its icon with
+    // network previews off, and is made on the network's slots with them on.
+    let on_network = request.on_network || is_on_network(&request.uri, request.target_uri.as_deref()).await;
+    if request.local_only && on_network {
         return None;
     }
     if let Some(texture) = KEPT.with_borrow(|kept| kept.get(&key).cloned()) {
         return Some(texture);
     }
+    let request = PreviewRequest {
+        on_network,
+        ..request
+    };
     let path = thumbnail_of(&request).await?;
     let pixels = request.pixels;
     let texture = DECODING
@@ -434,8 +472,7 @@ async fn make_thumbnail(request: &PreviewRequest) -> Result<PathBuf, Missing> {
     // GIO looks up local files only, and one size: a thumbnail this app
     // made earlier may be there all the same.
     let earlier = (cache_dir.clone(), request.uri.clone(), request.modified);
-    let found = MAKING
-        .with(Rc::clone)
+    let found = making(request)
         .blocking(move |_| {
             let (cache_dir, uri, modified) = earlier;
             writer::find_thumbnail(&cache_dir, &uri, modified?, flavor)
@@ -446,7 +483,7 @@ async fn make_thumbnail(request: &PreviewRequest) -> Result<PathBuf, Missing> {
     }
     if let Some(service) = service::service().await {
         if service.supports(&request.uri, &request.content_type) {
-            let _slot = MAKING.with(Rc::clone).take().await;
+            let _slot = making(request).take().await;
             let made = service.make(&request.uri, &request.content_type, flavor).await;
             let path = ox_core::entry::thumbnail_file(&cache_dir, &request.uri, flavor);
             return made.then_some(path).ok_or(Missing::Failed);
@@ -513,8 +550,7 @@ async fn by_decoding(
         modified,
     };
     let cache_dir = cache_dir.to_path_buf();
-    let decoded = MAKING
-        .with(Rc::clone)
+    let decoded = making(request)
         .blocking(move |cancel| writer::write_thumbnail(&cache_dir, &source, flavor, cancel))
         .await;
     // A worker that never ran belongs to a request already dropped.
@@ -541,8 +577,7 @@ async fn by_thumbnailer(
         modified,
         flavor,
     };
-    MAKING
-        .with(Rc::clone)
+    making(request)
         .blocking(move |cancel| {
             // The desktop's entries are files, read in the worker rather
             // than on the thread that asked, and once per run; what the
@@ -611,8 +646,9 @@ mod tests {
     }
 
     /// Previews follow Settings: off, only in folders on this computer
-    /// with network previews off (they are on by default), and not for
-    /// files over the limit.
+    /// unless network previews are on (they are off by default, as
+    /// Windows 11 File Explorer shows only icons in network folders), and
+    /// not for files over the limit.
     ///
     /// parity: VIEW-058
     #[test]
@@ -620,10 +656,7 @@ mod tests {
         let mut picture = crate::test_support::file_entry("photo.jpg");
         picture.content_type = Some("image/jpeg".to_owned());
         picture.size = Some(PREVIEW_SIZE_LIMIT + 1);
-        let options = ViewOptions {
-            remote_previews: false,
-            ..ViewOptions::default()
-        };
+        let options = ViewOptions::default();
 
         assert!(
             !PreviewPolicy::for_folder(&options, false).allows(&picture),
@@ -673,10 +706,48 @@ mod tests {
             request.target_uri.as_deref(),
             Some("file:///home/demo/Pictures/photo.jpg")
         );
-        let everywhere = ViewOptions::default();
+        let everywhere = ViewOptions {
+            remote_previews: true,
+            ..ViewOptions::default()
+        };
         assert!(PreviewPolicy::for_folder(&everywhere, true).allows(&picture));
         assert!(PreviewPolicy::for_folder(&everywhere, false).allows(&shared));
         assert!(PreviewPolicy::for_folder(&everywhere, false).allows(&recent));
+        // With them on, an item of a server or a device asks for its
+        // thumbnail on the network's own slots; one of this computer does
+        // not, until its file system says otherwise.
+        let on_network = PreviewPolicy::for_folder(&everywhere, true)
+            .request(&shared, 128)
+            .expect("a picture on a share");
+        assert!(on_network.on_network && !on_network.local_only);
+        let at_home = PreviewPolicy::for_folder(&everywhere, false)
+            .request(&picture, 128)
+            .expect("a picture of this computer");
+        assert!(!at_home.on_network);
+    }
+
+    /// A file of a folder known to be on the network, such as a kernel
+    /// CIFS mount whose files have `file:` URIs, asks for its thumbnail on
+    /// the network's own slots from the start, with no file system probe
+    /// of its own that a mount that stopped answering would hold up.
+    ///
+    /// parity: VIEW-057, VIEW-058
+    #[test]
+    fn a_file_of_a_mounted_share_asks_for_the_networks_slots() {
+        let mut picture = crate::test_support::file_entry("photo.jpg");
+        picture.content_type = Some("image/jpeg".to_owned());
+        picture.uri = "file:///mnt/nas/Photos/photo.jpg".to_owned();
+        let everywhere = ViewOptions {
+            remote_previews: true,
+            ..ViewOptions::default()
+        };
+
+        let request = PreviewPolicy::for_folder(&everywhere, true)
+            .request(&picture, 128)
+            .expect("a picture on the mounted share");
+
+        assert!(request.on_network);
+        assert!(!request.local_only);
     }
 
     /// A thumbnailer of the test's own, and the file it leaves when it is
@@ -714,7 +785,79 @@ mod tests {
             pixels: 128,
             local_only: false,
             target_uri: None,
+            on_network: false,
         }
+    }
+
+    /// A share that does not answer holds only the network's own slots:
+    /// with every one of them taken, as by reads of a server that never
+    /// return, a picture of this computer still gets its thumbnail, and a
+    /// file of the share waits for a network slot.
+    ///
+    /// parity: VIEW-057, VIEW-058
+    #[gtk::test]
+    fn a_share_that_does_not_answer_leaves_local_thumbnails_their_slots() {
+        use std::future::Future;
+        use std::task::{Context, Waker};
+
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let (thumbnailers, started) = fake_thumbnailer(folder.path());
+        let thumbnailers = Arc::new(thumbnailers);
+        let cache = folder.path().join("cache");
+        let picture = Pixbuf::new(Colorspace::Rgb, false, 8, 400, 200).expect("a picture");
+        picture.fill(0x3366_99ff);
+        let item = folder.path().join("photo.png");
+        picture.savev(&item, "png", &[]).expect("the picture");
+        let shared = folder.path().join("shared.png");
+        picture.savev(&shared, "png", &[]).expect("the picture");
+        let on_share = PreviewRequest {
+            on_network: true,
+            ..request_of(&shared, "image/png")
+        };
+        let context = glib::MainContext::default();
+        let network = making(&on_share);
+        let hung: Vec<_> = (0..NETWORK_MAKING_AT_ONCE)
+            .map(|_| context.block_on(network.take()))
+            .collect();
+
+        let local = request_of(&item, "image/png");
+        let written = context
+            .block_on(make_thumbnail_with(
+                &local,
+                &cache,
+                Some(Arc::clone(&thumbnailers)),
+                ThumbnailFlavor::Normal,
+                1_700_000_000,
+            ))
+            .expect("a local thumbnail while the share hangs");
+        assert_eq!(
+            written,
+            thumbnail_file(&cache, &local.uri, ThumbnailFlavor::Normal)
+        );
+
+        let mut waiting = Box::pin(make_thumbnail_with(
+            &on_share,
+            &cache,
+            Some(thumbnailers),
+            ThumbnailFlavor::Normal,
+            1_700_000_000,
+        ));
+        assert!(
+            waiting
+                .as_mut()
+                .poll(&mut Context::from_waker(Waker::noop()))
+                .is_pending(),
+            "the share's file waits for a network slot"
+        );
+        drop(hung);
+        let written = context
+            .block_on(waiting)
+            .expect("its thumbnail once a slot is free");
+        assert_eq!(
+            written,
+            thumbnail_file(&cache, &on_share.uri, ThumbnailFlavor::Normal)
+        );
+        assert!(!started.exists(), "the app decoded both pictures itself");
     }
 
     /// A picture the app cannot read — here a PNG that is no picture, as a

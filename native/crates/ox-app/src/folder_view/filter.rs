@@ -4,8 +4,9 @@
 //! Matches the filter in `filtered()` in `v2.0.0:desktop/ui/app.js`: hidden items
 //! only with "Show hidden files", and every whitespace-separated search term
 //! must occur somewhere in the name, ignoring case. A term with the
-//! wildcards `*`, `?` or `[ ]` must match the whole name instead, as in
-//! Dolphin's filter bar (SRCH-004, [`NamePattern`]). While searching,
+//! wildcards `*`, `?` or `[ ]` is a pattern, as in Dolphin's filter bar,
+//! found within the name as a plain term is, as in Windows 11 File
+//! Explorer (SRCH-004, [`NamePattern`]). While searching,
 //! the search options narrow the items by kind and date too (SRCH-037,
 //! [`SearchFacets`]). In a window that is choosing files for another
 //! application, the dialog's type list narrows the files as well, and a
@@ -213,11 +214,13 @@ mod tests {
 
     /// parity: SRCH-004
     #[test]
-    fn a_wildcard_term_filters_by_the_whole_name() {
+    fn a_wildcard_term_is_found_within_the_name() {
         let filter = searching("*.TXT notes");
         assert!(filter.accepts("notes 10.txt", Visibility::Visible));
-        assert!(!filter.accepts("notes 10.txt.bak", Visibility::Visible));
+        assert!(filter.accepts("notes 10.txt.bak", Visibility::Visible));
+        assert!(!filter.accepts("notes 10.md", Visibility::Visible));
         assert!(!filter.accepts("résumé.txt", Visibility::Visible));
+        assert!(searching("a?b").accepts("a1b.txt", Visibility::Visible));
     }
 
     /// parity: SRCH-003, VIEW-023

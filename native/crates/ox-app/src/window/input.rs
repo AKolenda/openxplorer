@@ -95,6 +95,7 @@ impl BrowserWindow {
             self.empty_folder_input(pane);
         }
         self.install_selection_keys();
+        self.install_tooltip_hiding();
         self.install_typing_anywhere();
         self.install_slow_click_rename();
         self.address_bar().connect_cancelled(glib::clone!(
@@ -109,6 +110,7 @@ impl BrowserWindow {
             }
         ));
         self.install_focus_regions();
+        self.show_the_focus_ring_only_for_keyboard_moves();
         self.install_tab_order();
         super::menu_popover::close_menus_on_press(self);
     }
@@ -529,9 +531,11 @@ impl BrowserWindow {
     /// Escape clears the prefix, and only without one cancels a file
     /// dialog or clears the selection; Backspace erases a
     /// typed character, and only without a prefix goes back, as in
-    /// Dolphin and Explorer (NAV-004), once the input method did not take
-    /// it for text it is composing; Space is prefix text, and only without
-    /// one selects the current item. `None` for every other key.
+    /// Dolphin and Explorer (NAV-004), or in an Open or Save dialog opens
+    /// the folder one level up, as Windows 11 does there, once the input
+    /// method did not take it for text it is composing; Space is prefix
+    /// text, and only without one selects the current item. `None` for
+    /// every other key.
     fn prefix_editing_key(
         &self,
         controller: &gtk::EventControllerKey,
@@ -554,7 +558,13 @@ impl BrowserWindow {
                 let composing = controller
                     .current_event()
                     .is_some_and(|event| input.filter_keypress(&event));
-                if !composing {
+                // "Backspace: Open a folder one level up if a folder is
+                // selected in the Save As or Open dialog box" (Windows'
+                // keyboard shortcuts, support.microsoft.com): Up, not
+                // Back; at / there is nothing above.
+                if !composing && self.is_picking() {
+                    self.go_up();
+                } else if !composing {
                     self.go_history(Direction::Backward);
                 }
             }

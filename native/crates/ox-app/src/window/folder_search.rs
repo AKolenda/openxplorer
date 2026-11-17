@@ -132,7 +132,7 @@ impl BrowserWindow {
         if !was_searching && !text.trim().is_empty() {
             self.remember_view_before_search();
         }
-        let folder = self.current_uri().unwrap_or_default();
+        let folder = self.searched_folder().unwrap_or_default();
         let roots = self.context().search_cache().roots();
         self.imp().search.borrow_mut().edit(text, &folder, &roots);
         self.show_searched_items();
@@ -233,11 +233,18 @@ impl BrowserWindow {
         }
     }
 
-    /// The folder the search box searches: the active tab's folder, not a
-    /// landing page.
-    fn searched_folder(&self) -> Option<String> {
+    /// The folder the search box searches: the active tab's folder, or
+    /// from Windows 11's Home the home folder, with its subfolders, as
+    /// Windows 11 searches from Home ("To find relevant files from your PC
+    /// and the cloud, search from File Explorer Home", HOME-035); no
+    /// other landing page.
+    pub(super) fn searched_folder(&self) -> Option<String> {
         let uri = self.current_uri()?;
-        Page::from_uri(&uri).is_none().then_some(uri)
+        match Page::from_uri(&uri) {
+            None => Some(uri),
+            Some(Page::Home) => Some(self.imp().locations.borrow().home_uri()),
+            Some(_) => None,
+        }
     }
 
     /// Whether the search box holds a search.
@@ -339,7 +346,7 @@ impl BrowserWindow {
     /// older run or another folder is dropped.
     fn finish_search(&self, run: &SearchRun, outcome: Result<SearchResults, CacheError>) {
         let is_current = self.imp().search.borrow().is_current(run);
-        let is_same_folder = self.current_uri().as_deref() == Some(run.folder.as_str());
+        let is_same_folder = self.searched_folder().as_deref() == Some(run.folder.as_str());
         if !is_current || !is_same_folder {
             return;
         }
@@ -548,7 +555,7 @@ impl BrowserWindow {
         if !self.is_searching() {
             return false;
         }
-        let folder = self.current_uri().unwrap_or_default();
+        let folder = self.searched_folder().unwrap_or_default();
         let roots = self.context().search_cache().roots();
         let root = related_roots(&roots, &folder).next().map(|root| root.uri.clone());
         if let Some(root) = root {

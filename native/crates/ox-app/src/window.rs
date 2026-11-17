@@ -89,6 +89,7 @@ mod file_drop;
 mod file_name_extensions;
 mod file_ops;
 mod focus_regions;
+mod focus_ring;
 mod folder_options;
 mod folder_pane;
 mod folder_search;
