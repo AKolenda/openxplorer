@@ -59,6 +59,9 @@ use gio::prelude::Cast;
 pub const ATTRIBUTES: &str = concat!(
     "standard::name,standard::display-name,standard::type,standard::is-hidden,",
     "standard::is-symlink,standard::size,standard::content-type,standard::target-uri,",
+    // The type GVfs's network backends report when they leave the content
+    // type out (VIEW-058); for a local file GIO takes it from the name.
+    "standard::fast-content-type,",
     "standard::is-virtual,standard::icon,time::modified,time::created,owner::user,unix::mode,",
     "access::can-rename,access::can-trash,access::can-delete,access::can-write,",
     "trash::orig-path,trash::deletion-date,",

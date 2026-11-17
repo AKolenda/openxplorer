@@ -271,6 +271,49 @@ fn a_share_mapped_for_this_session_keeps_its_letter() {
     assert_eq!(rows[0].label, "Projects (Z:)");
 }
 
+/// A browsed share is named after its mount, but with the share spelled
+/// as the user's address spells it: `GVfs` writes the share in lower case
+/// ("studio on 127.0.0.1"), and the address bar shows "Studio", so the
+/// navigation pane says "Studio on 127.0.0.1". A share mapped with a
+/// label, or saved, keeps its own label.
+///
+/// parity: NET-018
+#[test]
+fn a_browsed_share_keeps_the_spelling_of_its_address() {
+    let mounts = [active_mount("smb://127.0.0.1/studio", "studio on 127.0.0.1")];
+    let visited = [bookmark("smb://127.0.0.1/Studio", "")];
+    let rows = merge_network_locations(&[], &mounts, &[], &visited);
+    let labels: Vec<&str> = rows.iter().map(|row| row.label.as_str()).collect();
+    assert_eq!(labels, ["Studio on 127.0.0.1"]);
+
+    let mapped = [bookmark("smb://127.0.0.1/Studio", "Studio (Y:)")];
+    let rows = merge_network_locations(&[], &mounts, &[], &mapped);
+    assert_eq!(rows[0].label, "Studio (Y:)");
+}
+
+/// A saved or mapped share's label is the user's, so a later visit to the
+/// share with other casing ("Studio" for "studio") leaves it as it is:
+/// only a label taken from a mount follows the address's spelling.
+///
+/// parity: NET-018
+#[test]
+fn a_saved_or_mapped_label_keeps_its_spelling_when_the_share_is_browsed() {
+    let browsed = bookmark("smb://nas/Studio", "");
+    let saved = [saved_share("smb://nas/studio", "studio reports")];
+    let rows = merge_network_locations(&saved, &[], &[], std::slice::from_ref(&browsed));
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].label, "studio reports");
+
+    let visited = [bookmark("smb://nas/studio", "studio (Y:)"), browsed];
+    let rows = merge_network_locations(&[], &[], &[], &visited);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].label, "studio (Y:)");
+
+    let mounts = [active_mount("smb://nas/studio", "studio on nas")];
+    let rows = merge_network_locations(&saved, &mounts, &[], &visited[1..]);
+    assert_eq!(rows[0].label, "studio reports");
+}
+
 /// An SFTP folder browsed this session and the mount GIO reports for its
 /// server make one connected row, so the row the user opened offers
 /// Disconnect; a saved folder on the server keeps its own row.

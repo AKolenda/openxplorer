@@ -19,7 +19,9 @@
 //! to rename the next or previous item (OPS-012). With several items
 //! selected, the field edits one of them and Enter gives the typed name to
 //! all of them with a number (OPS-050, [`super::numbered_rename`]); Tab and
-//! the arrows are then the field's own keys.
+//! the arrows are then the field's own keys. Ctrl+A selects the whole
+//! name in the field and nothing else: GTK 4.14's text field selects its
+//! text but lets the key go on to the view, which selected every item too.
 //!
 //! As in Windows, a character Windows forbids in names is refused as it
 //! is typed or pasted, with Windows' balloon ([`super::name_balloon`]),
@@ -86,6 +88,17 @@ fn rename_step(key: gdk::Key, modifiers: gdk::ModifierType, in_details: bool) ->
         gdk::Key::Up if in_details => Some(-1),
         _ => None,
     }
+}
+
+/// Whether `key` with `modifiers` is Ctrl+A, with Caps Lock or not.
+fn is_select_all(key: gdk::Key, modifiers: gdk::ModifierType) -> bool {
+    let others = gdk::ModifierType::SHIFT_MASK
+        | gdk::ModifierType::ALT_MASK
+        | gdk::ModifierType::SUPER_MASK
+        | gdk::ModifierType::META_MASK;
+    key.to_lower() == gdk::Key::a
+        && modifiers.contains(gdk::ModifierType::CONTROL_MASK)
+        && !modifiers.intersects(others)
 }
 
 impl BrowserWindow {
@@ -177,8 +190,9 @@ impl BrowserWindow {
     }
 
     /// Escape in the field ends the rename and leaves the name as it was;
-    /// Tab and Shift+Tab, and Down and Up in the details view, commit and
-    /// go on to rename the next or previous item (OPS-012).
+    /// Ctrl+A selects the whole name; Tab and Shift+Tab, and Down and Up
+    /// in the details view, commit and go on to rename the next or
+    /// previous item (OPS-012).
     fn rename_keys(
         &self,
         cell: &FileCell,
@@ -202,6 +216,12 @@ impl BrowserWindow {
             move |_, key, _, modifiers| {
                 if key == gdk::Key::Escape {
                     window.end_rename_in_place(&cell);
+                    return glib::Propagation::Stop;
+                }
+                // Selected here and stopped: the field's own Ctrl+A goes on
+                // to the view in GTK 4.14, which then selects every item.
+                if is_select_all(key, modifiers) {
+                    editor.select_region(0, -1);
                     return glib::Propagation::Stop;
                 }
                 // Several items get one name: there is no next one to
