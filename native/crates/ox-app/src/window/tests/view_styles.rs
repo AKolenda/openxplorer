@@ -1009,3 +1009,42 @@ fn a_folder_expands_in_place_and_back_keeps_it_open() {
     tree.set_expanded(&documents, false);
     assert_eq!(model.n_items(), shown);
 }
+
+/// A picture too small to see as a thumbnail, such as the 1×1 white
+/// picture New > Bitmap image makes, keeps its type's icon, so its row
+/// never looks iconless on a light background; a larger picture still
+/// shows its thumbnail.
+///
+/// parity: VIEW-057
+#[gtk::test]
+fn a_tiny_picture_keeps_its_type_icon() {
+    use crate::folder_view::cells::FileCell;
+
+    let fixture = Fixture::standard();
+    let white = |width: i32, height: i32, name: &str| {
+        let stride = usize::try_from(width * 4).expect("a width");
+        let bytes = vec![0xff_u8; stride * usize::try_from(height).expect("a height")];
+        let pixels = gtk::glib::Bytes::from_owned(bytes);
+        let picture =
+            gtk::gdk::MemoryTexture::new(width, height, gtk::gdk::MemoryFormat::R8g8b8a8, &pixels, stride);
+        picture.save_to_png(fixture.path(name)).expect("a picture");
+    };
+    white(1, 1, "Dot.png");
+    white(64, 48, "Harbour.png");
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("view", Some("details"));
+    test.wait_for_listing("the pictures");
+    let cell = |name: &str| {
+        descendants::<FileCell>(&test.window)
+            .into_iter()
+            .find(|cell| cell.name() == name || cell.name() == format!("{name}.png"))
+    };
+    wait_until("Harbour's thumbnail", || {
+        cell("Harbour").is_some_and(|cell| cell.shows_custom_icon())
+    });
+    settle();
+    assert!(
+        cell("Dot").is_some_and(|cell| !cell.shows_custom_icon()),
+        "a 1×1 picture shows its type icon, not an invisible thumbnail"
+    );
+}
