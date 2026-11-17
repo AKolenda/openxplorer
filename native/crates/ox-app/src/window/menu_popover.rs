@@ -16,10 +16,14 @@
 //!
 //! An item with a submenu (a chevron at the far right of its row) opens it
 //! beside the menu, as Windows 11's menus do: resting the pointer on the
-//! row for [`SUBMENU_DELAY`] opens it, as does a click, Right or Enter at
-//! once; resting on another row for as long closes it, so moving across
-//! the rows towards an open submenu does not. Its first item is level
-//! with the row, and GTK flips it to the left near the screen's edge.
+//! row for [`SUBMENU_DELAY`] opens it, as does a click, a tap, Right or
+//! Enter at once; resting on another row for as long closes it. The pointer
+//! heading for the open submenu, inside the triangle between where it was
+//! and the submenu's near edge, does not rest on the rows it crosses
+//! however slowly it moves, so it reaches the submenu across them. Its
+//! first item is level with the row, and GTK flips it to the left near the
+//! screen's edge; with no room on either side, it opens over the menu, as
+//! Windows 11 places it.
 //! The keyboard moving to another row takes over from the pointer: the
 //! submenu it was about to open does not, and one open beside the row it
 //! left closes. Left or Escape closes only the open submenu, the innermost one. Choosing an item
@@ -139,8 +143,19 @@ mod imp {
         /// The row the pointer rests on, and the timer that opens or closes
         /// a submenu once it has rested there for `SUBMENU_DELAY`.
         pub(super) hover: RefCell<(Option<usize>, Option<SourceId>)>,
+        /// Where the pointer last was over the rows, in the menu's
+        /// coordinates, to tell whether it heads for the open submenu.
+        pub(super) pointer: Cell<Option<(f64, f64)>>,
         /// Whether this menu is a submenu, opened beside a row of another.
         pub(super) is_submenu: Cell<bool>,
+        /// The least width and height this submenu takes, measured as it
+        /// opens, to tell when GTK closed it for want of room.
+        pub(super) least_size: Cell<(i32, i32)>,
+        /// Whether this submenu opens over the menu's row instead of
+        /// beside it, as there was no room beside it on either side.
+        pub(super) over_menu: Cell<bool>,
+        /// Whether the keyboard opened this submenu, so it goes into it.
+        pub(super) by_keyboard: Cell<bool>,
         /// Whether the menu opens beside its button because GTK cut it
         /// short below it (height.rs).
         pub(super) beside_button: Cell<bool>,
@@ -358,10 +373,15 @@ fn follow_hover(popover: &MenuPopover, list: &gtk::ListBox) {
     let rest_at = glib::clone!(
         #[weak]
         popover,
-        move |y: f64| {
+        move |x: f64, y: f64| {
+            let list = popover.list();
             #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
-            let row = popover.list().row_at_y(y as i32);
-            popover.rest_on(row.and_then(|row| usize::try_from(row.index()).ok()));
+            let row = list.row_at_y(y as i32);
+            #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+            let point = list
+                .compute_point(&popover, &gtk::graphene::Point::new(x as f32, y as f32))
+                .map(|point| (f64::from(point.x()), f64::from(point.y())));
+            popover.pointer_moved(row.and_then(|row| usize::try_from(row.index()).ok()), point);
         }
     );
     let motion = gtk::EventControllerMotion::new();
@@ -369,20 +389,30 @@ fn follow_hover(popover: &MenuPopover, list: &gtk::ListBox) {
     motion.connect_enter(glib::clone!(
         #[weak]
         popover,
-        move |_, _, y| {
+        move |_, x, y| {
             // The pointer reached this submenu: the menu it opens from
             // keeps it open, whatever rows the pointer crossed on its way.
             if let Some(parent) = popover.parent_menu() {
                 parent.keep_submenu_open();
             }
-            on_enter(y);
+            on_enter(x, y);
         }
     ));
-    motion.connect_motion(move |_, _, y| rest_at(y));
+    motion.connect_motion(move |_, x, y| rest_at(x, y));
     motion.connect_leave(glib::clone!(
         #[weak]
         popover,
-        move |_| popover.rest_on(None)
+        move |_| {
+            // GTK makes up a motion event for the window when something
+            // in it changed, as while a menu opens, at the pointer's place
+            // on the window; a menu without a pointer grab of its own, as
+            // the command bar's, then hears the pointer leave though it
+            // never moved off its rows, which would keep a submenu from
+            // opening on hover (gdk_surface_ensure_motion, GTK 4.14).
+            if !popover.pointer_is_over_rows() {
+                popover.pointer_moved(None, None);
+            }
+        }
     ));
     list.add_controller(motion);
 }
@@ -959,6 +989,20 @@ impl MenuPopover {
                 if popover.open_submenu_menu().as_ref() != Some(closed) {
                     return;
                 }
+                // GTK closes a popup that the monitor has no room for,
+                // once it is laid out smaller than it can be: with no room
+                // beside the row on either side, it opens again over the
+                // menu.
+                if closed.was_squeezed() && !closed.imp().over_menu.get() {
+                    closed.imp().over_menu.set(true);
+                    let closed = closed.clone();
+                    glib::idle_add_local_once(glib::clone!(
+                        #[weak]
+                        popover,
+                        move || popover.show_open_submenu_over_menu(&closed)
+                    ));
+                    return;
+                }
                 let closed = closed.clone();
                 glib::idle_add_local_once(glib::clone!(
                     #[weak]
@@ -1030,9 +1074,10 @@ impl MenuPopover {
             ));
             return;
         }
+        let anchor = submenu_anchor(&menu, &area);
         let (points, pointing) = menu.pointing_to();
-        if !points || pointing != area {
-            menu.set_pointing_to(Some(&area));
+        if !points || pointing != anchor {
+            menu.set_pointing_to(Some(&anchor));
         }
     }
 
@@ -1064,6 +1109,101 @@ impl MenuPopover {
                 row.grab_focus();
             }
         }
+    }
+
+    /// Whether GTK laid this submenu's popup out smaller than the submenu
+    /// can be, as it does when the monitor has no room for it where it was
+    /// asked to open; GTK then closes it (`gtk_popover_native_layout`).
+    fn was_squeezed(&self) -> bool {
+        let (least_width, least_height) = self.imp().least_size.get();
+        self.surface()
+            .is_some_and(|surface| surface.width() < least_width || surface.height() < least_height)
+    }
+
+    /// Shows `submenu`, open beside a row and closed by GTK for want of
+    /// room there, over the menu instead: below the top of its row, from its
+    /// right end, and slid back onto the monitor (see [`submenu_anchor`]).
+    fn show_open_submenu_over_menu(&self, submenu: &MenuPopover) {
+        let Some((open, index)) = self.imp().submenu.borrow().clone() else {
+            return;
+        };
+        if open != *submenu {
+            return;
+        }
+        let keyboard = submenu.imp().by_keyboard.get();
+        submenu.set_position(gtk::PositionType::Bottom);
+        submenu.set_halign(gtk::Align::Start);
+        match self.row_at(index).and_then(|row| row_area(self, &row)) {
+            Some(area) => show_submenu(submenu, &area, keyboard),
+            None => self.close_submenu(),
+        }
+    }
+
+    /// Whether the pointer is over the menu's rows now, asked of the
+    /// pointer itself rather than of the events GTK sent the menu. False
+    /// when the windowing system does not say where it is, as Wayland
+    /// does only for the surface under the pointer.
+    fn pointer_is_over_rows(&self) -> bool {
+        let device = self
+            .display()
+            .default_seat()
+            .and_then(|seat| seat.pointer());
+        let Some((x, y)) = self
+            .surface()
+            .zip(device)
+            .and_then(|(surface, device)| surface.device_position(&device))
+            .map(|(x, y, _)| (x, y))
+        else {
+            return false;
+        };
+        let (shadow_x, shadow_y) = self.surface_transform();
+        let list = self.list();
+        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+        let point = self.compute_point(
+            list,
+            &gtk::graphene::Point::new((x - shadow_x) as f32, (y - shadow_y) as f32),
+        );
+        point.is_some_and(|point| list.contains(f64::from(point.x()), f64::from(point.y())))
+    }
+
+    /// The pointer moved to `point` of the menu, over the row at `index`,
+    /// or left the rows. Moving towards the open submenu, the pointer does
+    /// not rest on the rows it crosses: the delay starts again with each
+    /// step, so the submenu stays open however slowly the pointer goes,
+    /// and the row it stops on counts once it has rested there.
+    fn pointer_moved(&self, index: Option<usize>, point: Option<(f64, f64)>) {
+        let from = self.imp().pointer.replace(point);
+        let heading = from
+            .zip(point)
+            .is_some_and(|(from, to)| self.heads_for_open_submenu(from, to));
+        if heading && index.is_some() && index != self.open_submenu_index() {
+            self.cancel_hover();
+            self.imp().hover.borrow_mut().0 = None;
+        }
+        self.rest_on(index);
+    }
+
+    /// Whether the pointer moving from `from` to `to`, in the menu's
+    /// coordinates, heads for the open submenu: `to` is inside the
+    /// triangle between `from` and the two ends of the submenu's edge
+    /// nearest the menu.
+    fn heads_for_open_submenu(&self, from: (f64, f64), to: (f64, f64)) -> bool {
+        if from == to {
+            return false;
+        }
+        let Some(submenu) = self.open_submenu_menu().filter(WidgetExt::is_mapped) else {
+            return false;
+        };
+        let Some((left, top)) = submenu_origin_in(self, &submenu) else {
+            return false;
+        };
+        let bottom = top + f64::from(submenu.height());
+        let edge = if left >= from.0 {
+            left
+        } else {
+            left + f64::from(submenu.width())
+        };
+        point_in_triangle(to, from, (edge, top), (edge, bottom))
     }
 
     /// The pointer rests on the row at `index`, or on none: after
@@ -1165,6 +1305,7 @@ impl MenuPopover {
     fn forget_hover(&self) {
         self.cancel_hover();
         self.imp().hover.borrow_mut().0 = None;
+        self.imp().pointer.set(None);
     }
 
     /// The check mark `item` shows now.
@@ -1267,8 +1408,12 @@ fn collect_menus(widget: &gtk::Widget, menus: &mut Vec<MenuPopover>) {
 /// Shows `submenu` beside `row_area`, its row's place in the menu it opens
 /// from, with the keyboard on its first item if `keyboard` opened it.
 fn show_submenu(submenu: &MenuPopover, row_area: &gdk::Rectangle, keyboard: bool) {
-    submenu.set_pointing_to(Some(row_area));
+    submenu.imp().by_keyboard.set(keyboard);
+    submenu.set_pointing_to(Some(&submenu_anchor(submenu, row_area)));
     submenu.popup();
+    let (least_width, _, _, _) = submenu.measure(gtk::Orientation::Horizontal, -1);
+    let (least_height, _, _, _) = submenu.measure(gtk::Orientation::Vertical, -1);
+    submenu.imp().least_size.set((least_width, least_height));
     if keyboard {
         submenu.focus_first_item();
     }
@@ -1288,6 +1433,42 @@ fn row_area(menu: &MenuPopover, row: &gtk::ListBoxRow) -> Option<gdk::Rectangle>
         bounds.height() as i32,
     );
     Some(area)
+}
+
+/// What `submenu` points at for its row at `row_area`: the row, which it
+/// opens beside; or, opening over the menu, a point at the row's right
+/// end, which it opens below and GTK slides along the monitor's edge, so
+/// it shows in full whatever room the monitor has beside the menu.
+fn submenu_anchor(submenu: &MenuPopover, row_area: &gdk::Rectangle) -> gdk::Rectangle {
+    if submenu.imp().over_menu.get() {
+        gdk::Rectangle::new(row_area.x() + row_area.width() - 1, row_area.y(), 1, 1)
+    } else {
+        *row_area
+    }
+}
+
+/// Where the top left corner of `submenu` is in `menu`'s coordinates, from
+/// where its popup is on the menu's: a popup's position is relative to the
+/// one it opens from, on Wayland as on X11.
+fn submenu_origin_in(menu: &MenuPopover, submenu: &MenuPopover) -> Option<(f64, f64)> {
+    let popup = submenu.surface().and_downcast::<gdk::Popup>()?;
+    let (menu_x, menu_y) = menu.surface_transform();
+    let (submenu_x, submenu_y) = submenu.surface_transform();
+    Some((
+        f64::from(popup.position_x()) + submenu_x - menu_x,
+        f64::from(popup.position_y()) + submenu_y - menu_y,
+    ))
+}
+
+/// Whether `point` is inside the triangle `a`, `b`, `c`, edges included.
+fn point_in_triangle(point: (f64, f64), a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> bool {
+    let side = |from: (f64, f64), to: (f64, f64)| {
+        (to.0 - from.0) * (point.1 - from.1) - (to.1 - from.1) * (point.0 - from.0)
+    };
+    let sides = [side(a, b), side(b, c), side(c, a)];
+    let below = sides.iter().any(|side| *side < 0.0);
+    let above = sides.iter().any(|side| *side > 0.0);
+    !(below && above)
 }
 
 /// The items among `entries`, without the dividers.
