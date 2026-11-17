@@ -740,6 +740,7 @@ impl DetailsView {
     pub(crate) fn set_text_scale(&self, scale: f64) {
         let old = self.text_scale();
         self.imp().text_scale.set(scale);
+        self.keep_room_for_names(scale);
         if (old - scale).abs() < f64::EPSILON {
             return;
         }
@@ -755,6 +756,32 @@ impl DetailsView {
             }
         }
         self.cancel_resize_report();
+    }
+
+    /// Keeps Name, which fills the room the other columns leave, at least
+    /// its narrowest width times `scale` while text is larger than at 100%,
+    /// so larger text scrolls the list sideways rather than squeezing the
+    /// names to their first letters.
+    fn keep_room_for_names(&self, scale: f64) {
+        let Some(header) = self.header() else { return };
+        let Some((_, title)) = self
+            .titles(&header)
+            .into_iter()
+            .find(|(column, _)| *column == SortColumn::Name)
+        else {
+            return;
+        };
+        let narrowest = f64::from(*column_widths::width_limits(SortColumn::Name).start());
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a column is a few hundred pixels wide"
+        )]
+        let room = if scale > 1.0 {
+            (narrowest * scale).round() as i32
+        } else {
+            -1
+        };
+        title.set_width_request(room);
     }
 
     /// The narrowest width Size may have, in the pixels settings save:

@@ -138,6 +138,10 @@ pub(super) fn show_capacity(texts: &gtk::Box, uri: &str, with_text: bool) {
         texts.append(&bar);
         if with_text {
             texts.append(&label(&capacity.text(), "card-sub"));
+            // The Details pane describes a selected tile with this line.
+            if let Some(window) = texts.root().and_downcast::<BrowserWindow>() {
+                window.update_details_pane();
+            }
         } else {
             bar.set_tooltip_text(Some(&capacity.text()));
         }

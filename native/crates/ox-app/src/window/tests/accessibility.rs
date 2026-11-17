@@ -526,6 +526,12 @@ fn large_text_widens_default_columns_and_the_navigation_pane() {
     skin.set_text_size(TextSize::from_percent(200));
     wait_for_frames(&test.window, 3);
     let large = widths();
+    // Name, which fills the rest, keeps room for names: the list scrolls
+    // sideways instead.
+    let header = details.header().expect("the column titles");
+    let name_title = header.first_child().expect("Name's title");
+    let name_room = name_title.width_request();
+    let header_width = header.width();
     skin.set_text_size(TextSize::from_percent(100));
     wait_for_frames(&test.window, 3);
     let back = widths();
@@ -539,6 +545,8 @@ fn large_text_widens_default_columns_and_the_navigation_pane() {
     skin.set_text_size(before);
 
     assert_eq!(large, (282, 270, 420), "twice the text, wider columns and pane");
+    assert_eq!(name_room, 280, "Name keeps room for names");
+    assert!(header_width >= 280 + 282 + 270, "the list scrolls sideways: {header_width}");
     assert_eq!(back, (176, 135, 210));
     assert_eq!(dragged, 150, "a width the user chose stays");
 }
