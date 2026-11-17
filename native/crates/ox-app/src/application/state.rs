@@ -65,6 +65,10 @@ pub(super) struct AppState {
 /// competes with opening the first window.
 const UPDATE_CHECK_DELAY: u32 = 10;
 
+/// How long after startup Super+E is tidied up after removed apps, so it
+/// never competes with opening the first window.
+const SHORTCUT_TIDY_DELAY: u32 = 2;
+
 /// Set to 1, the daily update check never runs: the test runner sets it,
 /// so launched builds never ask GitHub.
 const NO_UPDATE_CHECK: &str = "OX_NO_UPDATE_CHECK";
@@ -85,6 +89,19 @@ impl AppState {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0, |since| since.as_secs());
             context.check_for_updates_if_due(now);
+        });
+    }
+
+    /// Shortly after startup, tidies up Super+E after an uninstalled
+    /// package of `OpenXplorer` or app (INT-033).
+    pub(super) fn forget_removed_shortcut_apps_soon(&self) {
+        let context = self.context.downgrade();
+        glib::timeout_add_seconds_local_once(SHORTCUT_TIDY_DELAY, move || {
+            if let Some(context) = context.upgrade() {
+                context
+                    .desktop_integration()
+                    .forget_removed_launch_shortcut_apps();
+            }
         });
     }
 

@@ -6,7 +6,7 @@ resolver = "2"
 members = ["crates/ox-core", "crates/ox-app"]
 
 [workspace.package]
-version = "2.0.17"
+version = "2.0.18"
 edition = "2021"
 license = "AGPL-3.0-only"
 # The oldest Rust the locked GTK and GIO crates build with. CI checks with
@@ -51,6 +51,12 @@ oo7 = { version = "0.6", default-features = false, features = ["async-std", "nat
 flate2 = "1.1"
 bzip2 = "0.6"
 lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "optimization", "xz", "encoder"] }
+# Writing .7z archives for Compress to › 7z File, as Windows 11 offers it
+# (ARC-023). Pure Rust, Apache-2.0. Pinned: 0.20.2 is the last release that
+# builds with this workspace's rust-version (0.21 and later need 1.93); it
+# brings its own lzma-rust2 0.16 for LZMA2. Only writing is enabled: no
+# encryption, PPMd, BZip2 or other codecs.
+sevenz-rust2 = { version = "=0.20.2", default-features = false, features = ["compress"] }
 # Zstandard decompression for .tar.zst archives (ARC-024), pure Rust like the
 # decoders above.
 ruzstd = { version = "0.9", default-features = false, features = ["std"] }

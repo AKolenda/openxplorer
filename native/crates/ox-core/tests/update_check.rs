@@ -47,7 +47,7 @@ fn failed_check_discards_stale_release_and_releases_lock() {
     let failures = [
         (
             FetchError::Status(403),
-            "GitHub could not check for updates (HTTP 403). Try again later.",
+            "GitHub refused the update check (HTTP 403). Try again later.",
         ),
         (
             FetchError::Unreachable,
