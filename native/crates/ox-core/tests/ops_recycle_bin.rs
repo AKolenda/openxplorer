@@ -694,3 +694,97 @@ fn emptying_the_recycle_bin_reports_how_many_items_are_done() {
     assert!(reports.len() < before.len(), "not one report per item");
     assert!(reports.iter().all(|report| report.label.starts_with("Delete: ")));
 }
+
+/// Items whose names are not UTF-8, or long, are deleted for good by
+/// their exact names, alone and among many, and nothing else is.
+///
+/// parity: OPS-042, OPS-043
+#[test]
+fn items_with_names_that_are_not_utf8_or_long_are_deleted_exactly() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let latin1 = temp.path().join(OsStr::from_bytes(b"caf\xe9 notes.txt"));
+    let long = temp.path().join(format!("{}.txt", "L".repeat(200)));
+    let neighbour = temp.path().join("caf notes.txt");
+    for path in [&latin1, &long, &neighbour] {
+        fs::write(path, b"old").unwrap();
+    }
+    trash(&[&latin1, &long, &neighbour]);
+    let alone = recycled_from(&latin1);
+    let kept = recycled_from(&neighbour);
+
+    let result = block_on(delete_from_recycle_bin(
+        std::slice::from_ref(&alone.uri),
+        &OperationContext::default(),
+    ))
+    .unwrap();
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    let files = glib::user_data_dir().join("Trash/files");
+    assert!(!files.join(OsStr::from_bytes(b"caf\xe9 notes.txt")).exists());
+
+    // Among many, which read where they are kept from one listing.
+    let originals = fill_home_trash(temp.path(), "Among many", 80);
+    let listed = wait_for_listed(81);
+    let mut uris: Vec<String> = listed
+        .iter()
+        .filter(|item| {
+            item.original_path
+                .as_ref()
+                .is_some_and(|path| originals.contains(path) || *path == long)
+        })
+        .map(|item| item.uri.clone())
+        .collect();
+    uris.sort();
+    assert_eq!(uris.len(), 81);
+    let result = block_on(delete_from_recycle_bin(&uris, &OperationContext::default())).unwrap();
+
+    assert!(result.errors.is_empty(), "{:?}", result.errors);
+    assert_eq!(result.done.len(), 81);
+    assert!(!files.join(format!("{}.txt", "L".repeat(200))).exists());
+    let left: Vec<RecycledItem> = recycle_bin();
+    assert!(
+        left.iter().any(|item| item.uri == kept.uri),
+        "the neighbour stays"
+    );
+    assert_eq!(fs::read(files.join("caf notes.txt")).unwrap(), b"old");
+    block_on(delete_from_recycle_bin(&[kept.uri], &OperationContext::default())).unwrap();
+}
+
+/// Two items deleted under the same name from different folders are kept
+/// apart in the Recycle Bin, and deleting one for good leaves the other.
+///
+/// parity: OPS-043
+#[test]
+fn deleting_one_of_two_items_with_the_same_name_leaves_the_other() {
+    let _recycle_bin = use_recycle_bin();
+    let temp = tempfile::tempdir().unwrap();
+    let (first, second) = (temp.path().join("One"), temp.path().join("Two"));
+    fs::create_dir_all(&first).unwrap();
+    fs::create_dir_all(&second).unwrap();
+    let (a, b) = (first.join("Same name.txt"), second.join("Same name.txt"));
+    fs::write(&a, b"first").unwrap();
+    fs::write(&b, b"second").unwrap();
+    trash(&[&a, &b]);
+    let (item_a, item_b) = (recycled_from(&a), recycled_from(&b));
+    assert_ne!(item_a.uri, item_b.uri);
+
+    let result = block_on(delete_from_recycle_bin(
+        std::slice::from_ref(&item_a.uri),
+        &OperationContext::default(),
+    ))
+    .unwrap();
+
+    assert_eq!(result.done, std::slice::from_ref(&item_a.uri));
+    let left = recycle_bin();
+    assert!(!left.iter().any(|item| item.uri == item_a.uri));
+    let still = recycled_from(&b);
+    let restored = block_on(restore_from_recycle_bin(
+        &[still.uri],
+        &OperationContext::default(),
+    ))
+    .unwrap();
+    assert!(restored.result.errors.is_empty(), "{:?}", restored.result.errors);
+    assert_eq!(fs::read(&b).unwrap(), b"second", "the other one is the one left");
+}

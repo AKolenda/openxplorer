@@ -163,7 +163,7 @@ impl CalendarDay {
         if !(1..=days_in_month).contains(&day) || !(1..=9999).contains(&year) {
             return None;
         }
-        // Howard Hinnant's days_from_civil.
+        // Howard Hinnant's `days_from_civil`.
         let year = i64::from(year) - i64::from(month <= 2);
         let era = year.div_euclid(400);
         let year_of_era = year - era * 400;
@@ -174,11 +174,13 @@ impl CalendarDay {
     }
 
     /// The day after this one.
+    #[must_use]
     pub fn next(self) -> Self {
         Self(self.0 + 1)
     }
 
     /// The day before this one.
+    #[must_use]
     pub fn previous(self) -> Self {
         Self(self.0 - 1)
     }
@@ -192,7 +194,7 @@ impl CalendarDay {
             .map(|start| start.to_unix())
     }
 
-    /// The year, month and day (Howard Hinnant's civil_from_days).
+    /// The year, month and day (Howard Hinnant's `civil_from_days`).
     fn civil(self) -> (i32, i32, i32) {
         let days = self.0 + 719_468;
         let era = days.div_euclid(146_097);

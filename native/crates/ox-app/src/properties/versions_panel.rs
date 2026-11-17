@@ -52,7 +52,7 @@ const INTRO_GLYPH: i32 = 32;
 /// The least height of the list, which grows to fill the tab as Windows'
 /// list does; it leaves room for two rows of tabs at the default text
 /// size.
-const LIST_HEIGHT: i32 = 216;
+const LIST_HEIGHT: i32 = 96;
 
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};

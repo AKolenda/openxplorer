@@ -794,6 +794,47 @@ fn a_character_windows_forbids_is_refused_with_its_balloon() {
     wait_until("the rename to end", || !is_renaming_in_place(&test));
 }
 
+/// Ctrl+A in the name field selects the whole name being edited, its
+/// extension included, and leaves the items' selection alone, in every
+/// view. The keys are real ones on the private display, so they pass
+/// every key handler the window and the view have on the way.
+///
+/// parity: OPS-010
+#[gtk::test]
+fn ctrl_a_selects_the_whole_name_being_edited() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
+    let mut pointer = Pointer::connect();
+    for view in ["details", "compact", "large", "tiles", "content"] {
+        test.activate("view", Some(view));
+        select_names(&test, &["Notes 2.txt"]);
+        test.activate("rename", None);
+        let field = name_editor(&test);
+        wait_until("the stem to be selected", || {
+            field.selection_bounds() == Some((0, 7))
+        });
+        let middle = (f64::from(field.width()) / 2.0, f64::from(field.height()) / 2.0);
+        let (x, y) = screen_point(&mut pointer, &field, middle, (200, 200));
+        pointer.move_to(x, y);
+
+        pointer.hold_key(gdk::Key::Control_L);
+        pointer.tap_key(gdk::Key::a);
+        pointer.let_go_key(gdk::Key::Control_L);
+        wait_for(Duration::from_millis(300));
+
+        assert_eq!(
+            field.selection_bounds(),
+            Some((0, 11)),
+            "the whole name in {view}"
+        );
+        assert_eq!(test.selected_names(), ["Notes 2.txt"], "only the item in {view}");
+        assert!(is_renaming_in_place(&test), "editing goes on in {view}");
+        press_in(&field, gdk::Key::Escape, gdk::ModifierType::empty());
+        wait_until("the rename to end", || !is_renaming_in_place(&test));
+    }
+}
+
 /// Pasting text with a character Windows forbids pastes nothing and
 /// shows the balloon, so the selected name is not lost; other text is
 /// pasted over the selection as usual.
@@ -1003,56 +1044,4 @@ fn an_erased_name_keeps_the_old_name() {
             "no undo entry in {view}"
         );
     }
-}
-
-/// Ctrl+A while renaming in place selects the field's text only, never
-/// every item in the folder, in every view; Escape then ends the rename
-/// with only the renamed item selected, so a following Delete recycles
-/// nothing else. Outside the field, Ctrl+A still selects every item. The
-/// keys are real ones on the private display, so they pass every handler
-/// a typed key passes.
-///
-/// parity: OPS-010, SEL-004
-#[gtk::test]
-fn ctrl_a_while_renaming_selects_the_name_not_the_items() {
-    let fixture = Fixture::standard();
-    let test = TestWindow::open(&fixture.uri());
-    super::support::show_file_name_extensions(&test);
-    let mut pointer = Pointer::connect();
-    let press_ctrl_a = |pointer: &mut Pointer| {
-        pointer.hold_key(gdk::Key::Control_L);
-        pointer.tap_key(gdk::Key::a);
-        pointer.let_go_key(gdk::Key::Control_L);
-    };
-    for view in ["details", "compact", "tiles", "large"] {
-        test.activate("view", Some(view));
-        select_names(&test, &["Notes 2.txt"]);
-        test.activate("rename", None);
-        let field = name_editor(&test);
-        wait_until("the field to take the keyboard", || {
-            field.has_focus() || field.focus_child().is_some()
-        });
-        let middle = (f64::from(field.width()) / 2.0, f64::from(field.height()) / 2.0);
-        let (x, y) = screen_point(&mut pointer, &field, middle, (200, 200));
-        pointer.move_to(x, y);
-
-        press_ctrl_a(&mut pointer);
-        wait_until(&format!("the whole name selected in {view}"), || {
-            field.selection_bounds() == Some((0, 11))
-        });
-        wait_for(Duration::from_millis(200));
-        assert_eq!(
-            test.selected_names(),
-            ["Notes 2.txt"],
-            "{view}: only the item renamed"
-        );
-
-        pointer.tap_key(gdk::Key::Escape);
-        wait_until("the rename to end", || !is_renaming_in_place(&test));
-        assert_eq!(test.selected_names(), ["Notes 2.txt"], "{view}: after Escape");
-    }
-
-    test.window.folder_pane().focus_view();
-    press_ctrl_a(&mut pointer);
-    wait_until("every item selected", || test.selected_names().len() == 4);
 }

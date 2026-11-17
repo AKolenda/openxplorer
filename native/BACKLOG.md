@@ -89,10 +89,9 @@ is missing.
   supported build targets and Flatpak configuration.
 - **Archives.** Browsing and extraction support ZIP and compressed TAR, and
   ZIPs with the traditional ZIP password, which ask for it. 7z, RAR and
-  AES-encrypted ZIPs still need additional codecs.
-  A TAR's relative links that stay inside the archive are listed and
-  extracted; ZIP links stay hidden and refused. Search inside an opened
-  archive is still unavailable.
+  AES-encrypted ZIPs still need additional codecs. A TAR's relative links
+  that stay inside the archive are listed and extracted; ZIP links stay
+  hidden and refused. Search inside an opened archive is still unavailable.
   Compress to › 7z File writes 7z archives (sevenz-rust2); browsing and
   extracting 7z is not supported yet.
 - **Flatpak:** "Show in folder" answers only while OpenXplorer runs unless the
@@ -295,3 +294,4 @@ braveSync, cacheClear, cacheRefresh, cacheRemove, cacheSet, cacheStatus,
 cacheStop, chrome, connect, environment, focusWindow, list, locationApply,
 locationCheck, mountPlan, mountVolume, normalise, open, openTerminal, pin,
 preferences, quit, search, uiReady, unmount, window, windowMetadata, windows.
+

@@ -159,6 +159,11 @@ impl DropRun {
             // A drag of drives offers a link alone; the window runs what
             // the drop asks for, such as the drop menu of a right-drag.
             gdk::DragAction::LINK
+        } else if offered.contains(gdk::DragAction::ASK) {
+            // GNOME Shell on Wayland can narrow an Alt-drag to "ask"
+            // alone; the window answers with it and runs the drop's own
+            // action, such as the shortcuts an Alt-drop makes.
+            gdk::DragAction::ASK
         } else {
             gdk::DragAction::empty()
         }
@@ -867,6 +872,25 @@ mod tests {
             DropAction::for_button_drop(DragButton::Secondary, own, plain_offer, plain_offer, alt),
             Some(DropRun::Run(DropAction::Ask(own))),
             "a right-button drag still asks"
+        );
+    }
+
+    /// GNOME Shell on Wayland can narrow an Alt-drag to "ask" alone. The
+    /// window still makes shortcuts to this app's own items, and answers
+    /// the drag with Ask, the one action it offers, so the drop is not
+    /// refused.
+    ///
+    /// parity: DND-017
+    #[test]
+    fn an_alt_drop_offered_only_ask_is_answered_with_ask_and_makes_shortcuts() {
+        let alt = gdk::ModifierType::ALT_MASK;
+        let ask_only = gdk::DragAction::ASK;
+        let run =
+            DropAction::for_button_drop(DragButton::Primary, DragOrigin::ThisApp, ask_only, ask_only, alt);
+        assert_eq!(run, Some(DropRun::Run(DropAction::Link)));
+        assert_eq!(
+            run.map(|run| run.protocol_action(ask_only)),
+            Some(gdk::DragAction::ASK)
         );
     }
 

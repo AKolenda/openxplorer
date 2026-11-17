@@ -26,8 +26,16 @@ use super::tab_layout::TAB_WIDTH;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
-/// The details pane's width from 1190 pixels down (`.details{width:235px}`).
+/// The details pane's width at 1190 pixels (`.details{width:235px}`).
 const NARROW_PANE_WIDTH: i32 = 235;
+/// The details pane's width just above 960 pixels, below which it hides:
+/// it narrows with the window from [`NARROW_PANE_WIDTH`] so the list keeps
+/// room for its columns.
+const NARROWEST_PANE_WIDTH: i32 = 180;
+/// The widest window of the band where the pane narrows.
+const PANE_NARROWS_FROM: i32 = 1190;
+/// The narrowest window that still shows the pane.
+const PANE_NARROWS_TO: i32 = 961;
 /// A tab's width from 960 pixels down (`.tab{width:180px}`).
 const NARROW_TAB_WIDTH: i32 = 180;
 /// A tab's width from 680 pixels down (`.tab{width:150px}`).
@@ -129,15 +137,6 @@ impl WindowWidth {
         }
     }
 
-    /// The details pane's width: [`PANE_WIDTH`], narrower from 1190 pixels.
-    pub(super) fn details_pane_width(self) -> i32 {
-        if self >= WindowWidth::Medium {
-            NARROW_PANE_WIDTH
-        } else {
-            PANE_WIDTH
-        }
-    }
-
     /// A tab's width when there is room: [`TAB_WIDTH`], narrower from 960
     /// and again from 680 pixels.
     pub(super) fn tab_width(self) -> i32 {
@@ -149,12 +148,28 @@ impl WindowWidth {
     }
 }
 
+/// The details pane's width in a window `width` pixels wide: [`PANE_WIDTH`]
+/// above 1190 pixels; below, from [`NARROW_PANE_WIDTH`] down to
+/// [`NARROWEST_PANE_WIDTH`] as the window narrows towards 961 pixels, so
+/// the pane gives way to the list rather than leaving its columns cut off.
+pub(super) fn details_pane_width_for(width: i32) -> i32 {
+    let band = WindowWidth::for_width(width);
+    if band < WindowWidth::Medium {
+        return PANE_WIDTH;
+    }
+    let width = width.clamp(PANE_NARROWS_TO, PANE_NARROWS_FROM);
+    let span = PANE_NARROWS_FROM - PANE_NARROWS_TO;
+    let shrink = NARROW_PANE_WIDTH - NARROWEST_PANE_WIDTH;
+    NARROWEST_PANE_WIDTH + (width - PANE_NARROWS_TO) * shrink / span
+}
+
 impl BrowserWindow {
     /// Follows the window's width as GTK allocates it. The layout changes
     /// after the allocation, because changing styles during one would
     /// start it again.
     pub(super) fn follow_width(&self, width: i32) {
         self.tab_strip().cap_width(width);
+        self.fit_details_pane_width(width);
         let band = WindowWidth::for_width(width);
         if self.imp().window_width.replace(band) == band {
             return;
@@ -175,7 +190,6 @@ impl BrowserWindow {
             self.add_css_class(class);
         }
         self.fit_details_pane();
-        self.details_pane().set_width(band.details_pane_width());
         let compact = band.is_compact();
         self.tab_strip().set_tab_width(band.tab_width());
         self.search_box().set_visible(!compact);
@@ -190,6 +204,21 @@ impl BrowserWindow {
         }
         self.settings_page().fit_to_width(band.settings_page_width());
         self.render_landing();
+    }
+
+    /// Gives the details pane its width for a window `width` pixels wide
+    /// ([`details_pane_width_for`]), after the allocation under way, as a
+    /// new width request during one would start it again.
+    fn fit_details_pane_width(&self, width: i32) {
+        let wanted = details_pane_width_for(width);
+        if self.details_pane().width_request() == wanted {
+            return;
+        }
+        glib::idle_add_local_once(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move || window.details_pane().set_width(wanted)
+        ));
     }
 
     /// The width band the window is in now.
@@ -292,8 +321,10 @@ mod tests {
     fn narrow_windows_drop_the_details_pane_and_narrow_the_tabs() {
         assert!(WindowWidth::Reduced.has_room_for_details());
         assert!(!WindowWidth::Narrow.has_room_for_details());
-        assert_eq!(WindowWidth::Wide.details_pane_width(), 262);
-        assert_eq!(WindowWidth::Medium.details_pane_width(), 235);
+        assert_eq!(details_pane_width_for(1320), 262);
+        assert_eq!(details_pane_width_for(1190), 235);
+        assert_eq!(details_pane_width_for(961), 180);
+        assert_eq!(details_pane_width_for(1000), 189);
         assert_eq!(WindowWidth::Narrow.tab_width(), 180);
         assert_eq!(WindowWidth::Compact.tab_width(), 150);
         assert!(!WindowWidth::Reduced.shows_appearance_label());

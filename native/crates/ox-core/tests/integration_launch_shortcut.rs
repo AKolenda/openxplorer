@@ -34,9 +34,11 @@ struct Shortcuts {
     actions: RefCell<Vec<(ShortcutAction, Vec<KeySequence>)>>,
     /// The desktop files the service can launch.
     launchable: Vec<String>,
-    /// The calls that fail, as when the service restarts: `register`,
-    /// `set_keys` of `OpenXplorer`'s actions, or `give_back`, a `set_keys`
-    /// that adds Super+E to any action but the New window action.
+    /// The calls that fail, as when the service restarts: `owner`,
+    /// `register`, `set_keys` of `OpenXplorer`'s actions, `give_back`, a
+    /// `set_keys` that adds Super+E to any action but the New window
+    /// action, or `give_back_to_an_app`, one that adds it to an action
+    /// that is no package's New window action.
     failing: RefCell<Vec<&'static str>>,
     /// Runs before each `set_keys`, with its action, as another process
     /// could act at that moment.
@@ -126,6 +128,7 @@ fn same(one: &ShortcutAction, other: &ShortcutAction) -> bool {
 
 impl GlobalShortcuts for Shortcuts {
     fn owner(&self, keys: KeySequence) -> Result<Option<ShortcutAction>, ShortcutError> {
+        self.check("owner")?;
         Ok(self
             .actions
             .borrow()
@@ -162,6 +165,9 @@ impl GlobalShortcuts for Shortcuts {
         }
         if keys.contains(&SUPER_E) && !(action.component == OURS && action.action == NEW_WINDOW_ACTION) {
             self.check("give_back")?;
+        }
+        if keys.contains(&SUPER_E) && action.action != NEW_WINDOW_ACTION {
+            self.check("give_back_to_an_app")?;
         }
         let mut actions = self.actions.borrow_mut();
         let free: Vec<KeySequence> = keys
@@ -1474,6 +1480,92 @@ fn super_e_taken_from_a_removed_app_is_not_recorded() {
     assert!(no_record_names(settings.path(), DOLPHIN));
     assert_eq!(stable.restore().unwrap(), RestoredShortcut::Freed);
     assert_eq!(shortcuts.owner(SUPER_E).unwrap(), None);
+}
+
+/// The stable package took Super+E from Dolphin and was uninstalled while
+/// it had it. When giving Super+E back to Dolphin fails as the preview
+/// starts, as when KDE's service restarts just then, Super+E stays on the
+/// removed package and its record is kept, so the next start gives it to
+/// Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn a_failed_give_back_at_start_keeps_the_way_back() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    shortcuts.uninstall(OURS);
+    shortcuts.fail("give_back");
+
+    preview.forget_removed_apps().unwrap();
+
+    assert!(!shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+    assert!(settings.path().join(RECORD).is_file(), "the way back stays");
+    assert!(shortcuts.keys_of(OURS).contains(&SUPER_E), "Super+E is not lost");
+
+    shortcuts.failing.borrow_mut().clear();
+    preview.forget_removed_apps().unwrap();
+
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+    assert!(no_record_names(settings.path(), OURS));
+}
+
+/// The stable package took Super+E from Dolphin and was uninstalled while
+/// it had it. When turning the preview's switch on cannot first give
+/// Super+E back to Dolphin, as when KDE's service restarts just then, the
+/// switch stays off and says so, rather than taking Super+E without the
+/// way back to Dolphin; once the service answers, turning it on and off
+/// again ends with Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn turning_it_on_stops_while_a_removed_package_cannot_give_super_e_back() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    shortcuts.uninstall(OURS);
+    shortcuts.fail("give_back_to_an_app");
+
+    assert!(preview.enable().is_err());
+
+    assert_ne!(preview.status(), LaunchShortcutStatus::Ours);
+    assert!(settings.path().join(RECORD).is_file(), "the way back stays");
+    shortcuts.failing.borrow_mut().clear();
+    preview.enable().unwrap();
+    assert_eq!(preview.status(), LaunchShortcutStatus::Ours);
+    assert_eq!(preview.restore().unwrap(), RestoredShortcut::GivenBack);
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+    assert!(no_record_names(settings.path(), OURS));
+}
+
+/// When KDE's service cannot say who has Super+E as the app starts, the
+/// records of a removed package are kept, as that package may still have
+/// Super+E: once the service answers, Super+E goes back to Dolphin.
+///
+/// parity: INT-033
+#[test]
+fn records_stay_while_the_service_cannot_say_who_has_super_e() {
+    let settings = tempfile::tempdir().unwrap();
+    let shortcuts = Shortcuts::plasma();
+    let stable = launch_shortcut(&shortcuts, settings.path());
+    let preview = preview_shortcut(&shortcuts, settings.path());
+    stable.enable().unwrap();
+    shortcuts.uninstall(OURS);
+    shortcuts.fail("owner");
+
+    preview.forget_removed_apps().unwrap();
+
+    assert!(settings.path().join(RECORD).is_file(), "the way back stays");
+
+    shortcuts.failing.borrow_mut().clear();
+    preview.forget_removed_apps().unwrap();
+
+    assert!(shortcuts.keys_of(DOLPHIN).contains(&SUPER_E));
+    assert!(no_record_names(settings.path(), OURS));
 }
 
 /// Records an older version left behind for a removed package, or

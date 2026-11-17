@@ -186,6 +186,24 @@ impl StoreDeleter {
         }
     }
 
+    /// The order in which to delete the items of `uris`, as positions in
+    /// it: listed items by the names their Trash folders keep them under,
+    /// in byte order, the others first in their own order. The Trash
+    /// backend of `GVfs` keeps its record of a Trash folder sorted by name
+    /// and looks each removed name up from the start of it; in any other
+    /// order, a backend watching 50,000 removals spent minutes looking
+    /// them up, listing items that were gone meanwhile.
+    pub(super) fn deletion_order(&self, uris: &[String]) -> Vec<usize> {
+        let mut order: Vec<usize> = (0..uris.len()).collect();
+        order.sort_by_cached_key(|&index| {
+            self.targets
+                .get(&uris[index])
+                .and_then(|target| gio::File::for_uri(target).basename())
+                .map(|name| name.into_os_string().into_encoded_bytes())
+        });
+        order
+    }
+
     /// Deletes the Recycle Bin item `item`, at `uri`, for good from its
     /// Trash folder: the item, with everything in it, through the
     /// transfer engine's pinned permanent delete (XFER-015), then its
@@ -338,6 +356,45 @@ mod tests {
         assert!(!folder.exists());
         assert!(!stored.info.exists());
         assert_eq!(std::fs::read(&outside).unwrap(), b"keep");
+    }
+
+    #[test]
+    fn listed_items_are_deleted_in_the_byte_order_of_their_stored_names() {
+        let target = |name: &str| format!("file:///home/user/.local/share/Trash/files/{name}");
+        let targets = HashMap::from([
+            (String::from("trash:///b"), target("b.txt")),
+            (String::from("trash:///a"), target("a%20b.txt")),
+            (String::from("trash:///z"), target("Z.txt")),
+            (String::from("trash:///n"), target("%C3%A9t%C3%A9.txt")),
+        ]);
+        let store = StoreDeleter::with_targets(targets);
+        let uris: Vec<String> = [
+            "trash:///b",
+            "trash:///unlisted",
+            "trash:///n",
+            "trash:///a",
+            "trash:///z",
+        ]
+        .map(String::from)
+        .into();
+
+        let order: Vec<&str> = store
+            .deletion_order(&uris)
+            .into_iter()
+            .map(|index| uris[index].as_str())
+            .collect();
+
+        // "Z" < "a b" < "b" < "été" in bytes; the unlisted item goes first.
+        assert_eq!(
+            order,
+            [
+                "trash:///unlisted",
+                "trash:///z",
+                "trash:///a",
+                "trash:///b",
+                "trash:///n"
+            ]
+        );
     }
 
     #[test]

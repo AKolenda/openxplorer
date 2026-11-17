@@ -50,6 +50,10 @@ window.ox:backdrop .ox-titlebar { background-color: @ox_title_backdrop; }
 /* The 16px icon (I03) sits where the web's 17px one did, and the title
    starts 10px after it (S06), at x=50 as in the current app. */
 .tab > .tab-icon { margin-left: 2px; }
+/* While a tab lists its folder or its search's results are still coming
+   in, a progress ring in the accent colour stands in for its icon, as
+   Windows 11 shows one (SRCH-048). */
+.tab > progressring { color: @ox_accent; }
 /* Half-pixel centring: where the web layout centres a box at x.5 pixels,
    Chromium draws it from the next pixel down (or right), while GTK rounds
    down. A one-pixel margin on the far side puts these on the same pixels

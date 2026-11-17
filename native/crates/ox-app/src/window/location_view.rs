@@ -199,6 +199,11 @@ fn tab_icon(
     if let Some(glyph) = listed_place_glyph(uri) {
         return Art::Glyph(glyph);
     }
+    // Home first: `user-dirs.dirs` may put a standard folder at the home
+    // folder (`XDG_DESKTOP_DIR="$HOME"`), whose tab still shows Home.
+    if location::same_location(uri, &locations.home_uri()) {
+        return Art::Glyph(Page::Home.icon());
+    }
     if let Some(folder) = standard_folder_at(uri, known_folders) {
         // On the network, as the navigation pane's row shows it.
         return if locations.is_network_location(uri) {
@@ -206,9 +211,6 @@ fn tab_icon(
         } else {
             Art::for_known_folder(folder)
         };
-    }
-    if location::same_location(uri, &locations.home_uri()) {
-        return Art::Glyph(Page::Home.icon());
     }
     if is_device_location(uri) {
         Art::Glyph(Icon::Phone)
@@ -231,6 +233,7 @@ fn tab_view(
     locations: &LocationContext,
     places: (&[NetworkLocation], &[Place]),
     names_query: bool,
+    busy: bool,
 ) -> TabView {
     let (network, known_folders) = places;
     let uri = tab.uri();
@@ -251,6 +254,7 @@ fn tab_view(
         },
         active: session.is_active(tab.id),
         previous_version: None,
+        busy,
     }
 }
 
@@ -299,7 +303,7 @@ impl BrowserWindow {
         self.render_address(uri);
         let search = self.search_box();
         search.set_folder_title(&title);
-        // Windows 11's Home searches the home folder (HOME-033); the other
+        // Windows 11's Home searches the home folder (HOME-035); the other
         // pages search nothing.
         let searches_home = Page::from_uri(uri) == Some(Page::Home);
         search.set_enabled((!on_page || searches_home) && !in_zip && !is_device_location(uri));
@@ -474,13 +478,22 @@ impl BrowserWindow {
         let network = self.network_locations();
         let known_folders = self.context().known_folders();
         let names_query = !self.shows_search_filter_bar();
+        let searching = self.is_searching() && self.imp().search.borrow().is_running();
         let mut views: Vec<TabView> = {
             let session = self.imp().session.borrow();
             let locations = self.imp().locations.borrow();
-            let tab_views = session
-                .tabs()
-                .iter()
-                .map(|tab| tab_view(tab, &session, &locations, (&network, &known_folders), names_query));
+            let tab_views = session.tabs().iter().map(|tab| {
+                // A search runs in the tab in front (SRCH-048).
+                let busy = tab.is_busy() || (searching && session.is_active(tab.id));
+                tab_view(
+                    tab,
+                    &session,
+                    &locations,
+                    (&network, &known_folders),
+                    names_query,
+                    busy,
+                )
+            });
             tab_views.collect()
         };
         self.mark_snapshot_tabs(&mut views);
@@ -677,6 +690,29 @@ mod tests {
         assert_eq!(tab_on("file:///home/demo/Downloads/Old"), Art::Folder);
     }
 
+    /// When `user-dirs.dirs` puts a standard folder at the home folder
+    /// (`XDG_DESKTOP_DIR="$HOME"`, as some desktops write it), the home
+    /// folder's tab still shows Home's glyph, not that folder's.
+    ///
+    /// parity: TAB-010
+    #[test]
+    fn the_home_folders_tab_shows_home_when_a_standard_folder_is_home() {
+        let known_folders = [Place {
+            label: String::new(),
+            uri: "file:///home/demo".to_owned(),
+            known_folder: Some(KnownFolder::Desktop),
+            is_shared: false,
+        }];
+        let locations = LocationContext {
+            home: Some("/home/demo".into()),
+            ..LocationContext::default()
+        };
+        assert_eq!(
+            tab_icon("file:///home/demo/", &locations, &[], &known_folders),
+            Art::Glyph(Page::Home.icon())
+        );
+    }
+
     /// A location and the title and tooltip of its tab.
     struct TabTextCase {
         uri: &'static str,
@@ -723,7 +759,7 @@ mod tests {
             let mut session = Session::default();
             let id = session.add(case.uri, super::super::session::TabPlacement::Foreground);
             let tab = session.tab(id).expect("the tab was added");
-            let view = tab_view(tab, &session, &locations, (&[], &[]), true);
+            let view = tab_view(tab, &session, &locations, (&[], &[]), true, false);
             assert_eq!(view.title, case.title, "{}", case.uri);
             assert_eq!(view.tooltip, case.tooltip, "{}", case.uri);
             assert!(view.active);

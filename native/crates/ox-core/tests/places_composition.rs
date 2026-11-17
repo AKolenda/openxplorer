@@ -291,6 +291,29 @@ fn a_browsed_share_keeps_the_spelling_of_its_address() {
     assert_eq!(rows[0].label, "Studio (Y:)");
 }
 
+/// A saved or mapped share's label is the user's, so a later visit to the
+/// share with other casing ("Studio" for "studio") leaves it as it is:
+/// only a label taken from a mount follows the address's spelling.
+///
+/// parity: NET-018
+#[test]
+fn a_saved_or_mapped_label_keeps_its_spelling_when_the_share_is_browsed() {
+    let browsed = bookmark("smb://nas/Studio", "");
+    let saved = [saved_share("smb://nas/studio", "studio reports")];
+    let rows = merge_network_locations(&saved, &[], &[], std::slice::from_ref(&browsed));
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].label, "studio reports");
+
+    let visited = [bookmark("smb://nas/studio", "studio (Y:)"), browsed];
+    let rows = merge_network_locations(&[], &[], &[], &visited);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].label, "studio (Y:)");
+
+    let mounts = [active_mount("smb://nas/studio", "studio on nas")];
+    let rows = merge_network_locations(&saved, &mounts, &[], &visited[1..]);
+    assert_eq!(rows[0].label, "studio reports");
+}
+
 /// An SFTP folder browsed this session and the mount GIO reports for its
 /// server make one connected row, so the row the user opened offers
 /// Disconnect; a saved folder on the server keeps its own row.

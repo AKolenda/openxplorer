@@ -496,7 +496,9 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             return Err(ShortcutError::Unsupported);
         }
         let _lock = self.lock()?;
-        self.forget_removed();
+        // While a removed package still has Super+E because it could not
+        // give it back, taking it now would lose its way back.
+        self.forget_removed()?;
         let mut owner = self.shortcuts.owner(SUPER_E)?;
         if owner.as_ref().is_some_and(|owner| owner.is(&self.ours)) {
             return Ok(());
@@ -603,7 +605,9 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
         }
         let _lock = self.lock()?;
         // A record leading to a removed app leads past it, or is dropped.
-        self.forget_removed();
+        // A removed package that keeps Super+E is not this package's to
+        // give back, so turning the switch off goes on.
+        let _ = self.forget_removed();
         let owner = self
             .shortcuts
             .owner(SUPER_E)?
@@ -695,13 +699,24 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             return Ok(());
         }
         let _lock = self.lock()?;
-        self.forget_removed();
+        // What could not be done is tried again at the next start.
+        let _ = self.forget_removed();
         Ok(())
     }
 
     /// [`Self::forget_removed_apps`] under the lock, as far as the service
-    /// and the folder let it.
-    fn forget_removed(&self) {
+    /// and the folder let it. A record that is still a way back stays
+    /// until what made it one is done: giving Super+E back, rewriting the
+    /// record that leads through it, or learning who has Super+E.
+    ///
+    /// # Errors
+    ///
+    /// The service's failure when a removed package of `OpenXplorer`
+    /// still has Super+E, because taking it or giving it back failed.
+    fn forget_removed(&self) -> Result<(), ShortcutError> {
+        // The records still needed as a way back.
+        let mut needed: Vec<PathBuf> = Vec::new();
+        let mut unfinished = Ok(());
         // A removed package that still has Super+E gives it back where it
         // took it from, as turning its switch off would have.
         if let Ok(Some(owner)) = self.shortcuts.owner(SUPER_E) {
@@ -712,12 +727,29 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
                     None => (None, Vec::new()),
                 };
                 used.extend(passed);
-                if self.take_super_e_from(&owner).is_ok() {
-                    if let Some(way_back) = way_back {
-                        let _ = self.give_super_e_back(&way_back);
+                let keys = self.shortcuts.keys(&owner);
+                let given = self.take_super_e_from(&owner).and_then(|()| {
+                    way_back
+                        .as_ref()
+                        .map_or(Ok(()), |way_back| self.give_super_e_back(way_back))
+                        .inspect_err(|_| {
+                            // Super+E goes back on the removed package,
+                            // which keeps its records, so the next try
+                            // gives it back.
+                            if let Ok(keys) = &keys {
+                                let _ = self.shortcuts.set_keys(&owner, keys);
+                            }
+                        })
+                });
+                match given {
+                    Ok(()) => {
+                        for path in used {
+                            let _ = std::fs::remove_file(path);
+                        }
                     }
-                    for path in used {
-                        let _ = std::fs::remove_file(path);
+                    Err(error) => {
+                        needed.extend(used);
+                        unfinished = Err(error);
                     }
                 }
             }
@@ -731,31 +763,40 @@ impl<G: GlobalShortcuts> LaunchShortcut<G> {
             if !self.is_removed(&record.previous) {
                 continue;
             }
-            match self.way_back(record.previous.clone(), false).0 {
-                Some(previous) => {
+            match self.way_back(record.previous.clone(), false) {
+                (Some(previous), passed) => {
                     let text = serde_json::to_string_pretty(&Record { previous, ..record })
                         .expect("a record serialises");
-                    // Should this fail, the record stays, and turning the
-                    // switch off still passes over the removed app.
-                    let _ = (self.write_file)(&path, ".winspace-", text.as_bytes());
+                    // Should this fail, the record and the records it
+                    // leads through stay, so turning the switch off still
+                    // passes over the removed app.
+                    if (self.write_file)(&path, ".winspace-", text.as_bytes()).is_err() {
+                        needed.extend(passed);
+                    }
                 }
-                None => {
+                (None, _) => {
                     let _ = std::fs::remove_file(&path);
                 }
             }
         }
         // A removed package's own record is nobody's way back now, unless
         // it still has Super+E, as when the service did not let go of it.
-        let owner = self.shortcuts.owner(SUPER_E).ok().flatten();
+        // When the service cannot say who has Super+E, every record stays
+        // for the next start.
+        let Ok(owner) = self.shortcuts.owner(SUPER_E) else {
+            return unfinished;
+        };
         for package in PACKAGE_DESKTOP_IDS {
             let action = ShortcutAction::desktop_action(package, NEW_WINDOW_ACTION, "", "");
             let holds = owner
                 .as_ref()
                 .is_some_and(|owner| is_super_e_action_of(owner, package));
-            if self.is_removed(&action) && !holds {
-                let _ = std::fs::remove_file(record_path_of(&self.settings, package));
+            let path = record_path_of(&self.settings, package);
+            if self.is_removed(&action) && !holds && !needed.contains(&path) {
+                let _ = std::fs::remove_file(path);
             }
         }
+        unfinished
     }
 
     /// The installed action Super+E should go back to, starting from
@@ -1180,6 +1221,98 @@ mod tests {
         fn set_keys(&self, _action: &ShortcutAction, _keys: &[KeySequence]) -> Result<(), ShortcutError> {
             Ok(())
         }
+    }
+
+    /// Global shortcuts where Super+E belongs to `owner`, the apps of
+    /// `removed` are uninstalled, and each `set_keys` call is logged.
+    struct WithRemoved {
+        owner: ShortcutAction,
+        removed: Vec<String>,
+        set: std::cell::RefCell<Vec<(String, Vec<KeySequence>)>>,
+    }
+
+    impl GlobalShortcuts for WithRemoved {
+        fn owner(&self, _keys: KeySequence) -> Result<Option<ShortcutAction>, ShortcutError> {
+            Ok(Some(self.owner.clone()))
+        }
+        fn keys(&self, action: &ShortcutAction) -> Result<Vec<KeySequence>, ShortcutError> {
+            Ok(if action.is(&self.owner) {
+                vec![SUPER_E]
+            } else {
+                Vec::new()
+            })
+        }
+        fn register(&self, _action: &ShortcutAction) -> Result<(), ShortcutError> {
+            Ok(())
+        }
+        fn set_keys(&self, action: &ShortcutAction, keys: &[KeySequence]) -> Result<(), ShortcutError> {
+            self.set
+                .borrow_mut()
+                .push((action.component.clone(), keys.to_vec()));
+            Ok(())
+        }
+        fn is_installed(&self, action: &ShortcutAction) -> bool {
+            !self.removed.contains(&action.component)
+        }
+    }
+
+    /// The stable package took Super+E from the preview, which took it
+    /// from Dolphin, and the preview was uninstalled. When rewriting the
+    /// stable package's record to lead to Dolphin fails as the app starts,
+    /// as on a full disk, the preview's record, the stable record's way
+    /// past the preview, stays, so turning the switch off still gives
+    /// Super+E to Dolphin.
+    ///
+    /// parity: INT-033
+    #[test]
+    fn a_failed_rewrite_keeps_the_records_it_leads_through() {
+        let settings = tempfile::tempdir().unwrap();
+        let preview_id = "io.winspace.Development.Native.desktop";
+        let preview = ShortcutAction::desktop_action(preview_id, NEW_WINDOW_ACTION, "", "");
+        let dolphin = ShortcutAction::launch("org.kde.dolphin.desktop", "Dolphin");
+        let app_id = super::super::default_apps::APP_ID;
+        let shortcuts = WithRemoved {
+            owner: ShortcutAction::desktop_action(app_id, NEW_WINDOW_ACTION, "", ""),
+            removed: vec![preview_id.to_owned()],
+            set: std::cell::RefCell::default(),
+        };
+        let mut stable = LaunchShortcut::new(
+            shortcuts,
+            settings.path(),
+            app_id,
+            vec!["kde".to_owned()],
+            Sandbox::Host,
+        );
+        stable
+            .write_record(&Record {
+                previous: preview.clone(),
+                stranded: false,
+            })
+            .unwrap();
+        let preview_record = record_path_of(settings.path(), preview_id);
+        let to_dolphin = serde_json::to_string(&Record {
+            previous: dolphin.clone(),
+            stranded: false,
+        })
+        .unwrap();
+        std::fs::write(&preview_record, &to_dolphin).unwrap();
+        stable.write_file = |_, _, _| Err(std::io::Error::other("No space left on device"));
+
+        stable.forget_removed_apps().unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(&preview_record).ok().as_deref(),
+            Some(to_dolphin.as_str()),
+            "the way past the preview stays"
+        );
+        stable.write_file = write_private_file;
+        stable.restore().unwrap();
+        let set = stable.shortcuts.set.borrow();
+        assert!(
+            set.iter()
+                .any(|(component, keys)| component == &dolphin.component && keys.contains(&SUPER_E)),
+            "Super+E goes back to Dolphin: {set:?}"
+        );
     }
 
     /// When handing its record on to the package that took Super+E fails,
