@@ -121,4 +121,12 @@ impl GlobalShortcuts for ShortcutBackend {
             }
         }
     }
+
+    fn is_installed(&self, action: &ShortcutAction) -> bool {
+        match self {
+            Self::Desktop(kde) => kde.is_installed(action),
+            #[cfg(test)]
+            Self::InMemory(_) => true,
+        }
+    }
 }

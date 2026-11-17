@@ -34,6 +34,11 @@ is missing.
   Bin" in the address bar opens it (NAV-033). Search's `?` stands for
   exactly one character (SRCH-004); a Linux name holding a literal `?` is
   matched by it too, and there is no escape for it.
+- **Windows 11 network thumbnails (2026-11-14).** Network folders (SMB,
+  servers, phones, cameras and kernel network mounts) show type icons by
+  default, as Windows 11 File Explorer does; Settings → Files & folders →
+  Previews and thumbnails → Show thumbnails in network folders turns
+  thumbnails and Preview pane previews on (VIEW-058).
 - **Windows 11 differences (2026-11-14).** Changed to Windows 11's behavior,
   replacing earlier choices: a Home Quick access tile has Windows 11's menu
   with "Show more options" (HOME-013); a wildcard search word is found
@@ -84,9 +89,11 @@ is missing.
   supported build targets and Flatpak configuration.
 - **Archives.** Browsing and extraction support ZIP and compressed TAR, and
   ZIPs with the traditional ZIP password, which ask for it. 7z, RAR and
-  AES-encrypted ZIPs still need additional codecs for browsing and
-  extraction. Compress to › 7z File writes 7z archives (sevenz-rust2);
-  browsing and extracting 7z is not supported yet.
+  AES-encrypted ZIPs still need additional codecs. A TAR's relative links
+  that stay inside the archive are listed and extracted; ZIP links stay
+  hidden and refused. Search inside an opened archive is still unavailable.
+  Compress to › 7z File writes 7z archives (sevenz-rust2); browsing and
+  extracting 7z is not supported yet.
 - **Flatpak:** "Show in folder" answers only while OpenXplorer runs unless the
   desktop's Background portal starts it at login (native/packaging/README.md,
   "Differences inside the Flatpak"). Flathub publication needs the owner.
@@ -287,3 +294,4 @@ braveSync, cacheClear, cacheRefresh, cacheRemove, cacheSet, cacheStatus,
 cacheStop, chrome, connect, environment, focusWindow, list, locationApply,
 locationCheck, mountPlan, mountVolume, normalise, open, openTerminal, pin,
 preferences, quit, search, uiReady, unmount, window, windowMetadata, windows.
+

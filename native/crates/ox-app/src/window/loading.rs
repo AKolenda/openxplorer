@@ -33,6 +33,7 @@
 
 mod denied_folder;
 mod disconnected;
+pub(super) use disconnected::disconnected_message;
 mod mount_retry;
 mod removed_folder;
 
@@ -508,6 +509,8 @@ impl BrowserWindow {
             }
         } else {
             self.finish_beside_listing(id);
+            // Its progress ring gives way to its icon (SRCH-048).
+            self.render_tabs();
         }
         if end == ListingEnd::ListAgain {
             self.folder_changed(id);

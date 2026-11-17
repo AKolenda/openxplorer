@@ -34,6 +34,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gdk, glib, graphene};
 
 use crate::icons::{self, Art, ArtImage, Icon};
+use crate::progress_ring::ProgressRing;
 
 use super::gestures;
 use super::menu_popover::MenuEntry;
@@ -79,6 +80,9 @@ pub(super) struct TabView {
     /// The name of the snapshot the tab shows a previous version from,
     /// which marks the tab (PROP-022).
     pub previous_version: Option<String>,
+    /// The tab is listing its folder or its search's results are still
+    /// coming in: a progress ring stands in for its icon (SRCH-048).
+    pub busy: bool,
 }
 
 mod imp {
@@ -281,6 +285,7 @@ impl TabStrip {
             let widget = match kept {
                 Some(widget) => {
                     show_in_front(&widget, tab.active);
+                    show_busy(&widget, tab);
                     widget
                 }
                 None => tab_widget(tab),
@@ -456,13 +461,42 @@ impl TabStrip {
     }
 }
 
-/// Whether `old` shows `new` but for which tab is in front: its widget can
-/// stay.
+/// Whether `old` shows `new` but for which tab is in front and whether it
+/// is busy: its widget can stay.
 fn is_same_but_for_front(old: &TabView, new: &TabView) -> bool {
     TabView {
         active: new.active,
+        busy: new.busy,
         ..old.clone()
     } == *new
+}
+
+/// Shows on the tab `widget` whether `tab` is busy: a progress ring in
+/// place of its icon while it is (as Windows 11 shows one while a search
+/// runs or a folder loads), its icon otherwise, and the busy state for
+/// assistive technologies. The widget is kept, so a press on it goes on.
+fn show_busy(widget: &gtk::Box, tab: &TabView) {
+    let Some(icon) = widget.first_child() else {
+        return;
+    };
+    let shows_ring = icon.is::<ProgressRing>();
+    if shows_ring != tab.busy {
+        let replacement = icon_of(tab);
+        replacement.insert_before(widget, Some(&icon));
+        widget.remove(&icon);
+    }
+    widget.update_state(&[gtk::accessible::State::Busy(tab.busy)]);
+}
+
+/// The tab's icon, or the progress ring while it is busy.
+fn icon_of(tab: &TabView) -> gtk::Widget {
+    if tab.busy {
+        let ring = ProgressRing::new(ICON_SIZE);
+        ring.add_css_class(TAB_ICON_CLASS);
+        ring.upcast()
+    } else {
+        tab_icon(tab.icon).upcast()
+    }
 }
 
 /// Marks the tab `widget` as in front, or not: its look, its keyboard
@@ -495,7 +529,8 @@ fn tab_widget(tab: &TabView) -> gtk::Box {
     }
     widget.update_property(&[gtk::accessible::Property::Label(&tab.title)]);
     widget.update_state(&[gtk::accessible::State::Selected(Some(tab.active))]);
-    widget.append(&tab_icon(tab.icon));
+    widget.append(&icon_of(tab));
+    widget.update_state(&[gtk::accessible::State::Busy(tab.busy)]);
     widget.append(&title(&tab.title));
     if let Some(snapshot) = &tab.previous_version {
         mark_previous_version(&widget, &tab.title, snapshot);
@@ -836,6 +871,7 @@ mod tests {
             title: "Plans".to_owned(),
             tooltip: "/srv/Documents/.snapshot/daily/Plans".to_owned(),
             icon: Art::Folder,
+            busy: false,
             active: true,
             previous_version: previous_version.map(str::to_owned),
         }

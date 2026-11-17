@@ -106,10 +106,16 @@ impl Contents {
             .bottom_margin(TEXT_PADDING)
             .css_classes(["preview-text"])
             .build();
+        // The text box stands off the pane's edges as a document's pages
+        // do, rather than starting at its top-left corner.
         let text_scroller = gtk::ScrolledWindow::builder()
             .hscrollbar_policy(gtk::PolicyType::Never)
             .child(&text)
             .vexpand(true)
+            .margin_start(MARGIN)
+            .margin_end(MARGIN)
+            .margin_top(MARGIN)
+            .margin_bottom(MARGIN)
             .build();
         stack.add_named(&text_scroller, Some(TEXT));
 

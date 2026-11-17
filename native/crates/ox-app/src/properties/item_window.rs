@@ -29,6 +29,7 @@ use ox_core::integration::BraveIntegration;
 use ox_core::location::{is_smb_location, is_smb_server, is_smb_share_root, ItemKind, LocationContext};
 use ox_core::network::Usershares;
 use ox_core::ops::is_recycle_bin_item;
+use ox_core::places::KnownFolder;
 use ox_core::transfer::Cancellation;
 use ox_core::versions::{is_conventional_snapshot, PreviousVersions};
 
@@ -92,6 +93,18 @@ struct ItemPages {
     count: Cancellation,
 }
 
+/// Adds the Location tab of the standard folder `folder`, whose move
+/// waits for the window's other changes.
+fn add_location_tab(window: &PropertiesWindow, folder: KnownFolder, context: &PropertiesContext) {
+    let location = LocationPanel::new(folder, Arc::clone(&context.relocation), context.brave.clone());
+    window.add_pending_last(location.pending());
+    window.add_tab(
+        PropertiesTab::Location.page_name(),
+        PropertiesTab::Location.label(),
+        &location,
+    );
+}
+
 /// Opens the Properties window of `target` on `initial` (General when the
 /// item has no such tab), from `opener`.
 pub(crate) fn open_item_properties(
@@ -140,13 +153,7 @@ pub(crate) fn open_item_properties(
         );
     }
     if let Some(folder) = target.known_folder {
-        let location = LocationPanel::new(folder, Arc::clone(&context.relocation), context.brave.clone());
-        window.add_pending_last(location.pending());
-        window.add_tab(
-            PropertiesTab::Location.page_name(),
-            PropertiesTab::Location.label(),
-            &location,
-        );
+        add_location_tab(&window, folder, &context);
     }
     let details = (!in_bin)
         .then(|| add_details_tab(&window, &target, &context))
