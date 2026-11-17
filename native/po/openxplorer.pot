@@ -1953,18 +1953,8 @@ msgid "Used space"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/properties/drive_tab.rs crates/ox-core/src/format.rs
-msgid "{bytes} bytes"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/properties/window.rs
 msgid "{name}:"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/properties/drive_tab.rs
-msgid "{value1} free of {value2}"
 msgstr ""
 
 #: crates/ox-app/src/properties/folder_count.rs crates/ox-app/src/properties/folder_sizes.rs
@@ -2979,6 +2969,10 @@ msgid "Hide expand arrows in the sidebar"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Language"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Layout"
 msgstr ""
 
@@ -2988,6 +2982,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "Near the pointer (default)"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "OpenXplorer shows its menus, buttons and messages in your desktop's language. Change it in your desktop's language or region settings, then start OpenXplorer again."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/window/type_applications.rs
@@ -3062,6 +3060,11 @@ msgstr ""
 msgid "Windows 11 · Compact actions (default)"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Your desktop's language ({language})"
+msgstr ""
+
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "appearance dark light system colour color mode"
 msgstr ""
@@ -3080,6 +3083,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "hide expand arrows chevron expander triangle sidebar navigation pane tree folders windows"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "language languages translation translations locale localization interface display chinese english region"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -3500,10 +3507,6 @@ msgstr ""
 msgid "Also copy paths as text"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/context_menu/entries.rs
-msgid "Calculate folder sizes"
-msgstr ""
-
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Clipboard"
 msgstr ""
@@ -3577,10 +3580,6 @@ msgid "Items whose names start with a dot show in every folder. Ctrl+H, View > S
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Logical file bytes, the space on disk, what a scan skips, and its limits."
-msgstr ""
-
-#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Off by default, as in Windows: files on shares, servers, phones and cameras show their type icons. Turn on to show their thumbnails and previews too."
 msgstr ""
 
@@ -3625,7 +3624,7 @@ msgid "Replace in a copy, move or restore keeps the old file in the Recycle Bin,
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Right-click a folder → Calculate folder size. Results last for this session."
+msgid "Right-click a folder → Calculate folder size. Results last for this session. This page explains logical file bytes, the space on disk, what a scan skips, and its limits."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3673,6 +3672,10 @@ msgid "When replacing a file, move the old one to the Recycle Bin"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
+msgid "calculate folder sizes scans run on demand outside the browsing worker pool compressed zfs logical bytes size on disk space snapshot usage links nested filesystem mounts snapshot collections 1 million entries 5 minutes partial total cancel recalculate"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "check box checkbox ctrl control key hold hover show hide select multiple"
 msgstr ""
 
@@ -3698,10 +3701,6 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "folder options file explorer options folder and search options open each folder in its own window single-click double-click show recently used files frequently used folders status bar pop-up description infotips tooltips preview handlers preview pane always show icons never thumbnails check boxes when typing into list view search box always search file names and contents clear file explorer history apply to folders reset folders restore defaults"
-msgstr ""
-
-#: crates/ox-app/src/settings_page/files_folders.rs
-msgid "folder sizes scans run on demand outside the browsing worker pool compressed zfs space snapshot usage hidden files links nested filesystem mounts snapshot collections 1 million entries 5 minutes partial total cancel recalculate"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3750,10 +3749,6 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "thumbnails thumbnail image photo preview icons cache"
-msgstr ""
-
-#: crates/ox-app/src/settings_page/files_folders.rs
-msgid "zfs logical bytes size on disk compressed snapshots disk usage. Results are kept only for this window session."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -5236,6 +5231,10 @@ msgid "Calculate folder size"
 msgstr ""
 
 #: crates/ox-app/src/window/context_menu/entries.rs
+msgid "Calculate folder sizes"
+msgstr ""
+
+#: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Choose another app"
 msgstr ""
 
@@ -6536,11 +6535,6 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/landing.rs
-msgid "{free} free of {size}"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/landing.rs
 msgid "{title} ({count})"
 msgstr ""
 
@@ -6986,6 +6980,10 @@ msgid "Alt"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Alt+drag"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Backspace"
 msgstr ""
 
@@ -7014,6 +7012,14 @@ msgid "Context menu"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Copy the dragged items where they are dropped"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Create shortcuts to the dragged items where they are dropped"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Ctrl+Plus (numeric keypad)"
 msgstr ""
 
@@ -7022,11 +7028,23 @@ msgid "Ctrl+arrow keys"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Ctrl+drag"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Ctrl+scroll wheel"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Down arrow"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Enter"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Esc"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
@@ -7067,11 +7085,27 @@ msgid "Last item"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Left arrow"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Move down a page of items"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Move the dragged items where they are dropped"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Move to an item without selecting it"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Move to the command bar"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Move up a page of items"
 msgstr ""
 
 #: crates/ox-app/resources/ui/window.ui crates/ox-app/src/window/shortcuts_window.rs
@@ -7104,7 +7138,15 @@ msgid "Open Terminal here"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Open the classic context menu (Show more options)"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Open the navigation pane to the current folder, while it is shown"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Open the selected items"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
@@ -7117,6 +7159,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Reopen closed tab"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Right arrow"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
@@ -7136,11 +7182,23 @@ msgid "Select several items"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Select several items one at a time"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Selection"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Shift+arrow keys"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Shift+drag"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Shift+right-click"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
@@ -7152,6 +7210,10 @@ msgid "Size all columns to fit"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Spacebar"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Tabs and windows"
 msgstr ""
 
@@ -7160,7 +7222,16 @@ msgid "Type an address"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Up arrow"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Up to the containing folder"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "{move}, then {select}"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar.rs
@@ -8348,7 +8419,7 @@ msgid ","
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/format/explorer_text.rs
+#: crates/ox-core/src/format.rs crates/ox-core/src/format/explorer_text.rs
 msgid "{bytes} byte"
 msgid_plural "{bytes} bytes"
 msgstr[0] ""
@@ -8362,6 +8433,11 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/format/explorer_text.rs
 msgid "{files} Files, {folders} Folders"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/format/explorer_text.rs
+msgid "{free} free of {size}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
