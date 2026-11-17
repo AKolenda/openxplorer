@@ -222,13 +222,26 @@ impl Dialog {
     /// content needs, not the 510 pixels of a dialog. Its close button,
     /// like Escape, answers "cancelled".
     pub(crate) fn message_box(parent: &impl IsA<gtk::Window>, title: &str, message: &str) -> Self {
+        Self::message_box_with(parent, title, message, crate::icons::Icon::WarningColor32)
+    }
+
+    /// [`Self::message_box`] with the error icon, Windows' red circle, as
+    /// File Explorer's box that says a typed address was not found.
+    pub(crate) fn error_box(parent: &impl IsA<gtk::Window>, title: &str, message: &str) -> Self {
+        Self::message_box_with(parent, title, message, crate::icons::Icon::DismissCircleColor32)
+    }
+
+    /// A message box with `icon` beside `message`.
+    fn message_box_with(
+        parent: &impl IsA<gtk::Window>,
+        title: &str,
+        message: &str,
+        icon: crate::icons::Icon,
+    ) -> Self {
         let dialog = Self::new(parent, title, message);
         dialog.add_css_class("message-box");
         dialog.set_default_size(-1, -1);
-        dialog
-            .imp()
-            .frame
-            .make_message_box(crate::icons::Icon::WarningColor32);
+        dialog.imp().frame.make_message_box(icon);
         dialog
     }
 

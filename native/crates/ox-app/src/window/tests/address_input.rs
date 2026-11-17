@@ -594,29 +594,59 @@ fn a_refused_address_is_explained_and_the_field_stays_open() {
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
 }
 
-/// A mistyped address says in plain words that it was not found and names
-/// what was typed, as Windows' "Windows can't find '…'. Make sure you
-/// typed the name correctly, and then try again." does; GIO's own
-/// "Error when getting information for file" text is not shown, and the
-/// tab stays where it was.
+/// A mistyped address is answered as File Explorer answers it: a small
+/// message box titled with the app's name, the red error icon, "… can't
+/// find '<what was typed>'. Check the spelling and try again." and one OK
+/// button, the default; GIO's own "Error when getting information for
+/// file" text is not shown. After OK the address bar holds the typed text
+/// again, to correct it, and the tab stays where it was.
 ///
 /// parity: NAV-033
 #[gtk::test]
-fn a_mistyped_address_says_it_was_not_found_in_plain_words() {
+fn a_mistyped_address_says_it_was_not_found_in_a_message_box() {
+    use super::file_ops_support::{focused_button, open_dialog, wait_for_no_dialog};
+
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     test.wait_for_listing("the fixture");
-    for typed in [
-        "Documnets",
-        fixture.path("Documnets").to_str().expect("UTF-8 fixture"),
-    ] {
+    let full = fixture
+        .path("Documnets")
+        .to_str()
+        .expect("UTF-8 fixture")
+        .to_owned();
+    for typed in ["Documnets", full.as_str()] {
         test.activate("location", None);
         test.window.submit_address(typed);
-        let expected = format!(
-            "OpenXplorer can’t find “{typed}”. Make sure you typed the name \
-             correctly, and then try again."
+        let message_box = open_dialog(&test);
+        let shown = (
+            message_box.title_text(),
+            message_box.message_text(),
+            message_box.button_labels(),
         );
-        wait_until("the message", || test.window.shown_message().as_str() == expected);
+        let error_icon = descendants::<gtk::Image>(&message_box).into_iter().any(|image| {
+            image.icon_name().as_deref() == Some("ox-dismiss-circle-32-color") && image.is_visible()
+        });
+        let default = focused_button(&message_box);
+        let is_box = message_box.has_css_class("message-box");
+        message_box.press("OK");
+        wait_for_no_dialog(&test);
+
+        assert_eq!(
+            shown,
+            (
+                "OpenXplorer".to_owned(),
+                format!("OpenXplorer can’t find ‘{typed}’. Check the spelling and try again."),
+                vec!["OK".to_owned()]
+            )
+        );
+        assert!(error_icon, "the error icon shows");
+        assert!(is_box, "the shared message-box style");
+        assert_eq!(default.as_deref(), Some("OK"), "Enter presses OK");
+        assert_eq!(test.window.shown_message(), "", "no toast");
+        wait_until("the typed text to come back", || {
+            test.window.address_bar().mode() == AddressMode::Entry
+                && test.window.address_bar().entry().text() == typed
+        });
         assert_eq!(test.window.current_uri(), Some(fixture.uri()), "the folder stays");
     }
 }

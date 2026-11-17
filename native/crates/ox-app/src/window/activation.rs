@@ -21,6 +21,7 @@ use ox_core::integration;
 use ox_core::location::VirtualPlace;
 use ox_core::ops::is_recycle_bin_item;
 
+use crate::dialog::Dialog;
 use crate::folder_view::loader::Listing;
 use crate::locations::{self, Page};
 use crate::properties::PropertiesTab;
@@ -31,7 +32,7 @@ use super::session::TabId;
 use super::session::TabPlacement;
 use super::slow_location::OpeningKind;
 use super::window_action::WindowAction;
-use super::BrowserWindow;
+use super::{BrowserWindow, ButtonStyle};
 
 mod outcome;
 
@@ -115,13 +116,12 @@ pub(super) fn activation_for(entry: &Entry) -> Activation {
     Activation::File
 }
 
-/// What a typed address that names nothing says: Windows' "Windows can't
-/// find '…'. Make sure you typed the name correctly, and then try again.",
-/// with the app's name and the address as it was typed.
+/// What a typed address that names nothing says, in Windows' words
+/// ("Windows can't find '…'. Check the spelling and try again.") with the
+/// app's name and the address as it was typed.
 fn not_found_message(typed: &str) -> String {
     ox_core::i18n::format_message(
-        "OpenXplorer can’t find “{address}”. Make sure you typed the name correctly, \
-         and then try again.",
+        "OpenXplorer can’t find ‘{address}’. Check the spelling and try again.",
         &[("address", typed)],
     )
 }
@@ -733,7 +733,7 @@ impl BrowserWindow {
             // Plain words that name what was typed, as Windows says it,
             // rather than GIO's own text (NAV-033).
             (Err(EntryError::NotFound(_)), None) => {
-                self.show_message(&not_found_message(request.typed));
+                self.say_not_found(request.typed);
                 return;
             }
             (Err(error), _) => {
@@ -752,6 +752,31 @@ impl BrowserWindow {
                 self.activate_entry(&entry);
             }
         }
+    }
+
+    /// Says that the typed address `typed` names nothing, as File
+    /// Explorer does: a message box titled with the app's name, the error
+    /// icon and one OK button, which Enter presses. The address bar keeps
+    /// the typed text, so it can be corrected (NAV-033).
+    fn say_not_found(&self, typed: &str) {
+        let dialog = Dialog::error_box(
+            self,
+            ox_core::i18n::gettext_static("OpenXplorer"),
+            &not_found_message(typed),
+        );
+        dialog.add_button(ox_core::i18n::gettext_static("OK"), ButtonStyle::Accent);
+        dialog.open();
+        let typed = typed.to_owned();
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                dialog.next_response().await;
+                dialog.finish();
+                window.forget_address_completions();
+                window.address_bar().edit(&typed);
+            }
+        ));
     }
 
     /// Opens command-line or desktop locations, as `openIncoming`: the
