@@ -29,9 +29,12 @@ use crate::window::BrowserWindow;
 /// What the "This location is unavailable" page says about a folder whose
 /// drive or share went away.
 pub(in crate::window) fn disconnected_error() -> EntryError {
-    EntryError::NotMounted(ox_core::i18n::gettext(
-        "The drive or network share that holds this folder was disconnected.",
-    ))
+    EntryError::NotMounted(disconnected_message())
+}
+
+/// The words of [`disconnected_error`], already said for people.
+pub(in crate::window) fn disconnected_message() -> String {
+    ox_core::i18n::gettext("The drive or network share that holds this folder was disconnected.")
 }
 
 impl BrowserWindow {

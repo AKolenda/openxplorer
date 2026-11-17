@@ -10,6 +10,7 @@
 mod accessibility;
 mod address_bar;
 mod address_input;
+mod archive_passwords;
 mod archives;
 mod captures;
 mod choose_details;
@@ -32,6 +33,8 @@ mod dialog_keys;
 mod disconnected;
 mod drag_and_drop;
 mod drag_escape;
+mod drop_frames;
+mod drop_on_zip;
 mod duplicate_tab;
 pub(super) mod empty_folder;
 mod empty_folder_look;

@@ -395,8 +395,10 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/archive_view/browser.rs
-msgid "{hidden_unsafe_count} unsafe names or links are hidden."
-msgstr ""
+msgid "{hidden_unsafe_count} unsafe name or link is hidden."
+msgid_plural "{hidden_unsafe_count} unsafe names or links are hidden."
+msgstr[0] ""
+msgstr[1] ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/archive_view/browser.rs
@@ -468,7 +470,7 @@ msgid "Select a destination"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "Show extracted files when finished"
+msgid "Show extracted files when complete"
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
@@ -477,10 +479,6 @@ msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs
 msgid "The archive is kept unchanged. A folder that does not exist yet is created; in an existing folder you are asked before any file is replaced."
-msgstr ""
-
-#: crates/ox-app/src/archive_view/extract_dialog.rs
-msgid "This ZIP has a password, so OpenXplorer cannot extract it. Open it in the archive manager instead."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -543,7 +541,7 @@ msgstr ""
 msgid "Not provided"
 msgstr ""
 
-#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/choose_details.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/gallery_locations.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
+#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/archive_password.rs crates/ox-app/src/window/choose_details.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/gallery_locations.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
 msgid "OK"
 msgstr ""
 
@@ -1897,7 +1895,7 @@ msgstr ""
 msgid "{width} x {height}"
 msgstr ""
 
-#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/details_tab.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/loading/denied_folder.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/details_tab.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/empty_page.rs crates/ox-app/src/window/loading/denied_folder.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Details"
 msgstr ""
 
@@ -3449,10 +3447,6 @@ msgstr ""
 msgid "Also copy paths as text"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Also in network folders"
-msgstr ""
-
 #: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/context_menu/entries.rs
 msgid "Calculate folder sizes"
 msgstr ""
@@ -3522,7 +3516,7 @@ msgid "Logical file bytes, the space on disk, what a scan skips, and its limits.
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Off: files on SMB shares, servers and phones keep their icons, so browsing them reads no file contents."
+msgid "Off by default, as in Windows: files on shares, servers, phones and cameras show their type icons. Turn on to show their thumbnails and previews too."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3579,6 +3573,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Show the number of items in folders"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Show thumbnails in network folders"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -3650,7 +3648,7 @@ msgid "replace overwrite file conflict copy move paste drag restore recycle bin 
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "show previews in network folders thumbnails remote network smb nas sftp slow"
+msgid "show previews in network folders thumbnails remote network smb nas sftp phone camera also"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -4357,12 +4355,17 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/update/state.rs
-msgid "Could not check for updates. {reason}"
+msgid "Could not restart. {reason}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/update/state.rs
-msgid "Could not restart. {reason}"
+msgid "Couldn't check for updates (HTTP {status}). Try again later."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/update/state.rs
+msgid "Couldn't check for updates. {reason}"
 msgstr ""
 
 #: crates/ox-app/src/update/state.rs
@@ -4610,6 +4613,23 @@ msgstr ""
 
 #: crates/ox-app/src/window/archive_actions.rs crates/ox-app/src/window/extract_into.rs crates/ox-app/src/window/file_ops/transfer.rs
 msgid "Preparing extraction…"
+msgstr ""
+
+#: crates/ox-app/src/window/archive_password.rs
+msgid "Password needed"
+msgstr ""
+
+#: crates/ox-app/src/window/archive_password.rs
+msgid "Password:"
+msgstr ""
+
+#: crates/ox-app/src/window/archive_password.rs crates/ox-core/src/archive/error.rs
+msgid "The password is incorrect. Try again."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/archive_password.rs
+msgid "“{name}” is password protected. Enter the password below."
 msgstr ""
 
 #: crates/ox-app/src/window/cache_folder.rs
@@ -5460,6 +5480,11 @@ msgstr ""
 msgid "Try again"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/empty_page.rs crates/ox-app/src/window/picker.rs
+msgid "{location} is unavailable. Make sure you are connected to the network and the server is turned on, and then try again."
+msgstr ""
+
 #: crates/ox-app/src/window/extract_into.rs
 msgid "A file with that name is already there. Choose a folder to extract to."
 msgstr ""
@@ -5605,12 +5630,12 @@ msgstr ""
 msgid "“{name}” is on a network share, a removable drive or a drive where every file can run, such as a Windows drive. Run it only if you trust where it came from."
 msgstr ""
 
-#: crates/ox-app/src/window/file_ops/availability.rs
-msgid "A previous version is read-only."
+#: crates/ox-app/src/window/file_drop/targets.rs crates/ox-app/src/window/file_ops/availability.rs
+msgid "An archive is read-only. Extract it to add items."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
-msgid "An archive is read-only. Extract it to add items."
+msgid "A previous version is read-only."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
@@ -6595,11 +6620,6 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/picker.rs
 msgid "{count} files already exist in this folder. Replace them?"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/picker.rs
-msgid "{location} is unavailable. Make sure you are connected to the network and the server is turned on, and then try again."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -7767,10 +7787,6 @@ msgid "Decompression safety limit reached."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
-msgid "Encrypted ZIP members require an archive manager."
-msgstr ""
-
-#: crates/ox-core/src/archive/error.rs
 msgid "Invalid archive folder."
 msgstr ""
 
@@ -7779,7 +7795,7 @@ msgid "Open a network share before choosing it as an extraction destination."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
-msgid "Password-protected ZIPs need an external archive manager in this release."
+msgid "OpenXplorer cannot compress more than 1,000,000 items or a file that grows while it is compressed. Use an archive manager."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
@@ -7863,7 +7879,15 @@ msgid "This ZIP compression method needs an external archive manager."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
+msgid "This ZIP uses an encryption method that isn't supported. To open it, use a different archive app."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
 msgid "This archive is damaged or is not a TAR archive. Use an archive manager."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
+msgid "This archive is password protected. Enter its password to open it."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
@@ -7896,10 +7920,6 @@ msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
 msgid "ZIP directory is too large for the built-in viewer. Use an archive manager."
-msgstr ""
-
-#: crates/ox-core/src/archive/error.rs
-msgid "ZIP files over 4 GiB or with more than 65,535 items need an archive manager."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -7989,11 +8009,6 @@ msgstr ""
 
 #: crates/ox-core/src/archive/zip/error.rs
 msgid "File size"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/archive/zip/error.rs
-msgid "File {name} is encrypted, password required for extraction"
 msgstr ""
 
 #: crates/ox-core/src/archive/zip/error.rs
@@ -9975,12 +9990,12 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/update/error.rs
-msgid "GitHub could not check for updates (HTTP {status}). Try again later."
+msgid "GitHub could not provide the installer (HTTP {status}). Nothing was installed."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/update/error.rs
-msgid "GitHub could not provide the installer (HTTP {status}). Nothing was installed."
+msgid "GitHub refused the update check (HTTP {status}). Try again later."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

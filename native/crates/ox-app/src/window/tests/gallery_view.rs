@@ -415,3 +415,168 @@ fn listing_gallery_shows_honest_progress() {
     });
     assert_eq!(test.window.status_bar().texts().0, "1 item");
 }
+
+/// A picture of "text": lines of 20-pixel black and white glyph blocks on
+/// white, as bold print in a screenshot that is still legible once the
+/// screenshot is shrunk to a tile, `width` by `height` pixels, as RGB.
+fn text_like(width: usize, height: usize) -> Vec<u8> {
+    let mut pixels = vec![255_u8; width * height * 3];
+    let mut seed = 0x2545_f491_u32;
+    let mut ink = vec![false; (width / 20 + 1) * (height / 20 + 1)];
+    for cell in &mut ink {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        *cell = seed & 3 != 0;
+    }
+    for y in 0..height {
+        // 40-pixel lines: 20 of glyphs, then 20 of spacing.
+        if y % 40 >= 20 {
+            continue;
+        }
+        for x in 0..width {
+            if ink[(y / 20) * (width / 20 + 1) + x / 20] {
+                let at = (y * width + x) * 3;
+                pixels[at..at + 3].copy_from_slice(&[20, 20, 20]);
+            }
+        }
+    }
+    pixels
+}
+
+/// `rgb` (`width` by `height`) shrunk to cover `out_width` by `out_height`
+/// by averaging every source pixel each output pixel covers, then cut to
+/// it from the middle: the reference a sharp tile matches.
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "picture sizes are small"
+)]
+fn area_average(rgb: &[u8], width: usize, height: usize, out_width: usize, out_height: usize) -> Vec<u8> {
+    let factor = (out_width as f64 / width as f64).max(out_height as f64 / height as f64);
+    let (covered_width, covered_height) = (
+        (width as f64 * factor).round() as usize,
+        (height as f64 * factor).round() as usize,
+    );
+    let (left, top) = ((covered_width - out_width) / 2, (covered_height - out_height) / 2);
+    let mut out = vec![0_u8; out_width * out_height * 3];
+    for y in 0..out_height {
+        let y0 = (((y + top) as f64) / factor) as usize;
+        let y1 = ((((y + top + 1) as f64) / factor).ceil() as usize).clamp(y0 + 1, height);
+        for x in 0..out_width {
+            let x0 = (((x + left) as f64) / factor) as usize;
+            let x1 = ((((x + left + 1) as f64) / factor).ceil() as usize).clamp(x0 + 1, width);
+            for channel in 0..3 {
+                let mut sum = 0_u32;
+                for sy in y0..y1 {
+                    for sx in x0..x1 {
+                        sum += u32::from(rgb[(sy * width + sx) * 3 + channel]);
+                    }
+                }
+                let count = u32::try_from((y1 - y0) * (x1 - x0)).unwrap_or(1);
+                out[(y * out_width + x) * 3 + channel] = u8::try_from(sum / count).unwrap_or(255);
+            }
+        }
+    }
+    out
+}
+
+/// The mean difference, per channel out of 255, between the RGBA pixels
+/// `drawn` and the RGB `reference`, leaving out a 5-pixel border (the
+/// tile's rounded corners).
+#[expect(clippy::cast_precision_loss, reason = "picture sizes are small")]
+fn mean_difference(drawn: &[u8], reference: &[u8], width: usize, height: usize) -> f64 {
+    let mut sum = 0_u64;
+    let mut count = 0_u64;
+    for y in 5..height.saturating_sub(5) {
+        for x in 5..width.saturating_sub(5) {
+            for channel in 0..3 {
+                let a = i64::from(drawn[(y * width + x) * 4 + channel]);
+                let b = i64::from(reference[(y * width + x) * 3 + channel]);
+                sum += a.abs_diff(b);
+                count += 1;
+            }
+        }
+    }
+    sum as f64 / count.max(1) as f64
+}
+
+/// A screenshot of small print is drawn as sharp as the original shrunk
+/// straight to the tile's device pixels, at Medium and Large icons, even
+/// with a 128-pixel thumbnail of it in the cache: the pixels the window
+/// renders for the tile are compared with an area-average of the original.
+///
+/// parity: HOME-033
+#[gtk::test]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "picture sizes are small"
+)]
+fn small_print_is_drawn_as_sharp_as_the_original_shrunk_to_the_tile() {
+    use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
+    let home = PicturesHome::new();
+    let (width, height) = (1600_usize, 900_usize);
+    let rgb = text_like(width, height);
+    let picture = Pixbuf::from_bytes(
+        &gtk::glib::Bytes::from(&rgb),
+        Colorspace::Rgb,
+        false,
+        8,
+        width as i32,
+        height as i32,
+        (width * 3) as i32,
+    );
+    let path = home.pictures().join("notes.png");
+    picture.savev(&path, "png", &[]).expect("the screenshot");
+    // A 128-pixel thumbnail in the cache, as a desktop leaves one.
+    let uri = ox_core::location::file_uri(&path);
+    let thumbnail = picture
+        .scale_simple(128, 72, gtk::gdk_pixbuf::InterpType::Bilinear)
+        .expect("a thumbnail");
+    let modified = fs::metadata(&path)
+        .and_then(|metadata| metadata.modified())
+        .expect("a date")
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("after 1970")
+        .as_secs()
+        .to_string();
+    let cache = gtk::glib::user_cache_dir().join("thumbnails").join("normal");
+    fs::create_dir_all(&cache).expect("the cache");
+    let digest =
+        gtk::glib::compute_checksum_for_string(gtk::glib::ChecksumType::Md5, &uri).expect("a digest");
+    thumbnail
+        .savev(
+            cache.join(format!("{digest}.png")),
+            "png",
+            &[
+                ("tEXt::Thumb::URI", uri.as_str()),
+                ("tEXt::Thumb::MTime", modified.as_str()),
+            ],
+        )
+        .expect("the cached thumbnail");
+    let test = gallery_window(&home);
+    test.window.set_default_size(1200, 800);
+    for size in ["medium", "large"] {
+        test.activate("view", Some(size));
+        let mut last = f64::MAX;
+        for _ in 0..200 {
+            wait_for_frames(&test.window, 1);
+            if let Some((tile_width, tile_height, drawn)) = test.window.gallery_tile_pixels("notes.png") {
+                let (tile_width, tile_height) = (tile_width as usize, tile_height as usize);
+                let reference = area_average(&rgb, width, height, tile_width, tile_height);
+                last = mean_difference(&drawn, &reference, tile_width, tile_height);
+                if last < 3.0 {
+                    break;
+                }
+            }
+            crate::test_support::harness::wait_for(std::time::Duration::from_millis(50));
+        }
+        assert!(
+            last < 6.0,
+            "{size}: the tile differs from a straight shrink by {last:.1} per channel"
+        );
+    }
+}

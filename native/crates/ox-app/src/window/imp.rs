@@ -242,6 +242,10 @@ pub(crate) struct BrowserWindow {
     /// so a slow New ▸ Text document renames in place only when the user
     /// did nothing meanwhile.
     pub(super) input_generation: Cell<u64>,
+    /// The passwords that opened password-protected ZIPs, by archive URI,
+    /// in memory until the window closes (`archive_password`).
+    pub(super) archive_passwords:
+        RefCell<std::collections::HashMap<String, ox_core::archive::ArchivePassword>>,
     /// In tests, a gate New ▸ Text document waits at before it creates
     /// the file, standing in for a slow share or phone.
     #[cfg(test)]
@@ -298,6 +302,8 @@ pub(crate) struct BrowserWindow {
     pub(super) first_offer: RefCell<Option<FirstOffer>>,
     /// What the label on the drag icon says over the window (DND-028).
     pub(super) drop_labels: RefCell<DropLabels>,
+    /// The drag the window last said it refuses, so it says so once.
+    pub(super) explained_drop: RefCell<Option<glib::WeakRef<glib::Object>>>,
     /// The drop menu, built when first needed.
     pub(super) drop_menu: OnceCell<MenuPopover>,
     /// Why tooltips are off now: a drag of this window's items, the drop
@@ -416,6 +422,7 @@ impl ObjectImpl for BrowserWindow {
         self.obj().end_progress_actions();
         self.obj().end_size_scans();
         self.obj().close_properties_windows();
+        self.obj().forget_archive_passwords();
         self.obj().end_band();
         self.obj().disconnect_external_handlers();
         self.obj().close_network();
@@ -474,6 +481,7 @@ impl WindowImpl for BrowserWindow {
         // with the work they started (PROP-029).
         self.obj().end_size_scans();
         self.obj().close_properties_windows();
+        self.obj().forget_archive_passwords();
         // A file dialog closed without a choice answers Cancelled
         // (INT-032).
         self.obj().end_picking_on_close();

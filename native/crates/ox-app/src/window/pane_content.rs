@@ -10,6 +10,7 @@
 //! ([`super::split_view`]).
 
 use gtk::subclass::prelude::*;
+use ox_core::entry::EntryError;
 
 use crate::locations::Page;
 
@@ -46,7 +47,7 @@ pub(super) struct PaneState {
     /// Its location has taken longer than the delay to open and list.
     slow: bool,
     /// Why its last listing failed.
-    error: Option<String>,
+    error: Option<EntryError>,
     /// A search of it still runs: its matches may still come.
     searching: bool,
 }
@@ -65,7 +66,7 @@ impl PaneState {
             },
             opening: tab.opening.is_some(),
             slow: tab.is_slow(),
-            error: tab.error.as_ref().map(ToString::to_string),
+            error: tab.error.clone(),
             searching: false,
         }
     }
@@ -101,7 +102,7 @@ pub(super) fn show_pane_state(
     // rows, and a location that answers sooner shows nothing.
     // A search that still runs is waited for as a listing is: the blank
     // list, never "No matching items" before the walk of the folder and
-    // its subfolders has ended (HOME-017, SRCH-035).
+    // its subfolders has ended (HOME-035, SRCH-035).
     let loading = listing != Listing::Idle || searching;
     let is_first_listing = listing == Listing::First && page.is_none() && error.is_none();
     if slow && (opening || (is_first_listing && pane.model().n_items() == 0)) {
@@ -122,10 +123,10 @@ pub(super) fn show_pane_state(
         // titles, until items come: no "Loading" text, no page swap.
         pane.show_empty_note(false);
         pane.show_page(PanePage::Listing);
-        return error;
+        return error.as_ref().map(ToString::to_string);
     } else {
-        let state = match error {
-            Some(error) => EmptyState::Unavailable(error),
+        let state = match &error {
+            Some(error) => EmptyState::unavailable(&uri, error),
             None => empty_state().unwrap_or_else(|| EmptyState::empty_listing(&uri)),
         };
         if state == EmptyState::EmptyFolder {

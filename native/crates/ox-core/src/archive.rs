@@ -19,6 +19,11 @@
 //!   streams.
 //! - ARC-012 to ARC-020: an extraction creates a new folder, checks every
 //!   member first, builds it privately and publishes it all or nothing.
+//! - ARC-006, ARC-016: a member encrypted with the traditional ZIP
+//!   method is listed like any other and decrypted with the password the
+//!   user gives ([`ArchivePassword`]); without it, or with a wrong one,
+//!   nothing is written. AES and strong encryption are left to an
+//!   archive manager.
 //! - ARC-023: compressing creates a new ZIP without replacing anything,
 //!   under its final name in local folders and privately staged elsewhere,
 //!   and removes it when it stops; links are never followed.
@@ -38,6 +43,7 @@
 //! | `member_names` | Safe member names, previewable types, suggested folder names | `archives.py`, `zip_extraction.py` |
 //! | `source` | Opening archives: [`ArchiveOpener`] | `archives.py`, `native_opening.py` |
 //! | `gio_reader` | Reading archives on shares in place | `native_opening.py` |
+//! | `password` | The password of a password-protected ZIP | new (Explorer) |
 //! | `zip` | The ZIP format, as Python's `zipfile` reads it | `zipfile` |
 //! | `progress` | Progress reports in the terms of a copy | new (Explorer) |
 //! | `worker` | Running operations on a worker thread | `winspace.py` |
@@ -50,6 +56,7 @@ mod error;
 mod extract;
 mod gio_reader;
 mod member_names;
+mod password;
 mod preview;
 mod progress;
 mod source;
@@ -76,6 +83,7 @@ pub use extract::{
 };
 pub use gio_reader::GioArchiveReader;
 pub use member_names::{is_safe_member as is_safe_member_name, is_supported_archive, suggested_folder_name};
+pub use password::ArchivePassword;
 pub use preview::{remove_old_previews, remove_preview_copy, PreviewCopy, PREVIEW_LIFETIME, PREVIEW_NOTICE};
 pub use source::{ArchiveOpener, ArchiveStream, GioArchiveOpener};
 pub use zip::{Zip64Field, ZipFormatError};

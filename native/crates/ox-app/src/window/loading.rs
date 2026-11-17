@@ -33,6 +33,7 @@
 
 mod denied_folder;
 mod disconnected;
+pub(super) use disconnected::disconnected_message;
 mod mount_retry;
 mod removed_folder;
 

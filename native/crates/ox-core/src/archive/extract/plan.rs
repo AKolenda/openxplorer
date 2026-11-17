@@ -27,7 +27,7 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
 use super::limits::ExtractionLimits;
-use crate::archive::zip::{MemberFileType, ZipMember};
+use crate::archive::zip::{Encryption as MemberEncryption, MemberFileType, ZipMember};
 use crate::archive::ArchiveError;
 use crate::transfer::Cancellation;
 
@@ -300,7 +300,11 @@ fn link_segments(
 /// # Errors
 ///
 /// [`ArchiveError::UnsafeLink`] naming the link otherwise.
-pub(super) fn check_link_target(name: &str, segments: &[String], target: &str) -> Result<(), ArchiveError> {
+pub(in crate::archive) fn check_link_target(
+    name: &str,
+    segments: &[String],
+    target: &str,
+) -> Result<(), ArchiveError> {
     let refuse = || ArchiveError::UnsafeLink(name.trim_end_matches('/').to_owned());
     let is_plain_text = !target.is_empty()
         && target.chars().count() <= MAX_NAME_CHARS
@@ -362,8 +366,10 @@ fn check_segment(segment: &str) -> Result<(), ArchiveError> {
     Ok(())
 }
 
-/// ARC-016: only plain files and folders, unencrypted, with a compression
-/// method the reader supports.
+/// ARC-016: only plain files and folders, unencrypted or encrypted with
+/// the traditional method the reader decrypts, with a compression method
+/// the reader supports. The password itself is asked when the extraction
+/// starts.
 fn check_type(member: &ZipMember) -> Result<(), ArchiveError> {
     let is_link_or_special = match member.file_type() {
         MemberFileType::Unrecorded | MemberFileType::Regular => false,
@@ -373,8 +379,8 @@ fn check_type(member: &ZipMember) -> Result<(), ArchiveError> {
     if is_link_or_special {
         return Err(ArchiveError::LinkOrSpecialFile);
     }
-    if member.is_encrypted() {
-        return Err(ArchiveError::PasswordProtected);
+    if member.encryption() == MemberEncryption::Unsupported {
+        return Err(ArchiveError::UnsupportedEncryption);
     }
     if !member.method.is_supported() {
         return Err(ArchiveError::UnsupportedCompression);

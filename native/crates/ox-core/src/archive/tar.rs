@@ -456,7 +456,14 @@ fn member(name: &str, kind: HeaderKind, mode: u32, size: u64, modified: u64) -> 
         header_offset: 0,
         data_limit: 0,
         external_attributes: (type_bits | mode) << 16,
-        modified: DosDateTime::from_unix_seconds(modified),
+        // A time of 0 is a time stripped from the archive, not a date it
+        // recorded: no Date modified, rather than the 1980 the MS-DOS
+        // form would clamp it to.
+        modified: if modified == 0 {
+            DosDateTime::UNKNOWN
+        } else {
+            DosDateTime::from_unix_seconds(modified)
+        },
     })
 }
 
