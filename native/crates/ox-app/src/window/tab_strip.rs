@@ -64,7 +64,7 @@ const CLOSE_GLYPH: i32 = 12;
 /// How many average characters of its title a tab keeps at its
 /// narrowest: about three letters and the ellipsis, as Windows 11 shrinks
 /// tabs no further (checked with 25 tabs in a 1920-pixel window).
-const TITLE_MIN_CHARS: i32 = 4;
+const TITLE_MIN_CHARS: i32 = 5;
 
 /// The glyph of the strip's scroll arrows.
 const SCROLL_GLYPH: i32 = 12;
@@ -340,14 +340,22 @@ impl TabStrip {
         if self.imp().arrows_pending.replace(true) {
             return;
         }
-        glib::idle_add_local_once(glib::clone!(
-            #[weak(rename_to = strip)]
-            self,
-            move || {
-                strip.imp().arrows_pending.set(false);
-                strip.update_arrows();
-            }
-        ));
+        // Before the next frame is laid out and drawn, so busy tabs' rings,
+        // which draw every frame, never hold the arrows back.
+        glib::idle_add_local_full(
+            glib::Priority::HIGH_IDLE,
+            glib::clone!(
+                #[weak(rename_to = strip)]
+                self,
+                #[upgrade_or]
+                glib::ControlFlow::Break,
+                move || {
+                    strip.imp().arrows_pending.set(false);
+                    strip.update_arrows();
+                    glib::ControlFlow::Break
+                }
+            ),
+        );
     }
 
     /// The arrows show while the tabs overflow. Shown, they take room from
@@ -384,16 +392,23 @@ impl TabStrip {
         forward.set_sensitive(value < adjustment.upper() - adjustment.page_size() - 0.5);
     }
 
-    /// Scrolls `tab` into view once the strip is laid out.
+    /// Scrolls `tab` into view once the strip is laid out: on the second
+    /// frame from now, when the first has laid the tabs out. The frame
+    /// clock, unlike an idle callback, is never held back by busy tabs'
+    /// rings, which draw every frame.
     fn scroll_into_view_soon(&self, tab: &gtk::Box) {
-        let viewport = self.imp().viewport.get();
-        glib::idle_add_local_once(glib::clone!(
-            #[weak]
-            viewport,
-            #[weak]
-            tab,
-            move || viewport.scroll_to(&tab, None)
-        ));
+        let viewport = self.imp().viewport.downgrade();
+        let frames = Cell::new(0);
+        tab.add_tick_callback(move |tab, _| {
+            frames.set(frames.get() + 1);
+            if frames.get() < 2 {
+                return glib::ControlFlow::Continue;
+            }
+            if let Some(viewport) = viewport.upgrade() {
+                viewport.scroll_to(tab, None);
+            }
+            glib::ControlFlow::Break
+        });
     }
 
     /// Replaces the tabs with `tabs` and scrolls the active one into view.

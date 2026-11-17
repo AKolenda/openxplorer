@@ -144,18 +144,24 @@ impl BrowserWindow {
             )
         };
         let title = step.label(JournalDirection::Undo);
+        // A Windows message box, as the app's other file questions are:
+        // the caption names the step, the icon stands beside the words.
         if !step.record.undoes_more_than_overwrites() {
-            dialog::show_message(self, &title, &said).await;
+            let dialog = Dialog::message_box(self, &title, &said);
+            dialog.add_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent);
+            dialog.open();
+            dialog.next_response().await;
+            dialog.finish();
             return OverwrittenAnswer::Told;
         }
         let message = format!("{said} {}", ox_core::i18n::gettext("Undo the rest anyway?"));
-        let dialog = Dialog::new(self, &title, &message);
+        let dialog = Dialog::message_box(self, &title, &message);
+        let undo = dialog.add_button(ox_core::i18n::gettext_static("Undo"), ButtonStyle::Accent);
         dialog.add_cancel_button();
-        dialog.add_button(ox_core::i18n::gettext_static("Undo"), ButtonStyle::Accent);
         dialog.open();
-        let confirmed = dialog.next_response().await.is_some();
-        if confirmed {
-            dialog.finish();
+        let answer = dialog.next_response().await;
+        dialog.finish();
+        if answer == Some(undo) {
             OverwrittenAnswer::UndoTheRest
         } else {
             OverwrittenAnswer::Cancelled
