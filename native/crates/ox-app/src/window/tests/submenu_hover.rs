@@ -57,7 +57,7 @@ fn plain_row(menu: &MenuPopover) -> String {
         .collect();
     std::iter::successors(list.first_child(), WidgetExt::next_sibling)
         .filter_map(|child| child.downcast::<gtk::ListBoxRow>().ok())
-        .filter(|row| row.is_sensitive())
+        .filter(WidgetExt::is_sensitive)
         .filter_map(|row| row_label(&row))
         .find(|label| !with_submenu.contains(label))
         .expect("the menu has a row without a submenu")
