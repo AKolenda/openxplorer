@@ -149,4 +149,3 @@
 .search-wrap entry > image { color: @ox_muted; }
 .search-wrap .search-icon { color: @ox_muted; margin-right: 11px; }
 .search-wrap:disabled { opacity: .6; }
-
