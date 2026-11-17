@@ -540,6 +540,7 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Theme",
             "Text size",
             "Use the desktop font",
+            "Language",
             "Compact view",
             "Hide expand arrows in the sidebar",
             "Show more items in the navigation pane",
