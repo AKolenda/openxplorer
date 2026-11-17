@@ -281,6 +281,10 @@ pub fn coded_seven_zip(
 
 /// The BCJ2 method id.
 pub const BCJ2: [u8; 4] = [0x03, 0x03, 0x01, 0x1b];
+/// The `BZip2` method id.
+pub const BZIP2: [u8; 3] = [0x04, 0x02, 0x02];
+/// The Deflate method id.
+pub const DEFLATE: [u8; 3] = [0x04, 0x01, 0x08];
 /// The Copy method id.
 pub const COPY: [u8; 1] = [0x00];
 

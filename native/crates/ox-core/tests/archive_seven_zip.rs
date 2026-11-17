@@ -21,7 +21,7 @@ use ox_core::transfer::Cancellation;
 use archive_support::{
     coded_seven_zip, encoded_header_seven_zip, gio_factory, memory_opener, one_file_seven_zip, raw_seven_zip,
     seven_zip_bytes, seven_zip_claiming_files, ExtractionFixture, LocalFileOutput, SevenEntry, TestCoder,
-    AES, BCJ2, COPY, LZMA2, PPMD, SEVEN_ZIP_MODIFIED,
+    AES, BCJ2, BZIP2, COPY, DEFLATE, LZMA2, PPMD, SEVEN_ZIP_MODIFIED,
 };
 
 /// A folder, a file in it, a folder in that and an empty file, with a
@@ -549,4 +549,36 @@ fn coders_linked_in_a_loop_are_refused_at_once() {
         "{error:?}"
     );
     fixture.assert_no_output();
+}
+
+/// 7-Zip writes BZip2 and Deflate 7z archives when asked (`-m0=BZip2`,
+/// `-m0=Deflate`); they open like any other 7z.
+///
+/// parity: ARC-024
+#[test]
+fn bzip2_and_deflate_7z_archives_extract() {
+    use std::io::Write;
+
+    let data = "Fictional field notes, written twice. ".repeat(200);
+    let mut bzip2 = bzip2::write::BzEncoder::new(Vec::new(), bzip2::Compression::default());
+    bzip2.write_all(data.as_bytes()).expect("compressed");
+    let mut deflate = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+    deflate.write_all(data.as_bytes()).expect("compressed");
+    for (method, packed) in [
+        (&BZIP2[..], bzip2.finish().expect("compressed")),
+        (&DEFLATE[..], deflate.finish().expect("compressed")),
+    ] {
+        let coders = [TestCoder {
+            method,
+            inputs: 1,
+            properties: &[],
+        }];
+        let bytes = coded_seven_zip("notes.txt", &coders, &[], &[0], &[&packed], &[data.len() as u64]);
+        let fixture = fixture_with(&bytes);
+
+        fixture.extract("Unpacked").expect("extracts");
+
+        let notes = fixture.destination.join("Unpacked/notes.txt");
+        assert_eq!(fs::read(notes).expect("a file"), data.as_bytes(), "{method:?}");
+    }
 }
