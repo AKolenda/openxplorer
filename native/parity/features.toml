@@ -6788,7 +6788,7 @@ sources = ["v2.0.0:desktop/ui/app.js:120", "v2.0.0:desktop/ui/app.js:211"]
 python_tests = []
 bridge = []
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/opening.rs (a_failing_command_says_why_in_the_toast). Every window action reports its error with show_message, the toast; Rust has no uncaught rejections to catch generically."
+native_note = "native/crates/ox-app/src/window/tests/opening.rs (a_failing_command_says_why). Every window action reports its error with show_message, the toast; Rust has no uncaught rejections to catch generically. Since 2026-11-17 a typed address that names nothing says so in a message box, as File Explorer does (NAV-033)."
 
 [[feature]]
 id = "CMD-019"
