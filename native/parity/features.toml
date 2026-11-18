@@ -617,7 +617,7 @@ native_note = "native/crates/ox-app/src/window/location_view.rs (tabs_and_the_ad
 id = "NAV-026"
 area = "NAV"
 title = "Editable address: Ctrl+L, Alt+D, blank-space click or chevron"
-behaviour = "Ctrl+L, Alt+D (both work even from other inputs), clicking empty address space, or the chevron button (aria-label 'Edit location') replaces the breadcrumbs with a text field. The field holds the complete display path (POSIX path for local, \\\\server\\share\\folder UNC for SMB, '<device> / path' for devices), fully selected. Escape or losing focus restores the breadcrumbs. Not available on the Settings tab. The address tooltip reads '<path> · Click blank space or press Ctrl+L to edit'."
+behaviour = "Ctrl+L, Alt+D (both work even from other inputs), clicking empty address space, or the chevron button (aria-label 'Edit location') replaces the breadcrumbs with a text field. The field holds the complete display path (POSIX path for local, \\\\server\\share\\folder UNC for SMB, '<device> / path' for devices), fully selected. Pressing Ctrl+L or Alt+D again while editing keeps editing and selects the whole text. Escape, Enter or losing focus restores the breadcrumbs. Not available on the Settings tab. The address tooltip reads '<path> · Click blank space or press Ctrl+L to edit'."
 origin = ["openxplorer", "dolphin"]
 priority = "must"
 openxplorer = "has"
@@ -644,7 +644,7 @@ bridge = ["normalise"]
 dolphin = "Ctrl+L editable location bar; Dolphin: Ctrl+L / F6 edit location; click empty breadcrumb area to edit.; KUrlNavigator toggle-editable area; replace_location: Ctrl+L"
 gnome = "Nautilus: Ctrl+L location entry."
 native = "done"
-native_note = "native/crates/ox-app/src/window/tests/address_input.rs (ctrl_l_alt_d_the_chevron_and_blank_space_edit_the_whole_address, the_settings_tab_has_no_address_to_edit); native/crates/ox-app/src/window/tests/address_bar.rs (the_title_crumbs_and_address_call_a_phone_by_its_mount_name): the device address. Ctrl+L and Alt+D are application accelerators, so they work from other inputs. The chevron and F4 run win.address-history, which edits the address as Ctrl+L does and lists the typed history below it (NAV-043), as Explorer's chevron does."
+native_note = "native/crates/ox-app/src/window/tests/address_input.rs (ctrl_l_alt_d_the_chevron_and_blank_space_edit_the_whole_address, the_settings_tab_has_no_address_to_edit, ctrl_l_and_alt_d_again_keep_editing_with_everything_selected); native/crates/ox-app/src/window/tests/address_bar.rs (the_title_crumbs_and_address_call_a_phone_by_its_mount_name): the device address. Ctrl+L and Alt+D are application accelerators, so they work from other inputs. The chevron and F4 run win.address-history, which edits the address as Ctrl+L does and lists the typed history below it (NAV-043), as Explorer's chevron does."
 
 [[feature]]
 id = "NAV-027"
@@ -682,8 +682,8 @@ sources = ["dolphin:src/dolphinmainwindow.cpp:987-1001"]
 python_tests = []
 bridge = []
 dolphin = "replace_location: Ctrl+L"
-native = "done"
-native_note = "native/crates/ox-app/src/window/location_view.rs: edit_address returns to the crumbs when Ctrl+L is pressed while the whole address is selected and nothing was typed (AddressBar::edits_whole_address); otherwise it edits the address. Tested in native/crates/ox-app/src/window/tests/address_input.rs (a_second_ctrl_l_returns_to_the_crumbs_unless_something_was_typed)."
+native = "n-a"
+native_note = "Product decision: OpenXplorer follows Windows 11 Explorer, where Alt+D and Ctrl+L always select the address bar (Microsoft's keyboard shortcut list: \"Alt+D: Select the address bar\"). Pressing either again while editing keeps editing with the whole text selected, so the next keys never reach the file list and open a file. NAV-026 covers this: native/crates/ox-app/src/window/location_view.rs (edit_address), tested in native/crates/ox-app/src/window/tests/address_input.rs (ctrl_l_and_alt_d_again_keep_editing_with_everything_selected)."
 
 [[feature]]
 id = "NAV-029"

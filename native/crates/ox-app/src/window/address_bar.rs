@@ -383,14 +383,12 @@ impl AddressBar {
         imp.entry.select_region(0, -1);
     }
 
-    /// Whether the entry has keyboard focus with its whole text selected,
-    /// as Ctrl+L leaves it: a second Ctrl+L then returns to the crumbs, as
-    /// in Dolphin (NAV-028).
-    pub(super) fn edits_whole_address(&self) -> bool {
+    /// Gives the entry the keyboard with its whole text selected, keeping
+    /// what was typed: Ctrl+L or Alt+D while the address is being edited.
+    pub(super) fn select_whole_text(&self) {
         let entry = &*self.imp().entry;
-        let focused = entry.has_focus() || entry.focus_child().is_some();
-        let length = i32::try_from(entry.text().chars().count()).unwrap_or(i32::MAX);
-        self.mode() == AddressMode::Entry && focused && entry.selection_bounds() == Some((0, length))
+        entry.grab_focus();
+        entry.select_region(0, -1);
     }
 
     /// The editable address, for tests.

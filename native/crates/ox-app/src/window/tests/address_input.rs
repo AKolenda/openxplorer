@@ -212,25 +212,44 @@ fn the_settings_tab_has_no_address_to_edit() {
     assert_eq!(test.window.address_bar().mode(), AddressMode::Crumbs);
 }
 
-/// parity: NAV-028
+/// Alt+D and Ctrl+L always select the address bar, as Explorer's
+/// "Alt+D: Select the address bar": pressing either again while editing
+/// keeps editing with the whole text selected, so the next keys still go
+/// to the address and never to the file list. F4 does not leave editing
+/// either.
+///
+/// parity: NAV-026
 #[gtk::test]
-fn a_second_ctrl_l_returns_to_the_crumbs_unless_something_was_typed() {
+fn ctrl_l_and_alt_d_again_keep_editing_with_everything_selected() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let address = test.window.address_bar();
+    let selects_all = |text: &str| {
+        let entry = address.entry();
+        assert_eq!(address.mode(), AddressMode::Entry, "still editing");
+        assert!(address.is_typing(), "the entry keeps the keyboard");
+        assert_eq!(entry.text().as_str(), text);
+        let length = i32::try_from(text.chars().count()).expect("a short text");
+        assert_eq!(entry.selection_bounds(), Some((0, length)), "everything selected");
+    };
+    let path = fixture.root().display().to_string();
     test.activate("location", None);
+    selects_all(&path);
 
     test.activate("location", None);
+    selects_all(&path);
 
-    assert_eq!(address.mode(), AddressMode::Crumbs);
-    test.activate("location", None);
     address.entry().set_text("/tm");
+    address.entry().set_position(-1);
     test.activate("location", None);
-    assert_eq!(
-        address.mode(),
-        AddressMode::Entry,
-        "after typing, editing goes on"
-    );
+    selects_all("/tm");
+
+    test.activate("address-history", None);
+    assert_eq!(address.mode(), AddressMode::Entry, "F4 keeps editing");
+    address.entry().set_text("Notes");
+    test.activate("address-history", None);
+    test.activate("location", None);
+    selects_all("Notes");
 }
 
 /// parity: NAV-043
