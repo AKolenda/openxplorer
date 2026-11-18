@@ -28,7 +28,7 @@
 //!
 //! Not undoable: permanent delete and emptying the Recycle Bin (nothing is
 //! left to bring back), and a file a Replace overwrote, as Windows 11 does
-//! by default or where nothing could go to the Recycle Bin: the record
+//! (the setting off) or where nothing could go to the Recycle Bin: the record
 //! names it, Undo says it can't bring it back, and its replacement stays
 //! when the rest is undone. Every undo step runs with the same safety
 //! rules as the operation itself; `undo_apply` carries them out.

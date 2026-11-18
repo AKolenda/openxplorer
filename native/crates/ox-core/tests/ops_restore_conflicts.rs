@@ -78,15 +78,6 @@ fn scan(uris: &[String]) -> ConflictScan {
     block_on(scan_restore_conflicts(uris, &Cancellation::new())).expect("a plan")
 }
 
-/// A context whose Replace keeps the replaced item in the Recycle Bin, as
-/// Settings > Files & folders can choose; the default overwrites it.
-fn recycling() -> OperationContext {
-    OperationContext {
-        replaced_files: ReplacedFiles::RecycleBin,
-        ..OperationContext::default()
-    }
-}
-
 /// Restores `scan` with `answers`, as the window does: the free items
 /// first, then the answered ones.
 fn restore(scan: &ConflictScan, answers: &[Resolution], context: &OperationContext) -> TransferOutcome {
@@ -117,7 +108,7 @@ fn skip_leaves_the_item_in_the_recycle_bin_without_a_report() {
     ];
 
     let plan_scan = scan(&uris);
-    let outcome = restore(&plan_scan, &[Resolution::Skip], &recycling());
+    let outcome = restore(&plan_scan, &[Resolution::Skip], &OperationContext::default());
 
     assert_eq!(plan_scan.conflicts.len(), 1);
     assert_eq!(plan_scan.conflicts[0].name(), "notes.txt");
@@ -148,7 +139,7 @@ fn replace_keeps_the_replaced_file_in_the_recycle_bin_and_undo_brings_it_back() 
     fs::write(&notes, b"newer").unwrap();
     let uri = recycled_from(&notes, 1)[0].uri.clone();
 
-    let context = recycling();
+    let context = OperationContext::default();
     let outcome = restore(&scan(&[uri]), &[Resolution::Replace], &context);
 
     assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result.errors);
@@ -195,7 +186,7 @@ fn keeping_both_numbers_the_restored_items_by_their_original_name() {
         .collect();
 
     let plan = scan(&uris);
-    let outcome = restore(&plan, &[Resolution::KeepBoth; 2], &recycling());
+    let outcome = restore(&plan, &[Resolution::KeepBoth; 2], &OperationContext::default());
 
     assert_eq!(plan.conflicts.len(), 2);
     assert!(plan
@@ -230,7 +221,7 @@ fn keeping_both_numbers_the_restored_items_by_their_original_name() {
 fn two_items_from_one_free_place_ask_about_the_second() {
     let _recycle_bin = use_recycle_bin();
     let temp = tempfile::tempdir().unwrap();
-    let context = recycling();
+    let context = OperationContext::default();
     for answer in [Resolution::KeepBoth, Resolution::Replace] {
         let folder = temp.path().join(format!("{answer:?}"));
         fs::create_dir(&folder).unwrap();
@@ -300,7 +291,7 @@ fn two_items_from_one_free_place_ask_about_the_second() {
 fn replace_restores_the_second_twin_over_the_first() {
     let _recycle_bin = use_recycle_bin();
     let temp = tempfile::tempdir().unwrap();
-    let context = recycling();
+    let context = OperationContext::default();
     let cases: [(&str, &[&[u8]], Resolution); 3] = [
         ("Replace", &[b"first", b"second!"], Resolution::Replace),
         ("Skip", &[b"first", b"second!"], Resolution::Skip),
@@ -379,7 +370,7 @@ fn replace_never_puts_a_file_in_place_of_a_folder() {
     let uri = recycled_from(&report, 1)[0].uri.clone();
 
     let plan = scan(&[uri]);
-    let outcome = restore(&plan, &[Resolution::Replace], &recycling());
+    let outcome = restore(&plan, &[Resolution::Replace], &OperationContext::default());
 
     assert!(plan.conflicts[0].existing.is_folder);
     assert!(report.is_dir());
@@ -417,7 +408,7 @@ fn replacing_one_name_twice_restores_the_last_item_and_undo_brings_the_newer_fil
     // file from the items trashed before the restore by its later date.
     thread::sleep(Duration::from_millis(1100));
 
-    let context = recycling();
+    let context = OperationContext::default();
     let plan = scan(&uris);
     let outcome = restore(&plan, &[Resolution::Replace; 2], &context);
 
@@ -475,7 +466,7 @@ fn replace_reads_the_original_folder_again_before_replacing() {
     fs::write(notes.join("inside.txt"), b"inside").unwrap();
     fs::remove_file(&plan_file).unwrap();
 
-    let outcome = restore(&plan, &[Resolution::Replace; 2], &recycling());
+    let outcome = restore(&plan, &[Resolution::Replace; 2], &OperationContext::default());
 
     assert_eq!(plan.conflicts.len(), 2);
     assert_eq!(fs::read(notes.join("inside.txt")).unwrap(), b"inside");
@@ -571,7 +562,7 @@ fn cancel_at_the_question_keeps_the_free_items_and_says_nothing() {
     let so_far = block_on(restore_free_items(
         &scan(&uris),
         RestoreSoFar::new(),
-        &recycling(),
+        &OperationContext::default(),
     ))
     .unwrap();
     let outcome = so_far.into_outcome();
@@ -598,7 +589,7 @@ fn a_name_taken_after_the_plan_is_asked_about_as_a_conflict() {
     fs::write(&twin, b"trashed").unwrap();
     trash(&[&twin]);
     let uris: Vec<String> = recycled_from(&twin, 1).into_iter().map(|item| item.uri).collect();
-    let context = recycling();
+    let context = OperationContext::default();
 
     let first = scan(&uris);
     assert!(!first.has_conflicts(), "nothing has the name yet");
@@ -753,7 +744,7 @@ fn a_cancelled_overwriting_restore_keeps_the_newer_file() {
     fs::write(&notes, b"newer").unwrap();
     let uri = recycled_from(&notes, 1)[0].uri.clone();
     let plan = scan(&[uri]);
-    let free = recycling();
+    let free = OperationContext::default();
     let so_far = block_on(restore_free_items(&plan, RestoreSoFar::new(), &free)).expect("the free items");
 
     // Cancel is pressed as the newer file is checked, right before the
@@ -846,7 +837,7 @@ fn a_failed_overwriting_restore_keeps_the_item_in_the_recycle_bin_as_it_was() {
     fs::write(&notes, b"newer").unwrap();
     let uri = recycled_from(&notes, 1)[0].uri.clone();
     let plan = scan(std::slice::from_ref(&uri));
-    let free = recycling();
+    let free = OperationContext::default();
     let so_far = block_on(restore_free_items(&plan, RestoreSoFar::new(), &free)).expect("the free items");
 
     // Another program swaps a folder in as the newer file is checked,

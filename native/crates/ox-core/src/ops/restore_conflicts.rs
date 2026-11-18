@@ -20,17 +20,17 @@
 //!   one is restored.
 //! - Skip leaves the item in the Recycle Bin and says nothing more, as
 //!   in Windows.
-//! - With [`ReplacedFiles::RecycleBin`] (Settings > Files & folders),
-//!   Replace moves the item in the original folder to the Recycle Bin
+//! - With [`ReplacedFiles::RecycleBin`] (the default, the owner's
+//!   choice), Replace moves the item in the original folder to the Recycle Bin
 //!   first, then restores the incoming one, as a paste's Replace does
 //!   ([`replace_through_recycle_bin`]); should it not arrive, the
 //!   replaced item comes back at once. Where nothing can go to the
 //!   Recycle Bin, or a file meets a folder, nothing is replaced and the
 //!   item stays in the Recycle Bin.
-//! - With [`ReplacedFiles::Overwrite`] (the default, as Windows does it),
-//!   a file restored over a file overwrites it, and the replaced file is
-//!   gone ([`restore_over`]); Undo says it can't bring it back. The file the Recycle Bin
-//!   keeps takes the old file's name in one rename, so a restore stopped
+//! - With [`ReplacedFiles::Overwrite`] (Settings > Files & folders, as
+//!   Windows does it), a file restored over a file overwrites it, and the
+//!   replaced file is gone ([`restore_over`]); Undo says it can't bring it
+//!   back. The file the Recycle Bin keeps takes the old file's name in one rename, so a restore stopped
 //!   or failed before it leaves the old file as it was and the item in
 //!   the Recycle Bin. A folder in the way still goes
 //!   to the Recycle Bin: the setting is about files, and a folder is

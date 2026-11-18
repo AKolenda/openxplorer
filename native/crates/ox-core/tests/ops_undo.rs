@@ -150,12 +150,12 @@ fn undoing_a_copy_deletes_the_agreed_copies_that_have_no_recycle_bin() {
     assert_eq!(original_paths, [destination.join("a.txt")]);
 }
 
-/// A copy that overwrote one file, as Replace does by default, and made
-/// others is a Replace record around its Copy step. Where the copies have
-/// no Recycle Bin, as on a share, Undo still lists them for Delete's own
-/// question, and once the user agreed it deletes those permanently and
-/// moves the others to the Recycle Bin, as for a plain copy; the
-/// overwritten file stays.
+/// A copy that overwrote one file, as Replace does with the switch off,
+/// and made others is a Replace record around its Copy step. Where the
+/// copies have no Recycle Bin, as on a share, Undo still lists them for
+/// Delete's own question, and once the user agreed it deletes those
+/// permanently and moves the others to the Recycle Bin, as for a plain
+/// copy; the overwritten file stays.
 ///
 /// parity: OPS-028, OPS-029
 #[test]

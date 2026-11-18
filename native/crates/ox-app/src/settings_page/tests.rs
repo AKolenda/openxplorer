@@ -878,35 +878,20 @@ fn the_search_filter_bar_switch_is_off_by_default_and_saves_the_choice() {
 }
 
 /// "When replacing a file, move the old one to the Recycle Bin" is in
-/// Files & folders, off by default, as Windows 11 overwrites the old file
-/// (checked in Windows 11, build 26200: after Replace nothing new was in
-/// the Recycle Bin), and saves only its turning on, which the window's
-/// next Replace follows.
+/// Files & folders, on by default (the owner's choice), and saves only
+/// its turning off, which the window's next Replace follows.
 ///
 /// parity: OPS-028
 #[gtk::test]
-fn the_replaced_files_switch_is_off_by_default_and_saves_only_its_turning_on() {
+fn the_replaced_files_switch_is_on_by_default_and_saves_only_its_turning_off() {
     let settings = SettingsTest::open();
     let title = "When replacing a file, move the old one to the Recycle Bin";
     let switch = switch_of(&settings.row(title));
-    assert!(!switch.is_active(), "off by default, as in Windows");
+    assert!(switch.is_active(), "on by default");
     assert_eq!(
         settings.test.window.replaced_files(),
-        ox_core::ops::ReplacedFiles::Overwrite
+        ox_core::ops::ReplacedFiles::RecycleBin
     );
-
-    switch.set_active(true);
-    wait_until("the choice to be saved", || {
-        settings.saved_preferences().recycle_replaced_files
-    });
-    let stored = std::fs::read_to_string(settings.test.settings_directory().join("settings.json")).unwrap();
-    assert!(
-        stored.contains("recycleReplacedFiles"),
-        "stored when on: {stored}"
-    );
-    wait_until("the window to follow", || {
-        settings.test.window.replaced_files() == ox_core::ops::ReplacedFiles::RecycleBin
-    });
 
     switch.set_active(false);
     wait_until("the choice to be saved", || {
@@ -914,8 +899,21 @@ fn the_replaced_files_switch_is_off_by_default_and_saves_only_its_turning_on() {
     });
     let stored = std::fs::read_to_string(settings.test.settings_directory().join("settings.json")).unwrap();
     assert!(
+        stored.contains("recycleReplacedFiles"),
+        "stored when off: {stored}"
+    );
+    wait_until("the window to follow", || {
+        settings.test.window.replaced_files() == ox_core::ops::ReplacedFiles::Overwrite
+    });
+
+    switch.set_active(true);
+    wait_until("the choice to be saved", || {
+        settings.saved_preferences().recycle_replaced_files
+    });
+    let stored = std::fs::read_to_string(settings.test.settings_directory().join("settings.json")).unwrap();
+    assert!(
         !stored.contains("recycleReplacedFiles"),
-        "stored only when on: {stored}"
+        "stored only when off: {stored}"
     );
 }
 

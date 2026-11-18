@@ -217,18 +217,19 @@ impl fmt::Debug for MoveByCopyingAsker {
 
 /// What Replace does with the file it replaces.
 ///
-/// Windows 11 overwrites it, and that is the default. Keeping it in the
-/// Recycle Bin first, so Undo can bring it back, is offered as a setting.
+/// The app's own choice is the default: the replaced file goes to the
+/// Recycle Bin first, so Undo or a cancelled copy can bring it back.
+/// Windows 11 overwrites it instead, and that is offered as a setting.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ReplacedFiles {
     /// The replaced file goes to the Recycle Bin, where the desktop's
-    /// Trash works.
+    /// Trash works (the default).
+    #[default]
     RecycleBin,
     /// The incoming file overwrites the replaced one, which is gone, as in
-    /// Windows 11 (the default). The incoming file is first written under
-    /// a temporary name and swapped in at the end, so a cancelled or
-    /// failed Replace keeps the old file.
-    #[default]
+    /// Windows 11. The incoming file is first written under a temporary
+    /// name and swapped in at the end, so a cancelled or failed Replace
+    /// keeps the old file.
     Overwrite,
 }
 

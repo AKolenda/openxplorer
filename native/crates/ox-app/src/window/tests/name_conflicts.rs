@@ -452,17 +452,15 @@ fn files_with_the_same_date_and_size_can_be_skipped_at_once() {
     assert!(!fixture.path("Notes 2 (2).txt").exists());
 }
 
-/// With Settings > Files & folders > "When replacing a file, move the old
-/// one to the Recycle Bin" on, Replace keeps the replaced file in the
-/// Recycle Bin, and the journal records it: Undo Copy takes the copy away
-/// and brings the replaced file back, and Redo replaces it again.
+/// Replace keeps the replaced file in the Recycle Bin, and the journal
+/// records it: Undo Copy takes the copy away and brings the replaced file
+/// back, and Redo replaces it again.
 ///
 /// parity: OPS-028, OPS-029, OPS-031
 #[gtk::test]
-fn undo_brings_back_the_file_a_paste_replaced_when_the_switch_is_on() {
+fn undo_brings_back_the_file_a_paste_replaced() {
     let fixture = Fixture::standard();
     let test = copy_namesakes(&fixture, &["Notes 2.txt"]);
-    super::restore_conflicts::recycle_replaced_files(&test);
 
     test.activate("paste", None);
     answer_conflicts(&test, ConflictAnswer::Replace);
@@ -487,22 +485,21 @@ fn undo_brings_back_the_file_a_paste_replaced_when_the_switch_is_on() {
     );
 }
 
-/// By default a paste's Replace overwrites the old file, as Windows 11
-/// does (checked in Windows 11, build 26200: nothing new appeared in the
-/// Recycle Bin): it is gone, not in the Recycle Bin. Undo Copy then says
-/// plainly that it can't bring the old file back, and changes nothing;
-/// it never reaches past the Replace to undo an older operation.
+/// With Settings > Files & folders > "When replacing a file, move the old
+/// one to the Recycle Bin" off, a paste's Replace overwrites the old file
+/// as Windows 11 does (checked in Windows 11, build 26200: nothing new
+/// appeared in the Recycle Bin): it is gone, not in the Recycle Bin. Undo
+/// Copy then says plainly that it can't bring the old file back, and
+/// changes nothing; it never reaches past the Replace to undo an older
+/// operation.
 ///
 /// parity: OPS-028, OPS-029
 #[gtk::test]
-fn a_pasted_replace_overwrites_the_old_file_by_default_and_undo_says_so() {
+fn a_pasted_replace_overwrites_the_old_file_when_the_switch_is_off_and_undo_says_so() {
     super::file_ops_support::require_private_trash();
     let fixture = Fixture::standard();
     let test = copy_namesakes(&fixture, &["Notes 2.txt"]);
-    assert!(
-        !test.context.settings_data().preferences.recycle_replaced_files,
-        "the switch is off by default"
-    );
+    super::restore_conflicts::overwrite_replaced_files(&test);
     let trash_files = gtk::glib::user_data_dir().join("Trash/files");
     let recycled = || fs::read_dir(&trash_files).map_or(0, Iterator::count);
     let before = recycled();
@@ -545,7 +542,7 @@ fn a_pasted_replace_overwrites_the_old_file_by_default_and_undo_says_so() {
     );
 }
 
-/// Several files replaced with the default setting, among others copied
+/// Several files overwritten with the switch off, among others copied
 /// without a conflict: Undo Copy says how many old files it can't bring
 /// back, and, once agreed, takes back only the copies that replaced
 /// nothing.
@@ -556,6 +553,7 @@ fn undo_after_replacing_several_files_takes_back_only_the_new_copies() {
     let fixture = Fixture::standard();
     fs::write(fixture.path("Documents/Brand new.txt"), b"New\n").unwrap();
     let test = copy_namesakes(&fixture, &["Notes 2.txt", "Notes 10.txt", "Brand new.txt"]);
+    super::restore_conflicts::overwrite_replaced_files(&test);
 
     test.activate("paste", None);
     answer_conflicts(&test, ConflictAnswer::Replace);

@@ -12,8 +12,9 @@
 //! [`ox_core::ops::undo`]). The commands are labelled with the operation
 //! they reverse ("Undo Rename"). Before Undo moves copies to the Trash
 //! that were changed after the copy, it asks, as Dolphin does (OPS-030).
-//! A Replace that overwrote files, as Windows 11 does by default, can't
-//! bring them back: Undo says so plainly first (OPS-028).
+//! A Replace that overwrote files, as Windows 11 does and as Replace does
+//! here with "When replacing a file, move the old one to the Recycle Bin"
+//! off, can't bring them back: Undo says so plainly first (OPS-028).
 //! Items that cannot go to the Recycle Bin, as on a share, are deleted
 //! permanently only after Delete's own question there (OPS-016).
 

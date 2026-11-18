@@ -3629,7 +3629,7 @@ msgid "Remember each folder's view settings"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Replace in a copy, move or restore keeps the old file in the Recycle Bin, so Undo can bring it back. Off, as in Windows: the new file overwrites it, and it is gone."
+msgid "Replace in a copy, move or restore keeps the old file in the Recycle Bin, so Undo can bring it back. Off: the new file overwrites it, as in Windows, and it is gone."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs

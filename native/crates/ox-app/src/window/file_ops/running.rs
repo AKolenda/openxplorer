@@ -128,10 +128,10 @@ impl BrowserWindow {
         Ok((OperationContext::new(self.context().write_protection()), hold))
     }
 
-    /// What Replace does with the file it replaces: by default it is
-    /// overwritten, as in Windows 11; with Settings > Files & folders'
-    /// "When replacing a file, move the old one to the Recycle Bin" on, it
-    /// goes to the Recycle Bin first.
+    /// What Replace does with the file it replaces: by default it goes to
+    /// the Recycle Bin; with Settings > Files & folders' "When replacing a
+    /// file, move the old one to the Recycle Bin" off, it is overwritten,
+    /// as in Windows 11.
     pub(crate) fn replaced_files(&self) -> ReplacedFiles {
         if self.context().settings_data().preferences.recycle_replaced_files {
             ReplacedFiles::RecycleBin

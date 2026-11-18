@@ -64,13 +64,13 @@ fn write(path: &Path, contents: &[u8]) {
 
 /// Runs `scan` with `answers`, one per conflict.
 fn run(scan: &ConflictScan, answers: &[Resolution]) -> ox_core::ops::TransferOutcome {
-    // Replace keeps the replaced file in the Recycle Bin, as Settings >
-    // Files & folders can choose; the default overwrites it.
-    let context = OperationContext {
-        replaced_files: ReplacedFiles::RecycleBin,
-        ..OperationContext::default()
-    };
-    block_on(run_resolved_transfer(scan, answers, &context, |_| {})).expect("an accepted transfer")
+    block_on(run_resolved_transfer(
+        scan,
+        answers,
+        &OperationContext::default(),
+        |_| {},
+    ))
+    .expect("an accepted transfer")
 }
 
 /// A folder whose name is taken by a folder is merged: only the files
@@ -501,10 +501,7 @@ fn the_items_without_a_conflict_go_before_the_answers() {
     write(&src.join("free.txt"), b"free");
     write(&src.join("taken.txt"), b"incoming");
     write(&dst.join("taken.txt"), b"existing");
-    let context = OperationContext {
-        replaced_files: ReplacedFiles::RecycleBin,
-        ..OperationContext::default()
-    };
+    let context = OperationContext::default();
     let scan = scan(TransferMode::Copy, &src, &["free.txt", "taken.txt"], &dst);
 
     let first = block_on(run_free_items(&scan, &context, |_| {})).expect("the free items");
@@ -819,17 +816,44 @@ fn a_conflict_gone_before_its_replace_is_undone_as_a_plain_copy() {
     );
 }
 
-/// By default Replace overwrites the old file, as Windows 11 does
-/// (checked in Windows 11, build 26200: nothing new appeared in the
+/// With the switch off, Replace overwrites the old file, as Windows 11
+/// does (checked in Windows 11, build 26200: nothing new appeared in the
 /// Recycle Bin), through private staging, so no temporary file is left.
 ///
 /// parity: OPS-028
 #[test]
-fn replace_overwrites_the_old_file_by_default() {
+fn replace_overwrites_the_old_file_as_windows_does_when_chosen() {
+    require_private_trash();
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("report.png"), b"incoming");
+    write(&dst.join("report.png"), b"existing");
+
+    let scan = scan(TransferMode::Copy, &src, &["report.png"], &dst);
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &overwriting(),
+        |_| {},
+    ))
+    .unwrap();
+
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
+    assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"incoming");
+    assert_eq!(recycled_now(&dst.join("report.png")), 0, "nothing was recycled");
+    assert!(staging_left_in(&dst).is_empty(), "{:?}", staging_left_in(&dst));
+}
+
+/// The default is unchanged: Replace sends the old file to the Recycle
+/// Bin, as the owner chose.
+///
+/// parity: OPS-028
+#[test]
+fn replace_recycles_the_old_file_by_default() {
     require_private_trash();
     assert_eq!(
         OperationContext::default().replaced_files,
-        ReplacedFiles::Overwrite
+        ReplacedFiles::RecycleBin
     );
     let folders = Folders::new();
     let (src, dst) = (folders.source(), folders.destination());
@@ -844,26 +868,6 @@ fn replace_overwrites_the_old_file_by_default() {
         |_| {},
     ))
     .unwrap();
-
-    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
-    assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"incoming");
-    assert_eq!(recycled_now(&dst.join("report.png")), 0, "nothing was recycled");
-    assert!(staging_left_in(&dst).is_empty(), "{:?}", staging_left_in(&dst));
-}
-
-/// With the switch on, Replace sends the old file to the Recycle Bin.
-///
-/// parity: OPS-028
-#[test]
-fn replace_recycles_the_old_file_when_chosen() {
-    require_private_trash();
-    let folders = Folders::new();
-    let (src, dst) = (folders.source(), folders.destination());
-    write(&src.join("report.png"), b"incoming");
-    write(&dst.join("report.png"), b"existing");
-
-    let scan = scan(TransferMode::Copy, &src, &["report.png"], &dst);
-    let outcome = run(&scan, &[Resolution::Replace]);
 
     assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
     assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"incoming");
