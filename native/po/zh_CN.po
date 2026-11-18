@@ -3209,6 +3209,15 @@ msgid "Dark"
 msgstr "深色"
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "English"
+msgstr "英语"
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "English: no translation for {language} is installed"
+msgstr "英语：未安装 {language} 的翻译"
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Hide expand arrows in the sidebar"
 msgstr "在侧边栏中隐藏展开箭头"
 
@@ -3230,8 +3239,8 @@ msgid "Near the pointer (default)"
 msgstr "靠近指针(默认)"
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "OpenXplorer shows its menus, buttons and messages in your desktop's language. Change it in your desktop's language or region settings, then start OpenXplorer again."
-msgstr "OpenXplorer 的菜单、按钮和消息使用你桌面的语言。请在桌面的语言或区域设置中更改它，然后重新启动 OpenXplorer。"
+msgid "OpenXplorer shows its menus, buttons and messages in your desktop's language when a translation for it is installed, and in English otherwise. Change the language in your desktop's language or region settings, then start OpenXplorer again."
+msgstr "如果已安装你桌面语言的翻译，OpenXplorer 的菜单、按钮和消息会使用该语言，否则使用英语。请在桌面的语言或区域设置中更改语言，然后重新启动 OpenXplorer。"
 
 #: crates/ox-app/src/settings_page/appearance.rs
 #: crates/ox-app/src/window/type_applications.rs
@@ -4045,8 +4054,8 @@ msgid "Dragging tabs and files"
 msgstr "拖动标签页和文件"
 
 #: crates/ox-app/src/settings_page/general.rs
-msgid "Drop files on a writable folder to copy them, or drop folders in Quick access to pin them. Hold Shift to move, Ctrl+Shift to create links or Alt to choose; drop files on a program to open them with it."
-msgstr "将文件放到可写的文件夹上即可复制，或将文件夹放到“快速访问”中以固定。按住 Shift 移动，按住 Ctrl+Shift 创建链接，按住 Alt 可选择；将文件放到某个程序上即可用它打开。"
+msgid "Drop files on a folder to move them there on the same drive or copy them to another, or drop folders in Quick access to pin them. Hold Shift to move, Ctrl to copy or Alt to create shortcuts, or drag with the right mouse button to choose; drop files on a program to open them with it."
+msgstr "将文件放到同一驱动器上的文件夹中会移动它们，放到其他驱动器上则会复制；将文件夹放到“快速访问”中可固定它。按住 Shift 移动，按住 Ctrl 复制，按住 Alt 创建快捷方式，或用鼠标右键拖动以进行选择；将文件放到某个程序上即可用它打开。"
 
 #: crates/ox-app/src/settings_page/general.rs
 msgid "Drop files on folders"
@@ -4151,8 +4160,8 @@ msgid "drag drop attach"
 msgstr "拖动 拖放 附加"
 
 #: crates/ox-app/src/settings_page/general.rs
-msgid "drag drop copy move link pin program run"
-msgstr "拖动 拖放 复制 移动 链接 固定 程序 运行"
+msgid "drag drop copy move link shortcut alt ctrl shift right pin program run"
+msgstr "拖动 拖放 复制 移动 链接 快捷方式 alt ctrl shift 右键 固定 程序 运行"
 
 #: crates/ox-app/src/settings_page/general.rs
 msgid "make the address bar editable in new windows breadcrumbs location bar type text"
