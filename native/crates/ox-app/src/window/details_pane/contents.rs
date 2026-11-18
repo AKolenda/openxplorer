@@ -28,7 +28,8 @@ use gtk::{gdk, gio, glib};
 
 use crate::picture_guard::{self, Limits};
 
-use super::preview_page::{decode_text, PreviewPage, NO_PREVIEW, TEXT_LIMIT};
+use super::preview_page::{decode_text, shown_text, PreviewPage, NO_PREVIEW, TEXT_LIMIT};
+use super::rich_text::{is_rtf, rtf_text};
 use super::DetailsPane;
 
 /// How long a selection must stay before its file is read.
@@ -264,7 +265,10 @@ impl DetailsPane {
     /// and shows it if the selection is still the same.
     fn read_page(&self, generation: u64, page: &PreviewPage, cancellation: gio::Cancellable) {
         let file = match page {
-            PreviewPage::Text(file) | PreviewPage::Picture(file) | PreviewPage::Pdf(file) => file,
+            PreviewPage::Text(file)
+            | PreviewPage::RichText(file)
+            | PreviewPage::Picture(file)
+            | PreviewPage::Pdf(file) => file,
             PreviewPage::Message(_) | PreviewPage::Media => return,
         };
         let local_only = file.local_only;
@@ -288,10 +292,11 @@ impl DetailsPane {
                 return;
             };
             match page {
-                PreviewPage::Text(_) => {
+                PreviewPage::Text(_) | PreviewPage::RichText(_) => {
+                    let rich = matches!(page, PreviewPage::RichText(_));
                     let read = gio::spawn_blocking(move || {
                         allowed(&path, local_only)
-                            .then(|| read_text(&path, &cancellation))
+                            .then(|| read_text(&path, rich, &cancellation))
                             .flatten()
                     })
                     .await;
@@ -515,8 +520,10 @@ fn open_plain_file(path: &Path) -> Option<fs::File> {
 /// The text the Preview pane shows of the file at `path`: its first
 /// [`TEXT_LIMIT`] bytes, decoded by [`decode_text`]; `None` for a binary
 /// file, one that is not a plain file ([`open_plain_file`]), or a
-/// cancelled read. Blocks.
-fn read_text(path: &Path, cancellation: &gio::Cancellable) -> Option<String> {
+/// cancelled read. With `rich`, an RTF document's text without its
+/// markup ([`rtf_text`]); one that is not RTF after all is read as text.
+/// Blocks.
+fn read_text(path: &Path, rich: bool, cancellation: &gio::Cancellable) -> Option<String> {
     let file = open_plain_file(path)?;
     let mut bytes = Vec::with_capacity(64 * 1024);
     let mut chunk = vec![0; 64 * 1024];
@@ -533,6 +540,9 @@ fn read_text(path: &Path, cancellation: &gio::Cancellable) -> Option<String> {
     }
     let truncated = bytes.len() > TEXT_LIMIT;
     bytes.truncate(TEXT_LIMIT);
+    if rich && is_rtf(&bytes) {
+        return Some(shown_text(&rtf_text(&bytes)));
+    }
     decode_text(&bytes, truncated)
 }
 

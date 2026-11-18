@@ -20,6 +20,7 @@ pub(super) const MESSAGES: &[(&str, &str, &str, bool, &str)] = &[
     ("brave-dialog.ui", "status_label", "label", false, "Checking native Brave profiles…"),
     ("command-bar.ui", ".", "label", true, "File commands"),
     ("command-bar.ui", "appearance_button", "label", true, "Appearance"),
+    ("command-bar.ui", "details_toggle", "label", true, "Details"),
     ("command-bar.ui", "i18n_1", "label", false, "Details"),
     ("command-bar.ui", "settings_button", "label", true, "Settings"),
     ("details-pane.ui", "details_heading", "label", false, "Details"),

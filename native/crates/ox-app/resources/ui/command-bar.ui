@@ -121,6 +121,11 @@
           <class name="text-command"/>
           <class name="details-toggle"/>
         </style>
+        <!-- GTK names a button after a label only when the label is its
+             child; this one's label sits in a box beside the glyph. -->
+        <accessibility>
+          <property name="label" translatable="yes">Details</property>
+        </accessibility>
         <property name="child">
           <object class="GtkBox">
             <property name="spacing">9</property>

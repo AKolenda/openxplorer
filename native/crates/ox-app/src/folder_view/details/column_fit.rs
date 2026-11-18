@@ -125,7 +125,7 @@ impl DetailsView {
     }
 
     /// Each column with its title, in column order.
-    fn titles(&self, header: &gtk::Widget) -> Vec<(SortColumn, gtk::Widget)> {
+    pub(super) fn titles(&self, header: &gtk::Widget) -> Vec<(SortColumn, gtk::Widget)> {
         let titles = std::iter::successors(header.first_child(), WidgetExt::next_sibling);
         self.column_order().into_iter().zip(titles).collect()
     }

@@ -77,15 +77,31 @@ fn this_pc_lists_devices_and_drives_and_no_quick_access() {
 
 /// The status bar reads as Windows 11 Explorer's: "4 items", then, past
 /// a divider shown only with a selection, "1 item selected  20 bytes",
-/// the size only while every selected item is a file.
+/// the size only while every selected item is a file. This PC counts its
+/// tiles as items.
 ///
-/// parity: VIEW-050
+/// parity: VIEW-050, HOME-001
 #[gtk::test]
-fn the_status_bar_says_ready_on_a_page_and_counts_a_folder() {
+fn the_status_bar_counts_this_pc_and_a_folder() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(Page::ThisPc.uri());
     let status_bar = test.window.status_bar();
-    assert_eq!(status_bar.texts(), ("Ready".to_owned(), String::new()));
+    let landing = test.window.folder_pane().landing();
+    for (flow, _) in landing::tile_groups(landing) {
+        flow.unselect_all();
+    }
+    let tiles: usize = landing::tile_groups(landing)
+        .iter()
+        .map(|(_, tiles)| tiles.len())
+        .sum();
+    let items = if tiles == 1 {
+        "1 item".to_owned()
+    } else {
+        format!("{tiles} items")
+    };
+    wait_until("This PC's tiles counted", || {
+        status_bar.texts() == (items.clone(), String::new())
+    });
     assert!(!status_bar.shows_selection_divider());
     test.window.navigate(&fixture.uri()).expect("the fixture folder");
     test.wait_for_listing("the fixture folder");

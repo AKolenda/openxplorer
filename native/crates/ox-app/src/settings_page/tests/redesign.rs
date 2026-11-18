@@ -70,7 +70,7 @@ const MOVED_ROWS: [(&str, &str); 77] = [
         "Network / fallback checks",
         "Check network and unwatched folders every",
     ),
-    ("Calculate folder sizes", "Calculate folder sizes"),
+    ("Calculate folder sizes", "How sizes are counted"),
     (
         "When replacing a file, move the old one to the Recycle Bin",
         "When replacing a file, move the old one to the Recycle Bin",
@@ -266,6 +266,11 @@ fn each_setting_is_one_line_with_its_details_in_the_info_bubble() {
     let settings = SettingsTest::open();
     for row in every_row(&settings) {
         let text = row.text();
+        // A help row, with nothing to change, shows its text under its
+        // title instead (SettingRow::new_help).
+        if row.shown_description() == ox_core::i18n::gettext(text.description) {
+            continue;
+        }
         let info = row.info();
         assert_eq!(info.is_some(), !text.description.is_empty(), "{}", text.title);
         if let Some(info) = info {

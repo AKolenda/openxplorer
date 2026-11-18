@@ -106,7 +106,7 @@ impl FileCell {
             }
             if texture.is_none() {
                 if let Some(request) = preview {
-                    texture = thumbnails::preview(request).await;
+                    texture = thumbnails::preview(request).await.filter(is_big_enough_to_see);
                 }
             }
             if let (Some(cell), Some(texture)) = (cell.upgrade(), texture) {
@@ -140,6 +140,20 @@ impl FileCell {
     pub(crate) fn shows_custom_icon(&self) -> bool {
         self.imp().custom_icon.is_visible()
     }
+}
+
+/// Fewest pixels across the shorter side of a thumbnail the cell shows.
+const THINNEST_THUMBNAIL: i32 = 4;
+/// Fewest pixels across the longer side of a thumbnail the cell shows.
+const SMALLEST_THUMBNAIL: i32 = 8;
+
+/// Whether a picture's thumbnail `texture` is large enough to stand for
+/// it. One smaller, such as the 1×1 white picture New > Bitmap image
+/// makes, would leave its row looking iconless on a light background, so
+/// the item keeps its type's icon instead.
+fn is_big_enough_to_see(texture: &gdk::Texture) -> bool {
+    let (width, height) = (texture.width(), texture.height());
+    width.min(height) >= THINNEST_THUMBNAIL && width.max(height) >= SMALLEST_THUMBNAIL
 }
 
 /// The pictures a local item names for itself: its custom icon and, for

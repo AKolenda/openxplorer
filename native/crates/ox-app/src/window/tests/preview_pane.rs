@@ -219,6 +219,42 @@ fn the_preview_pane_shows_text_and_says_when_it_cannot() {
     });
 }
 
+/// A Rich Text Document shows its text, not its RTF markup: paragraphs on
+/// their own lines, escaped and Unicode characters as characters, and
+/// the font table, colors and other hidden groups left out. A new, empty
+/// one made by New shows no text at all.
+///
+/// parity: VIEW-070
+#[gtk::test]
+fn the_preview_pane_shows_a_rich_text_documents_text_not_its_markup() {
+    let fixture = Fixture::standard();
+    std::fs::write(
+        fixture.path("Letter.rtf"),
+        "{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Calibri;}}{\\colortbl;\\red255\\green0\\blue0;}\
+         {\\*\\generator Example 1.0;}\\f0\\fs22 Dear \\b Sam\\b0 ,\\par \
+         Caf\\'e9 prices rose 5\\u8364?.\\par\\pard Thanks\\{!\\}\\par}\n",
+    )
+    .expect("rtf");
+    std::fs::write(
+        fixture.path("New Rich Text Document.rtf"),
+        ox_core::ops::NewDocument::RichTextDocument.contents(),
+    )
+    .expect("rtf");
+    let test = preview_window(&fixture);
+    let pane = test.window.imp().details_pane.get();
+
+    test.select_named("Letter.rtf");
+    wait_until("the letter's text", || {
+        pane.preview_text().as_deref() == Some("Dear Sam,\nCafé prices rose 5€.\nThanks{!}\n")
+    });
+
+    test.select_named("New Rich Text Document.rtf");
+    wait_until("no text", || {
+        pane.preview_text().is_some_and(|text| !text.contains('\\'))
+    });
+    assert_eq!(pane.preview_text().as_deref(), Some("\n"));
+}
+
 /// A picture is shown whole, as large as the pane allows and with its
 /// shape, without widening the pane; a quick run through several files
 /// ends on the last one's contents.

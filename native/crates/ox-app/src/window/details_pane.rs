@@ -24,6 +24,7 @@ mod media;
 mod metadata;
 mod options_menu;
 mod preview_page;
+mod rich_text;
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -36,7 +37,7 @@ use crate::icons::{self, Art, ArtImage, Icon};
 
 use super::window_action::WindowAction;
 
-pub(super) use content::{pane_content, PaneFacts};
+pub(super) use content::{describe_tiles, pane_content, PaneFacts};
 use content::{PaneContent, Preview};
 pub(super) use preview_page::PreviewRules;
 

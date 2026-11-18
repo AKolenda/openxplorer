@@ -363,7 +363,8 @@ fn column_titles_sort_and_resize_from_the_keyboard() {
     let test = TestWindow::open(&fixture.uri());
     let details = test.window.folder_pane().details();
     let titles = crate::folder_view::column_titles::title_buttons(details.column_view());
-    let type_index = SortColumn::ALL
+    let type_index = details
+        .column_order()
         .iter()
         .position(|column| *column == SortColumn::Type);
     let type_title = &titles[type_index.expect("a Type title")];
@@ -391,6 +392,73 @@ fn column_titles_sort_and_resize_from_the_keyboard() {
     assert_eq!(details.sort_order().column, SortColumn::Type);
     assert!(press_on(type_title, gdk::Key::space, gdk::ModifierType::empty()));
     assert_eq!(details.sort_order().direction, SortDirection::Descending);
+}
+
+/// What a screen reader hears matches what the window shows: the Details
+/// button is named, the search box is named "Search <folder>" as it reads,
+/// a tab is described by its location (not its close button's "Close
+/// tab"), the row of column titles is named once, the title that shows
+/// "Date modified" sorts by Date modified, and the rows are named as the
+/// list shows them, without a hidden extension.
+///
+/// parity: ACC-001, ACC-002
+#[gtk::test]
+fn screen_readers_hear_what_the_window_shows() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let details_button = descendants::<gtk::ToggleButton>(&test.window)
+        .into_iter()
+        .find(|button| button.has_css_class("details-toggle"))
+        .expect("the Details button");
+    assert!(
+        gtk::test_accessible_has_property(&details_button, gtk::AccessibleProperty::Label),
+        "the Details button has a name"
+    );
+    let placeholder = test
+        .window
+        .search_box()
+        .entry()
+        .placeholder_text()
+        .unwrap_or_default();
+    assert!(placeholder.starts_with("Search "), "{placeholder}");
+    assert_eq!(test.window.search_box().accessible_name(), placeholder);
+
+    let tabs: Vec<gtk::Widget> = descendants::<gtk::Widget>(&test.window)
+        .into_iter()
+        .filter(|widget| widget.accessible_role() == gtk::AccessibleRole::Tab)
+        .collect();
+    assert!(!tabs.is_empty(), "a tab is drawn");
+    for tab in &tabs {
+        assert!(
+            gtk::test_accessible_has_property(tab, gtk::AccessibleProperty::Description),
+            "a tab is described by its location"
+        );
+    }
+
+    let details = test.window.folder_pane().details();
+    let header = details.header().expect("the column titles");
+    assert!(gtk::test_accessible_has_property(
+        &header,
+        gtk::AccessibleProperty::Label
+    ));
+    let titles = crate::folder_view::column_titles::title_buttons(details.column_view());
+    let modified = titles
+        .iter()
+        .find(|title| {
+            title.is_visible()
+                && descendants::<gtk::Label>(*title)
+                    .iter()
+                    .any(|label| label.text() == "Date modified")
+        })
+        .expect("a title that shows Date modified");
+    assert!(press_on(modified, gdk::Key::Return, gdk::ModifierType::empty()));
+    assert_eq!(details.sort_order().column, SortColumn::Modified);
+
+    let owners = test.window.folder_pane().owners();
+    wait_until("the rows are named", || {
+        let names = owners.detail_row_names();
+        names.iter().any(|name| name == "Résumé") && !names.iter().any(|name| name == "Résumé.txt")
+    });
 }
 
 /// Every motion in the skin is a CSS transition or animation, which GTK
@@ -496,6 +564,105 @@ fn large_text_grows_rows_and_dialogs_still_fit_800_by_600() {
     assert!(large_row > normal_row, "{large_row} > {normal_row}");
     assert!(dialog_width <= 800, "{dialog_width} pixels wide");
     assert!(dialog_height <= 600, "{dialog_height} pixels high");
+}
+
+/// At 200% text, the columns nobody resized and the navigation pane at
+/// its default width grow with the text, so dates, types and folder names
+/// are not cut short; back at 100% they return to their default widths.
+/// A width the user dragged is kept.
+///
+/// parity: ACC-012, VIEW-028
+#[gtk::test]
+fn large_text_widens_default_columns_and_the_navigation_pane() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.set_default_size(1800, 900);
+    wait_for_frames(&test.window, 3);
+    let skin = skin();
+    let before = skin.text_size();
+    let details = test.window.folder_pane().details();
+    let width_of = |column: SortColumn| details.column(column).expect("a column").fixed_width();
+    let widths = || {
+        (
+            width_of(SortColumn::Modified),
+            width_of(SortColumn::Type),
+            test.window.workspace().position(),
+        )
+    };
+    assert_eq!(widths(), (176, 135, 210), "the 100% defaults");
+
+    skin.set_text_size(TextSize::from_percent(200));
+    wait_for_frames(&test.window, 3);
+    let large = widths();
+    // Name, which fills the rest, keeps room for names: the list scrolls
+    // sideways instead.
+    let header = details.header().expect("the column titles");
+    let name_title = header.first_child().expect("Name's title");
+    let name_room = name_title.width_request();
+    let header_width = header.width();
+    skin.set_text_size(TextSize::from_percent(100));
+    wait_for_frames(&test.window, 3);
+    let back = widths();
+    details
+        .column(SortColumn::Type)
+        .expect("Type")
+        .set_fixed_width(150);
+    skin.set_text_size(TextSize::from_percent(200));
+    wait_for_frames(&test.window, 3);
+    let dragged = width_of(SortColumn::Type);
+    skin.set_text_size(before);
+
+    assert_eq!(large, (282, 270, 420), "twice the text, wider columns and pane");
+    assert_eq!(name_room, 280, "Name keeps room for names");
+    assert!(
+        header_width >= 280 + 282 + 270,
+        "the list scrolls sideways: {header_width}"
+    );
+    assert_eq!(back, (176, 135, 210));
+    assert_eq!(dragged, 150, "a width the user chose stays");
+}
+
+/// A window that opens with 200% text already chosen starts with the
+/// navigation pane and the columns nobody resized at their widths for
+/// that text, not at the 100% defaults until the text size next changes.
+///
+/// parity: ACC-012, VIEW-028
+#[gtk::test]
+fn a_window_opened_at_large_text_starts_with_wide_defaults() {
+    let skin = crate::theme::Skin::detached();
+    skin.set_text_size(TextSize::from_percent(200));
+    let fixture = Fixture::standard();
+    let test = TestWindow::open_with_skin(&fixture.uri(), &skin);
+    wait_for_frames(&test.window, 3);
+    let details = test.window.folder_pane().details();
+    let width_of = |column: SortColumn| details.column(column).expect("a column").fixed_width();
+
+    assert_eq!(test.window.workspace().position(), 420, "the navigation pane");
+    assert_eq!(width_of(SortColumn::Modified), 282);
+    assert_eq!(width_of(SortColumn::Type), 270);
+}
+
+/// In a window too narrow for the navigation pane's 200% default, the pane
+/// stops where the folder pane keeps its room, and still returns to 210
+/// pixels at 100% text: it was at its default, cut short.
+///
+/// parity: ACC-012
+#[gtk::test]
+fn a_navigation_pane_cut_short_at_large_text_returns_to_210() {
+    let skin = crate::theme::Skin::detached();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open_with_skin(&fixture.uri(), &skin);
+    test.window.set_default_size(640, 700);
+    wait_for_frames(&test.window, 3);
+
+    skin.set_text_size(TextSize::from_percent(200));
+    wait_for_frames(&test.window, 3);
+    let large = test.window.workspace().position();
+    skin.set_text_size(TextSize::from_percent(100));
+    wait_for_frames(&test.window, 3);
+
+    assert!((211..420).contains(&large), "cut short at 200%: {large}");
+    assert_eq!(test.window.workspace().position(), 210);
 }
 
 /// The desktop's text scaling (GTK's font resolution) grows the rows on

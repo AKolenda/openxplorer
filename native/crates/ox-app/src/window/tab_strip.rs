@@ -527,7 +527,17 @@ fn tab_widget(tab: &TabView) -> gtk::Box {
     if tab.active {
         widget.add_css_class("active");
     }
-    widget.update_property(&[gtk::accessible::Property::Label(&tab.title)]);
+    // Described by where it is, as its tooltip says; left to GTK, the
+    // description was the close button's "Close tab".
+    let description = if tab.tooltip.is_empty() {
+        &tab.title
+    } else {
+        &tab.tooltip
+    };
+    widget.update_property(&[
+        gtk::accessible::Property::Label(&tab.title),
+        gtk::accessible::Property::Description(description),
+    ]);
     widget.update_state(&[gtk::accessible::State::Selected(Some(tab.active))]);
     widget.append(&icon_of(tab));
     widget.update_state(&[gtk::accessible::State::Busy(tab.busy)]);

@@ -41,7 +41,7 @@ use std::sync::OnceLock;
 
 use glib::DateTime;
 
-pub use explorer_text::{contents_text, exact_size_text, grouped, short_size};
+pub use explorer_text::{contents_text, exact_bytes, exact_size_text, free_of_text, grouped, short_size};
 pub use locale_pattern::ClockFormat;
 use locale_pattern::LocalePatterns;
 pub use relative_date::DateStyle;
@@ -245,10 +245,12 @@ pub fn group_digits(value: u64) -> String {
 ///
 /// Halves round up, like JavaScript's `toFixed` (`1280` bytes is `1.3 KB`),
 /// and the arithmetic is exact, so every size gets the same text as in the
-/// web interface.
+/// web interface, except one byte, which is "1 byte" (ngettext) where the
+/// web interface wrote "1 bytes".
 pub fn pretty_bytes(bytes: u64) -> String {
     let Some(unit) = largest_unit(bytes) else {
-        return crate::i18n::format_message("{bytes} bytes", &[("bytes", &bytes.to_string())]);
+        let pattern = crate::i18n::ngettext("{bytes} byte", "{bytes} bytes", bytes);
+        return crate::i18n::format_message(&pattern, &[("bytes", &bytes.to_string())]);
     };
     let symbol = crate::i18n::gettext_static(unit.symbol);
     // Integer arithmetic wide enough for ten times `u64::MAX`.
@@ -560,6 +562,17 @@ mod tests {
         DateTime::from_utc(2026, 9, 21, 14, 13, 20.0).expect("valid date")
     }
 
+    /// One byte is "1 byte", not the web interface's "1 bytes": the count
+    /// picks its form through ngettext, as every size spelled in bytes does.
+    #[test]
+    fn one_byte_is_singular() {
+        assert_eq!(pretty_bytes(1), "1 byte");
+        assert_eq!(pretty_bytes(2), "2 bytes");
+        assert_eq!(size_text(Some(1)), "1 byte");
+        assert_eq!(exact_bytes(1), "1 byte");
+        assert_eq!(exact_bytes(1_234_567), "1,234,567 bytes");
+    }
+
     /// Ported from the size examples in `v2.0.0:desktop/ui/app.js::prettyBytes`.
     ///
     /// parity: VIEW-003
@@ -568,7 +581,6 @@ mod tests {
         assert_eq!(size_text(None), "—");
         assert_eq!(size_text(Some(0)), "0 bytes");
         assert_eq!(pretty_bytes(0), "0 bytes");
-        assert_eq!(pretty_bytes(1), "1 bytes");
         assert_eq!(pretty_bytes(912), "912 bytes");
         assert_eq!(pretty_bytes(1023), "1023 bytes");
         assert_eq!(pretty_bytes(1024), "1.0 KB");

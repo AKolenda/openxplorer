@@ -268,7 +268,7 @@
       "status": "native-tested",
       "note": "ox_core::ops::create_from_template ports create_from_template in v2.0.0:desktop/file_services.py with the OPS-048 rules: the template must be in a fresh list, it is opened without following links or blocking and checked on the descriptor, read in bounded, cancellable blocks, staged in a private file that is published without overwriting and deleted when it is not published. Native: New's documents (Text Document, Bitmap image, Rich Text Document, Compressed (zipped) Folder) go through the same checks and no-replace publication in create_numbered_document, without a dialog, under 'New Text Document.txt' or the next free numbered name, then rename the file in place; a template the New menu lists is read under the same rules by create_numbered_from_template and copied under its file name or the next free numbered one. The New from template dialog left with Windows 11's New menu (2026-11-06).",
       "evidence": [
-        "native/crates/ox-core/tests/ops_create.rs::a_starter_writes_its_content_to_a_private_new_file",
+        "native/crates/ox-core/tests/ops_create.rs::a_starter_writes_its_content_to_a_new_file_with_the_umask_mode",
         "native/crates/ox-core/tests/ops_create.rs::a_user_template_is_copied_without_its_permissions",
         "native/crates/ox-core/tests/ops_create.rs::a_template_the_list_does_not_offer_is_refused",
         "native/crates/ox-core/tests/ops_create.rs::a_template_never_overwrites_and_never_goes_to_a_server_listing",

@@ -24,13 +24,13 @@ fn can_go_back(test: &TestWindow) -> bool {
     session.active().is_some_and(|tab| tab.history.can_go_back())
 }
 
-/// A command that fails says why in the toast instead of failing
-/// silently: here Enter on an address that does not exist, which leaves
-/// the tab where it was.
+/// A command that fails says why instead of failing silently: here Enter
+/// on an address that does not exist, which File Explorer answers with a
+/// message box naming it, and which leaves the tab where it was.
 ///
 /// parity: CMD-018
 #[gtk::test]
-fn a_failing_command_says_why_in_the_toast() {
+fn a_failing_command_says_why() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
     let missing = fixture.path("Missing folder");
@@ -38,7 +38,10 @@ fn a_failing_command_says_why_in_the_toast() {
     test.window
         .submit_address(missing.to_str().expect("fixture paths are UTF-8"));
 
-    wait_until("the toast", || !test.window.shown_message().is_empty());
+    let message_box = super::file_ops_support::open_dialog(&test);
+    let says = message_box.message_text();
+    message_box.press("OK");
+    assert!(says.contains("Missing folder"), "{says}");
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
     assert!(test.context.recorded_launches().is_empty());
 }
