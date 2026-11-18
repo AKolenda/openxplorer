@@ -53,15 +53,18 @@ flowbox.drive-tiles > flowboxchild:focus-visible {
 /* A drive's capacity bar: Windows 11's thin bar under the name, accent
    blue, red once the drive is 90% full. */
 .landing .capacity { min-height: 6px; margin: 4px 0 3px 0; }
+/* The trough's 1px outline is an inset shadow rather than a border, so
+   the fill covers it, as Explorer's capacity bar does, without a negative
+   margin: GTK warns that a node with one reports a size below zero. */
 .landing .capacity > trough {
-  min-height: 6px;
+  min-height: 8px;
   background-color: @ox_hover;
-  border: 1px solid @ox_border;
+  border: none;
+  box-shadow: inset 0 0 0 1px @ox_border;
   border-radius: 1px;
 }
 .landing .capacity > trough > progress {
-  min-height: 6px;
-  margin: -1px;
+  min-height: 8px;
   background-color: @ox_accent;
   border: none;
   border-radius: 1px;

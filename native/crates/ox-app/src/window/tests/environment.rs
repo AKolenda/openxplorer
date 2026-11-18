@@ -75,6 +75,29 @@ fn this_pc_lists_devices_and_drives_and_no_quick_access() {
     assert_eq!(landing::section_titles(landing), ["Devices and drives"]);
 }
 
+/// Opening This PC, and switching the Details pane there, draws its
+/// drives' capacity bars without GTK warning that a bar has a negative
+/// size ("GtkGizmo (progress) reported min width -2").
+#[gtk::test]
+fn this_pc_draws_its_capacity_bars_without_gtk_warnings() {
+    let recorder = crate::test_support::gtk_log::LogRecorder::start();
+    let test = TestWindow::open(Page::ThisPc.uri());
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    test.open_details_pane();
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    test.activate("details-pane", None);
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let warnings = recorder.warnings();
+    drop(recorder);
+
+    let landing = test.window.folder_pane().landing();
+    assert!(!landing::tile_groups(landing).is_empty(), "This PC shows its drives");
+    assert!(
+        !warnings.iter().any(|warning| warning.contains("reported min")),
+        "{warnings:?}"
+    );
+}
+
 /// The status bar reads as Windows 11 Explorer's: "4 items", then, past
 /// a divider shown only with a selection, "1 item selected  20 bytes",
 /// the size only while every selected item is a file. This PC counts its
