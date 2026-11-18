@@ -1151,8 +1151,9 @@ impl MenuPopover {
         }
     }
 
-    /// Whether the pointer is over the menu's rows now, asked of the
-    /// pointer itself rather than of the events GTK sent the menu. False
+    /// Whether the pointer is over the menu's rows where they show now,
+    /// asked of the pointer itself rather than of the events GTK sent the
+    /// menu. False
     /// when the windowing system does not say where it is, as Wayland
     /// does only for the surface under the pointer.
     fn pointer_is_over_rows(&self) -> bool {
@@ -1165,14 +1166,13 @@ impl MenuPopover {
         else {
             return false;
         };
+        // What GTK finds there, as it does for a pointer event: the list
+        // runs on behind the strip and out of the scroller's sight once
+        // the rows have scrolled, where only what is shown counts.
         let (shadow_x, shadow_y) = self.surface_transform();
         let list = self.list();
-        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
-        let point = self.compute_point(
-            list,
-            &gtk::graphene::Point::new((x - shadow_x) as f32, (y - shadow_y) as f32),
-        );
-        point.is_some_and(|point| list.contains(f64::from(point.x()), f64::from(point.y())))
+        self.pick(x - shadow_x, y - shadow_y, gtk::PickFlags::INSENSITIVE)
+            .is_some_and(|picked| picked == *list.upcast_ref::<gtk::Widget>() || picked.is_ancestor(list))
     }
 
     /// The pointer moved to `point` of the menu, over the row at `index`,
