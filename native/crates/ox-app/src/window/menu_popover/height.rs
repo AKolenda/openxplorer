@@ -47,17 +47,22 @@ pub(super) fn rows_limit(monitor_height: i32, chrome: i32) -> i32 {
 }
 
 /// The tallest the rows of a menu may be on Wayland, where the menu
-/// cannot read where it is on a monitor `monitor_height` tall: the room
-/// below its anchor, which spans `anchor` (top and bottom) in the window,
-/// or above it, whichever is larger, as if the window's top were the
-/// monitor's, as a maximized window's is; within [`rows_limit`].
+/// cannot read where it or its window is on a monitor `monitor_height`
+/// tall: the room below its anchor, which spans `anchor` (top and bottom)
+/// in the window, or above it, whichever is larger. Below the anchor the
+/// room ends at the window's bottom edge, `window_height`, which is on the
+/// screen wherever the window is; a maximized window, `None`, starts at
+/// most a desktop panel ([`PANEL_ALLOWANCE`]) below the monitor's top, so
+/// the room ends at the monitor's bottom. Within [`rows_limit`].
 pub(super) fn wayland_rows_limit(
     monitor_height: i32,
     chrome: i32,
     (anchor_top, anchor_bottom): (i32, i32),
+    window_height: Option<i32>,
 ) -> i32 {
     let chrome = chrome.max(0);
-    let below = monitor_height - anchor_bottom - MONITOR_MARGIN - chrome;
+    let bottom_edge = window_height.unwrap_or(monitor_height - PANEL_ALLOWANCE);
+    let below = bottom_edge - anchor_bottom - MONITOR_MARGIN - chrome;
     let above = anchor_top - MONITOR_MARGIN - chrome;
     below
         .max(above)
@@ -168,7 +173,9 @@ impl MenuPopover {
         let menu = frame.measure(gtk::Orientation::Vertical, -1).1;
         let chrome = menu - rows.measure(gtk::Orientation::Vertical, -1).1;
         let limit = match self.anchor_in_window().filter(|_| self.on_wayland()) {
-            Some(anchor) => wayland_rows_limit(monitor_height, chrome, anchor),
+            Some(anchor) => {
+                wayland_rows_limit(monitor_height, chrome, anchor, self.unmaximized_window_height())
+            }
             None => rows_limit(monitor_height, chrome),
         };
         rows.set_max_content_height(limit);
@@ -192,6 +199,13 @@ impl MenuPopover {
     /// on the monitor, and the compositor alone keeps it on the screen.
     fn on_wayland(&self) -> bool {
         self.display().is::<gdk_wayland::WaylandDisplay>()
+    }
+
+    /// The height of the menu's window, unless it is maximized or full
+    /// screen, when it fills the monitor but for a desktop panel.
+    fn unmaximized_window_height(&self) -> Option<i32> {
+        let window = self.parent()?.root()?.downcast::<gtk::Window>().ok()?;
+        (!window.is_maximized() && !window.is_fullscreen()).then(|| window.height())
     }
 
     /// The top and bottom of what the menu opens at, in its window: the
@@ -259,22 +273,39 @@ mod tests {
     use crate::window::menu_popover::{MenuEntry, MenuItem, MenuStyle};
     use crate::window::window_action::WindowAction;
 
-    /// On Wayland a menu cannot read where it is on the monitor, so it is
-    /// fitted to the room below or above its anchor as if the window's top
-    /// were the monitor's, as a maximized window's is: the View menu,
-    /// below a button 130 pixels down a 768-pixel monitor, scrolls rather
-    /// than run off the bottom, and a context menu near the window's
-    /// bottom fits the room above it, where it flips.
+    /// On Wayland a menu cannot read where it or its window is on the
+    /// monitor. A menu in a window that is not maximized fits the room
+    /// down to the window's bottom edge, which is on the screen wherever
+    /// the window is, so the View menu of a window placed low on a
+    /// 768-pixel monitor scrolls rather than run off the bottom. In a
+    /// maximized window it fits the room down to the monitor's bottom.
+    /// A context menu near the bottom fits the room above it, where it
+    /// flips.
     #[test]
     fn on_wayland_a_menu_fits_the_room_beside_its_anchor() {
-        // The View menu: 8 + 130 above, the chrome 20 and 8 below.
-        assert_eq!(wayland_rows_limit(768, 20, (100, 130)), 768 - 130 - 8 - 20);
+        // The View menu, its button 130 pixels down a 700-pixel window:
+        // the window's bottom edge, 8 pixels of margin and 20 of chrome.
+        assert_eq!(
+            wayland_rows_limit(768, 20, (100, 130), Some(700)),
+            700 - 130 - 8 - 20
+        );
+        // Maximized below a panel of up to 48 pixels.
+        assert_eq!(
+            wayland_rows_limit(768, 20, (100, 130), None),
+            768 - 48 - 130 - 8 - 20
+        );
         // Near the bottom, the room above is the larger.
-        assert_eq!(wayland_rows_limit(768, 20, (700, 701)), 700 - 8 - 20);
+        assert_eq!(wayland_rows_limit(768, 20, (650, 651), Some(700)), 650 - 8 - 20);
         // Never less than the least room the rows keep.
-        assert_eq!(wayland_rows_limit(200, 20, (100, 101)), LEAST_ROWS_HEIGHT);
+        assert_eq!(
+            wayland_rows_limit(768, 20, (100, 101), Some(200)),
+            LEAST_ROWS_HEIGHT
+        );
         // Never more than the whole monitor allows.
-        assert_eq!(wayland_rows_limit(768, 20, (0, 0)), rows_limit(768, 20));
+        assert_eq!(
+            wayland_rows_limit(768, 20, (0, 0), Some(2000)),
+            rows_limit(768, 20)
+        );
     }
 
     /// The height of the test display's only monitor (check.py's Xvfb).
