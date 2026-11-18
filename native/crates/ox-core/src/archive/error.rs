@@ -71,6 +71,16 @@ pub enum ArchiveError {
     )]
     SevenZipMethod,
 
+    /// A 7z archive was replaced or changed between reading its headers
+    /// and decoding its data.
+    #[error(
+        "{}",
+        crate::i18n::gettext(
+            "This 7z archive changed while it was read. Nothing was extracted. Open it again."
+        )
+    )]
+    SevenZipChanged,
+
     /// The compressed stream requests more decoder memory than the
     /// built-in reader allows, before any dictionary is allocated.
     #[error(

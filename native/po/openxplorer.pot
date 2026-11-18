@@ -8012,6 +8012,10 @@ msgid "The destination did not accept all extracted bytes."
 msgstr ""
 
 #: crates/ox-core/src/archive/error.rs
+msgid "This 7z archive changed while it was read. Nothing was extracted. Open it again."
+msgstr ""
+
+#: crates/ox-core/src/archive/error.rs
 msgid "This 7z archive is damaged or incomplete. Use an archive manager."
 msgstr ""
 

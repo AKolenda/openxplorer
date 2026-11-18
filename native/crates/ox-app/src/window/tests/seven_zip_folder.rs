@@ -293,3 +293,28 @@ fn crc32(bytes: &[u8]) -> u32 {
     }
     !crc
 }
+
+/// A folder a healthy 7z does not have (a typed or stale address) is not
+/// found, as a missing folder anywhere: the archive page is only for an
+/// archive that can't be read.
+///
+/// parity: ARC-026
+#[gtk::test]
+fn a_folder_missing_from_a_healthy_7z_is_not_reported_as_a_broken_archive() {
+    let fixture = fixture_with_7z();
+    let test = opening_archives_as_folders(&fixture);
+    let root = open_bundle(&test, &fixture);
+
+    let missing = root.member("Nowhere/");
+    test.window
+        .navigate(&missing.uri())
+        .expect("a valid address inside the 7z");
+    test.wait_for_listing("the failed listing");
+
+    let page = test.window.folder_pane().empty_page();
+    assert_eq!(page.title(), "This location is unavailable");
+    assert_ne!(
+        page.icon_name().as_deref(),
+        Some(crate::icons::Icon::FolderZip.name())
+    );
+}

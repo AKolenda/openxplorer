@@ -189,6 +189,28 @@ pub fn one_file_seven_zip(name: &str, method: &[u8], properties: &[u8], data: &[
     raw_seven_zip(data, &header)
 }
 
+/// A 7z holding one file `name` with `data` stored (Copy), whose streams
+/// info leaves out the optional substreams record, as `7zFormat.txt`
+/// allows: the block then holds one file of the block's size.
+pub fn seven_zip_without_sub_streams(name: &str, data: &[u8]) -> Vec<u8> {
+    let size = data.len() as u64;
+    let mut streams = one_block_streams(&[0x00], &[], size, size);
+    let record = streams.len() - 3;
+    assert_eq!(
+        &streams[record..],
+        [0x08, 0x00, 0x00],
+        "the substreams record, then the end"
+    );
+    streams.drain(record..record + 2);
+    let mut header = vec![0x01, 0x04];
+    header.extend(streams);
+    header.push(0x05); // kFilesInfo
+    header.extend(number(1));
+    header.extend(names_property(&[name]));
+    header.extend([0x00, 0x00]);
+    raw_seven_zip(data, &header)
+}
+
 /// A 7z whose header is "encoded": packed with `method` (AES here, so the
 /// names cannot be read without the password).
 pub fn encoded_header_seven_zip(method: &[u8], properties: &[u8]) -> Vec<u8> {

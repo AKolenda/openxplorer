@@ -20,8 +20,8 @@ use ox_core::transfer::Cancellation;
 
 use archive_support::{
     coded_seven_zip, encoded_header_seven_zip, gio_factory, memory_opener, one_file_seven_zip, raw_seven_zip,
-    seven_zip_bytes, seven_zip_claiming_files, ExtractionFixture, LocalFileOutput, SevenEntry, TestCoder,
-    AES, BCJ2, BZIP2, COPY, DEFLATE, LZMA2, PPMD, SEVEN_ZIP_MODIFIED,
+    seven_zip_bytes, seven_zip_claiming_files, seven_zip_without_sub_streams, ExtractionFixture,
+    LocalFileOutput, SevenEntry, TestCoder, AES, BCJ2, BZIP2, COPY, DEFLATE, LZMA2, PPMD, SEVEN_ZIP_MODIFIED,
 };
 
 /// A folder, a file in it, a folder in that and an empty file, with a
@@ -589,4 +589,99 @@ fn a_bzip2_7z_extracts_and_a_deflate_one_is_refused_plainly() {
     let error = fixture.extract("Unpacked").expect_err("refused");
     assert!(matches!(error, ArchiveError::SevenZipMethod), "{error:?}");
     fixture.assert_no_output();
+}
+
+/// Opening or copying a late file of a solid block decodes every file
+/// before it. A huge, highly compressed stream placed before a small
+/// file counts against the decompression limits too, so it is refused
+/// at once instead of being decoded and dropped.
+///
+/// parity: ARC-006, ARC-017
+#[test]
+fn a_late_file_behind_a_huge_compressed_stream_is_refused_without_decoding_it() {
+    let filler = vec![0u8; 64 * 1024 * 1024];
+    let entries = [
+        SevenEntry::file("filler.bin", &filler),
+        SevenEntry::file("notes.txt", b"small notes"),
+    ];
+    let bytes = seven_zip_bytes(&entries, true);
+    assert!(bytes.len() < 1024 * 1024, "the filler packs tightly");
+    let root = tempfile::tempdir().expect("a folder");
+    let browser = browser_of(bytes.clone(), root.path());
+
+    let started = Instant::now();
+    let error = browser
+        .preview_member("file:///fixture/Bundle.7z", "notes.txt", &Cancellation::new())
+        .expect_err("refused");
+    assert!(matches!(error, ArchiveError::MemberTooLarge), "{error:?}");
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "{:?}",
+        started.elapsed()
+    );
+
+    let fixture = fixture_with(&bytes);
+    let mut extractor = fixture.extractor().with_selection(&["notes.txt".to_owned()]);
+    let error = fixture.extract_with(&mut extractor, "Copy").expect_err("refused");
+    assert!(matches!(error, ArchiveError::MemberTooLarge), "{error:?}");
+    fixture.assert_no_output();
+}
+
+/// The data is decoded from a second opening of the archive. If the
+/// archive was replaced in between, even by one of the same shape, it is
+/// refused rather than read under the first one's names.
+///
+/// parity: ARC-017
+#[test]
+fn an_archive_replaced_between_reading_and_decoding_is_refused() {
+    let first = seven_zip_bytes(&[SevenEntry::file("notes.txt", b"first text")], true);
+    let second = seven_zip_bytes(&[SevenEntry::file("notes.txt", b"other text")], true);
+    assert_eq!(first.len(), second.len(), "the same shape and size");
+    let opens = Arc::new(AtomicUsize::new(0));
+    let counted = Arc::clone(&opens);
+    let opener = move |_uri: &str, _cancel: &Cancellation| -> Result<Box<dyn ArchiveStream>, ArchiveError> {
+        let bytes = if counted.fetch_add(1, Ordering::SeqCst) == 0 {
+            first.clone()
+        } else {
+            second.clone()
+        };
+        Ok(Box::new(std::io::Cursor::new(bytes)))
+    };
+    let fixture = fixture_with(b"");
+    let mut extractor = ZipExtractor::new(
+        Arc::new(opener),
+        gio_factory(),
+        Arc::new(LocalFileOutput::owner_only()),
+    );
+
+    let error = fixture
+        .extract_with(&mut extractor, "Unpacked")
+        .expect_err("refused");
+
+    assert!(matches!(error, ArchiveError::SevenZipChanged), "{error:?}");
+    fixture.assert_no_output();
+}
+
+/// The substreams record is optional: without it each block holds one
+/// file of the block's size, as 7-Zip reads it.
+///
+/// parity: ARC-022, ARC-024
+#[test]
+fn a_7z_without_a_substreams_record_lists_and_extracts() {
+    let bytes = seven_zip_without_sub_streams("notes.txt", b"stored notes");
+    let root = tempfile::tempdir().expect("a folder");
+    let listing = browser_of(bytes.clone(), root.path())
+        .list("file:///fixture/Bundle.7z", "", &Cancellation::new())
+        .expect("lists");
+    assert!(
+        matches!(listing.entries[0].kind, ArchiveEntryKind::File { size: 12, .. }),
+        "{:?}",
+        listing.entries
+    );
+    let fixture = fixture_with(&bytes);
+
+    fixture.extract("Unpacked").expect("extracts");
+
+    let notes = fixture.destination.join("Unpacked/notes.txt");
+    assert_eq!(fs::read(notes).expect("a file"), b"stored notes");
 }
