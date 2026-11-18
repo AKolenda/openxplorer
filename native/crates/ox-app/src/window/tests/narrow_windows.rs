@@ -8,7 +8,7 @@ use gtk::prelude::*;
 
 use super::geometry::{bounds, button_for, laid_out, laid_out_with_details_pane};
 use crate::folder_view::sorting::SortColumn;
-use crate::test_support::harness::{wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 
 /// Resizes the window to `width` pixels and waits until it is laid out.
 pub(super) fn resize(test: &TestWindow, width: i32) {
@@ -186,5 +186,61 @@ fn in_a_900_pixel_window_name_gives_way_before_the_list_scrolls() {
     wait_for_frames(&test.window, 3);
     for (index, pane) in test.window.folder_panes().iter().enumerate() {
         check(&format!("split pane {index}"), pane);
+    }
+}
+
+/// A 1366-pixel window, a laptop's width at 1x, with the details pane
+/// open and the tab split in two: in each pane every column shows, or Name
+/// has given way to its narrowest and the list scrolls sideways to the
+/// rest, with a horizontal scroll bar that stays shown. Before, Type was cut off and Size hidden, reachable only by a
+/// scroll bar that showed only under the pointer.
+///
+/// parity: LOOK-022, VIEW-059
+#[gtk::test]
+fn a_split_tab_beside_the_details_pane_at_1366_pixels_reaches_every_column() {
+    let fixture = Fixture::standard();
+    let test = laid_out_with_details_pane(&fixture.uri());
+    resize(&test, 1366);
+    test.activate("split-view", None);
+    wait_for_frames(&test.window, 3);
+    assert!(test.window.details_pane().is_visible(), "the pane is open");
+    let panes = test.window.folder_panes();
+    assert_eq!(panes.len(), 2, "split in two");
+    for (index, pane) in panes.iter().enumerate() {
+        let room = column_room(&test, pane);
+        let fits = room.columns <= room.shown + 1.0;
+        let scrolls = room.name == 140 + 14 && room.columns > room.shown;
+        assert!(
+            fits || scrolls,
+            "pane {index}: Name {} pixels, {} of {} pixels shown",
+            room.name,
+            room.shown,
+            room.columns
+        );
+        let details = pane.details();
+        if !fits {
+            wait_for_frames(&test.window, 2);
+            let shown_bar = descendants::<gtk::Scrollbar>(details).into_iter().any(|bar| {
+                bar.orientation() == gtk::Orientation::Horizontal
+                    && bar.is_mapped()
+                    && !bar.has_css_class("overlay-indicator")
+                    && bar.height() > 0
+            });
+            assert!(
+                shown_bar,
+                "pane {index}: a scroll bar shows that the list scrolls sideways, not only under the pointer"
+            );
+        }
+        for column in [
+            SortColumn::Name,
+            SortColumn::Modified,
+            SortColumn::Type,
+            SortColumn::Size,
+        ] {
+            assert!(
+                details.column(column).is_some_and(|column| column.is_visible()),
+                "pane {index}: {column:?} is shown"
+            );
+        }
     }
 }

@@ -80,6 +80,24 @@ impl Separators {
     }
 }
 
+/// `27.5 GB free of 251 GB`: how much of a drive is free, in Explorer's
+/// short sizes, as This PC writes it under a drive and the drive's
+/// Properties under its ring. Both write it here, so a drive has one
+/// capacity wherever it is shown.
+pub fn free_of_text(free: u64, size: u64) -> String {
+    crate::i18n::format_message(
+        "{free} free of {size}",
+        &[("free", &short_size(free)), ("size", &short_size(size))],
+    )
+}
+
+/// `1,234,567 bytes`, or `1 byte`: every byte, with the user's thousands
+/// separator, as Properties writes a drive's space.
+pub fn exact_bytes(bytes: u64) -> String {
+    let pattern = crate::i18n::ngettext("{bytes} byte", "{bytes} bytes", bytes);
+    crate::i18n::format_message(&pattern, &[("bytes", &grouped(bytes))])
+}
+
 /// `1234567` as `1,234,567`, with the user's thousands separator.
 pub fn grouped(value: u64) -> String {
     grouped_with(value, &Separators::current().thousands)

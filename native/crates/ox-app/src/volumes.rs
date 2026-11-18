@@ -25,6 +25,20 @@ use ox_core::integration::DiskTool;
 use ox_core::location;
 use ox_core::network::volume_id_from;
 
+/// The file system attributes a drive's space is read from.
+pub(crate) const SPACE_ATTRIBUTES: &str = "filesystem::free,filesystem::size";
+
+/// The free space and size, in bytes, of the file system GIO described in
+/// `filesystem`, with the free space at most the size; `None` when GIO
+/// could not tell or the size is zero. This PC's drive tiles and a
+/// drive's Properties both read it here, so they show one capacity.
+pub(crate) fn space_of(filesystem: &gio::FileInfo) -> Option<(u64, u64)> {
+    let known = filesystem.has_attribute("filesystem::free") && filesystem.has_attribute("filesystem::size");
+    let size = filesystem.attribute_uint64("filesystem::size");
+    let free = filesystem.attribute_uint64("filesystem::free").min(size);
+    (known && size > 0).then_some((free, size))
+}
+
 /// What a row represents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum VolumeKind {
