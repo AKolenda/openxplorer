@@ -275,23 +275,41 @@ impl SettingsPage {
     /// with matches, their counts and the first page that has any.
     fn apply_search(&self, typed: &str) {
         let imp = self.imp();
-        let query = SearchQuery::parse(typed);
+        let mut query = SearchQuery::parse(typed);
         self.gather_results(!query.is_empty());
+        // Several words: first where settings are named; descriptions
+        // count only when no setting names them all.
         let mut total = 0;
-        for category_row in self.category_rows() {
-            let section = self.category_section(category_row.category());
-            let matches = section.apply_query(&query);
-            category_row.set_matches(matches);
-            // Among the results, a category without matches leaves out
-            // its title too.
-            section.set_visible(query.is_empty() || matches > 0);
-            total += matches;
+        if let Some(by_names) = query.by_names() {
+            total = self.filter_categories(&by_names);
+            if total > 0 {
+                query = by_names;
+            }
+        }
+        if total == 0 {
+            total = self.filter_categories(&query);
         }
         imp.match_count().set_text(&match_count_text(total));
         imp.match_count().set_visible(!query.is_empty());
         imp.query.replace(query);
         self.mark_chosen_category();
         self.show_search_results();
+    }
+
+    /// Shows the settings of every category that match `query`, with
+    /// each category's count and title, and returns how many match.
+    fn filter_categories(&self, query: &SearchQuery) -> usize {
+        let mut total = 0;
+        for category_row in self.category_rows() {
+            let section = self.category_section(category_row.category());
+            let matches = section.apply_query(query);
+            category_row.set_matches(matches);
+            // Among the results, a category without matches leaves out
+            // its title too.
+            section.set_visible(query.is_empty() || matches > 0);
+            total += matches;
+        }
+        total
     }
 
     /// Shows the results from the top, or says that nothing matches. The

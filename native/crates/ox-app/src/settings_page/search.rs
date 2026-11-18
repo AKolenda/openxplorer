@@ -231,6 +231,10 @@ impl Term {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct SearchQuery {
     terms: Vec<Term>,
+    /// Whether every word must be in what names a setting, its title,
+    /// keywords and controls, not only in what it says at length
+    /// ([`Self::by_names`]).
+    names_only: bool,
 }
 
 impl SearchQuery {
@@ -259,7 +263,23 @@ impl SearchQuery {
                 index += 1;
             }
         }
-        Self { terms }
+        Self {
+            terms,
+            names_only: false,
+        }
+    }
+
+    /// The query of several words, taken only where a setting is named:
+    /// the search tries it first, and when it finds any setting, the
+    /// settings whose descriptions alone hold the words are left out, so
+    /// "hidden files" shows the setting it names and not one whose note
+    /// says "hidden" and whose description says "files". `None` for one
+    /// word or none, which is found in descriptions too.
+    pub(crate) fn by_names(&self) -> Option<Self> {
+        (self.terms.len() > 1).then(|| Self {
+            terms: self.terms.clone(),
+            names_only: true,
+        })
     }
 
     /// True when nothing is typed, so every setting shows.
@@ -283,7 +303,11 @@ impl SearchQuery {
             return Finding::NoSearch;
         }
         let name_text = names.join(" ").to_lowercase();
-        let text = format!("{name_text} {}", details.join(" ").to_lowercase());
+        let text = if self.names_only {
+            name_text.clone()
+        } else {
+            format!("{name_text} {}", details.join(" ").to_lowercase())
+        };
         let name_stems = stems_of(&name_text);
         if self.terms.iter().all(|term| term.is_in(&text, &name_stems)) {
             Finding::Match

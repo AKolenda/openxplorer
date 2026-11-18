@@ -361,8 +361,11 @@ fn the_search_finds_what_buttons_options_and_headings_show() {
             typed: "refresh all",
             category: Category::Search,
             shows_status_card: true,
-            // "all" is in the privacy note ("locally"), in the row's ⓘ.
-            shown: &["Indexed folders", "Check network and unwatched folders every"],
+            // The card's Refresh all button names both words, so a row
+            // with "all" only in its ⓘ note ("locally"), Indexed folders,
+            // is left out; the network row's keywords name both
+            // ("refresh", "fallback").
+            shown: &["Check network and unwatched folders every"],
         },
         ShownTextCase {
             typed: "make openxplorer default",
@@ -422,7 +425,7 @@ fn enter_on_a_status_card_match_jumps_to_the_card() {
         .next()
         .expect("Search has a status card");
     assert!(card.has_css_class("jump-target"));
-    assert_eq!(settings.page.imp().match_count().text(), "3 matching settings");
+    assert_eq!(settings.page.imp().match_count().text(), "2 matching settings");
 }
 
 /// parity: SET-019
@@ -1231,6 +1234,35 @@ fn windows_folder_option_words_find_their_settings() {
     }
 }
 
+/// A search of several words shows the settings that every word names,
+/// in their titles, keywords or controls: "hidden files" no longer also
+/// shows Indexed folders, whose note says "hidden" and whose description
+/// says "files", and "status bar" no longer shows the Update button row,
+/// whose description mentions the status bar. Words that only a
+/// description has still find its setting.
+///
+/// parity: SET-019
+#[gtk::test]
+fn several_words_find_the_settings_they_all_name() {
+    let settings = SettingsTest::open();
+    let cases: [(&str, &str, &str); 2] = [
+        ("hidden files", "Show hidden files, folders, and drives", "Indexed folders"),
+        ("status bar", "Folder Options", "Show the Update button in the command bar"),
+    ];
+    for (typed, found, left_out) in cases {
+        settings.page.search(typed);
+        let shown = settings.shown_rows();
+        assert!(shown.contains(&found), "{typed:?} finds {found:?}: {shown:?}");
+        assert!(!shown.contains(&left_out), "{typed:?} leaves out {left_out:?}: {shown:?}");
+    }
+    settings.page.search("unpinning removes");
+    let shown = settings.shown_rows();
+    assert!(
+        shown.contains(&"Index pinned folders automatically"),
+        "a description's words: {shown:?}"
+    );
+}
+
 /// Files & folders > Folder views shows and changes the hidden files and
 /// the file name extensions that Ctrl+H, View > Show and Folder Options
 /// change, in step with them, and its Open Folder Options button opens
@@ -1433,3 +1465,4 @@ fn the_dragging_help_says_alt_creates_shortcuts() {
     assert!(text.contains("Ctrl to copy"), "{text}");
     assert!(!text.contains("Alt to choose"), "{text}");
 }
+
