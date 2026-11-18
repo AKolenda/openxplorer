@@ -110,10 +110,11 @@ const DRAG_TO_APPS: RowText = RowText {
 
 const DROP_ON_FOLDERS: RowText = RowText {
     title: "Drop files on folders",
-    description: "Drop files on a writable folder to copy them, or drop folders in Quick access \
-                  to pin them. Hold Shift to move, Ctrl+Shift to create links or Alt to choose; \
+    description: "Drop files on a folder to move them there on the same drive or copy them to \
+                  another, or drop folders in Quick access to pin them. Hold Shift to move, Ctrl to \
+                  copy or Alt to create shortcuts, or drag with the right mouse button to choose; \
                   drop files on a program to open them with it.",
-    keywords: "drag drop copy move link pin program run",
+    keywords: "drag drop copy move link shortcut alt ctrl shift right pin program run",
 };
 
 /// The rest of the Python section's paragraph.

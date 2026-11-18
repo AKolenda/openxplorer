@@ -1416,3 +1416,20 @@ fn every_settings_row_has_a_control_or_a_status() {
     }
     assert!(bare.is_empty(), "rows with nothing to change: {bare:?}");
 }
+
+/// The dragging help says what the keys do at a drop of the app's own
+/// items, as `DropAction::with_keys` runs it and Windows' list has it
+/// ("Alt+mouse drag a file: create a shortcut", support.microsoft.com,
+/// Keyboard shortcuts in Windows): Shift moves, Ctrl copies and Alt creates
+/// shortcuts; Alt does not choose.
+///
+/// parity: SET-004
+#[gtk::test]
+fn the_dragging_help_says_alt_creates_shortcuts() {
+    let settings = SettingsTest::open();
+    let text = settings.row("Drop files on folders").shown_description();
+    assert!(text.contains("Alt to create shortcuts"), "{text}");
+    assert!(text.contains("Shift to move"), "{text}");
+    assert!(text.contains("Ctrl to copy"), "{text}");
+    assert!(!text.contains("Alt to choose"), "{text}");
+}
