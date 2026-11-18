@@ -556,3 +556,107 @@ fn submenus_behave_the_same_in_the_dark_theme_without_animations() {
     settings.set_gtk_enable_animations(animations);
     findings.assert_none_failed();
 }
+
+/// In a menu taller than the monitor, scrolled so its rows run on behind
+/// the compact style's strip of buttons, the pointer moving from a row
+/// with a submenu onto the strip before the delay has passed leaves the
+/// rows: the submenu does not open, though the rows' list goes on under
+/// the strip, out of sight.
+///
+/// parity: CMD-010
+#[gtk::test]
+fn the_pointer_leaving_scrolled_rows_for_the_strip_opens_no_submenu() {
+    use crate::icons::Icon;
+    use crate::window::menu_popover::{MenuItem, MenuStyle};
+    use crate::window::window_action::WindowAction;
+
+    let mut session = Session::open(None);
+    let entries = (0..60)
+        .map(|row| {
+            let label = format!("Example item {row}");
+            if row % 3 == 0 {
+                let submenu =
+                    vec![MenuItem::new("Example choice", Icon::Copy, WindowAction::CopyAddress).into()];
+                MenuItem::submenu(&label, Icon::Folder, WindowAction::CopyAddress, submenu).into()
+            } else {
+                MenuItem::new(&label, Icon::Copy, WindowAction::CopyAddress).into()
+            }
+        })
+        .collect();
+    let menu = MenuPopover::new(entries);
+    menu.set_style_and_strip(
+        MenuStyle::Compact,
+        vec![MenuItem::new("Copy", Icon::Copy, WindowAction::CopyAddress)],
+    );
+    let pane = session.test.window.folder_pane().clone();
+    menu.set_parent(&pane);
+    menu.set_pointing_to(Some(&gdk::Rectangle::new(pane.width() / 2, 40, 1, 1)));
+    menu.popup();
+    wait_until("the menu", || menu.is_mapped());
+    wait_for_frames(&menu, 3);
+    let scroller = descendants::<gtk::ScrolledWindow>(&menu)
+        .into_iter()
+        .next()
+        .expect("the rows scroll");
+    let strip = descendants::<gtk::Button>(&menu)
+        .into_iter()
+        .find(WidgetExt::is_mapped)
+        .expect("the strip's button");
+    let strip_below = menu.strip_at_bottom();
+    // Scrolled away from the strip's side, so the rows' list runs on under it.
+    let adjustment = scroller.vadjustment();
+    adjustment.set_value(if strip_below {
+        adjustment.lower()
+    } else {
+        adjustment.upper() - adjustment.page_size()
+    });
+    wait_for_frames(&menu, 3);
+    assert!(adjustment.upper() > adjustment.page_size(), "the menu scrolls");
+    // The row with a submenu that shows nearest the strip.
+    let shown_top = |row: &gtk::ListBoxRow| {
+        row.compute_point(&scroller, &gtk::graphene::Point::new(0.0, 0.0))
+            .map_or(f64::MIN, |point| f64::from(point.y()))
+    };
+    let page = f64::from(scroller.height());
+    let row = menu
+        .rows()
+        .into_iter()
+        .filter(|row| {
+            let top = shown_top(row);
+            top >= 0.0 && top + f64::from(row.height()) <= page
+        })
+        .filter(|row| row_label(row).is_some_and(|label| submenu_rows(&menu).contains(&label)))
+        .reduce(|nearest, row| {
+            let nearer = if strip_below {
+                shown_top(&row) > shown_top(&nearest)
+            } else {
+                shown_top(&row) < shown_top(&nearest)
+            };
+            if nearer {
+                row
+            } else {
+                nearest
+            }
+        })
+        .expect("a row with a submenu shows");
+    let label = row_label(&row).expect("a labeled row");
+    let on_row = session.on_screen(
+        &row,
+        (f64::from(row.width()) / 2.0, f64::from(row.height()) / 2.0),
+    );
+    let on_strip = session.on_screen(
+        &strip,
+        (f64::from(strip.width()) / 2.0, f64::from(strip.height()) / 2.0),
+    );
+    session.pointer.move_to(on_row.0, on_row.1 + 1);
+    session.pointer.move_to(on_row.0, on_row.1);
+    session.pointer.move_to(on_strip.0, on_strip.1);
+    wait_for(PAST_THE_DELAY);
+    let opened = shows_submenu_of(&menu, &label);
+    menu.popdown();
+    menu.unparent();
+    assert!(
+        !opened,
+        "{label}'s submenu stays shut once the pointer is on the strip"
+    );
+}
