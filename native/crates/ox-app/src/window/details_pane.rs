@@ -350,6 +350,10 @@ impl DetailsPane {
             PaneMode::Preview => ox_core::i18n::gettext("Preview pane"),
         };
         self.update_property(&[gtk::accessible::Property::Label(&title)]);
+        // The scroller is where Tab from the file list lands; a screen
+        // reader names it as the pane rather than saying nothing.
+        imp.scroller
+            .update_property(&[gtk::accessible::Property::Label(&title)]);
         imp.title.replace(title);
         if mode == PaneMode::Details {
             self.show_page(None);
@@ -399,6 +403,12 @@ impl DetailsPane {
     #[cfg(test)]
     pub(super) fn shows_preview(&self) -> bool {
         self.imp().preview_area.is_visible()
+    }
+
+    /// The scroller that holds the pane's contents, for tests.
+    #[cfg(test)]
+    pub(super) fn scroller(&self) -> gtk::ScrolledWindow {
+        self.imp().scroller.get()
     }
 
     /// The pane's accessible name, for tests.

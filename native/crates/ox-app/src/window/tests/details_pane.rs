@@ -303,3 +303,24 @@ fn a_folders_new_picture_shows_in_the_pane_at_once() {
     });
     assert_eq!(test.selected_names(), ["Documents"], "without selecting again");
 }
+
+/// The pane's scroller, which the keyboard reaches with Tab from the file
+/// list, has the pane's name, "Details pane" or "Preview pane", so a screen
+/// reader says where the keyboard is rather than nothing.
+#[gtk::test]
+fn the_panes_scroller_is_named_as_the_pane() {
+    let fixture = Fixture::standard();
+    let test = window_with_pane(&fixture);
+    let pane = test.window.details_pane();
+    let scroller = pane.scroller();
+    for mode in [
+        crate::window::details_pane::PaneMode::Preview,
+        crate::window::details_pane::PaneMode::Details,
+    ] {
+        pane.set_mode(mode);
+        assert!(
+            gtk::test_accessible_has_property(&scroller, gtk::AccessibleProperty::Label),
+            "{mode:?}"
+        );
+    }
+}
