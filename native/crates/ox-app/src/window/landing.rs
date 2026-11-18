@@ -57,9 +57,6 @@ use super::BrowserWindow;
 /// Share of used space from which the capacity bar turns red.
 const NEARLY_FULL: f64 = 0.9;
 
-/// The file system attributes a drive tile reads.
-const CAPACITY_ATTRIBUTES: &str = "filesystem::size,filesystem::free";
-
 /// Pixels between a tile's icon and its lines, as in the Tiles view.
 const TILE_ICON_GAP: i32 = 10;
 /// A tile's padding and margin across (8 and 2 on each side) and down
@@ -73,6 +70,10 @@ const MOST_TILES_PER_ROW: u32 = 32;
 const THIS_PC_CLASS: &str = "this-pc";
 /// The class of a mounted drive's tile, which Copy copies when selected.
 const DRIVE_TILE_CLASS: &str = "drive-tile";
+
+/// The class of a phone's or camera's tile, which the Details pane draws
+/// with the phone.
+const DEVICE_TILE_CLASS: &str = "device-tile";
 
 /// How full a file system is, in bytes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,11 +97,10 @@ impl Capacity {
         self.used_share() >= NEARLY_FULL
     }
 
-    /// "N free of M", as Windows 11 says it under a drive.
+    /// "N free of M", as Windows 11 says it under a drive, and as the
+    /// drive's Properties says it.
     fn text(self) -> String {
-        let free = format::pretty_bytes(self.free);
-        let size = format::pretty_bytes(self.size);
-        ox_core::i18n::format_message("{free} free of {size}", &[("free", &free), ("size", &size)])
+        format::free_of_text(self.free, self.size)
     }
 }
 
@@ -134,6 +134,10 @@ pub(super) fn show_capacity(texts: &gtk::Box, uri: &str, with_text: bool) {
         texts.append(&bar);
         if with_text {
             texts.append(&label(&capacity.text(), "card-sub"));
+            // The Details pane describes a selected tile with this line.
+            if let Some(window) = texts.root().and_downcast::<BrowserWindow>() {
+                window.update_details_pane();
+            }
         } else {
             bar.set_tooltip_text(Some(&capacity.text()));
         }
@@ -144,12 +148,11 @@ pub(super) fn show_capacity(texts: &gtk::Box, uri: &str, with_text: bool) {
 /// or it has no size (`if(m.total)` in app.js).
 pub(super) async fn measure_capacity(file: &gio::File) -> Option<Capacity> {
     let filesystem = file
-        .query_filesystem_info_future(CAPACITY_ATTRIBUTES, glib::Priority::LOW)
+        .query_filesystem_info_future(crate::volumes::SPACE_ATTRIBUTES, glib::Priority::LOW)
         .await
         .ok()?;
-    let size = filesystem.attribute_uint64("filesystem::size");
-    let free = filesystem.attribute_uint64("filesystem::free").min(size);
-    (size > 0).then_some(Capacity { size, free })
+    let (free, size) = crate::volumes::space_of(&filesystem)?;
+    Some(Capacity { size, free })
 }
 
 /// The bar that shows how full a drive is, red when it is nearly full.
@@ -285,6 +288,9 @@ fn drive_tile(row: &VolumeRow, cell: CellSize) -> Tile {
         VolumeState::Mountable { id } => id,
     };
     let (child, lines) = tile_frame(&icons::image(glyph, TILES_ICON), &row.label, key, cell);
+    if row.kind == VolumeKind::Device {
+        child.add_css_class(DEVICE_TILE_CLASS);
+    }
     match &row.state {
         VolumeState::Mounted { uri, controls } => {
             show_capacity(&lines, uri, true);
@@ -904,6 +910,7 @@ fn tile_group(page: &gtk::Box, group: Group, tiles: Vec<Tile>) {
     ));
     connect_menus(&flow, &tiles);
     connect_keys(&flow, &tiles);
+    recount_on_selection(&flow);
     connect_edge_keys(&flow);
 }
 
@@ -942,6 +949,99 @@ pub(super) fn selected_drives(page: &gtk::Box) -> Vec<String> {
         .filter(|child| child.has_css_class(DRIVE_TILE_CLASS))
         .map(|child| child.widget_name().to_string())
         .collect()
+}
+
+/// What This PC shows, as the status bar and the Details pane count and
+/// describe it: its tiles as items, as Windows 11 counts them.
+pub(super) struct ThisPcTiles {
+    /// Every tile, a collapsed group's too.
+    pub(super) count: u32,
+    /// The selected tiles, in order.
+    pub(super) selected: Vec<TileFacts>,
+}
+
+/// A tile as the Details pane describes it.
+pub(super) struct TileFacts {
+    /// The drive's, device's or share's name.
+    pub(super) name: String,
+    /// Its picture.
+    pub(super) art: Art,
+    /// What the tile says under its name: "27.6 GB free of 252 GB", or
+    /// that it connects when opened.
+    pub(super) note: Option<String>,
+}
+
+/// The tiles of This PC in `page`, or `None` when `page` shows another
+/// page.
+pub(super) fn this_pc_tiles(page: &gtk::Box) -> Option<ThisPcTiles> {
+    if !page.has_css_class(THIS_PC_CLASS) {
+        return None;
+    }
+    let mut count = 0_u32;
+    let mut selected = Vec::new();
+    for flow in tile_boxes(page) {
+        for child in tiles_in(&flow) {
+            count = count.saturating_add(1);
+            if child.is_selected() {
+                selected.push(tile_facts(&child));
+            }
+        }
+    }
+    Some(ThisPcTiles { count, selected })
+}
+
+/// The name, picture and note of the tile `child`.
+fn tile_facts(child: &gtk::FlowBoxChild) -> TileFacts {
+    let labels = super::widget_tree::descendants::<gtk::Label>(child);
+    let text_with = |class: &str| {
+        labels
+            .iter()
+            .find(|label| label.has_css_class(class))
+            .map(|label| label.text().to_string())
+    };
+    let art = super::widget_tree::descendants::<ArtImage>(child)
+        .iter()
+        .find_map(ArtImage::art)
+        .unwrap_or(if child.has_css_class(DEVICE_TILE_CLASS) {
+            Art::Glyph(Icon::Phone)
+        } else {
+            Art::Glyph(Icon::HardDrive)
+        });
+    TileFacts {
+        name: text_with("tile-name").unwrap_or_default(),
+        art,
+        note: text_with("card-sub"),
+    }
+}
+
+/// Selects only This PC's tile named `name` in `page`, as the snapshot
+/// hook's scene asks; `false` when `page` shows no such tile.
+pub(super) fn select_named(page: &gtk::Box, name: &str) -> bool {
+    if !page.has_css_class(THIS_PC_CLASS) {
+        return false;
+    }
+    let found = tile_boxes(page).find_map(|flow| {
+        let child = tiles_in(&flow).find(|child| tile_facts(child).name == name)?;
+        Some((flow, child))
+    });
+    let Some((flow, child)) = found else {
+        return false;
+    };
+    flow.unselect_all();
+    flow.select_child(&child);
+    child.grab_focus();
+    true
+}
+
+/// Has the window count This PC's tiles again whenever `flow`'s selection
+/// changes.
+fn recount_on_selection(flow: &gtk::FlowBox) {
+    flow.connect_selected_children_changed(|flow| {
+        if let Some(window) = flow.root().and_downcast::<BrowserWindow>() {
+            window.update_status();
+            window.update_details_pane();
+        }
+    });
 }
 
 /// The tiles of `flow`.
@@ -1235,8 +1335,28 @@ mod tests {
             size: 2048,
             free: 1024,
         };
-        let free = format::pretty_bytes(1024);
-        let size = format::pretty_bytes(2048);
+        let free = format::short_size(1024);
+        let size = format::short_size(2048);
         assert_eq!(capacity.text(), format!("{free} free of {size}"));
+    }
+
+    /// A drive tile says what the drive's Properties says, truncated as
+    /// Explorer truncates sizes: "27.5 GB free of 251 GB", never "27.6 GB
+    /// free of 252 GB" beside Properties' "251 GB".
+    ///
+    /// parity: PROP-004
+    #[test]
+    fn a_drive_tile_and_its_properties_write_the_same_sizes() {
+        let capacity = Capacity {
+            size: 270_553_174_016,
+            free: 29_600_000_000,
+        };
+        assert_eq!(capacity.text(), "27.5 GB free of 251 GB");
+        assert_eq!(
+            capacity.text(),
+            ox_core::format::short_size(29_600_000_000)
+                + " free of "
+                + &ox_core::format::short_size(270_553_174_016)
+        );
     }
 }

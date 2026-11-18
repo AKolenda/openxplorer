@@ -73,5 +73,14 @@ class I18nTest(unittest.TestCase):
         self.assertEqual(catalogue.gettext('Terminal'), 'Terminal', 'fuzzy messages stay English')
 
 
+    def test_the_zip_line_without_a_handler_is_one_whole_message(self) -> None:
+        # The ZIP line for "the desktop choice" is a sentence of its own,
+        # extracted from the sources whole, so a translation never gets an
+        # untranslated English phrase put into it.
+        line = 'ZIP opening uses the desktop choice. Opening a download is not Show in folder.'
+        msgids = [message.msgid for message in i18n.extract()]
+        self.assertIn(line, msgids)
+        self.assertNotIn('the desktop choice', msgids)
+
 if __name__ == '__main__':
     unittest.main()

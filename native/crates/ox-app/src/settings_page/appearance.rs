@@ -49,6 +49,15 @@ const DESKTOP_FONT: RowText = RowText {
     keywords: "font typeface family desktop system interface noto segoe size accessibility",
 };
 
+const LANGUAGE: RowText = RowText {
+    title: "Language",
+    description: "OpenXplorer shows its menus, buttons and messages in your desktop's language when a \
+                  translation for it is installed, and in English otherwise. Change the language in your \
+                  desktop's language or region settings, then start OpenXplorer again.",
+    keywords: "language languages translation translations locale localization interface display \
+               chinese english region",
+};
+
 const RIGHT_CLICK_MENU: RowText = RowText {
     title: "Right-click menu",
     description: "Windows 10 is compact and shows familiar text commands.",
@@ -179,7 +188,47 @@ fn theme_group(page: &SettingsPage) -> SettingsGroup {
     text_size.add_control(&text_size_choice(page), ControlName::RowTitle);
     group.add_row(&text_size);
     group.add_row(&desktop_font_row(page));
+    group.add_row(&language_row());
     group
+}
+
+/// "Language": the desktop's language, which the app follows, under the
+/// title, as Windows sets the display language in its own settings and
+/// not in File Explorer's.
+fn language_row() -> SettingRow {
+    let row = SettingRow::new(LANGUAGE);
+    let asked: Vec<String> = glib::language_names().iter().map(ToString::to_string).collect();
+    row.set_description(&language_status(ox_core::i18n::interface_language(), &asked));
+    row
+}
+
+/// What the Language row says, given the language of the catalogue the
+/// app picked (`None` while it shows English) and the languages the
+/// desktop asks for, in order.
+fn language_status(picked: Option<&str>, asked: &[String]) -> String {
+    if let Some(language) = picked {
+        let language = language.split(['.', '@']).next().unwrap_or(language);
+        return ox_core::i18n::format_message(
+            "Your desktop's language ({language})",
+            &[("language", language)],
+        );
+    }
+    // The first language asked for before the C locale, encoded or not
+    // (`C.UTF-8` comes before `C` with LANG=C.UTF-8), unless it is English.
+    let wanted = asked
+        .iter()
+        .map(|name| name.split(['.', '@']).next().unwrap_or_default())
+        .filter(|name| !name.is_empty())
+        .take_while(|name| !matches!(*name, "C" | "POSIX"))
+        .next()
+        .filter(|name| name.split('_').next() != Some("en"));
+    match wanted {
+        Some(language) => ox_core::i18n::format_message(
+            "English: no translation for {language} is installed",
+            &[("language", language)],
+        ),
+        None => ox_core::i18n::gettext("English"),
+    }
 }
 
 /// The three theme cards, in a row that wraps in a narrow window, their
@@ -494,5 +543,48 @@ mod tests {
         assert_eq!(values, StripPosition::ALL);
         assert_eq!(StripPosition::default(), StripPosition::Pointer);
         assert_eq!(STRIP_POSITIONS[0].label, "Near the pointer (default)");
+    }
+}
+
+#[cfg(test)]
+mod language_tests {
+    use super::language_status;
+
+    fn names(list: &[&str]) -> Vec<String> {
+        list.iter().map(|name| (*name).to_owned()).collect()
+    }
+
+    /// The Language row names the language the interface is in: the one
+    /// whose catalogue was picked, after any the desktop asked for first
+    /// that has none, and says English when no catalogue was found,
+    /// naming the language that has no translation.
+    ///
+    /// parity: SET-004
+    #[test]
+    fn the_language_row_names_the_language_the_interface_is_in() {
+        let french_then_chinese = names(&["fr_FR.UTF-8", "fr_FR", "fr", "zh_CN.UTF-8", "zh_CN", "zh", "C"]);
+        assert_eq!(
+            language_status(Some("zh_CN"), &french_then_chinese),
+            "Your desktop's language (zh_CN)"
+        );
+        let french = names(&["fr_FR.UTF-8", "fr_FR", "fr", "C"]);
+        assert_eq!(
+            language_status(None, &french),
+            "English: no translation for fr_FR is installed"
+        );
+        let english = names(&["en_US.UTF-8", "en_US", "en", "C"]);
+        assert_eq!(language_status(None, &english), "English");
+        assert_eq!(language_status(None, &names(&["C"])), "English");
+        // GLib lists an encoded C locale before the plain one (LANG=C.UTF-8).
+        assert_eq!(language_status(None, &names(&["C.UTF-8", "C"])), "English");
+        assert_eq!(
+            language_status(None, &names(&["POSIX.UTF-8", "POSIX"])),
+            "English"
+        );
+        assert_eq!(
+            language_status(None, &names(&["C.UTF-8", "fr_FR", "C"])),
+            "English",
+            "the C locale ends the search"
+        );
     }
 }

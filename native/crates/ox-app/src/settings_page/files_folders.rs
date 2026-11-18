@@ -160,19 +160,14 @@ const ITEM_COUNTS: RowText = RowText {
     keywords: "details folder size count items contents",
 };
 
-const FOLDER_SIZES: RowText = RowText {
-    title: "Calculate folder sizes",
-    description: "Right-click a folder → Calculate folder size. Results last for this session.",
-    keywords: "zfs logical bytes size on disk compressed snapshots disk usage. Results are kept \
-               only for this window session.",
-};
-
 const HOW_SIZES_ARE_COUNTED: RowText = RowText {
     title: "How sizes are counted",
-    description: "Logical file bytes, the space on disk, what a scan skips, and its limits.",
-    keywords: "folder sizes scans run on demand outside the browsing worker pool compressed zfs \
-               space snapshot usage hidden files links nested filesystem mounts snapshot \
-               collections 1 million entries 5 minutes partial total cancel recalculate",
+    description: "Right-click a folder → Calculate folder size. Results last for this session. This \
+                  page explains logical file bytes, the space on disk, what a scan skips, and its \
+                  limits.",
+    keywords: "calculate folder sizes scans run on demand outside the browsing worker pool compressed \
+               zfs logical bytes size on disk space snapshot usage links nested filesystem mounts \
+               snapshot collections 1 million entries 5 minutes partial total cancel recalculate",
 };
 
 /// The two paragraphs of the Python "Folder sizes" section.
@@ -471,10 +466,10 @@ fn view_option_switch(page: &SettingsPage, binding: ViewOptionBinding) -> gtk::S
     switch
 }
 
-/// "Calculate folder sizes", a command of the folder's context menu, and
-/// the row that opens how sizes are counted.
+/// The row that opens how sizes are counted, whose ⓘ says where
+/// Calculate folder size is: a command of a folder's context menu, with
+/// nothing to change here.
 fn add_folder_size_rows(page: &SettingsPage, group: &SettingsGroup) {
-    group.add_row(&SettingRow::new(FOLDER_SIZES));
     let details = SettingRow::new(HOW_SIZES_ARE_COUNTED);
     let open = parts::chevron_button(HOW_SIZES_ARE_COUNTED.title);
     open.connect_clicked(glib::clone!(

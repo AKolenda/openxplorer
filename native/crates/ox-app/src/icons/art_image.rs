@@ -309,8 +309,7 @@ impl ArtImage {
             })
     }
 
-    /// What the image shows, for tests.
-    #[cfg(test)]
+    /// What the image shows.
     pub(crate) fn art(&self) -> Option<Art> {
         self.imp().shown.get().map(|shown| shown.art)
     }

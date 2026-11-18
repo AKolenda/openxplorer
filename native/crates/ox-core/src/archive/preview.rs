@@ -28,7 +28,7 @@ use super::browse::ArchiveBrowser;
 use super::member_names::{is_previewable, is_safe_member};
 use super::source::{open_archive, MemberData};
 use super::worker::on_worker;
-use super::zip::{Encryption, MemberFileType, ZipMember};
+use super::zip::{CompressionMethod, MemberFileType, ZipMember};
 use super::ArchiveError;
 use crate::private_storage::private_directory;
 use crate::random::{random_hex, NAME_BYTES};
@@ -97,7 +97,7 @@ impl ArchiveBrowser {
         if !is_previewable(file_name) {
             return Err(ArchiveError::UnsafePreviewType);
         }
-        let mut archive = open_archive(self.opener.as_ref(), uri, cancel)?;
+        let mut archive = open_archive(&self.opener, uri, cancel)?;
         let index = unique_member(archive.members(), member)?;
         check_previewable(&archive.members()[index])?;
         // A missing or wrong password stops here, before any folder exists.
@@ -152,8 +152,12 @@ fn unique_member(members: &[ZipMember], member: &str) -> Result<usize, ArchiveEr
 /// special files, and members too large or too highly compressed to
 /// decompress safely.
 fn check_previewable(member: &ZipMember) -> Result<(), ArchiveError> {
-    if member.encryption() == Encryption::Unsupported {
-        return Err(ArchiveError::UnsupportedEncryption);
+    if let Some(refusal) = member.encryption_refusal() {
+        return Err(refusal);
+    }
+    // A 7z block the reader cannot decode says why at once.
+    if let (CompressionMethod::SevenZip(_), Some(refusal)) = (member.method, member.method_refusal()) {
+        return Err(refusal);
     }
     let is_regular = matches!(
         member.file_type(),

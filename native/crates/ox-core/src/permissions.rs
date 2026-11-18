@@ -238,7 +238,7 @@ impl ModeChange {
 
 /// The process's file-creation mask, from `/proc/self/status` (reading it
 /// with umask(2) would change it); `0o022` where it cannot be read.
-fn process_umask() -> u32 {
+pub(crate) fn process_umask() -> u32 {
     std::fs::read_to_string("/proc/self/status")
         .ok()
         .and_then(|status| {

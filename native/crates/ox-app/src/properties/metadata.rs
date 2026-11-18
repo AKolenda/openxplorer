@@ -285,19 +285,11 @@ fn mount_at(file: &gio::File) -> Option<MountFacts> {
     let mount = mounts.into_iter().rev().find(|mount| mount.path == path)?;
     let info = file
         .query_filesystem_info(
-            "filesystem::free,filesystem::size,filesystem::remote",
+            &format!("{},filesystem::remote", crate::volumes::SPACE_ATTRIBUTES),
             gio::Cancellable::NONE,
         )
         .ok();
-    let space = info.as_ref().and_then(|info| {
-        let known = info.has_attribute("filesystem::free") && info.has_attribute("filesystem::size");
-        known.then(|| {
-            (
-                info.attribute_uint64("filesystem::free"),
-                info.attribute_uint64("filesystem::size"),
-            )
-        })
-    });
+    let space = info.as_ref().and_then(crate::volumes::space_of);
     let remote = info
         .as_ref()
         .and_then(|info| optional_bool(info, "filesystem::remote"))

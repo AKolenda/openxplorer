@@ -763,3 +763,131 @@ fn an_arrow_scrolls_one_whole_tab_also_past_a_wide_snapshot_tab() {
         assert!(clicks < 80, "the strip reaches its start");
     }
 }
+
+/// With "Reopen my tabs" on, the open tabs are saved while the window is
+/// open, soon after they change, not only when the last window closes:
+/// an app ended by a signal (SIGTERM at logout) keeps the tabs it had.
+///
+/// parity: TAB-053
+#[gtk::test]
+fn the_open_tabs_are_saved_while_the_window_is_open() {
+    use ox_core::session::SavedSession;
+    use ox_core::settings::{PreferencesUpdate, Settings};
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let update = PreferencesUpdate {
+        restore_session: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    // As a window the user opened, which saves its size and tabs.
+    test.window.imp().remembers_session.set(true);
+
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("the new tab");
+
+    let saved_uris = || {
+        SavedSession::load(test.settings_directory()).map(|saved| {
+            saved
+                .tabs
+                .iter()
+                .map(|tab| tab.panes[tab.active_pane].uri.clone())
+                .collect::<Vec<_>>()
+        })
+    };
+    wait_until("the tabs to be saved", || {
+        saved_uris() == Some(vec![fixture.uri(), fixture.uri_of("Documents")])
+    });
+    assert!(test.window.is_visible(), "saved while the window is open");
+}
+
+/// A save of the open tabs that fails for a while (a full disk, a folder
+/// that may not be written) is tried again at the next save, so the tabs
+/// are kept once the storage works again.
+///
+/// parity: TAB-053
+#[gtk::test]
+fn a_failed_save_of_the_open_tabs_is_tried_again() {
+    use ox_core::session::SavedSession;
+    use ox_core::settings::{PreferencesUpdate, Settings};
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let update = PreferencesUpdate {
+        restore_session: Some(true),
+        ..PreferencesUpdate::default()
+    };
+    Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    test.window.imp().remembers_session.set(true);
+    let directory = test.settings_directory().to_owned();
+    // A folder where the session file goes makes every save fail.
+    let blocker = directory.join("session.json");
+    std::fs::create_dir_all(blocker.join("in the way")).expect("a folder in the way");
+
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("the new tab");
+    wait_for(std::time::Duration::from_secs(4));
+    let while_failing = SavedSession::load(&directory);
+    std::fs::remove_dir_all(&blocker).expect("the way cleared");
+
+    let saved_uris = || {
+        SavedSession::load(&directory).map(|saved| {
+            saved
+                .tabs
+                .iter()
+                .map(|tab| tab.panes[tab.active_pane].uri.clone())
+                .collect::<Vec<_>>()
+        })
+    };
+    wait_until("the tabs to be saved once the folder may be written", || {
+        saved_uris() == Some(vec![fixture.uri(), fixture.uri_of("Documents")])
+    });
+    assert!(while_failing.is_none(), "nothing could be saved meanwhile");
+}
+
+/// When another window saved its tabs, a window whose tabs did not change
+/// saves them again once it is in front, so the next start opens the tabs
+/// of the window in front, not those of the window that saved last.
+///
+/// parity: TAB-053
+#[gtk::test]
+fn a_window_saves_its_unchanged_tabs_again_after_another_window_saved() {
+    use ox_core::session::SavedSession;
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let other = test.open_beside(&fixture.uri_of("Documents"));
+    let saved_uris = || {
+        SavedSession::load(test.settings_directory()).map(|saved| {
+            saved
+                .tabs
+                .iter()
+                .map(|tab| tab.panes[tab.active_pane].uri.clone())
+                .collect::<Vec<_>>()
+        })
+    };
+
+    test.window.save_session_in_background();
+    wait_until("the first window's tabs to be saved", || {
+        saved_uris() == Some(vec![fixture.uri()])
+    });
+    other.window.save_session_in_background();
+    wait_until("the other window's tabs to be saved", || {
+        saved_uris() == Some(vec![fixture.uri_of("Documents")])
+    });
+    test.window.save_session_in_background();
+    wait_until("the first window's tabs to be saved again", || {
+        saved_uris() == Some(vec![fixture.uri()])
+    });
+}

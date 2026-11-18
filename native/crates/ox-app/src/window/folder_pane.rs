@@ -928,5 +928,6 @@ impl FolderPane {
     /// Draws the icon view's cells for text of `size`.
     pub(super) fn set_text_size(&self, size: TextSize) {
         self.icon_view().set_text_size(size);
+        self.details().set_text_scale(size.scale());
     }
 }

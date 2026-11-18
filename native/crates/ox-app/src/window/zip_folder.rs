@@ -13,10 +13,10 @@
 //! the selected items (see `zip_copies.rs`). The other choice, "In a
 //! pop-up window", keeps the "Compressed folder" window.
 //!
-//! TAR archives (.tar, .tar.gz/.tgz, .tar.bz2, .tar.xz, .tar.zst, which
-//! Windows 11 also reads itself) open the same way: the archive reader
-//! lists them into the same member records as a ZIP, under the same
-//! rules.
+//! TAR archives (.tar, .tar.gz/.tgz, .tar.bz2, .tar.xz, .tar.zst) and 7z
+//! archives, which Windows 11 also reads itself, open the same way: the
+//! archive reader lists them into the same member records as a ZIP, under
+//! the same rules.
 
 use ox_core::entry::Entry;
 use ox_core::location::ArchiveLocation;
@@ -38,8 +38,8 @@ const NOT_OPENABLE: &str =
 const NOT_IN_DIALOGS: &str =
     crate::i18n::message_id("Files inside an archive cannot be chosen here. Extract the archive first.");
 
-/// Whether `entry` is an archive the app browses itself, a ZIP or a TAR
-/// plain or compressed, by name or type.
+/// Whether `entry` is an archive the app browses itself, a ZIP, a TAR
+/// plain or compressed, or a 7z, by name or type.
 fn is_zip(entry: &Entry) -> bool {
     ox_core::archive::is_supported_archive(&entry.name, entry.content_type.as_deref())
 }

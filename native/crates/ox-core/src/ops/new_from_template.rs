@@ -19,6 +19,11 @@
 //!   that never overwrites. A failed stage is deleted. The template's
 //!   permissions, execute bits included, are never copied, and a template
 //!   is never run.
+//! - Once written in full, a stage on this computer gets the mode any
+//!   app's new file gets, 0666 less the umask (0644 or 0664), through the
+//!   file it still has open (`fchmod`), never through its name, before it
+//!   is published, so a new document is as readable as other new files in
+//!   a shared folder and no link swapped in for the stage is followed.
 
 use std::fs::File;
 use std::io::{ErrorKind, Read};
@@ -42,6 +47,12 @@ use crate::transfer::{already_removed, Cancellation, Node, StagedName};
 /// Templates are read in blocks of this many bytes, with a cancellation
 /// check before each.
 const READ_BLOCK_BYTES: usize = 64 * 1024;
+
+/// The mode `creat(2)` asks for a new file, before the umask.
+const NEW_FILE_MODE: u32 = 0o666;
+
+/// The stage's mode while it is written: its owner's alone.
+const PRIVATE_STAGE_MODE: u32 = 0o600;
 
 /// The stage file is `.winspace-new-<32 hex>` in the target folder.
 const STAGE_PREFIX: &str = ".winspace-new-";
@@ -370,15 +381,22 @@ fn naming(error: OpsError, staged: &StagedName) -> OpsError {
 }
 
 /// Creates `stage` exclusively as a private (0600) file and writes
-/// `contents` to it. A stage this call created is deleted again when
-/// writing fails; a name it could not create is never touched. Errors name
-/// the new file that `staged` describes.
+/// `contents` to it. A stage on this computer then gets the mode any app's
+/// new file gets, 0666 less the umask (0644 or 0664), through the file it
+/// still has open, never through its name, which another account could
+/// swap for a link in a folder it may write to; a stage elsewhere keeps
+/// the mode its backend gives it. A stage this call created is deleted
+/// again when writing fails; a name it could not create is never touched.
+/// Errors name the new file that `staged` describes.
 fn write_private_stage(
     stage: &gio::File,
     contents: &[u8],
     context: &OperationContext,
     staged: &StagedName,
 ) -> Result<(), OpsError> {
+    if let Some(path) = stage.path() {
+        return write_local_stage(stage, &path, contents, context, staged);
+    }
     let cancellable = Some(context.cancellable());
     let stream = stage
         .create(gio::FileCreateFlags::PRIVATE, cancellable)
@@ -393,6 +411,55 @@ fn write_private_stage(
     written
         .and(closed)
         .map_err(|error| discard_stage(&GioNode::from_file(stage.clone()), naming(error.into(), staged)))
+}
+
+/// [`write_private_stage`] for a stage at `path` on this computer: created
+/// with `O_CREAT | O_EXCL | O_NOFOLLOW` (a link or anything else already
+/// at the name is refused, never followed), written in 64 KiB blocks that
+/// check for cancellation, given its final mode with `fchmod` on the open
+/// file and flushed to the storage with `fsync` before it is closed, so a
+/// write that fails late is never published.
+fn write_local_stage(
+    stage: &gio::File,
+    path: &Path,
+    contents: &[u8],
+    context: &OperationContext,
+    staged: &StagedName,
+) -> Result<(), OpsError> {
+    use std::io::Write;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+    // The system's reason after the stage's path, which `naming` turns
+    // into the new file's.
+    let located = |error: std::io::Error| {
+        naming(
+            std::io::Error::new(error.kind(), format!("{}: {error}", path.display())).into(),
+            staged,
+        )
+    };
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(PRIVATE_STAGE_MODE)
+        .custom_flags((OFlags::NOFOLLOW | OFlags::CLOEXEC).bits().cast_signed())
+        .open(path)
+        .map_err(located)?;
+    let mode = NEW_FILE_MODE & !crate::permissions::process_umask();
+    let mut write = || -> Result<(), OpsError> {
+        for block in contents.chunks(READ_BLOCK_BYTES) {
+            context.cancel.check()?;
+            file.write_all(block).map_err(located)?;
+        }
+        file.set_permissions(std::fs::Permissions::from_mode(mode))
+            .map_err(located)?;
+        // A write the storage takes later (NFS, FUSE, a quota) can still
+        // fail; closing would not say so, `fsync` does.
+        file.sync_all().map_err(located)
+    };
+    let written = write();
+    drop(file);
+    // OPS-048: a stage that could not be written in full is deleted.
+    written.map_err(|error| discard_stage(&GioNode::from_file(stage.clone()), error))
 }
 
 /// Deletes a stage file this operation created after `cause` stopped it,
@@ -482,6 +549,74 @@ mod tests {
             .map(|entry| entry.expect("a folder entry").file_name())
             .collect();
         assert_eq!(names, ["New document.txt"], "no {STAGE_PREFIX} file is left");
+    }
+
+    /// Every New document (a bitmap, a Rich Text Document, a text
+    /// document and a ZIP) is published with the mode other apps give new
+    /// files, 0666 less the umask (0644 or 0664), not its private stage's
+    /// 0600, so the group and others can read it in a shared folder.
+    ///
+    /// parity: OPS-048
+    #[test]
+    fn a_new_document_gets_the_umask_mode_not_the_private_stage_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        let folder = gio::File::for_path(temp.path());
+        let wanted = 0o666 & !crate::permissions::process_umask();
+        for document in NewDocument::ALL {
+            let name = format!("New document.{}", document.extension());
+            let target = GioNode::from_file(folder.child(&name));
+            publish_new_file(
+                &folder,
+                &target,
+                document.contents(),
+                &OperationContext::default(),
+            )
+            .expect("the new document");
+            let mode = fs::metadata(temp.path().join(&name))
+                .expect("the new document")
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, wanted, "{name}: {:o}", mode & 0o777);
+        }
+    }
+
+    /// A local stage has the new file's final mode, 0666 less the umask,
+    /// once it is written and before anything names it again: the mode is
+    /// set through the open file, never through its name, which another
+    /// account could swap for a link in a folder it may write to. A link
+    /// already at the stage's name is never followed.
+    ///
+    /// parity: OPS-048
+    #[test]
+    fn a_stage_gets_its_mode_through_the_open_file_not_its_name() {
+        use std::os::unix::fs::PermissionsExt;
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        let folder = gio::File::for_path(temp.path());
+        let wanted = 0o666 & !crate::permissions::process_umask();
+        let staged = StagedName::new(".winspace-new-a", &[], "New document.txt");
+
+        let stage = folder.child(".winspace-new-a");
+        write_private_stage(&stage, b"text", &OperationContext::default(), &staged).expect("a stage");
+        let mode = fs::metadata(temp.path().join(".winspace-new-a"))
+            .expect("the stage")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, wanted, "{:o}", mode & 0o777);
+
+        let victim = temp.path().join("victim.txt");
+        fs::write(&victim, b"kept").expect("another file");
+        fs::set_permissions(&victim, fs::Permissions::from_mode(0o600)).expect("chmod");
+        symlink(&victim, temp.path().join(".winspace-new-b")).expect("a planted link");
+        let planted = folder.child(".winspace-new-b");
+        let refused = write_private_stage(&planted, b"text", &OperationContext::default(), &staged);
+        assert!(refused.is_err(), "{refused:?}");
+        assert_eq!(fs::read(&victim).expect("the other file"), b"kept");
+        let mode = fs::metadata(&victim)
+            .expect("the other file")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600, "the other file keeps its mode");
     }
 
     #[test]

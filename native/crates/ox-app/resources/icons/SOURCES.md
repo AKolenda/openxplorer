@@ -17,7 +17,7 @@ also awaiting the owner's review: `apps_list_detail_20_regular` (Tiles) and
 `content_view_20_regular` (Content). Added on 2026-11-08, also awaiting the
 owner's review: `search_settings_20_regular` (Search options while searching). Added on 2026-11-09, also awaiting the owner's review: `warning_32_color`
 (the warning icon of the Rename and Confirm Save As message boxes, which Windows 11
-draws in colour). Undo, Redo and Pin
+draws in colour). Added on 2026-11-17, also awaiting the owner's review: `dismiss_circle_32_color` (the error icon of the message box that says a typed address was not found, the red circle Windows 11's File Explorer error box shows). Undo, Redo and Pin
 are drawn in Windows' blue (#0078d4, or #60cdff in the dark theme) by the menu's CSS, and Redo shows
 `arrow_undo_20_regular` mirrored by it (`-gtk-icon-transform`), as Windows
 11 draws them; the files are not changed. Microsoft publishes no colour
@@ -185,6 +185,7 @@ it.
 | `places/ox-organization-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/organization_20_regular.svg` | b996c1ee7354c2b5bbed026cf8cb6e51298876381954cfb2d63372f1719937bd |
 | `places/ox-video-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/video_20_regular.svg` | 0d08b2e62ce110c379e9f726a954a81f8ee8eeb279d60e2eae4ebcea8a025365 |
 | `status/ox-clock-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/clock_20_regular.svg` | fd5202fb96544171c260e8541138dfb49c29a7db3c1801cdc5a15333f673e067 |
+| `status/ox-dismiss-circle-32-color.svg` | Fluent UI System Icons 1.1.343 | `icons/dismiss_circle_32_color.svg` | 46205ce332b27341fd4396e1f93c82f74914ecd3c10ff40d2e629c505c2a7f37 |
 | `status/ox-info-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/info_20_regular.svg` | b2171313057fcd3cffca9c20cf905a05977e63eebe5275bab4371b1f0d4a1ff8 |
 | `status/ox-shield-lock-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/shield_lock_20_regular.svg` | 1ee2491675efa4f0882313130035a5ae4bcf7b3a0634fe33f60ddf30390dbc2b |
 | `status/ox-star-20-filled-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/star_20_filled.svg` | cc9978158a2dc62250a2321e1ba54d6f96108e3ec739eef52ed48c628604cbac |
