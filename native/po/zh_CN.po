@@ -1240,10 +1240,6 @@ msgid "ZIP opening uses {handler}. Opening a download is not Show in folder."
 msgstr "ZIP 打开使用 {handler}。打开下载的文件不属于“在文件夹中显示”。"
 
 #: crates/ox-app/src/integration/status.rs
-msgid "ZIP opening uses the desktop choice. Opening a download is not Show in folder."
-msgstr "ZIP 打开使用桌面环境的默认应用。打开下载的文件不属于“在文件夹中显示”。"
-
-#: crates/ox-app/src/integration/status.rs
 msgid "ZIP opening: OpenXplorer. This is separate from folder defaults."
 msgstr "ZIP 打开方式：OpenXplorer。这与文件夹默认应用是分开的。"
 

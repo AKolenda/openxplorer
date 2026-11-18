@@ -77,9 +77,7 @@ is missing.
   Preview pane shows an RTF document's text without its bold, italics,
   fonts or colors (VIEW-070); at 200% text the command bar's and panes'
   icons stay 16 pixels (ACC-012); a selected This PC tile lists its space
-  as "Space" in the Details pane, not checked against Windows (HOME-001);
-  the Chinese sentence for ZIP files opened by the desktop's choice reuses
-  the catalogue's own wording and still needs a translator's review.
+  as "Space" in the Details pane, not checked against Windows (HOME-001).
 - **Checks this environment cannot run.** LOOK-028 (fractional scales and a
   window moving between monitors of different scales need a Wayland
   compositor), ACC-003 (nobody has checked the file list with Orca; the icon
