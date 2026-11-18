@@ -25,6 +25,7 @@ use crate::test_support::harness::{
 use crate::text_size::TextSize;
 use crate::theme::desktop_text::{DesktopText, DesktopTextWatch};
 use crate::window::focus_regions::Region;
+use crate::window::window_action::WindowAction;
 use crate::window::ButtonStyle;
 
 /// Emits `key` with `modifiers` on the key controller of `widget`;
@@ -620,6 +621,41 @@ fn large_text_widens_default_columns_and_the_navigation_pane() {
     );
     assert_eq!(back, (176, 135, 210));
     assert_eq!(dragged, 150, "a width the user chose stays");
+}
+
+/// A folder opened at 200% text starts with the wide defaults; Ctrl+0
+/// then brings every column nobody resized, Size included, back to its
+/// 100% default, not only those that were already open when the text
+/// grew.
+///
+/// parity: ACC-012, VIEW-028
+#[gtk::test]
+fn columns_of_a_folder_opened_at_large_text_shrink_after_ctrl_0() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.set_default_size(1800, 900);
+    wait_for_frames(&test.window, 3);
+    let skin = skin();
+    let before = skin.text_size();
+    let details = test.window.folder_pane().details();
+    let width_of = |column: SortColumn| details.column(column).expect("a column").fixed_width();
+    let widths = || [SortColumn::Modified, SortColumn::Type, SortColumn::Size].map(width_of);
+    let normal = widths();
+
+    skin.set_text_size(TextSize::from_percent(200));
+    wait_for_frames(&test.window, 3);
+    test.window.navigate(&fixture.uri_of("Documents")).expect("Documents");
+    test.wait_for_listing("Documents");
+    wait_for_frames(&test.window, 3);
+    let large = widths();
+    test.activate(WindowAction::TextSize(crate::text_size::Step::Reset).name(), None);
+    wait_for_frames(&test.window, 3);
+    let back = widths();
+    skin.set_text_size(before);
+
+    assert!(large[0] > normal[0] && large[1] > normal[1], "{large:?} after {normal:?}");
+    assert!(large[2] > normal[2], "Size holds its larger text: {large:?} after {normal:?}");
+    assert_eq!(back, normal, "back at the 100% defaults");
 }
 
 /// A window that opens with 200% text already chosen starts with the
