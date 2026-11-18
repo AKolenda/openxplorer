@@ -500,3 +500,39 @@ fn a_failed_save_of_the_open_tabs_is_tried_again() {
     });
     assert!(while_failing.is_none(), "nothing could be saved meanwhile");
 }
+
+/// When another window saved its tabs, a window whose tabs did not change
+/// saves them again once it is in front, so the next start opens the tabs
+/// of the window in front, not those of the window that saved last.
+///
+/// parity: TAB-053
+#[gtk::test]
+fn a_window_saves_its_unchanged_tabs_again_after_another_window_saved() {
+    use ox_core::session::SavedSession;
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let other = test.open_beside(&fixture.uri_of("Documents"));
+    let saved_uris = || {
+        SavedSession::load(test.settings_directory()).map(|saved| {
+            saved
+                .tabs
+                .iter()
+                .map(|tab| tab.panes[tab.active_pane].uri.clone())
+                .collect::<Vec<_>>()
+        })
+    };
+
+    test.window.save_session_in_background();
+    wait_until("the first window's tabs to be saved", || {
+        saved_uris() == Some(vec![fixture.uri()])
+    });
+    other.window.save_session_in_background();
+    wait_until("the other window's tabs to be saved", || {
+        saved_uris() == Some(vec![fixture.uri_of("Documents")])
+    });
+    test.window.save_session_in_background();
+    wait_until("the first window's tabs to be saved again", || {
+        saved_uris() == Some(vec![fixture.uri()])
+    });
+}

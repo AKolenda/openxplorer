@@ -16,6 +16,10 @@
 //! main thread, and at once when the session manager asks the app to end
 //! (`GtkApplication`'s `query-end`, [`save_front_session`]).
 
+use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, PoisonError};
+
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
@@ -34,6 +38,38 @@ use super::BrowserWindow;
 /// How often, in seconds, the window in front saves its tabs while they
 /// change.
 const SESSION_SAVE_SECONDS: u32 = 3;
+
+/// The number the next snapshot of a window's tabs takes, in the order
+/// the main thread reads them.
+static NEXT_SNAPSHOT: AtomicU64 = AtomicU64::new(1);
+
+/// The number of the newest snapshot written, locked while one is
+/// written: writes never overlap, and an older snapshot never replaces a
+/// newer one, whichever write finishes first.
+static WRITTEN_SNAPSHOT: Mutex<u64> = Mutex::new(0);
+
+/// Writes `saved`, snapshot `number`, to `directory`, after any write
+/// still running, unless a newer snapshot is written already.
+fn write_snapshot(saved: &SavedSession, number: u64, directory: &Path) -> Result<(), String> {
+    let mut written = WRITTEN_SNAPSHOT.lock().unwrap_or_else(PoisonError::into_inner);
+    if *written > number {
+        return Ok(());
+    }
+    saved.save(directory).map_err(|error| error.to_string())?;
+    *written = number;
+    Ok(())
+}
+
+/// Writes the tabs of `window` now, after any write still running.
+fn save_now(window: &BrowserWindow) {
+    let Some(saved) = window.saved_session() else {
+        return;
+    };
+    let number = NEXT_SNAPSHOT.fetch_add(1, Ordering::Relaxed);
+    if let Err(error) = write_snapshot(&saved, number, &window.context().settings_directory()) {
+        glib::g_warning!(ox_core::LOG_DOMAIN, "The open tabs could not be saved: {error}");
+    }
+}
 
 /// The entries of `history` a saved session keeps: at most
 /// [`MAX_HISTORY_ENTRIES`] locations around the current one, without its
@@ -115,11 +151,7 @@ impl BrowserWindow {
         if others_open {
             return;
         }
-        if let Some(saved) = self.saved_session() {
-            if let Err(error) = saved.save(&self.context().settings_directory()) {
-                glib::g_warning!(ox_core::LOG_DOMAIN, "The open tabs could not be saved: {error}");
-            }
-        }
+        save_now(self);
     }
 
     /// Saves the window's tabs every [`SESSION_SAVE_SECONDS`] seconds
@@ -159,8 +191,8 @@ impl BrowserWindow {
     }
 
     /// Writes the window's tabs on a worker thread when they differ from
-    /// what this window saved last.
-    fn save_session_in_background(&self) {
+    /// what this window saved last and no other window saved since.
+    pub(super) fn save_session_in_background(&self) {
         let Some(saved) = self.saved_session() else {
             return;
         };
@@ -172,13 +204,15 @@ impl BrowserWindow {
         // the same write again; forgotten if it fails, so a later tick
         // tries again once the storage works (a full disk, for example).
         self.imp().saved_session_text.replace(Some(text.clone()));
+        self.forget_other_saves();
+        let number = NEXT_SNAPSHOT.fetch_add(1, Ordering::Relaxed);
         let directory = self.context().settings_directory();
         let window = self.downgrade();
         glib::spawn_future_local(async move {
-            let written = gio::spawn_blocking(move || saved.save(&directory)).await;
+            let written = gio::spawn_blocking(move || write_snapshot(&saved, number, &directory)).await;
             let failure = match written {
                 Ok(Ok(())) => return,
-                Ok(Err(error)) => error.to_string(),
+                Ok(Err(error)) => error,
                 Err(_) => "the saving thread stopped".to_owned(),
             };
             glib::g_warning!(ox_core::LOG_DOMAIN, "The open tabs could not be saved: {failure}");
@@ -189,6 +223,23 @@ impl BrowserWindow {
                 }
             }
         });
+    }
+
+    /// Forgets what every other browsing window saved last: the session
+    /// file holds this window's tabs now, so theirs are saved again once
+    /// one of them is in front, even unchanged.
+    fn forget_other_saves(&self) {
+        let Some(app) = self.application() else {
+            return;
+        };
+        for window in app.windows() {
+            if let Some(other) = window
+                .downcast_ref::<BrowserWindow>()
+                .filter(|other| *other != self)
+            {
+                other.imp().saved_session_text.replace(None);
+            }
+        }
     }
 
     /// Opens the tabs of `saved` in this window, which has none yet, and
@@ -250,11 +301,8 @@ pub(crate) fn save_front_session(app: &gtk::Application) {
     let Some(window) = front else {
         return;
     };
-    if let Some(saved) = window.saved_session() {
-        if let Err(error) = saved.save(&window.context().settings_directory()) {
-            glib::g_warning!(ox_core::LOG_DOMAIN, "The open tabs could not be saved: {error}");
-        }
-    }
+    window.forget_other_saves();
+    save_now(&window);
 }
 
 /// Gives the restored pane `tab` the selection and scroll position of

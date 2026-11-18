@@ -4,7 +4,9 @@
 //! Windows' Preview pane shows an RTF file's text, not its markup. This
 //! reads the text the way an RTF reader does, without its formatting:
 //! paragraphs and line breaks become new lines, `\tab` a tab, `\'hh`
-//! escapes a Windows-1252 character, `\uN` a Unicode character (two of
+//! escapes a character of the document's ANSI code page (`\ansicpgN`,
+//! Windows-1252 unless it names another the system converts, one byte
+//! per character), `\uN` a Unicode character (two of
 //! them a surrogate pair's character beyond the Basic Multilingual Plane,
 //! skipping the `\ucN` fallback characters after each), and the groups a reader
 //! does not show (the font, color and style tables, document information,
@@ -51,6 +53,30 @@ struct Group {
     fallback: usize,
 }
 
+/// The characters 0x80 to 0xFF of the single-byte ANSI code page
+/// `code_page` (`\ansicpgN`), through the system's converters; `None`
+/// for Windows-1252. A byte the converters cannot read as one character
+/// (a code page they lack, or a byte it does not map) is read as
+/// Windows-1252.
+fn code_page_characters(code_page: i64) -> Option<Vec<char>> {
+    if code_page == 1252 {
+        return None;
+    }
+    let codeset = format!("CP{code_page}");
+    let characters = (0x80..=0xff_u8)
+        .map(|byte| {
+            gtk::glib::convert(&[byte], "UTF-8", codeset.as_str())
+                .ok()
+                .and_then(|(bytes, _)| {
+                    let mut characters = std::str::from_utf8(&bytes).ok()?.chars();
+                    characters.next().filter(|_| characters.next().is_none())
+                })
+                .unwrap_or_else(|| windows_1252(byte))
+        })
+        .collect();
+    Some(characters)
+}
+
 /// The character of the Windows-1252 byte `byte`.
 fn windows_1252(byte: u8) -> char {
     match byte {
@@ -87,6 +113,9 @@ pub(super) fn rtf_text(bytes: &[u8]) -> String {
         index: 0,
         text: String::new(),
         stack: Vec::new(),
+        untracked: 0,
+        code_page: None,
+        code_page_read: false,
         group: Group {
             hidden: false,
             fallback: 1,
@@ -107,6 +136,15 @@ struct Reader<'a> {
     index: usize,
     text: String,
     stack: Vec<Group>,
+    /// Groups opened past [`MAX_DEPTH`] and not closed yet: their `}`
+    /// close no group of the stack.
+    untracked: usize,
+    /// The characters 0x80 to 0xFF of the document's ANSI code page;
+    /// `None` for Windows-1252.
+    code_page: Option<Vec<char>>,
+    /// The header's `\ansicpgN` was read; later ones are ignored, so a
+    /// file of them cannot keep the converters busy.
+    code_page_read: bool,
     group: Group,
     /// Fallback characters still to skip after a `\uN`.
     skip: usize,
@@ -121,6 +159,14 @@ struct Reader<'a> {
 }
 
 impl Reader<'_> {
+    /// The character of the byte `byte` in the document's ANSI code page.
+    fn ansi(&self, byte: u8) -> char {
+        match &self.code_page {
+            Some(characters) if byte >= 0x80 => characters[usize::from(byte - 0x80)],
+            _ => windows_1252(byte),
+        }
+    }
+
     /// Adds `character` to the text unless it is a fallback to skip or
     /// its group is hidden.
     fn push(&mut self, character: char) {
@@ -182,13 +228,17 @@ impl Reader<'_> {
                 b'{' => {
                     if self.stack.len() < MAX_DEPTH {
                         self.stack.push(self.group);
+                    } else {
+                        self.untracked += 1;
                     }
                     self.group_start = true;
                     self.skip = 0;
                     continue;
                 }
                 b'}' => {
-                    if let Some(outer) = self.stack.pop() {
+                    if self.untracked > 0 {
+                        self.untracked -= 1;
+                    } else if let Some(outer) = self.stack.pop() {
                         self.group = outer;
                     }
                     self.skip = 0;
@@ -230,7 +280,7 @@ impl Reader<'_> {
                     .and_then(|hex| u8::from_str_radix(hex, 16).ok());
                 if let Some(value) = value {
                     self.index += 2;
-                    self.push(windows_1252(value));
+                    self.push(self.ansi(value));
                 }
             }
             b'~' => self.push('\u{a0}'),
@@ -273,6 +323,10 @@ impl Reader<'_> {
             "par" | "line" | "sect" | "page" | "row" | "tab" | "cell" => {
                 self.push_always(word_character(word).unwrap_or('\n'));
             }
+            "ansicpg" if !self.code_page_read => {
+                self.code_page_read = true;
+                self.code_page = parameter.and_then(code_page_characters);
+            }
             "uc" => self.group.fallback = parameter.and_then(|n| usize::try_from(n).ok()).unwrap_or(1),
             "u" => {
                 self.unicode_unit(parameter);
@@ -292,7 +346,7 @@ impl Reader<'_> {
     }
 
     /// Reads a character of text: ASCII, or UTF-8 a hand-written file may
-    /// hold (bytes above 127 are not RTF), else Windows-1252.
+    /// hold (bytes above 127 are not RTF), else the ANSI code page's.
     fn character(&mut self, byte: u8) {
         let start = self.index - 1;
         let character = if byte.is_ascii() {
@@ -307,7 +361,7 @@ impl Reader<'_> {
                     self.index = start + character.len_utf8();
                     character
                 }
-                None => windows_1252(byte),
+                None => self.ansi(byte),
             }
         };
         self.push(character);
@@ -357,6 +411,34 @@ mod tests {
         assert_eq!(rtf_text(b"{\\rtf1\\uc0\\u-10176\\u-9191 }"), "\u{20019}");
         assert_eq!(rtf_text(b"{\\rtf1\\uc1\\u-10179? x}"), "\u{fffd} x");
         assert_eq!(rtf_text(b"{\\rtf1\\uc1\\u-8704? y}"), "\u{fffd} y");
+    }
+
+    /// `\'hh` escapes and raw bytes above 127 are characters of the ANSI
+    /// code page the header names, such as Windows-1251 for Cyrillic.
+    ///
+    /// parity: VIEW-070
+    #[test]
+    fn escaped_bytes_are_read_in_the_documents_code_page() {
+        // Only where the system can convert Windows-1251.
+        if gtk::glib::convert(&[0xcf], "UTF-8", "CP1251").is_err() {
+            return;
+        }
+        assert_eq!(
+            rtf_text(b"{\\rtf1\\ansi\\ansicpg1251\\deff0 \\'cf\\'f0\\'e8\\'e2\\'e5\\'f2 \xe4\xe0}"),
+            "\u{41f}\u{440}\u{438}\u{432}\u{435}\u{442} \u{434}\u{430}"
+        );
+        assert_eq!(rtf_text(b"{\\rtf1\\ansi\\ansicpg1252 Caf\\'e9}"), "Caf\u{e9}");
+    }
+
+    /// Groups nested past the deepest followed still close their own `}`,
+    /// so the text after them is read in the right group.
+    #[test]
+    fn groups_past_the_deepest_followed_close_their_own_braces() {
+        let mut document = b"{\\rtf1{\\*\\hidden ".to_vec();
+        document.extend(std::iter::repeat_n(b'{', MAX_DEPTH + 4));
+        document.extend(std::iter::repeat_n(b'}', MAX_DEPTH + 4));
+        document.extend(b" still hidden} shown}");
+        assert_eq!(rtf_text(&document), " shown");
     }
 
     #[test]

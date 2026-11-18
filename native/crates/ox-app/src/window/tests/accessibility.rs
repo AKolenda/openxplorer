@@ -574,6 +574,29 @@ fn a_window_opened_at_large_text_starts_with_wide_defaults() {
     assert_eq!(width_of(SortColumn::Type), 270);
 }
 
+/// In a window too narrow for the navigation pane's 200% default, the pane
+/// stops where the folder pane keeps its room, and still returns to 210
+/// pixels at 100% text: it was at its default, cut short.
+///
+/// parity: ACC-012
+#[gtk::test]
+fn a_navigation_pane_cut_short_at_large_text_returns_to_210() {
+    let skin = crate::theme::Skin::detached();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open_with_skin(&fixture.uri(), &skin);
+    test.window.set_default_size(640, 700);
+    wait_for_frames(&test.window, 3);
+
+    skin.set_text_size(TextSize::from_percent(200));
+    wait_for_frames(&test.window, 3);
+    let large = test.window.workspace().position();
+    skin.set_text_size(TextSize::from_percent(100));
+    wait_for_frames(&test.window, 3);
+
+    assert!((211..420).contains(&large), "cut short at 200%: {large}");
+    assert_eq!(test.window.workspace().position(), 210);
+}
+
 /// The desktop's text scaling (GTK's font resolution) grows the rows on
 /// top of the app's own text size. The test follows the display's
 /// settings as the application does at startup.

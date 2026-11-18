@@ -416,8 +416,9 @@ fn write_private_stage(
 /// [`write_private_stage`] for a stage at `path` on this computer: created
 /// with `O_CREAT | O_EXCL | O_NOFOLLOW` (a link or anything else already
 /// at the name is refused, never followed), written in 64 KiB blocks that
-/// check for cancellation, and given its final mode with `fchmod` on the
-/// open file before it is closed.
+/// check for cancellation, given its final mode with `fchmod` on the open
+/// file and flushed to the storage with `fsync` before it is closed, so a
+/// write that fails late is never published.
 fn write_local_stage(
     stage: &gio::File,
     path: &Path,
@@ -450,7 +451,10 @@ fn write_local_stage(
             file.write_all(block).map_err(located)?;
         }
         file.set_permissions(std::fs::Permissions::from_mode(mode))
-            .map_err(located)
+            .map_err(located)?;
+        // A write the storage takes later (NFS, FUSE, a quota) can still
+        // fail; closing would not say so, `fsync` does.
+        file.sync_all().map_err(located)
     };
     let written = write();
     drop(file);

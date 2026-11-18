@@ -296,11 +296,14 @@ impl BrowserWindow {
         let old = self.default_sidebar_width();
         self.imp().sidebar_text_scale.set(scale);
         let workspace = self.workspace();
-        if workspace.position() != old {
+        let limit = self.sidebar_limit().unwrap_or(i32::MAX);
+        // The old default cut short to leave the folder pane its room is
+        // still the default.
+        let position = workspace.position();
+        if position != old && position != old.min(limit) {
             return;
         }
         let wanted = self.default_sidebar_width();
-        let limit = self.sidebar_limit().unwrap_or(i32::MAX);
         workspace.set_position(wanted.min(limit));
     }
 
