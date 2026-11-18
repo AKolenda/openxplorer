@@ -363,7 +363,8 @@ fn column_titles_sort_and_resize_from_the_keyboard() {
     let test = TestWindow::open(&fixture.uri());
     let details = test.window.folder_pane().details();
     let titles = crate::folder_view::column_titles::title_buttons(details.column_view());
-    let type_index = SortColumn::ALL
+    let type_index = details
+        .column_order()
         .iter()
         .position(|column| *column == SortColumn::Type);
     let type_title = &titles[type_index.expect("a Type title")];
@@ -391,6 +392,73 @@ fn column_titles_sort_and_resize_from_the_keyboard() {
     assert_eq!(details.sort_order().column, SortColumn::Type);
     assert!(press_on(type_title, gdk::Key::space, gdk::ModifierType::empty()));
     assert_eq!(details.sort_order().direction, SortDirection::Descending);
+}
+
+/// What a screen reader hears matches what the window shows: the Details
+/// button is named, the search box is named "Search <folder>" as it reads,
+/// a tab is described by its location (not its close button's "Close
+/// tab"), the row of column titles is named once, the title that shows
+/// "Date modified" sorts by Date modified, and the rows are named as the
+/// list shows them, without a hidden extension.
+///
+/// parity: ACC-001, ACC-002
+#[gtk::test]
+fn screen_readers_hear_what_the_window_shows() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let details_button = descendants::<gtk::ToggleButton>(&test.window)
+        .into_iter()
+        .find(|button| button.has_css_class("details-toggle"))
+        .expect("the Details button");
+    assert!(
+        gtk::test_accessible_has_property(&details_button, gtk::AccessibleProperty::Label),
+        "the Details button has a name"
+    );
+    let placeholder = test
+        .window
+        .search_box()
+        .entry()
+        .placeholder_text()
+        .unwrap_or_default();
+    assert!(placeholder.starts_with("Search "), "{placeholder}");
+    assert_eq!(test.window.search_box().accessible_name(), placeholder);
+
+    let tabs: Vec<gtk::Widget> = descendants::<gtk::Widget>(&test.window)
+        .into_iter()
+        .filter(|widget| widget.accessible_role() == gtk::AccessibleRole::Tab)
+        .collect();
+    assert!(!tabs.is_empty(), "a tab is drawn");
+    for tab in &tabs {
+        assert!(
+            gtk::test_accessible_has_property(tab, gtk::AccessibleProperty::Description),
+            "a tab is described by its location"
+        );
+    }
+
+    let details = test.window.folder_pane().details();
+    let header = details.header().expect("the column titles");
+    assert!(gtk::test_accessible_has_property(
+        &header,
+        gtk::AccessibleProperty::Label
+    ));
+    let titles = crate::folder_view::column_titles::title_buttons(details.column_view());
+    let modified = titles
+        .iter()
+        .find(|title| {
+            title.is_visible()
+                && descendants::<gtk::Label>(*title)
+                    .iter()
+                    .any(|label| label.text() == "Date modified")
+        })
+        .expect("a title that shows Date modified");
+    assert!(press_on(modified, gdk::Key::Return, gdk::ModifierType::empty()));
+    assert_eq!(details.sort_order().column, SortColumn::Modified);
+
+    let owners = test.window.folder_pane().owners();
+    wait_until("the rows are named", || {
+        let names = owners.detail_row_names();
+        names.iter().any(|name| name == "Résumé") && !names.iter().any(|name| name == "Résumé.txt")
+    });
 }
 
 /// Every motion in the skin is a CSS transition or animation, which GTK

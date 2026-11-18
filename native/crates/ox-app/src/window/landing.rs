@@ -57,9 +57,6 @@ use super::BrowserWindow;
 /// Share of used space from which the capacity bar turns red.
 const NEARLY_FULL: f64 = 0.9;
 
-/// The file system attributes a drive tile reads.
-const CAPACITY_ATTRIBUTES: &str = "filesystem::size,filesystem::free";
-
 /// Pixels between a tile's icon and its lines, as in the Tiles view.
 const TILE_ICON_GAP: i32 = 10;
 /// A tile's padding and margin across (8 and 2 on each side) and down
@@ -96,11 +93,10 @@ impl Capacity {
         self.used_share() >= NEARLY_FULL
     }
 
-    /// "N free of M", as Windows 11 says it under a drive.
+    /// "N free of M", as Windows 11 says it under a drive, and as the
+    /// drive's Properties says it.
     fn text(self) -> String {
-        let free = format::pretty_bytes(self.free);
-        let size = format::pretty_bytes(self.size);
-        ox_core::i18n::format_message("{free} free of {size}", &[("free", &free), ("size", &size)])
+        format::free_of_text(self.free, self.size)
     }
 }
 
@@ -144,12 +140,11 @@ pub(super) fn show_capacity(texts: &gtk::Box, uri: &str, with_text: bool) {
 /// or it has no size (`if(m.total)` in app.js).
 pub(super) async fn measure_capacity(file: &gio::File) -> Option<Capacity> {
     let filesystem = file
-        .query_filesystem_info_future(CAPACITY_ATTRIBUTES, glib::Priority::LOW)
+        .query_filesystem_info_future(crate::volumes::SPACE_ATTRIBUTES, glib::Priority::LOW)
         .await
         .ok()?;
-    let size = filesystem.attribute_uint64("filesystem::size");
-    let free = filesystem.attribute_uint64("filesystem::free").min(size);
-    (size > 0).then_some(Capacity { size, free })
+    let (free, size) = crate::volumes::space_of(&filesystem)?;
+    Some(Capacity { size, free })
 }
 
 /// The bar that shows how full a drive is, red when it is nearly full.
@@ -1235,8 +1230,28 @@ mod tests {
             size: 2048,
             free: 1024,
         };
-        let free = format::pretty_bytes(1024);
-        let size = format::pretty_bytes(2048);
+        let free = format::short_size(1024);
+        let size = format::short_size(2048);
         assert_eq!(capacity.text(), format!("{free} free of {size}"));
+    }
+
+    /// A drive tile says what the drive's Properties says, truncated as
+    /// Explorer truncates sizes: "27.5 GB free of 251 GB", never "27.6 GB
+    /// free of 252 GB" beside Properties' "251 GB".
+    ///
+    /// parity: PROP-004
+    #[test]
+    fn a_drive_tile_and_its_properties_write_the_same_sizes() {
+        let capacity = Capacity {
+            size: 270_553_174_016,
+            free: 29_600_000_000,
+        };
+        assert_eq!(capacity.text(), "27.5 GB free of 251 GB");
+        assert_eq!(
+            capacity.text(),
+            ox_core::format::short_size(29_600_000_000)
+                + " free of "
+                + &ox_core::format::short_size(270_553_174_016)
+        );
     }
 }
