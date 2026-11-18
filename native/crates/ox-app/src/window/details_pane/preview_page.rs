@@ -73,6 +73,9 @@ pub(in crate::window) enum PreviewPage {
     Message(&'static str),
     /// The beginning of the text file at `uri`, as it was at `modified`.
     Text(PreviewFile),
+    /// The text of the Rich Text Format document at `uri`, without its
+    /// markup ([`super::rich_text`]).
+    RichText(PreviewFile),
     /// The picture at `uri`.
     Picture(PreviewFile),
     /// The pages of the local PDF at `uri`.
@@ -139,7 +142,9 @@ pub(in crate::window) fn preview_page(selection: &[FileItem], rules: PreviewRule
         modified: entry.modified,
         local_only: !rules.remote_previews,
     };
-    if is_text(content_type, &entry.name) {
+    if is_rich_text(content_type, &entry.name) {
+        PreviewPage::RichText(file)
+    } else if is_text(content_type, &entry.name) {
         PreviewPage::Text(file)
     } else if kind == "image" {
         PreviewPage::Picture(file)
@@ -158,6 +163,13 @@ fn extension_of(name: &str) -> String {
         .filter(|(stem, _)| !stem.is_empty())
         .map(|(_, extension)| extension.to_ascii_lowercase())
         .unwrap_or_default()
+}
+
+/// Whether a file of `content_type` named `name` is a Rich Text Format
+/// document, whose text is shown without its markup. The system makes
+/// RTF a kind of plain text, so this is asked first.
+fn is_rich_text(content_type: &str, name: &str) -> bool {
+    matches!(content_type, "application/rtf" | "text/rtf") || extension_of(name) == "rtf"
 }
 
 /// Whether a file of `content_type` named `name` is shown as text: a
@@ -189,7 +201,13 @@ pub(in crate::window) fn decode_text(bytes: &[u8], truncated: bool) -> Option<St
     if text.contains('\0') || controls * BINARY_SHARE > text.chars().count().max(1) {
         return None;
     }
-    Some(first_lines(&break_long_lines(&text)))
+    Some(shown_text(&text))
+}
+
+/// `text` as the pane shows it: long lines broken and only the first
+/// [`LINE_COUNT_LIMIT`] lines.
+pub(in crate::window) fn shown_text(text: &str) -> String {
+    first_lines(&break_long_lines(text))
 }
 
 /// The first [`LINE_COUNT_LIMIT`] lines of `text`.

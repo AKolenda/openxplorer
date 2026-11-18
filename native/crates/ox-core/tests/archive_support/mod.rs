@@ -12,6 +12,7 @@
     reason = "each test executable that includes this module uses a different part of it"
 )]
 
+mod seven_zip;
 mod zip_writer;
 
 use std::fs;
@@ -29,6 +30,12 @@ use ox_core::archive::{
 use ox_core::gio_node::GioNode;
 use ox_core::transfer::{Cancellation, Node, NodeFactory, Progress, TransferError};
 
+pub use seven_zip::{
+    coded_seven_zip, encoded_header_seven_zip, lzma_seven_zip_bytes, number, one_file_seven_zip,
+    raw_seven_zip, seven_zip_bytes, seven_zip_claiming_files, seven_zip_with_empty_file_between,
+    seven_zip_without_sub_streams, SevenEntry, TestCoder, AES, BCJ2, BZIP2, COPY, DEFLATE, LZMA2, PPMD,
+    SEVEN_ZIP_MODIFIED,
+};
 pub use zip_writer::{
     file_type, first_member_data_offset, write_archive_declaring_directory, zip_bytes, zip_bytes_with,
     ArchiveLayout, Compression, EndRecords, TestMember, ENCRYPTED_FLAG, UTF8_NAME_FLAG,

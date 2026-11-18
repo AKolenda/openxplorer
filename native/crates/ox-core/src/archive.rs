@@ -59,6 +59,7 @@ mod member_names;
 mod password;
 mod preview;
 mod progress;
+mod seven_zip;
 mod source;
 mod tar;
 mod worker;

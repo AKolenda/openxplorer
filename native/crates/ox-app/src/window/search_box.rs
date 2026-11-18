@@ -47,6 +47,8 @@ mod imp {
         /// The magnifier at the right end.
         #[template_child]
         pub(super) magnifier: TemplateChild<gtk::Image>,
+        /// What a screen reader calls the field: what it shows.
+        pub(super) accessible_name: std::cell::RefCell<String>,
     }
 
     #[glib::object_subclass]
@@ -180,10 +182,21 @@ impl SearchBox {
         entry.set_position(end);
     }
 
-    /// Names the folder the box searches: "Search Documents".
+    /// Names the folder the box searches: "Search Documents", which a
+    /// screen reader reads as the field's name too.
     pub(super) fn set_folder_title(&self, title: &str) {
         let placeholder = ox_core::i18n::format_message("Search {title}", &[("title", title)]);
-        self.imp().entry.set_placeholder_text(Some(&placeholder));
+        let imp = self.imp();
+        imp.entry.set_placeholder_text(Some(&placeholder));
+        imp.entry
+            .update_property(&[gtk::accessible::Property::Label(&placeholder)]);
+        imp.accessible_name.replace(placeholder);
+    }
+
+    /// What a screen reader calls the field, for tests.
+    #[cfg(test)]
+    pub(super) fn accessible_name(&self) -> String {
+        self.imp().accessible_name.borrow().clone()
     }
 
     /// Enables the box in folders and disables it on landing pages.

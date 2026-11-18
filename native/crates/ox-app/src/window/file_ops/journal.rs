@@ -12,6 +12,9 @@
 //! [`ox_core::ops::undo`]). The commands are labelled with the operation
 //! they reverse ("Undo Rename"). Before Undo moves copies to the Trash
 //! that were changed after the copy, it asks, as Dolphin does (OPS-030).
+//! A Replace that overwrote files, as Windows 11 does and as Replace does
+//! here with "When replacing a file, move the old one to the Recycle Bin"
+//! off, can't bring them back: Undo says so plainly first (OPS-028).
 //! Items that cannot go to the Recycle Bin, as on a share, are deleted
 //! permanently only after Delete's own question there (OPS-016).
 
@@ -29,6 +32,19 @@ use crate::window::ButtonStyle;
 /// The title of the question before Undo moves changed copies to the
 /// Trash (Dolphin's "Undo File Copy Confirmation").
 const UNDO_COPY_TITLE: &str = crate::i18n::message_id("Undo copy?");
+
+/// What the user said when Undo named the files a Replace overwrote.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OverwrittenAnswer {
+    /// The step overwrote nothing: nothing was said.
+    Nothing,
+    /// The step does nothing more, and the user was told with OK.
+    Told,
+    /// The user chose to undo the rest of the step.
+    UndoTheRest,
+    /// The user cancelled: the step stays to undo.
+    Cancelled,
+}
 
 /// The command that walks the journal in `direction`.
 const fn command_for(direction: JournalDirection) -> FileCommand {
@@ -49,6 +65,16 @@ impl BrowserWindow {
         };
         let mut delete_permanently = Vec::new();
         if direction == JournalDirection::Undo {
+            match self.tell_what_undo_cannot_bring_back(&step).await {
+                OverwrittenAnswer::Nothing | OverwrittenAnswer::UndoTheRest => {}
+                OverwrittenAnswer::Cancelled => {
+                    self.context().put_back_journal_step(direction, step);
+                    return;
+                }
+                // Nothing else to undo: the step is used up, so the next
+                // Undo reverses the operation before it.
+                OverwrittenAnswer::Told => return,
+            }
             let Some(without_recycle_bin) = self.confirm_undo_without_recycle_bin(&step).await else {
                 self.context().put_back_journal_step(direction, step);
                 return;
@@ -93,6 +119,57 @@ impl BrowserWindow {
                 )
                 .await;
             }
+        }
+    }
+
+    /// Says that Undo of `step` can't bring back the files its Replace
+    /// overwrote, as Windows 11 overwrites them: with OK alone when there
+    /// is nothing else to undo, else asking whether to undo the rest.
+    async fn tell_what_undo_cannot_bring_back(&self, step: &JournalEntry) -> OverwrittenAnswer {
+        let overwritten = step.record.overwritten();
+        let Some(first) = overwritten.first() else {
+            return OverwrittenAnswer::Nothing;
+        };
+        let said = if overwritten.len() == 1 {
+            let name = gtk::prelude::FileExt::basename(&gtk::gio::File::for_uri(first))
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            ox_core::i18n::format_message(
+                "“{name}” was replaced, so Undo can't bring back the old file.",
+                &[("name", &name)],
+            )
+        } else {
+            // Through ngettext, so each count takes its language's form.
+            let count = overwritten.len();
+            ox_core::i18n::ngettext(
+                "{count} file was replaced, so Undo can't bring back the old file.",
+                "{count} files were replaced, so Undo can't bring back the old files.",
+                u64::try_from(count).unwrap_or(u64::MAX),
+            )
+            .replace("{count}", &count.to_string())
+        };
+        let title = step.label(JournalDirection::Undo);
+        // A Windows message box, as the app's other file questions are:
+        // the caption names the step, the icon stands beside the words.
+        if !step.record.undoes_more_than_overwrites() {
+            let dialog = Dialog::message_box(self, &title, &said);
+            dialog.add_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent);
+            dialog.open();
+            dialog.next_response().await;
+            dialog.finish();
+            return OverwrittenAnswer::Told;
+        }
+        let message = format!("{said} {}", ox_core::i18n::gettext("Undo the rest anyway?"));
+        let dialog = Dialog::message_box(self, &title, &message);
+        let undo = dialog.add_button(ox_core::i18n::gettext_static("Undo"), ButtonStyle::Accent);
+        dialog.add_cancel_button();
+        dialog.open();
+        let answer = dialog.next_response().await;
+        dialog.finish();
+        if answer == Some(undo) {
+            OverwrittenAnswer::UndoTheRest
+        } else {
+            OverwrittenAnswer::Cancelled
         }
     }
 
@@ -151,5 +228,22 @@ impl BrowserWindow {
         self.context()
             .journal_label(direction)
             .unwrap_or_else(|| direction.command_name().to_owned())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// How many old files Undo can't bring back is said through
+    /// `ngettext`, so a translation can give each count its own form: the
+    /// message template has the plural.
+    ///
+    /// parity: OPS-028
+    #[test]
+    fn the_count_of_replaced_files_has_plural_forms() {
+        let template = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../po/openxplorer.pot");
+        let template = std::fs::read_to_string(template).expect("the message template");
+        let plural = "msgid \"{count} file was replaced, so Undo can't bring back the old file.\"\n\
+                      msgid_plural \"{count} files were replaced, so Undo can't bring back the old files.\"";
+        assert!(template.contains(plural), "a plural entry in the template");
     }
 }

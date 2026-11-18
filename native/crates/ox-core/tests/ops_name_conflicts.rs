@@ -766,11 +766,82 @@ fn replace_overwrites_without_the_recycle_bin_when_chosen() {
     assert_eq!(fs::read(src.join("report.png")).unwrap(), b"incoming");
     assert_eq!(recycled_now(&dst.join("report.png")), 0, "nothing was recycled");
     assert!(staging_left_in(&dst).is_empty(), "{:?}", staging_left_in(&dst));
-    assert!(
-        !matches!(outcome.undo, Some(UndoRecord::Replace { .. })),
-        "no replaced file to bring back: {:?}",
-        outcome.undo
+    // Nothing to bring back: Undo names the overwritten file and leaves
+    // its replacement.
+    let Some(UndoRecord::Replace {
+        steps,
+        replaced,
+        overwritten,
+        ..
+    }) = &outcome.undo
+    else {
+        panic!("{:?}", outcome.undo);
+    };
+    assert!(steps.is_empty() && replaced.is_empty(), "{:?}", outcome.undo);
+    assert_eq!(overwritten, &[file_uri(&dst.join("report.png"))]);
+}
+
+/// A conflict whose file another program removed after the check and
+/// before the answered copy ran is published as a plain copy: nothing was
+/// overwritten, so Undo takes the copy back as for any copy instead of
+/// saying an old file was replaced.
+///
+/// parity: OPS-028, OPS-029
+#[test]
+fn a_conflict_gone_before_its_replace_is_undone_as_a_plain_copy() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("report.png"), b"incoming");
+    write(&dst.join("report.png"), b"existing");
+    let scan = scan(TransferMode::Copy, &src, &["report.png"], &dst);
+    assert_eq!(scan.conflicts.len(), 1, "{scan:?}");
+    fs::remove_file(dst.join("report.png")).unwrap();
+
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &overwriting(),
+        |_| {},
+    ))
+    .unwrap();
+
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
+    assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"incoming");
+    assert_eq!(
+        outcome.undo,
+        Some(UndoRecord::Copy {
+            copies: vec![file_uri(&dst.join("report.png"))]
+        }),
+        "an ordinary copy to undo"
     );
+}
+
+/// With the switch off, Replace overwrites the old file, as Windows 11
+/// does (checked in Windows 11, build 26200: nothing new appeared in the
+/// Recycle Bin), through private staging, so no temporary file is left.
+///
+/// parity: OPS-028
+#[test]
+fn replace_overwrites_the_old_file_as_windows_does_when_chosen() {
+    require_private_trash();
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("report.png"), b"incoming");
+    write(&dst.join("report.png"), b"existing");
+
+    let scan = scan(TransferMode::Copy, &src, &["report.png"], &dst);
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &overwriting(),
+        |_| {},
+    ))
+    .unwrap();
+
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
+    assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"incoming");
+    assert_eq!(recycled_now(&dst.join("report.png")), 0, "nothing was recycled");
+    assert!(staging_left_in(&dst).is_empty(), "{:?}", staging_left_in(&dst));
 }
 
 /// The default is unchanged: Replace sends the old file to the Recycle
@@ -790,7 +861,13 @@ fn replace_recycles_the_old_file_by_default() {
     write(&dst.join("report.png"), b"existing");
 
     let scan = scan(TransferMode::Copy, &src, &["report.png"], &dst);
-    let outcome = run(&scan, &[Resolution::Replace]);
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &OperationContext::default(),
+        |_| {},
+    ))
+    .unwrap();
 
     assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
     assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"incoming");

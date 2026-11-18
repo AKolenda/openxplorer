@@ -131,12 +131,13 @@ fn a_long_name_or_location_never_widens_properties() {
     // (a folder's five tabs in a wide font) widens it whatever the name,
     // so a file is compared with a file of a short name.
     test.select_named("Short.txt");
-    let short_file = properties_of_selection(&test, "Short.txt Properties");
+    let short_file = properties_of_selection(&test, "Short Properties");
     let file_width = shown_width(&short_file);
     short_file.close();
     let file_name = format!("{LONG_NAME}.txt");
     test.select_named(&file_name);
-    let file = properties_of_selection(&test, &format!("{file_name} Properties"));
+    // Titled without the hidden extension, as Windows 11 titles it.
+    let file = properties_of_selection(&test, &format!("{LONG_NAME} Properties"));
     assert_eq!(shown_width(&file), file_width, "a long file name");
     assert_every_tab_keeps(&file, file_width, "a long file name");
     file.close();
@@ -232,7 +233,7 @@ fn every_kind_of_properties_keeps_the_width() {
     folder.close();
 
     test.select_named("Short.txt");
-    let file = properties_of_selection(&test, "Short.txt Properties");
+    let file = properties_of_selection(&test, "Short Properties");
     assert_eq!(shown_width(&file), width, "a file");
     assert_every_tab_keeps(&file, width, "a file");
     file.close();
@@ -414,10 +415,7 @@ fn every_kind(theme: Option<&str>, each: &mut dyn FnMut(&str, &PropertiesWindow)
         window.close();
     };
     test.select_named("Packing list.txt");
-    show(
-        "file",
-        properties_of_selection(test, "Packing list.txt Properties"),
-    );
+    show("file", properties_of_selection(test, "Packing list Properties"));
     test.select_named("Tickets.txt - Shortcut");
     show(
         "shortcut",
@@ -443,10 +441,7 @@ fn every_kind(theme: Option<&str>, each: &mut dyn FnMut(&str, &PropertiesWindow)
     show("wrapped", seven_tab_properties(test));
     // A launcher has a Shortcut tab with its fields.
     test.select_named("Planner.desktop");
-    show(
-        "launcher",
-        properties_of_selection(test, "Planner.desktop Properties"),
-    );
+    show("launcher", properties_of_selection(test, "Planner Properties"));
     // An item in the Recycle Bin, where the tests' Trash is their own.
     {
         super::file_ops_support::require_private_trash();
@@ -459,10 +454,7 @@ fn every_kind(theme: Option<&str>, each: &mut dyn FnMut(&str, &PropertiesWindow)
             bin.names().contains(&"Old draft.txt".to_owned())
         });
         bin.select_named("Old draft.txt");
-        show(
-            "recycled",
-            properties_of_selection(&bin, "Old draft.txt Properties"),
-        );
+        show("recycled", properties_of_selection(&bin, "Old draft Properties"));
     }
 }
 
@@ -1073,7 +1065,7 @@ fn every_kind_of_properties_is_captured() {
         capture_dialog(&folder, &format!("properties-kind-folder-{theme}.png"));
         folder.close();
         test.select_named("Packing list.txt");
-        let file = properties_of_selection(&test, "Packing list.txt Properties");
+        let file = properties_of_selection(&test, "Packing list Properties");
         shown_width(&file);
         capture_dialog(&file, &format!("properties-kind-file-{theme}.png"));
         file.close();

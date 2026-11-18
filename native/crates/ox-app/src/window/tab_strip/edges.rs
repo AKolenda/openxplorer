@@ -94,6 +94,13 @@ impl TabStrip {
             reason = "a strip is far narrower than 2^24 pixels"
         )]
         let width = self.width() as f32;
+        // The tabs show between the scroll arrows, when they show: nothing
+        // is drawn over them.
+        let (first, last) = self
+            .imp()
+            .scroller
+            .compute_bounds(self)
+            .map_or((0.0, width), |shown| (shown.x(), shown.x() + shown.width()));
         let size = |piece: &gtk::Widget| {
             let (_, natural) = piece.preferred_size();
             #[expect(clippy::cast_precision_loss, reason = "a few pixels")]
@@ -109,7 +116,7 @@ impl TabStrip {
             }
             let left_end = left.bounds.x() + left.bounds.width();
             let x = (f32::midpoint(left_end, right.bounds.x()) - 0.5).floor();
-            if x < 0.0 || x + 1.0 > width {
+            if x < first || x + 1.0 > last {
                 continue;
             }
             let y = left.bounds.y() + ((left.bounds.height() - separator_height) / 2.0).round();
@@ -121,7 +128,7 @@ impl TabStrip {
         // Only beside an edge of the tab that shows, so a tab scrolled
         // partly out of the strip has none on its cut side, and one
         // scrolled out of it has none.
-        let shows = |edge: f32| (-0.5..=width + 0.5).contains(&edge);
+        let shows = |edge: f32| (first - 0.5..=last + 0.5).contains(&edge);
         let start = front.bounds.x();
         let end = start + front.bounds.width();
         let (flare_width, flare_height) = size(&edges.start_flare);

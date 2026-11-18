@@ -1411,7 +1411,7 @@ dependencies = [
 
 [[package]]
 name = "ox-app"
-version = "2.0.18"
+version = "2.0.19"
 dependencies = [
  "async-channel",
  "gdk4-wayland",
@@ -1433,7 +1433,7 @@ dependencies = [
 
 [[package]]
 name = "ox-core"
-version = "2.0.18"
+version = "2.0.19"
 dependencies = [
  "bzip2",
  "crc32fast",
@@ -1753,6 +1753,7 @@ version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29225600349ef74beda5a9fffb36ac660a24613c0bde9315d0c49be1d51e9c24"
 dependencies = [
+ "bzip2",
  "crc32fast",
  "js-sys",
  "lzma-rust2 0.16.5",

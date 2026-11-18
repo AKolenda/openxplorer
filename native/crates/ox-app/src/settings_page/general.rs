@@ -110,10 +110,11 @@ const DRAG_TO_APPS: RowText = RowText {
 
 const DROP_ON_FOLDERS: RowText = RowText {
     title: "Drop files on folders",
-    description: "Drop files on a writable folder to copy them, or drop folders in Quick access \
-                  to pin them. Hold Shift to move, Ctrl+Shift to create links or Alt to choose; \
+    description: "Drop files on a folder to move them there on the same drive or copy them to \
+                  another, or drop folders in Quick access to pin them. Hold Shift to move, Ctrl to \
+                  copy or Alt to create shortcuts, or drag with the right mouse button to choose; \
                   drop files on a program to open them with it.",
-    keywords: "drag drop copy move link pin program run",
+    keywords: "drag drop copy move link shortcut alt ctrl shift right pin program run",
 };
 
 /// The rest of the Python section's paragraph.
@@ -250,12 +251,13 @@ fn address_group(page: &SettingsPage) -> SettingsGroup {
     group
 }
 
-/// Dragging tabs and files, which always works: folded away, with the
-/// rest of the Python paragraph in the first row's ⓘ.
+/// Dragging tabs and files, which always works: folded away, each row
+/// help with its text under its title, and the rest of the Python
+/// paragraph in the first row's ⓘ.
 fn dragging_group() -> SettingsGroup {
     let group = SettingsGroup::new_folded(&ox_core::i18n::gettext("Dragging tabs and files"));
     for text in [MOVE_TABS, DRAG_TO_APPS, DROP_ON_FOLDERS] {
-        let row = SettingRow::new(text);
+        let row = SettingRow::new_help(text);
         if text == MOVE_TABS {
             row.add_details(ox_core::i18n::gettext_static(DRAGGING_NOTE));
         }

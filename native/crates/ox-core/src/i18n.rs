@@ -51,6 +51,8 @@ pub struct Catalog {
     messages: HashMap<String, Vec<String>>,
     /// Which plural form a count takes.
     plural: Plural,
+    /// The language folder the catalogue was found in, by [`Catalog::find`].
+    language: Option<String>,
 }
 
 impl Catalog {
@@ -62,7 +64,11 @@ impl Catalog {
             .and_then(|header| header.first())
             .and_then(|header| Plural::from_header(header))
             .unwrap_or_default();
-        Some(Self { messages, plural })
+        Some(Self {
+            messages,
+            plural,
+            language: None,
+        })
     }
 
     /// The catalogue of `domain` for the first of `languages` that has one
@@ -80,9 +86,19 @@ impl Catalog {
             .flat_map(|language| {
                 locale_dirs
                     .iter()
-                    .map(move |dir| dir.join(language).join("LC_MESSAGES").join(file))
+                    .map(move |dir| (language, dir.join(language).join("LC_MESSAGES").join(file)))
             })
-            .find_map(|path| read_catalog(&path))
+            .find_map(|(language, path)| {
+                let mut catalog = read_catalog(&path)?;
+                catalog.language = Some(language.clone());
+                Some(catalog)
+            })
+    }
+
+    /// The language whose folder the catalogue was found in (`zh_CN`),
+    /// or `None` for one read otherwise.
+    pub fn language(&self) -> Option<&str> {
+        self.language.as_deref()
     }
 
     /// The translation of `msgid`, or `msgid` itself.
@@ -208,6 +224,12 @@ pub fn gettext_static(msgid: &'static str) -> &'static str {
         .get()
         .and_then(|catalog| catalog.lookup(msgid, 0))
         .unwrap_or(msgid)
+}
+
+/// The language of the catalogue the interface uses (`zh_CN`), or `None`
+/// while it is in English.
+pub fn interface_language() -> Option<&'static str> {
+    INSTALLED.get().and_then(Catalog::language)
 }
 
 /// The translation of `msgid` in the interface's language; `None` while
@@ -362,6 +384,26 @@ mod tests {
             Catalog::find(DOMAIN, &[dir.path().to_owned()], &english_first),
             None
         );
+    }
+
+    /// The catalogue says which language it was found for: the first of
+    /// the desktop's languages that has one, not the first one asked for,
+    /// so a desktop asking for French, then Polish, with only Polish
+    /// installed, is in Polish and says so.
+    ///
+    /// parity: INT-031
+    #[test]
+    fn a_catalogue_names_the_language_it_was_found_for() {
+        let dir = tempfile::tempdir().expect("a temporary folder");
+        let messages = dir.path().join("pl").join("LC_MESSAGES");
+        std::fs::create_dir_all(&messages).expect("catalogue folder");
+        let catalog = mo_file("nplurals=1; plural=0;", &[("Folder tree", &["Drzewo folderów"])]);
+        std::fs::write(messages.join("openxplorer.mo"), catalog).expect("catalogue");
+        let languages = ["fr_FR.UTF-8", "fr_FR", "fr", "pl_PL", "pl", "C"].map(String::from);
+
+        let catalog = Catalog::find(DOMAIN, &[dir.path().to_owned()], &languages).expect("found");
+
+        assert_eq!(catalog.language(), Some("pl"));
     }
 
     /// No message says a drive is read-only or guesses why: like Windows

@@ -170,8 +170,15 @@ mod imp {
         /// Names the application, then creates the shared state once GTK
         /// has started.
         fn startup(&self) {
-            self.parent_startup();
             let app = self.obj();
+            // The session manager tells a registered app that the session
+            // is about to end (`query-end`), when the open tabs are saved
+            // for the next start (TAB-053). GTK registers during startup.
+            if let Launch::Interactive = app.launch() {
+                app.set_register_session(true);
+                app.connect_query_end(|app| crate::window::save_front_session(app.upcast_ref()));
+            }
+            self.parent_startup();
             app.name_for_the_desktop();
             if let Some(state) = AppState::new(app.upcast_ref(), Settings::open_default()) {
                 self.state.set(state).expect("GTK starts an application once");

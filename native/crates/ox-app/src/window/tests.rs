@@ -98,6 +98,7 @@ mod search_options;
 mod selection;
 mod send_to;
 mod settings;
+mod seven_zip_folder;
 mod share;
 mod shift_f10_keys;
 mod shortcut_tab;

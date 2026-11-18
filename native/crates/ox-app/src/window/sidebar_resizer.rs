@@ -19,7 +19,7 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use super::preferences::{sidebar_widths, Preference, DEFAULT_SIDEBAR_WIDTH};
+use super::preferences::{sidebar_widths, Preference};
 use super::BrowserWindow;
 use crate::resizer_control::ResizerControl;
 
@@ -38,14 +38,14 @@ fn paned_handle(paned: &gtk::Paned) -> Option<gtk::Widget> {
         .find(|child| Some(child) != start.as_ref() && Some(child) != end.as_ref())
 }
 
-/// The sidebar width a key asks for from `width`, before the limits;
-/// `None` for a key the resizer does not take.
-fn width_for_key(key: gdk::Key, shift: bool, width: i32) -> Option<i32> {
+/// The sidebar width a key asks for from `width`, before the limits, Home
+/// asking for `default`; `None` for a key the resizer does not take.
+fn width_for_key(key: gdk::Key, shift: bool, width: i32, default: i32) -> Option<i32> {
     let step = if shift { SHIFT_KEY_STEP } else { KEY_STEP };
     match key {
         gdk::Key::Left | gdk::Key::KP_Left => Some(width - step),
         gdk::Key::Right | gdk::Key::KP_Right => Some(width + step),
-        gdk::Key::Home | gdk::Key::KP_Home => Some(DEFAULT_SIDEBAR_WIDTH),
+        gdk::Key::Home | gdk::Key::KP_Home => Some(default),
         _ => None,
     }
 }
@@ -128,7 +128,8 @@ impl BrowserWindow {
     /// Moves the sidebar for `key`, within its limits, and saves the new
     /// width; false for a key the resizer does not take.
     pub(super) fn resize_sidebar_by_key(&self, key: gdk::Key, shift: bool) -> bool {
-        let Some(wanted) = width_for_key(key, shift, self.workspace().position()) else {
+        let default = self.default_sidebar_width();
+        let Some(wanted) = width_for_key(key, shift, self.workspace().position(), default) else {
             return false;
         };
         self.resize_sidebar_to(wanted);
@@ -167,15 +168,34 @@ impl BrowserWindow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::window::preferences::DEFAULT_SIDEBAR_WIDTH;
 
     /// parity: SIDE-023, ACC-006
     #[test]
     fn arrows_move_the_resizer_10_pixels_shift_40_and_home_resets_it() {
-        assert_eq!(width_for_key(gdk::Key::Left, false, 250), Some(240));
-        assert_eq!(width_for_key(gdk::Key::Right, false, 250), Some(260));
-        assert_eq!(width_for_key(gdk::Key::Left, true, 250), Some(210));
-        assert_eq!(width_for_key(gdk::Key::Right, true, 250), Some(290));
-        assert_eq!(width_for_key(gdk::Key::Home, false, 400), Some(210));
-        assert_eq!(width_for_key(gdk::Key::Up, false, 250), None);
+        assert_eq!(
+            width_for_key(gdk::Key::Left, false, 250, DEFAULT_SIDEBAR_WIDTH),
+            Some(240)
+        );
+        assert_eq!(
+            width_for_key(gdk::Key::Right, false, 250, DEFAULT_SIDEBAR_WIDTH),
+            Some(260)
+        );
+        assert_eq!(
+            width_for_key(gdk::Key::Left, true, 250, DEFAULT_SIDEBAR_WIDTH),
+            Some(210)
+        );
+        assert_eq!(
+            width_for_key(gdk::Key::Right, true, 250, DEFAULT_SIDEBAR_WIDTH),
+            Some(290)
+        );
+        assert_eq!(
+            width_for_key(gdk::Key::Home, false, 400, DEFAULT_SIDEBAR_WIDTH),
+            Some(210)
+        );
+        assert_eq!(
+            width_for_key(gdk::Key::Up, false, 250, DEFAULT_SIDEBAR_WIDTH),
+            None
+        );
     }
 }

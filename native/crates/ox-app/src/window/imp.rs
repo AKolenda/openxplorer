@@ -128,6 +128,12 @@ pub(crate) struct BrowserWindow {
     /// to close saves its tabs for the next start (TAB-053); snapshot
     /// windows do not.
     pub(super) remembers_session: Cell<bool>,
+    /// The tabs as last saved while the window was open, in their saved
+    /// form, so an unchanged session is not written again (TAB-053).
+    pub(super) saved_session_text: RefCell<Option<String>>,
+    /// How many times its 100% size the window's text is drawn, which
+    /// widens the sidebar's default width; 0 until it is drawn.
+    pub(super) sidebar_text_scale: Cell<f64>,
     /// The modifiers held at the last key press or click in a folder view,
     /// which decide how an activated folder opens (TAB-026).
     pub(super) view_modifiers: Cell<Option<gtk::gdk::ModifierType>>,
@@ -416,6 +422,7 @@ impl ObjectImpl for BrowserWindow {
         self.volume_monitor
             .set(gio::VolumeMonitor::get())
             .expect("constructed runs once per object");
+        window.keep_session_saved();
     }
 
     fn dispose(&self) {

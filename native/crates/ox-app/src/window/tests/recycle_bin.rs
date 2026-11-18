@@ -670,7 +670,7 @@ fn opening_an_item_in_the_recycle_bin_shows_its_properties() {
 
     test.window
         .activate_item(test.position_of("Opened from the bin.txt"));
-    let file = test.wait_for_properties("Opened from the bin.txt Properties");
+    let file = test.wait_for_properties("Opened from the bin Properties");
     test.window.activate_item(test.position_of("Opened folder"));
     let folder = test.wait_for_properties("Opened folder Properties");
 
@@ -721,7 +721,7 @@ fn properties_of_an_item_in_the_recycle_bin_shows_where_it_came_from() {
 
     test.activate("properties", None);
 
-    let window = test.wait_for_properties("Described in the bin.txt Properties");
+    let window = test.wait_for_properties("Described in the bin Properties");
     let general = super::item_dialogs::tab(&window, "general");
     wait_until("the properties to be read", || {
         super::item_dialogs::value_after(&general, "Origin:").is_some()

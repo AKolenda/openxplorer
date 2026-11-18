@@ -713,12 +713,21 @@ fn replace_overwrites_the_newer_file_when_chosen() {
         .map(|entry| entry.unwrap().file_name())
         .collect();
     assert_eq!(names, ["notes.txt"], "no private name is left");
+    // Undo puts the item back in the Recycle Bin, and says the newer
+    // file it overwrote can't come back.
+    let Some(UndoRecord::Replace {
+        steps, overwritten, ..
+    }) = &outcome.undo
+    else {
+        panic!("{:?}", outcome.undo);
+    };
     assert_eq!(
-        outcome.undo,
-        Some(UndoRecord::Restore {
+        steps,
+        &[UndoRecord::Restore {
             restored: vec![file_uri(&notes)]
-        })
+        }]
     );
+    assert_eq!(overwritten, &[file_uri(&notes)]);
 }
 
 /// With the switch off, a restore cancelled before the swap leaves the

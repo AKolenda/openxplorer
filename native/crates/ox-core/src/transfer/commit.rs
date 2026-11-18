@@ -151,6 +151,11 @@ fn move_with_owner_access(
 /// [`TransferError::Cancelled`] before the uninterruptible steps, or a
 /// failure to install; [`TransferError::RecoveryRequired`] names the backup
 /// that holds the old file when it could not be put back or removed.
+///
+/// Returns whether an item of that name was there when the commit ran,
+/// and was overwritten or merged into; `false` when the name was free,
+/// as when another program removed the item after the conflict was
+/// found, and the item was published as for any copy.
 pub(crate) fn commit_replace(
     source: &dyn Node,
     destination: &dyn Node,
@@ -158,7 +163,7 @@ pub(crate) fn commit_replace(
     guard: Option<&WriteGuard>,
     modes: Option<&mut DirectoryModes>,
     merge_check: Option<&WriteGuard>,
-) -> Result<(), TransferError> {
+) -> Result<bool, TransferError> {
     Replacement {
         cancel,
         guard,
@@ -178,14 +183,15 @@ struct Replacement<'a> {
 }
 
 impl Replacement<'_> {
-    /// Commits `source` over `destination`, at nesting `depth`.
+    /// Commits `source` over `destination`, at nesting `depth`; true when
+    /// `destination` was there and was overwritten or merged into.
     fn replace(
         &self,
         source: &dyn Node,
         destination: &dyn Node,
         modes: Option<&mut DirectoryModes>,
         depth: usize,
-    ) -> Result<(), TransferError> {
+    ) -> Result<bool, TransferError> {
         self.cancel.check()?;
         if depth > MAX_DEPTH {
             return Err(nesting_error());
@@ -197,12 +203,15 @@ impl Replacement<'_> {
             return match modes {
                 Some(modes) => publish_staged(source, destination, modes, self.cancel),
                 None => source.move_native(destination, Some(self.cancel)),
-            };
+            }
+            .map(|()| false);
         }
         let incoming = source.info(Some(self.cancel))?.kind;
         let existing = destination.info(Some(self.cancel))?.kind;
         match (incoming, existing) {
-            (NodeKind::Directory, NodeKind::Directory) => self.merge(source, destination, modes, depth),
+            (NodeKind::Directory, NodeKind::Directory) => {
+                self.merge(source, destination, modes, depth).map(|()| true)
+            }
             // XFER-009: never delete a tree as a side effect of Replace.
             (NodeKind::Directory, _) | (_, NodeKind::Directory) => {
                 Err(TransferError::failed(crate::i18n::gettext(
@@ -210,7 +219,7 @@ impl Replacement<'_> {
                 )))
             }
             (NodeKind::File | NodeKind::Symlink, NodeKind::File | NodeKind::Symlink) => {
-                self.overwrite(source, destination)
+                self.overwrite(source, destination).map(|()| true)
             }
             _ => Err(TransferError::failed(crate::i18n::gettext(
                 "This item type cannot be replaced automatically.",

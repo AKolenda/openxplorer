@@ -204,7 +204,7 @@ fn the_pane_offers_share_and_properties() {
         .expect("the Properties button");
     assert!(properties.is_visible() && properties.is_sensitive());
     properties.emit_clicked();
-    test.wait_for_properties("Notes 2.txt Properties");
+    test.wait_for_properties("Notes 2 Properties");
 }
 
 /// The pane's keyboard stops are its buttons: its names and values can be

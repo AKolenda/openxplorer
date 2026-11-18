@@ -128,6 +128,15 @@ fn button_label(button: &gtk::Button) -> Option<String> {
     Some(inner.text().to_string())
 }
 
+/// Shows known types' extensions, as View > Show > File name extensions
+/// does.
+fn show_extensions(test: &TestWindow) {
+    test.activate("file-name-extensions", None);
+    wait_until("extensions to show", || {
+        test.context.settings_data().preferences.show_extensions
+    });
+}
+
 /// The name field of a Properties window.
 fn name_field(window: &PropertiesWindow) -> gtk::Entry {
     let page = general(window);
@@ -235,7 +244,7 @@ fn show_item_properties_opens_the_folder_and_the_properties() {
 
     test.window.show_file_manager_request(&request);
 
-    test.wait_for_properties("report.txt Properties");
+    test.wait_for_properties("report Properties");
     assert_eq!(test.window.tab_count(), 2);
     assert_eq!(test.window.current_uri(), Some(fixture.uri_of("Documents")));
     test.wait_for_listing("the Documents listing");
@@ -259,7 +268,7 @@ fn show_item_properties_gives_the_callers_token_to_the_properties_window() {
     test.window.hand_startup_id_to_properties("caller-token-1");
     test.window.show_file_manager_request(&request);
 
-    test.wait_for_properties("report.txt Properties");
+    test.wait_for_properties("report Properties");
     assert_eq!(
         test.window.properties_startup_ids(),
         ["caller-token-1"],
@@ -288,7 +297,7 @@ fn alt_enter_opens_a_files_properties_in_a_window_of_its_own() {
 
     test.activate("properties", None);
 
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
     assert!(!window.is_modal(), "Properties blocks nothing");
     assert_eq!(window.transient_for(), None, "a window of its own");
     assert_eq!(
@@ -452,7 +461,7 @@ fn edit_after_general_changes_the_item_as_it_is_now() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
     let general_page = general(&window);
 
     check(&general_page, "Read-only").set_active(true);
@@ -498,7 +507,7 @@ fn tabs_taller_than_the_screen_scroll_inside_the_window() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let filled = test.wait_for_properties("Notes 2.txt Properties");
+    let filled = test.wait_for_properties("Notes 2 Properties");
     general(&filled);
     wait_for_frames(&filled, 4);
     let fitting = filled.scroller().vadjustment();
@@ -541,7 +550,7 @@ fn read_only_follows_a_change_made_in_edit() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
     let read_only = check(&general(&window), "Read-only");
     assert!(!read_only.is_active());
 
@@ -582,7 +591,7 @@ fn read_only_chosen_before_a_change_in_edit_compares_with_it() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
     let read_only = check(&general(&window), "Read-only");
     read_only.set_active(true);
     assert!(window.apply_button().is_sensitive(), "ticking it is a change");
@@ -651,6 +660,8 @@ fn a_rename_reaches_every_tab() {
 fn closing_during_ok_waits_for_the_change() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The extension shows, so the name can change it.
+    show_extensions(&test);
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
     let window = test.wait_for_properties("Notes 2.txt Properties");
@@ -747,8 +758,8 @@ fn properties_go_on_with_the_last_tab_moved_away() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("Notes 2.txt Properties");
-    name_field(&window).set_text("Renamed.txt");
+    let window = test.wait_for_properties("Notes 2 Properties");
+    name_field(&window).set_text("Renamed");
     let tab = test.active_tab().expect("a tab");
 
     let action = format!("win.{}", WindowAction::MoveTabToNewWindow.name());
@@ -776,7 +787,7 @@ fn properties_are_windows_of_their_own_that_block_nothing() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let file = test.wait_for_properties("Notes 2.txt Properties");
+    let file = test.wait_for_properties("Notes 2 Properties");
     test.select_named("Documents");
     test.activate("properties", None);
     let folder = test.wait_for_properties("Documents Properties");
@@ -817,7 +828,7 @@ fn read_only_waits_for_ok_and_cancel_discards_it() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
     let read_only = check(&general(&window), "Read-only");
 
     read_only.set_active(true);
@@ -833,7 +844,7 @@ fn read_only_waits_for_ok_and_cancel_discards_it() {
     assert_eq!(mode_of(&path), 0o664, "Cancel discards the change");
 
     test.activate("properties", None);
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
     check(&general(&window), "Read-only").set_active(true);
     window.ok_button().emit_clicked();
     wait_until("OK to close", || window.is_closed());
@@ -921,11 +932,11 @@ fn the_name_waits_while_apply_renames() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
     let name = name_field(&window);
     let hidden = check(&general(&window), "Hidden");
 
-    name.set_text("Notes 3.txt");
+    name.set_text("Notes 3");
     press(&window, "Apply");
     while window.ok_button().is_sensitive() {
         glib::MainContext::default().iteration(true);
@@ -936,7 +947,7 @@ fn the_name_waits_while_apply_renames() {
     assert_eq!(waiting, (true, true), "the name and Hidden wait");
     assert!(fixture.path("Notes 3.txt").exists());
     assert!(name.is_editable() && hidden.is_sensitive(), "they come back");
-    assert_eq!(name.text(), "Notes 3.txt");
+    assert_eq!(name.text(), "Notes 3", "the extension stays hidden");
 }
 
 /// Read-only is refused on a location registered as a previous version
@@ -953,7 +964,7 @@ fn read_only_refuses_a_location_made_a_previous_version_meanwhile() {
     let test = TestWindow::open(&fixture.uri_of("Backups"));
     test.select_named("plan.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("plan.txt Properties");
+    let window = test.wait_for_properties("plan Properties");
     let read_only = check(&general(&window), "Read-only");
 
     test.context
@@ -995,7 +1006,7 @@ fn alt_and_an_underlined_letter_press_the_properties_controls() {
     let mut pointer = crate::test_support::pointer::Pointer::connect();
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
     let page = general(&window);
     let read_only = check(&page, "Read-only");
     let hidden = check(&page, "Hidden");
@@ -1049,7 +1060,7 @@ fn an_item_that_cannot_be_renamed_greys_its_name_and_hidden() {
     let test = TestWindow::open(&fixture.uri_of("Fixed"));
     test.select_named("plan.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("plan.txt Properties");
+    let window = test.wait_for_properties("plan Properties");
     let page = general(&window);
     let shown = (
         name_field(&window).is_editable(),
@@ -1078,21 +1089,19 @@ fn hidden_renames_with_a_leading_dot() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
 
     check(&general(&window), "Hidden").set_active(true);
     press(&window, "Apply");
 
     wait_until("the hidden name", || fixture.path(".Notes 2.txt").exists());
     assert!(!fixture.path("Notes 2.txt").exists());
-    wait_until("the new title", || {
-        window.title_text() == ".Notes 2.txt Properties"
-    });
-    assert_eq!(name_field(&window).text(), ".Notes 2.txt");
+    wait_until("the new title", || window.title_text() == ".Notes 2 Properties");
+    assert_eq!(name_field(&window).text(), ".Notes 2");
 
     test.select_named("Taken.txt");
     test.activate("properties", None);
-    let taken = test.wait_for_properties("Taken.txt Properties");
+    let taken = test.wait_for_properties("Taken Properties");
     check(&general(&taken), "Hidden").set_active(true);
     taken.ok_button().emit_clicked();
     let refusal = message_over(&taken);
@@ -1114,17 +1123,17 @@ fn the_name_in_properties_renames_the_item() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
     let name = name_field(&window);
-    assert_eq!(name.text(), "Notes 2.txt");
+    assert_eq!(name.text(), "Notes 2");
 
-    name.set_text("Taken.txt");
+    name.set_text("Taken");
     assert!(window.apply_button().is_sensitive());
     window.ok_button().emit_clicked();
     message_over(&window).press("OK");
     assert_eq!(fs::read(fixture.path("Taken.txt")).expect("kept"), b"keep");
     assert!(!window.is_closed());
-    name.set_text("Renamed.txt");
+    name.set_text("Renamed");
     assert!(name.activates_default(), "Enter presses OK");
     window.ok_button().emit_clicked();
 
@@ -1143,7 +1152,7 @@ fn an_invalid_name_in_properties_is_refused_before_the_extension_question() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
 
     name_field(&window).set_text("");
     press(&window, "Apply");
@@ -1171,6 +1180,8 @@ fn an_invalid_name_in_properties_is_refused_before_the_extension_question() {
 fn the_name_in_properties_asks_before_changing_the_extension() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The extension shows, so the name can change it.
+    show_extensions(&test);
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
     let window = test.wait_for_properties("Notes 2.txt Properties");
@@ -1232,6 +1243,8 @@ fn extension_questions(window: &PropertiesWindow) -> usize {
 fn ok_twice_in_properties_asks_about_the_extension_once() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The extension shows, so the name can change it.
+    show_extensions(&test);
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
     let window = test.wait_for_properties("Notes 2.txt Properties");
@@ -1324,7 +1337,7 @@ fn the_security_tab_reads_and_changes_the_linux_permissions() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
     window.select_tab("security");
     let security = tab(&window, "security");
     wait_until("the names", || {
@@ -1392,7 +1405,7 @@ fn an_item_in_the_recycle_bin_shows_where_it_came_from_and_when_it_was_deleted()
     });
     super::file_ops_support::select_names(&test, &["Draft to delete.txt"]);
     test.activate("properties", None);
-    let window = test.wait_for_properties("Draft to delete.txt Properties");
+    let window = test.wait_for_properties("Draft to delete Properties");
     let page = tab(&window, "general");
     wait_until("the item to be read", || value_after(&page, "Origin:").is_some());
 
@@ -1869,7 +1882,7 @@ fn change_opens_open_with_over_the_properties_window() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
     let general = general(&window);
     let app_before = value_after(&general, "Opens with:");
     // Another window covers the browser window.
@@ -2078,7 +2091,7 @@ fn a_file_without_snapshots_explains_that_none_were_found() {
 
     test.activate("previous-versions", None);
 
-    let window = test.wait_for_properties("Notes 2.txt Properties");
+    let window = test.wait_for_properties("Notes 2 Properties");
     let versions = versions_of(&window);
     wait_until("the lookup", || {
         versions
@@ -2349,7 +2362,7 @@ fn a_custom_icon_shows_in_the_view_until_the_default_is_restored() {
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let file = test.wait_for_properties("Notes 2.txt Properties");
+    let file = test.wait_for_properties("Notes 2 Properties");
     assert!(
         file.tab_page("customize").is_none(),
         "a file has no Customize tab"
@@ -2780,6 +2793,8 @@ fn change_icon_lists_the_themes_folder_icons() {
 fn ok_during_apply_closes_once_the_change_is_made() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
+    // The extension shows, so the name can change it.
+    show_extensions(&test);
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
     let window = test.wait_for_properties("Notes 2.txt Properties");
@@ -2794,4 +2809,136 @@ fn ok_during_apply_closes_once_the_change_is_made() {
     wait_until("the rename", || fixture.path("Notes 2.md").exists());
     wait_until("the window to close", || window.is_closed());
     assert_eq!(extension_questions(&window), 0, "asked once");
+}
+
+/// With "Hide extensions for known file types" on, as it is by default,
+/// Properties names a file as the view does, as Windows 11 (build 26200)
+/// does: the General tab's name box shows "Notes 2" and the window is
+/// "Notes 2 Properties". A name typed there keeps the hidden extension,
+/// as renaming in place does, and the title follows the new name. A
+/// folder and a name with no known type's extension show whole.
+///
+/// parity: PROP-003, PROP-005, VIEW-069
+#[gtk::test]
+fn properties_leave_out_a_hidden_extension_and_a_rename_keeps_it() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("README"), b"Plain text\n").expect("a file without an extension");
+    let test = TestWindow::open(&fixture.uri());
+    assert!(
+        !test.context.settings_data().preferences.show_extensions,
+        "extensions are hidden by default"
+    );
+
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2 Properties");
+    let name = name_field(&window);
+    assert_eq!(name.text(), "Notes 2");
+    name.set_text("Harbor notes");
+    assert!(window.apply_button().is_sensitive(), "a new name is a change");
+    press(&window, "Apply");
+    wait_until("the rename", || fixture.path("Harbor notes.txt").exists());
+    assert!(!fixture.path("Notes 2.txt").exists());
+    assert!(!fixture.path("Harbor notes").exists(), "the extension is kept");
+    wait_until("the title to follow", || {
+        window.title_text() == "Harbor notes Properties"
+    });
+    assert_eq!(name.text(), "Harbor notes");
+    assert!(!window.apply_button().is_sensitive(), "nothing is left to apply");
+    window.close();
+
+    for (item, title, shown) in [
+        ("Documents", "Documents Properties", "Documents"),
+        ("README", "README Properties", "README"),
+    ] {
+        test.select_named(item);
+        test.activate("properties", None);
+        let window = test.wait_for_properties(title);
+        assert_eq!(name_field(&window).text(), shown, "{item} shows whole");
+        window.close();
+    }
+}
+
+/// With extensions shown, Properties shows the whole name, and a name
+/// typed there is the whole new name.
+///
+/// parity: PROP-003, PROP-005, VIEW-069
+#[gtk::test]
+fn properties_show_the_whole_name_while_extensions_are_shown() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("file-name-extensions", None);
+    wait_until("extensions to show", || {
+        test.context.settings_data().preferences.show_extensions
+    });
+
+    test.select_named("Notes 10.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 10.txt Properties");
+    let name = name_field(&window);
+    assert_eq!(name.text(), "Notes 10.txt");
+    name.set_text("Notes 11.txt");
+    press(&window, "Apply");
+    wait_until("the rename", || fixture.path("Notes 11.txt").exists());
+    wait_until("the title to follow", || {
+        window.title_text() == "Notes 11.txt Properties"
+    });
+}
+
+/// Properties opened by address, as another app's `ShowItemProperties`
+/// opens it, of a link to a folder whose name ends in a known type's
+/// extension: it is named whole, as a folder is, in its title as in its
+/// name box, also while extensions are hidden.
+///
+/// parity: PROP-005, VIEW-069
+#[gtk::test]
+fn a_folder_links_properties_opened_by_address_keep_its_whole_name() {
+    let fixture = Fixture::standard();
+    std::os::unix::fs::symlink(fixture.path("Documents"), fixture.path("Docs.txt"))
+        .expect("the link is made");
+    let test = TestWindow::open(&fixture.uri());
+    assert!(!test.context.settings_data().preferences.show_extensions);
+
+    test.window.open_properties_of(
+        &fixture.uri_of("Docs.txt"),
+        crate::properties::PropertiesTab::General,
+    );
+
+    let window = test.wait_for_properties("Docs.txt Properties");
+    assert_eq!(name_field(&window).text(), "Docs.txt");
+}
+
+/// A link to a file whose name has no known type's extension is a
+/// shortcut, named whole. Renamed in Properties to `note.txt`, it is a
+/// file with an extension, as the view shows it, so with extensions hidden
+/// the name box and the title then leave `.txt` out, and a name typed next
+/// keeps it.
+///
+/// parity: PROP-005, VIEW-069
+#[gtk::test]
+fn a_link_renamed_in_properties_to_a_known_type_hides_its_extension_after() {
+    let fixture = Fixture::standard();
+    std::os::unix::fs::symlink(fixture.path("Notes 2.txt"), fixture.path("note-link"))
+        .expect("the link is made");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("note-link");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("note-link Properties");
+    let name = name_field(&window);
+    assert_eq!(name.text(), "note-link");
+
+    name.set_text("note.txt");
+    press(&window, "Apply");
+    wait_until("the rename", || fixture.path("note.txt").is_symlink());
+    wait_until("the title to leave out .txt", || {
+        window.title_text() == "note Properties"
+    });
+    assert_eq!(name.text(), "note");
+
+    name.set_text("memo");
+    press(&window, "Apply");
+    wait_until("the hidden extension kept", || {
+        fixture.path("memo.txt").is_symlink()
+    });
+    assert_eq!(window.title_text(), "memo Properties");
 }

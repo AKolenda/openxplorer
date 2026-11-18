@@ -51,6 +51,19 @@ is missing.
   focus rings show only after keyboard navigation (ACC-009). Windows 11
   opens Home with Quick access by default; "Open Quick access on Home"
   stays off here, the owner's choice.
+- **Windows 11 differences (2026-11-17).** Changed to Windows 11's behavior,
+  replacing earlier choices: Properties leaves out a hidden extension in
+  its name box and title, and a name typed there keeps it (PROP-005); tabs
+  keep their icon, about three letters and the close button, and an
+  overflowing strip has scroll arrows at both ends (TAB-019). Replace
+  still moves the old file to the Recycle Bin by default, the owner's
+  choice; with "When replacing a file, move the old one to the Recycle
+  Bin" turned off it overwrites it, as Windows 11 does, and Undo after it
+  says it can't bring the old file back (OPS-028). Not confirmed in
+  Windows: what its Undo does after a Replace, whether its tab scroll
+  arrows take keyboard focus, their glyph and how far one click scrolls,
+  and the titles of several items' Properties and of the Permissions
+  window.
 - **Advanced Query Syntax in the search box (2026-11-15).** Quoted phrases,
   upper-case `AND`, `OR` and `NOT`, `name:`, `ext:`, `date:` with dates,
   comparisons and ranges, and sizes in KB, MB or GB are read as Microsoft
@@ -71,6 +84,13 @@ is missing.
   Settings category is a Tab stop; Home tiles are a Tab stop each; the
   message boxes Delete File and Rename File have no Alt+letter keys; a
   folder opened from the command line has Home before it in Back's history.
+- **Review fixes (2026-11-17).** Still open after these fixes: the open
+  tabs are saved every 3 s and at logout, but there is no SIGTERM or SIGINT
+  handler, which needs unsafe code or a new dependency (TAB-053); the
+  Preview pane shows an RTF document's text without its bold, italics,
+  fonts or colors (VIEW-070); at 200% text the command bar's and panes'
+  icons stay 16 pixels (ACC-012); a selected This PC tile lists its space
+  as "Space" in the Details pane, not checked against Windows (HOME-001).
 - **Checks this environment cannot run.** LOOK-028 (fractional scales and a
   window moving between monitors of different scales need a Wayland
   compositor), ACC-003 (nobody has checked the file list with Orca; the icon
@@ -97,13 +117,16 @@ is missing.
 - **Terminal.** View → Terminal opens the configured external terminal in the
   current folder. An embedded VTE terminal is not available across the current
   supported build targets and Flatpak configuration.
-- **Archives.** Browsing and extraction support ZIP and compressed TAR, and
-  ZIPs with the traditional ZIP password, which ask for it. 7z, RAR and
-  AES-encrypted ZIPs still need additional codecs. A TAR's relative links
-  that stay inside the archive are listed and extracted; ZIP links stay
-  hidden and refused. Search inside an opened archive is still unavailable.
-  Compress to › 7z File writes 7z archives (sevenz-rust2); browsing and
-  extracting 7z is not supported yet.
+- **Archives.** Browsing and extraction support ZIP (including ZIP64),
+  compressed TAR and 7z, and ZIPs with the traditional ZIP password, which
+  ask for it. Compress to › 7z File writes 7z archives (sevenz-rust2). 7z
+  archives made with LZMA, LZMA2 (with their filters and BCJ2) or BZip2 are
+  browsed and extracted like ZIP; encrypted 7z archives and other methods
+  such as PPMd and Deflate are refused plainly, as Windows 11 refuses
+  encrypted archives. RAR and AES-encrypted ZIPs still need additional codecs. A TAR's
+  relative links that stay inside the archive are listed and extracted; ZIP
+  links stay hidden and refused. Search inside an opened archive is still
+  unavailable.
 - **Flatpak:** "Show in folder" answers only while OpenXplorer runs unless the
   desktop's Background portal starts it at login (native/packaging/README.md,
   "Differences inside the Flatpak"). Flathub publication needs the owner.

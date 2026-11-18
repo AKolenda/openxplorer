@@ -164,7 +164,10 @@ impl StagedCopy<'_> {
     ///
     /// Any failure while staging, publishing or verifying. Nothing is
     /// visible under the final name unless publishing succeeded.
-    pub(crate) fn run(mut self, staging: &mut ItemStaging) -> Result<(), TransferError> {
+    ///
+    /// Returns whether Replace overwrote or merged into an item that was
+    /// there when the copy was published.
+    pub(crate) fn run(mut self, staging: &mut ItemStaging) -> Result<bool, TransferError> {
         let stage_name = staging_name()?;
         let folder = self.destination_folder.child(OsStr::new(&stage_name));
         // Only a private folder holds the item under a name of its own; a
@@ -189,7 +192,7 @@ impl StagedCopy<'_> {
         &mut self,
         name: &StagedName,
         staging: &mut ItemStaging,
-    ) -> Result<(), TransferError> {
+    ) -> Result<bool, TransferError> {
         let mut modes = DirectoryModes::default();
         staging.place = StagingPlace::of(self.destination_folder);
         let layout = self.layout();
@@ -207,7 +210,8 @@ impl StagedCopy<'_> {
                 "The copy was not staged. Nothing was published.",
             ))
         })?;
-        self.publish(stage, &mut modes)
+        let replaced = self
+            .publish(stage, &mut modes)
             .map_err(|error| explain_publish_error(error, layout))?;
         if staging.place == StagingPlace::Device {
             // XFER-021: a device's success report is not proof.
@@ -218,7 +222,7 @@ impl StagedCopy<'_> {
                 staging.stage = None;
             }
         }
-        Ok(())
+        Ok(replaced)
     }
 
     /// Where this copy is built: a same-device file copy must follow MTP
@@ -339,7 +343,10 @@ impl StagedCopy<'_> {
     /// native rename in the destination folder. Replace is only reached
     /// after the user explicitly chose it; every other policy keeps the
     /// no-overwrite race guard (XFER-007).
-    fn publish(&self, stage: &Stage, modes: &mut DirectoryModes) -> Result<(), TransferError> {
+    ///
+    /// Returns whether Replace overwrote or merged into an item that was
+    /// there ([`commit_replace`]).
+    fn publish(&self, stage: &Stage, modes: &mut DirectoryModes) -> Result<bool, TransferError> {
         if self.policy == ConflictPolicy::Replace {
             commit_replace(
                 stage.item(),
@@ -350,7 +357,7 @@ impl StagedCopy<'_> {
                 self.merge_check,
             )
         } else {
-            publish_staged(stage.item(), self.destination, modes, self.cancel)
+            publish_staged(stage.item(), self.destination, modes, self.cancel).map(|()| false)
         }
     }
 }

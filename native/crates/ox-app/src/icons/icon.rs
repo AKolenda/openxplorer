@@ -99,11 +99,11 @@ pub(crate) enum Icon {
     /// settings drop-down).
     ChevronDown16,
     /// `chevron_left_16_regular`: the address bar's crumb dividers in a
-    /// right-to-left language (named by `resources/skin/navigation.css`).
-    #[cfg_attr(not(test), expect(dead_code, reason = "only the skin's CSS names it"))]
+    /// right-to-left language (named by `resources/skin/navigation.css`)
+    /// and the tab strip's arrow that scrolls it back.
     ChevronLeft16,
     /// `chevron_right_16_regular`: a settings row that opens a page of its
-    /// own.
+    /// own, and the tab strip's arrow that scrolls it forward.
     ChevronRight16,
     /// `chevron_up_16_regular`: the progress window's "Fewer details".
     ChevronUp16,
@@ -149,6 +149,10 @@ pub(crate) enum Icon {
     /// `dismiss_circle_16_filled`: the badge of a disconnected network share
     /// or mapped drive, as Windows marks one with a red cross.
     DismissCircleFilled,
+    /// `dismiss_circle_32_color`: the error icon of a message box, such as
+    /// the one that says a typed address was not found, in colour as
+    /// Windows draws it.
+    DismissCircleColor32,
     /// `document_20_regular`: the Documents and Templates folders, License &
     /// source, and New ▸ Rich Text Document and the user's templates.
     Document,
@@ -397,6 +401,7 @@ impl Icon {
             Icon::Dismiss => "ox-dismiss-20-symbolic",
             Icon::Dismiss16 => "ox-dismiss-16-symbolic",
             Icon::DismissCircleFilled => "ox-dismiss-circle-16-filled-symbolic",
+            Icon::DismissCircleColor32 => "ox-dismiss-circle-32-color",
             Icon::Document => "ox-document-20-symbolic",
             Icon::DocumentAdd => "ox-document-add-20-symbolic",
             Icon::DocumentColor20 => "ox-document-20-color",
@@ -499,7 +504,7 @@ impl Icon {
 /// Every icon, in the order of [`Icon`], for the tests that check each one
 /// ships, is recorded and resolves.
 #[cfg(test)]
-pub(crate) const ALL_ICONS: [Icon; 125] = [
+pub(crate) const ALL_ICONS: [Icon; 126] = [
     Icon::Add,
     Icon::AddNetworkLocation24,
     Icon::Apps,
@@ -545,6 +550,7 @@ pub(crate) const ALL_ICONS: [Icon; 125] = [
     Icon::Dismiss,
     Icon::Dismiss16,
     Icon::DismissCircleFilled,
+    Icon::DismissCircleColor32,
     Icon::Document,
     Icon::DocumentAdd,
     Icon::DocumentColor20,

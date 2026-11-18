@@ -27,8 +27,10 @@
 //! the Trash by its Undo: the record lists the items that went into them.
 //!
 //! Not undoable: permanent delete and emptying the Recycle Bin (nothing is
-//! left to bring back), and a file a Replace overwrote where nothing could
-//! go to the Recycle Bin (its copy then stays when the rest is undone). Every undo step runs with the same safety
+//! left to bring back), and a file a Replace overwrote, as Windows 11 does
+//! (the setting off) or where nothing could go to the Recycle Bin: the record
+//! names it, Undo says it can't bring it back, and its replacement stays
+//! when the rest is undone. Every undo step runs with the same safety
 //! rules as the operation itself; `undo_apply` carries them out.
 //!
 //! Reversing a record has an effect of its own, which [`UndoRecord::inverse`]
@@ -116,12 +118,15 @@ pub enum UndoRecord {
         /// The folders, each after the folder it is in.
         folders: Vec<String>,
     },
-    /// A copy or move that replaced files, which went to the Recycle Bin,
-    /// or that removed the folders it emptied:
-    /// undone by undoing `steps` in order, then restoring each replaced
-    /// file. The Recycle Bin items are looked up before the steps run,
-    /// since the steps may move other items from the same paths to the
-    /// Trash. Its Redo is a record of the same kind.
+    /// A copy, move or restore that replaced files, which went to the
+    /// Recycle Bin or were overwritten, or that removed the folders it
+    /// emptied: undone by undoing `steps` in order, then restoring each
+    /// replaced file. The Recycle Bin items are looked up before the
+    /// steps run, since the steps may move other items from the same
+    /// paths to the Trash. A file it overwrote, as Windows overwrites one,
+    /// is gone: Undo says so first ([`UndoRecord::overwritten`]) and
+    /// leaves its replacement in place. Its Redo is a record of the same
+    /// kind.
     Replace {
         /// The operation it belongs to, which names the step.
         operation: Operation,
@@ -132,6 +137,9 @@ pub enum UndoRecord {
         /// When they went to the Recycle Bin, at the earliest, in seconds
         /// since the Unix epoch.
         replaced_since: u64,
+        /// The files the operation overwrote, by the URI their
+        /// replacements have: nothing can bring the old ones back.
+        overwritten: Vec<String>,
     },
 }
 
@@ -251,6 +259,24 @@ impl UndoRecord {
         self.operation().title()
     }
 
+    /// The files the operation overwrote, which Undo cannot bring back,
+    /// by the URI their replacements have; empty when it overwrote none.
+    pub fn overwritten(&self) -> &[String] {
+        match self {
+            UndoRecord::Replace { overwritten, .. } => overwritten,
+            _ => &[],
+        }
+    }
+
+    /// Whether undoing the record does anything beyond saying which files
+    /// it cannot bring back ([`Self::overwritten`]).
+    pub fn undoes_more_than_overwrites(&self) -> bool {
+        match self {
+            UndoRecord::Replace { steps, replaced, .. } => !steps.is_empty() || !replaced.is_empty(),
+            _ => true,
+        }
+    }
+
     /// The label of the Undo command for this operation, for example
     /// `Undo Rename`.
     pub fn undo_label(&self) -> String {
@@ -343,11 +369,13 @@ impl UndoRecord {
         if inverse_steps.is_empty() && replaced.is_empty() {
             return None;
         }
+        // Undo left the files it overwrote alone, so Redo has none.
         Some(UndoRecord::Replace {
             operation,
             steps: inverse_steps,
             replaced,
             replaced_since: reversed_since,
+            overwritten: Vec::new(),
         })
     }
 }

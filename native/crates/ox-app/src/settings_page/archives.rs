@@ -17,9 +17,9 @@ use super::SettingsPage;
 
 const BROWSE_ARCHIVES: RowText = RowText {
     title: "Open archives as folders",
-    description: "Browse ZIP and TAR archives (.tar, .tar.gz, .tar.bz2, .tar.xz, .tar.zst) inside \
-                  OpenXplorer. Off, they open in their default application.",
-    keywords: "zip tar gz archive compressed browse extract",
+    description: "Browse ZIP, TAR and 7z archives (.tar, .tar.gz, .tar.bz2, .tar.xz, .tar.zst, .7z) \
+                  inside OpenXplorer. Off, they open in their default application.",
+    keywords: "zip tar gz 7z 7-zip archive compressed browse extract",
 };
 
 const ZIP_OPENING: RowText = RowText {

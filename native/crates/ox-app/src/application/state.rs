@@ -1064,7 +1064,7 @@ mod tests {
             properties
                 .properties_windows()
                 .iter()
-                .any(|window| window.title_text() == "report.txt Properties")
+                .any(|window| window.title_text() == "report Properties")
         });
         assert_eq!(
             properties.properties_startup_ids(),

@@ -27,7 +27,7 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 
 use super::limits::ExtractionLimits;
-use crate::archive::zip::{Encryption as MemberEncryption, MemberFileType, ZipMember};
+use crate::archive::zip::{MemberFileType, ZipMember};
 use crate::archive::ArchiveError;
 use crate::transfer::Cancellation;
 
@@ -379,11 +379,8 @@ fn check_type(member: &ZipMember) -> Result<(), ArchiveError> {
     if is_link_or_special {
         return Err(ArchiveError::LinkOrSpecialFile);
     }
-    if member.encryption() == MemberEncryption::Unsupported {
-        return Err(ArchiveError::UnsupportedEncryption);
-    }
-    if !member.method.is_supported() {
-        return Err(ArchiveError::UnsupportedCompression);
+    if let Some(refusal) = member.encryption_refusal().or_else(|| member.method_refusal()) {
+        return Err(refusal);
     }
     Ok(())
 }
