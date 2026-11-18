@@ -17,7 +17,7 @@ use std::io::{self, Read, Seek, SeekFrom};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{sync_channel, Receiver, RecvTimeoutError, SyncSender};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use sevenz_rust2::{Archive, BlockDecoder, Password};
@@ -83,6 +83,7 @@ impl BlockStream {
             wanted: Arc::clone(&wanted),
             stop: Arc::clone(&stop),
             cancel: cancel.clone(),
+            source_failure: SourceFailure::default(),
         };
         let spawned = std::thread::Builder::new()
             .name("ox-7z-decoder".to_owned())
@@ -186,6 +187,7 @@ struct Decoding {
     wanted: Arc<AtomicUsize>,
     stop: Arc<AtomicBool>,
     cancel: Cancellation,
+    source_failure: SourceFailure,
 }
 
 impl Decoding {
@@ -198,6 +200,9 @@ impl Decoding {
             // panic left anyway means damaged data.
             Err(_) => ArchiveError::DamagedSevenZip,
         };
+        // The decoder may have made damage of a failed read of the archive
+        // (while it started, say): that read's failure is the one reported.
+        let failure = self.source_failure.take().unwrap_or(failure);
         let _ = self.sender.send(Message::Failed(failure));
     }
 
@@ -218,6 +223,7 @@ impl Decoding {
             stream,
             parsed.length,
             Arc::clone(&parsed.checked_header),
+            self.source_failure.clone(),
         ));
         let password = Password::empty();
         let archive = Archive::read(&mut source, &password).map_err(|error| crate_error(&error))?;
@@ -263,7 +269,13 @@ impl Decoding {
             }
             self.cancel.check()?;
             let mut chunk = vec![0u8; CHUNK];
-            let count = read_full(reader, &mut chunk).map_err(data_error)?;
+            let read = read_full(reader, &mut chunk);
+            // A failed read of the archive is that failure, and nothing the
+            // decoder made of it is sent.
+            if let Some(error) = self.source_failure.take() {
+                return Err(error);
+            }
+            let count = read.map_err(|_| ArchiveError::DamagedSevenZip)?;
             if count == 0 {
                 break;
             }
@@ -286,13 +298,17 @@ impl Decoding {
 /// header. Any change to the names, sizes or checksums of its files
 /// changes that header; damaged data then fails its own checksum.
 fn is_same_archive(stream: &mut dyn ArchiveStream, parsed: &Parsed) -> Result<bool, ArchiveError> {
-    let length = stream.seek(SeekFrom::End(0))?;
-    stream.seek(SeekFrom::Start(0))?;
-    let mut start = [0u8; 32];
-    if length != parsed.length || stream.read_exact(&mut start).is_err() {
+    let length = stream.seek(SeekFrom::End(0)).map_err(source_error)?;
+    stream.seek(SeekFrom::Start(0)).map_err(source_error)?;
+    if length != parsed.length {
         return Ok(false);
     }
-    Ok(start == parsed.start)
+    let mut start = [0u8; 32];
+    match stream.read_exact(&mut start) {
+        Ok(()) => Ok(start == parsed.start),
+        Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => Ok(false),
+        Err(error) => Err(source_error(error)),
+    }
 }
 
 /// Fills `chunk` as far as `reader` goes; fewer bytes only at its end.
@@ -309,35 +325,43 @@ fn read_full(reader: &mut dyn Read, chunk: &mut [u8]) -> io::Result<usize> {
     Ok(filled)
 }
 
-/// The error of reading a file's data: the source's own error when the
-/// archive could not be read (a lost connection stays a lost connection),
-/// and any checksum or decoding failure damage.
-fn data_error(error: io::Error) -> ArchiveError {
-    match error
-        .into_inner()
-        .map(<dyn std::error::Error + Send + Sync>::downcast::<SourceError>)
-    {
-        Some(Ok(source)) => damaged(source.0),
-        _ => ArchiveError::DamagedSevenZip,
+/// The first failed read or seek of the archive itself, kept as it came:
+/// the decoders hand such an error on as one of their own, or lose it, so
+/// it is looked at before any decoding failure is called damage.
+#[derive(Clone, Default)]
+struct SourceFailure(Arc<Mutex<Option<io::Error>>>);
+
+impl SourceFailure {
+    /// Keeps `error` unless one is kept already, and returns one of the
+    /// same kind for the decoder.
+    fn record(&self, error: io::Error) -> io::Error {
+        if error.kind() == io::ErrorKind::Interrupted {
+            return error;
+        }
+        let stand_in = io::Error::new(error.kind(), error.to_string());
+        if let Ok(mut kept) = self.0.lock() {
+            if kept.is_none() {
+                *kept = Some(error);
+            }
+        }
+        stand_in
+    }
+
+    /// The app's error for the failure kept, if any.
+    fn take(&self) -> Option<ArchiveError> {
+        let error = self.0.lock().ok()?.take()?;
+        Some(source_error(error))
     }
 }
 
-/// An error of reading the archive itself, marked so that it is told
-/// apart from the decoders' errors, which come as I/O errors too.
-#[derive(Debug)]
-struct SourceError(io::Error);
-
-impl std::fmt::Display for SourceError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(formatter)
+/// The app's error for a failed read of the archive: GIO's own error when
+/// it came from GIO, so a share that must be mounted says so, and damage
+/// when the archive ends early.
+fn source_error(error: io::Error) -> ArchiveError {
+    match error.downcast::<glib::Error>() {
+        Ok(gio) => gio.into(),
+        Err(error) => damaged(error),
     }
-}
-
-impl std::error::Error for SourceError {}
-
-/// `error`, of the same kind, marked as the source's.
-fn source_error(error: io::Error) -> io::Error {
-    io::Error::new(error.kind(), SourceError(error))
 }
 
 /// The app's error for an error of the crate.
@@ -404,10 +428,12 @@ struct WithPlainHeader {
     position: u64,
     /// Where `inner` is, when known.
     inner_position: Option<u64>,
+    /// Where a failed read or seek of `inner` is kept.
+    failure: SourceFailure,
 }
 
 impl WithPlainHeader {
-    fn new(inner: Box<dyn ArchiveStream>, length: u64, plain: Arc<[u8]>) -> Self {
+    fn new(inner: Box<dyn ArchiveStream>, length: u64, plain: Arc<[u8]>, failure: SourceFailure) -> Self {
         let mut fields = Vec::with_capacity(20);
         fields.extend_from_slice(&(length - SIGNATURE_HEADER_BYTES).to_le_bytes());
         fields.extend_from_slice(&(plain.len() as u64).to_le_bytes());
@@ -424,6 +450,7 @@ impl WithPlainHeader {
             plain,
             position: 0,
             inner_position: None,
+            failure,
         }
     }
 
@@ -445,10 +472,13 @@ impl Read for WithPlainHeader {
             if self.inner_position != Some(self.position) {
                 self.inner
                     .seek(SeekFrom::Start(self.position))
-                    .map_err(source_error)?;
+                    .map_err(|error| self.failure.record(error))?;
             }
             self.inner_position = None;
-            let count = self.inner.read(&mut buffer[..limit]).map_err(source_error)?;
+            let count = self
+                .inner
+                .read(&mut buffer[..limit])
+                .map_err(|error| self.failure.record(error))?;
             self.inner_position = Some(self.position + count as u64);
             count
         } else {

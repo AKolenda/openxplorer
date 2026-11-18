@@ -7,7 +7,7 @@
 use std::io::Cursor;
 
 use sevenz_rust2::encoder_options::Lzma2Options;
-use sevenz_rust2::{ArchiveEntry, ArchiveWriter, NtTime, SourceReader};
+use sevenz_rust2::{ArchiveEntry, ArchiveWriter, EncoderConfiguration, EncoderMethod, NtTime, SourceReader};
 
 /// The attribute 7-Zip and p7zip set when the high 16 bits hold the
 /// item's Unix mode.
@@ -78,8 +78,22 @@ impl SevenEntry {
 ///
 /// When the writer fails.
 pub fn seven_zip_bytes(entries: &[SevenEntry], solid: bool) -> Vec<u8> {
+    seven_zip_coded_with(entries, solid, Lzma2Options::from_level(1).into())
+}
+
+/// A solid 7z of `entries` compressed with LZMA rather than LZMA2: its
+/// decoder reads the first packed bytes as soon as it starts.
+///
+/// # Panics
+///
+/// When the writer fails.
+pub fn lzma_seven_zip_bytes(entries: &[SevenEntry]) -> Vec<u8> {
+    seven_zip_coded_with(entries, true, EncoderConfiguration::new(EncoderMethod::LZMA))
+}
+
+fn seven_zip_coded_with(entries: &[SevenEntry], solid: bool, method: EncoderConfiguration) -> Vec<u8> {
     let mut writer = ArchiveWriter::new(Cursor::new(Vec::new())).expect("a 7z writer");
-    writer.set_content_methods(vec![Lzma2Options::from_level(1).into()]);
+    writer.set_content_methods(vec![method]);
     writer.set_encrypt_header(false);
     if solid {
         let (folders, files): (Vec<&SevenEntry>, Vec<&SevenEntry>) =

@@ -19,10 +19,10 @@ use ox_core::archive::{
 use ox_core::transfer::Cancellation;
 
 use archive_support::{
-    coded_seven_zip, encoded_header_seven_zip, gio_factory, memory_opener, one_file_seven_zip, raw_seven_zip,
-    seven_zip_bytes, seven_zip_claiming_files, seven_zip_with_empty_file_between,
-    seven_zip_without_sub_streams, ExtractionFixture, LocalFileOutput, SevenEntry, TestCoder, AES, BCJ2,
-    BZIP2, COPY, DEFLATE, LZMA2, PPMD, SEVEN_ZIP_MODIFIED,
+    coded_seven_zip, encoded_header_seven_zip, gio_factory, lzma_seven_zip_bytes, memory_opener,
+    one_file_seven_zip, raw_seven_zip, seven_zip_bytes, seven_zip_claiming_files,
+    seven_zip_with_empty_file_between, seven_zip_without_sub_streams, ExtractionFixture, LocalFileOutput,
+    SevenEntry, TestCoder, AES, BCJ2, BZIP2, COPY, DEFLATE, LZMA2, PPMD, SEVEN_ZIP_MODIFIED,
 };
 
 /// A folder, a file in it, a folder in that and an empty file, with a
@@ -720,47 +720,90 @@ fn an_empty_file_inside_an_unreadable_solid_block_still_opens() {
     assert_eq!(fs::read(copy).expect("a file"), b"");
 }
 
-/// A stream that loses its connection once the decoder reads data, as a
-/// GIO stream reports it (an error of no particular kind).
-struct LostConnection(std::io::Cursor<Vec<u8>>);
+/// A stream of an archive whose reads fail from byte `fail_from` on with
+/// the error `error` makes, as a GIO stream fails when its connection is
+/// lost or its share unmounted. It reads at most 4 KiB at a time, as GIO
+/// streams are read.
+struct FailingStream {
+    inner: std::io::Cursor<Vec<u8>>,
+    fail_from: u64,
+    error: fn() -> std::io::Error,
+}
 
-impl Read for LostConnection {
+impl Read for FailingStream {
     fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
-        if self.0.position() >= 32 {
-            return Err(std::io::Error::other("Connection lost"));
+        if self.inner.position() >= self.fail_from {
+            return Err((self.error)());
         }
-        self.0.read(buffer)
+        let count = buffer.len().min(4096);
+        self.inner.read(&mut buffer[..count])
     }
 }
 
-impl Seek for LostConnection {
+impl Seek for FailingStream {
     fn seek(&mut self, position: SeekFrom) -> std::io::Result<u64> {
-        self.0.seek(position)
+        self.inner.seek(position)
     }
 }
 
-/// A connection lost while a file is decoded is that failure, so that
-/// it can be retried, and not a damaged archive.
+/// The error of opening `notes.txt` of the 7z `bytes` when the decoder's
+/// reads of the archive fail from byte `fail_from` on with `error`.
+fn decoding_error(bytes: Vec<u8>, fail_from: u64, error: fn() -> std::io::Error) -> ArchiveError {
+    let opener = move |_uri: &str, _cancel: &Cancellation| -> Result<Box<dyn ArchiveStream>, ArchiveError> {
+        let inner = std::io::Cursor::new(bytes.clone());
+        if std::thread::current().name() == Some("ox-7z-decoder") {
+            Ok(Box::new(FailingStream {
+                inner,
+                fail_from,
+                error,
+            }))
+        } else {
+            Ok(Box::new(inner))
+        }
+    };
+    let root = tempfile::tempdir().expect("a folder");
+    ArchiveBrowser::new(Arc::new(opener), root.path().to_path_buf())
+        .preview_member("file:///fixture/Remote.7z", "notes.txt", &Cancellation::new())
+        .expect_err("the read fails")
+}
+
+/// Bytes that do not compress, so their packed data is as long.
+fn noise(length: usize) -> Vec<u8> {
+    let mut state = 0x2545_f491_u32;
+    (0..length)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state.to_le_bytes()[0]
+        })
+        .collect()
+}
+
+/// A failed read of the archive while a file is decoded is that failure,
+/// so that it can be retried or the share mounted, and not a damaged
+/// archive: when LZMA2 first reads data, when LZMA reads its first bytes
+/// as it starts, and in the middle of the data.
 ///
 /// parity: ARC-017
 #[test]
 fn a_connection_lost_while_decoding_is_not_called_damage() {
-    let bytes = seven_zip_bytes(&[SevenEntry::file("notes.txt", b"remote notes")], true);
-    let opener = move |_uri: &str, _cancel: &Cancellation| -> Result<Box<dyn ArchiveStream>, ArchiveError> {
-        let cursor = std::io::Cursor::new(bytes.clone());
-        if std::thread::current().name() == Some("ox-7z-decoder") {
-            Ok(Box::new(LostConnection(cursor)))
-        } else {
-            Ok(Box::new(cursor))
-        }
-    };
-    let root = tempfile::tempdir().expect("a folder");
-    let browser = ArchiveBrowser::new(Arc::new(opener), root.path().to_path_buf());
+    let lost = || std::io::Error::other("Connection lost");
+    let unmounted = || std::io::Error::other(glib::Error::new(gio::IOErrorEnum::NotMounted, "Not mounted"));
+    let entries = [SevenEntry::file("notes.txt", &noise(64 * 1024))];
 
-    let error = browser
-        .preview_member("file:///fixture/Remote.7z", "notes.txt", &Cancellation::new())
-        .expect_err("the connection is lost");
-
+    let error = decoding_error(seven_zip_bytes(&entries, true), 32, lost);
     assert!(matches!(error, ArchiveError::Backend(_)), "{error:?}");
     assert!(error.to_string().contains("Connection lost"), "{error}");
+
+    let lzma = lzma_seven_zip_bytes(&entries);
+    for fail_from in [32, 32 + 16 * 1024] {
+        let error = decoding_error(lzma.clone(), fail_from, lost);
+        assert!(
+            error.to_string().contains("Connection lost"),
+            "{fail_from}: {error:?}"
+        );
+        let error = decoding_error(lzma.clone(), fail_from, unmounted);
+        assert!(error.is_not_mounted(), "{fail_from}: {error:?}");
+    }
 }
