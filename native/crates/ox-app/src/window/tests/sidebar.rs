@@ -1076,3 +1076,31 @@ fn recent_locations_lists_visited_folders_and_clear_forgets_them() {
     assert!(recent_folder_uris().is_empty());
     wait_until("the cleared list", || test.names().is_empty());
 }
+
+/// The Recycle Bin's menu is as wide as its longest row, so "Hide section
+/// “Recent files and Recycle Bin”" reads in full rather than cut off.
+///
+/// parity: SIDE-010
+#[gtk::test]
+fn the_recycle_bin_menu_is_as_wide_as_its_longest_row() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let sidebar = test.window.sidebar();
+    wait_for_frames(&test.window, 3);
+
+    let menu = sidebar.right_click_row("Recycle Bin");
+    wait_for_frames(&test.window, 3);
+    let labels = descendants::<gtk::Label>(&menu);
+    let menu_width = menu.width();
+    menu.popdown();
+
+    let hide_section = labels
+        .iter()
+        .find(|label| label.label().starts_with("Hide section"))
+        .expect("the Hide section row");
+    assert!(
+        !hide_section.layout().is_ellipsized(),
+        "{:?} is cut off in a menu {menu_width} pixels wide",
+        hide_section.label()
+    );
+}
