@@ -75,6 +75,36 @@ fn this_pc_lists_devices_and_drives_and_no_quick_access() {
     assert_eq!(landing::section_titles(landing), ["Devices and drives"]);
 }
 
+/// This PC opens with nothing selected, as Windows 11's does ("2 items"
+/// and no selection in the status bar), and the keyboard on its first
+/// tile, so the arrows and Space start there.
+///
+/// parity: HOME-001
+#[gtk::test]
+fn this_pc_opens_with_the_first_tile_focused_and_nothing_selected() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+
+    test.window.navigate("This PC").expect("a page");
+    let landing = test.window.folder_pane().landing();
+    wait_until("This PC's tiles", || !landing::tile_groups(landing).is_empty());
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+
+    let groups = landing::tile_groups(landing);
+    let first = groups[0].1[0].clone();
+    let focus = gtk::prelude::GtkWindowExt::focus(&test.window);
+    assert!(
+        focus.is_some_and(|focus| focus == first || focus.is_ancestor(&first)),
+        "the first tile has the keyboard"
+    );
+    let selected: usize = groups.iter().map(|(flow, _)| flow.selected_children().len()).sum();
+    assert_eq!(selected, 0, "nothing is selected");
+    let status = test.window.status_bar().texts();
+    assert_eq!(status.1, "", "no selection in the status bar: {status:?}");
+    assert!(!test.window.status_bar().shows_selection_divider());
+}
+
 /// Opening This PC, and switching the Details pane there, draws its
 /// drives' capacity bars without GTK warning that a bar has a negative
 /// size ("GtkGizmo (progress) reported min width -2").
