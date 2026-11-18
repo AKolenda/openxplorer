@@ -38,10 +38,8 @@ const BUTTON_RELEASE: u8 = 5;
 const MOTION_NOTIFY: u8 = 6;
 const COOKIE_AUTHORIZATION: &[u8] = b"MIT-MAGIC-COOKIE-1";
 
-/// The private display's screen (`XVFB_SERVER_ARGUMENTS` in check.py), and
-/// how far apart the pointer looks for a window on it.
-const SCREEN_WIDTH: i32 = 1440;
-const SCREEN_HEIGHT: i32 = 1000;
+/// How far apart the pointer looks for a window on the private display's
+/// screen.
 const SEARCH_STEP: usize = 80;
 
 /// A pointer button.
@@ -61,6 +59,9 @@ pub(crate) enum Button {
 pub(crate) struct Pointer {
     connection: UnixStream,
     root: u32,
+    /// The screen's width and height, which the X server says when the
+    /// connection opens (`XVFB_SERVER_ARGUMENTS` in check.py).
+    screen: (i32, i32),
     xtest: u8,
     /// The buttons pressed and not released yet.
     held: Vec<Button>,
@@ -88,10 +89,11 @@ impl Pointer {
         connection
             .set_read_timeout(Some(Duration::from_secs(5)))
             .expect("a read timeout");
-        let root = set_up(&mut connection, &number);
+        let (root, screen) = set_up(&mut connection, &number);
         let mut pointer = Self {
             connection,
             root,
+            screen,
             xtest: 0,
             held: Vec::new(),
         };
@@ -376,9 +378,10 @@ pub(crate) fn window_origin(
         .and_then(|display| display.default_seat())
         .and_then(|seat| seat.pointer())
         .expect("the private display has a pointer");
-    let screen = (0..SCREEN_HEIGHT)
+    let (width, height) = pointer.screen;
+    let screen = (0..height)
         .step_by(SEARCH_STEP)
-        .flat_map(|y| (0..SCREEN_WIDTH).step_by(SEARCH_STEP).map(move |x| (x, y)));
+        .flat_map(move |y| (0..width).step_by(SEARCH_STEP).map(move |x| (x, y)));
     std::iter::once(probe)
         .chain(screen)
         .find_map(|(x, y)| {
@@ -464,8 +467,8 @@ fn cookie(number: &str) -> Option<Vec<u8>> {
 }
 
 /// Opens the connection, with the display's cookie when it has one; the
-/// first screen's root window.
-fn set_up(connection: &mut UnixStream, number: &str) -> u32 {
+/// first screen's root window, and its width and height in pixels.
+fn set_up(connection: &mut UnixStream, number: &str) -> (u32, (i32, i32)) {
     let cookie = cookie(number);
     let (name, data) = match &cookie {
         Some(data) => (COOKIE_AUTHORIZATION, data.as_slice()),
@@ -495,10 +498,13 @@ fn set_up(connection: &mut UnixStream, number: &str) -> u32 {
     let vendor = usize::from(u16::from_le_bytes([setup[16], setup[17]]));
     let formats = usize::from(setup[21]);
     let screen = 32 + vendor.div_ceil(4) * 4 + formats * 8;
-    u32::from_le_bytes([
+    let root = u32::from_le_bytes([
         setup[screen],
         setup[screen + 1],
         setup[screen + 2],
         setup[screen + 3],
-    ])
+    ]);
+    let width = u16::from_le_bytes([setup[screen + 20], setup[screen + 21]]);
+    let height = u16::from_le_bytes([setup[screen + 22], setup[screen + 23]]);
+    (root, (i32::from(width), i32::from(height)))
 }

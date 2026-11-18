@@ -32,21 +32,21 @@ const MENUS: [&str; 4] = ["New", "Sort", "View", "See more"];
 
 /// The window under test with the real pointer, and where the window is
 /// on the screen.
-struct Session {
-    pointer: Pointer,
-    test: TestWindow,
+pub(super) struct Session {
+    pub(super) pointer: Pointer,
+    pub(super) test: TestWindow,
     origin: (i32, i32),
     fixture: Fixture,
 }
 
 impl Session {
     /// A window on a folder with a few files, wide or `width` pixels.
-    fn open(width: Option<i32>) -> Self {
+    pub(super) fn open(width: Option<i32>) -> Self {
         Self::open_on(Fixture::standard(), width)
     }
 
     /// A window on `fixture`'s folder, wide or `width` pixels.
-    fn open_on(fixture: Fixture, width: Option<i32>) -> Self {
+    pub(super) fn open_on(fixture: Fixture, width: Option<i32>) -> Self {
         let mut pointer = Pointer::connect();
         let test = TestWindow::open(&fixture.uri());
         if let Some(width) = width {
@@ -63,7 +63,7 @@ impl Session {
     }
 
     /// The screen point of (`x`, `y`) in `widget`, in the window.
-    fn on_screen(&self, widget: &impl IsA<gtk::Widget>, (x, y): (f64, f64)) -> (i32, i32) {
+    pub(super) fn on_screen(&self, widget: &impl IsA<gtk::Widget>, (x, y): (f64, f64)) -> (i32, i32) {
         let native = widget.native().expect("a shown widget is in a window");
         #[expect(clippy::cast_possible_truncation, reason = "window positions are small")]
         let point = widget
@@ -81,26 +81,26 @@ impl Session {
     }
 
     /// The screen point of the middle of `widget`.
-    fn middle_of(&self, widget: &impl IsA<gtk::Widget>) -> (i32, i32) {
+    pub(super) fn middle_of(&self, widget: &impl IsA<gtk::Widget>) -> (i32, i32) {
         let half = |size: i32| f64::from(size) / 2.0;
         self.on_screen(widget, (half(widget.width()), half(widget.height())))
     }
 
     /// A real primary click at `point` on the screen.
-    fn click_at(&mut self, (x, y): (i32, i32)) {
+    pub(super) fn click_at(&mut self, (x, y): (i32, i32)) {
         self.pointer.move_to(x, y);
         self.pointer.press(Button::Primary);
         self.pointer.release(Button::Primary);
     }
 
     /// A real primary click on the middle of the menu button `name`.
-    fn click_button(&mut self, name: &str) {
+    pub(super) fn click_button(&mut self, name: &str) {
         let point = self.middle_of(&menu_button(&self.test, name));
         self.click_at(point);
     }
 
     /// Opens `name`'s menu with a real click and waits for it.
-    fn open_by_click(&mut self, name: &str) {
+    pub(super) fn open_by_click(&mut self, name: &str) {
         self.click_button(name);
         let menu = menu_of(&self.test, name);
         wait_until(&format!("{name}'s menu to open"), || menu.is_mapped());
@@ -108,13 +108,13 @@ impl Session {
     }
 
     /// The names of the bar's open menus.
-    fn open_menus(&self) -> Vec<String> {
+    pub(super) fn open_menus(&self) -> Vec<String> {
         open_menus(&self.test)
     }
 
     /// Waits until the only open menu of the bar is `name`'s, or none for
     /// `None`, then watches a moment that no other opens.
-    fn expect_only_open(&self, name: Option<&str>, after: &str) {
+    pub(super) fn expect_only_open(&self, name: Option<&str>, after: &str) {
         let expected: Vec<String> = name.map(str::to_owned).into_iter().collect();
         wait_until(&format!("{after}: open menus {expected:?}"), || {
             self.open_menus() == expected
@@ -156,7 +156,7 @@ fn bar_menu_buttons(test: &TestWindow) -> Vec<gtk::MenuButton> {
 }
 
 /// The command bar's menu button named `name`.
-fn menu_button(test: &TestWindow, name: &str) -> gtk::MenuButton {
+pub(super) fn menu_button(test: &TestWindow, name: &str) -> gtk::MenuButton {
     bar_menu_buttons(test)
         .into_iter()
         .find(|button| control_name(button.upcast_ref()).as_deref() == Some(name))
@@ -164,7 +164,7 @@ fn menu_button(test: &TestWindow, name: &str) -> gtk::MenuButton {
 }
 
 /// The menu of the bar's menu button `name`.
-fn menu_of(test: &TestWindow, name: &str) -> MenuPopover {
+pub(super) fn menu_of(test: &TestWindow, name: &str) -> MenuPopover {
     menu_button(test, name)
         .popover()
         .and_downcast::<MenuPopover>()
@@ -181,7 +181,7 @@ fn open_menus(test: &TestWindow) -> Vec<String> {
 }
 
 /// The row of `menu` labeled `label`.
-fn row_of(menu: &MenuPopover, label: &str) -> gtk::ListBoxRow {
+pub(super) fn row_of(menu: &MenuPopover, label: &str) -> gtk::ListBoxRow {
     let list = menu.row_list();
     std::iter::successors(list.first_child(), WidgetExt::next_sibling)
         .filter_map(|child| child.downcast::<gtk::ListBoxRow>().ok())
@@ -190,7 +190,7 @@ fn row_of(menu: &MenuPopover, label: &str) -> gtk::ListBoxRow {
 }
 
 /// Whether the keyboard is on `widget` or inside it.
-fn has_keyboard(test: &TestWindow, widget: &impl IsA<gtk::Widget>) -> bool {
+pub(super) fn has_keyboard(test: &TestWindow, widget: &impl IsA<gtk::Widget>) -> bool {
     gtk::prelude::GtkWindowExt::focus(&test.window)
         .is_some_and(|focus| focus.is_ancestor(widget) || focus == *widget.as_ref())
 }

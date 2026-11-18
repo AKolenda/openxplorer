@@ -108,6 +108,7 @@ mod sidebar_sections;
 mod slow_locations;
 mod split_view;
 mod stopping;
+mod submenu_hover;
 mod support;
 mod tab_commands;
 mod tab_dragging;
