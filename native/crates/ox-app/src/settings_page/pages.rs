@@ -32,7 +32,7 @@ pub(crate) enum Category {
     /// Folder views, the details view, the clipboard, previews and folder
     /// sizes.
     FilesAndFolders,
-    /// How ZIP and TAR archives open.
+    /// How ZIP, TAR and 7z archives open.
     Archives,
     /// The questions asked before deleting, running and closing.
     Confirmations,
@@ -97,7 +97,7 @@ impl Category {
             Category::FilesAndFolders => {
                 crate::i18n::message_id("How folders, their items and previews are shown.")
             }
-            Category::Archives => crate::i18n::message_id("How ZIP and TAR archives open."),
+            Category::Archives => crate::i18n::message_id("How ZIP, TAR and 7z archives open."),
             Category::Confirmations => {
                 crate::i18n::message_id("What OpenXplorer asks before it deletes, runs or closes.")
             }

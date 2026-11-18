@@ -8,11 +8,13 @@
 
 use std::fs::OpenOptions;
 use std::io::{Read, Seek, SeekFrom};
+use std::sync::Arc;
 
 use rustix::fs::OFlags;
 
 use super::gio_reader::GioArchiveReader;
-use super::member_names::has_tar_name;
+use super::member_names::{has_seven_zip_name, has_tar_name};
+use super::seven_zip::{SevenZipArchive, SevenZipMemberReader, SIGNATURE as SEVEN_ZIP_SIGNATURE};
 use super::tar::{TarArchive, TarCompression, TarMemberReader};
 use super::zip::{MemberReader, ZipArchive, ZipMember};
 use super::{ArchiveError, ArchivePassword};
@@ -83,11 +85,12 @@ impl ArchiveOpener for GioArchiveOpener {
     }
 }
 
-/// An open ZIP or TAR archive (ARC-022, ARC-024). Both are read into the
-/// same member records, so every rule applies to both.
+/// An open ZIP, TAR or 7z archive (ARC-022, ARC-024). All are read into
+/// the same member records, so every rule applies to all of them.
 pub(super) enum OpenedArchive {
     Zip(ZipArchive<Box<dyn ArchiveStream>>),
     Tar(TarArchive),
+    SevenZip(SevenZipArchive),
 }
 
 impl OpenedArchive {
@@ -96,15 +99,16 @@ impl OpenedArchive {
         match self {
             Self::Zip(archive) => archive.members(),
             Self::Tar(archive) => archive.members(),
+            Self::SevenZip(archive) => archive.members(),
         }
     }
 
     /// The targets of the members that are symbolic links, by index: a
-    /// TAR's, which may be extracted (ARC-016); `None` for a ZIP, whose
-    /// links are all refused.
+    /// TAR's, which may be extracted (ARC-016); `None` for a ZIP or a 7z,
+    /// whose links are all refused.
     pub(super) fn link_targets(&self) -> Option<&std::collections::HashMap<usize, String>> {
         match self {
-            Self::Zip(_) => None,
+            Self::Zip(_) | Self::SevenZip(_) => None,
             Self::Tar(archive) => Some(archive.link_targets()),
         }
     }
@@ -124,6 +128,7 @@ impl OpenedArchive {
         Ok(match self {
             Self::Zip(archive) => MemberData::Zip(archive.open_member(index, password)?),
             Self::Tar(archive) => MemberData::Tar(archive.open_member(index)?),
+            Self::SevenZip(archive) => MemberData::SevenZip(archive.open_member(index)?),
         })
     }
 }
@@ -132,6 +137,7 @@ impl OpenedArchive {
 pub(super) enum MemberData<'a> {
     Zip(MemberReader<'a>),
     Tar(TarMemberReader<'a>),
+    SevenZip(SevenZipMemberReader<'a>),
 }
 
 impl MemberData<'_> {
@@ -144,32 +150,44 @@ impl MemberData<'_> {
         match self {
             Self::Zip(reader) => reader.read_chunk(buffer),
             Self::Tar(reader) => reader.read_chunk(buffer),
+            Self::SevenZip(reader) => reader.read_chunk(buffer),
         }
     }
 }
 
 /// Opens the archive at `uri` with `opener` and reads its members: a
-/// ZIP's central directory (`Archives.opened`), or every header of a TAR,
-/// plain or compressed.
+/// ZIP's central directory (`Archives.opened`), every header of a TAR,
+/// plain or compressed, or a 7z's headers.
 ///
 /// # Errors
 ///
 /// The opener's error, a damaged archive, a central directory over
 /// 32 MiB, or [`ArchiveError::TooManyMembers`].
 pub(super) fn open_archive(
-    opener: &dyn ArchiveOpener,
+    opener: &Arc<dyn ArchiveOpener>,
     uri: &str,
     cancel: &Cancellation,
 ) -> Result<OpenedArchive, ArchiveError> {
     let mut stream = opener.open(uri, cancel)?;
-    if let Some(compression) = tar_compression(&mut stream)? {
+    let start = first_bytes(&mut stream)?;
+    let name = uri.rsplit('/').next().unwrap_or_default();
+    if start.starts_with(&SEVEN_ZIP_SIGNATURE) {
+        let archive = SevenZipArchive::open(stream, Arc::clone(opener), uri, cancel)
+            .map_err(|error| error.unless_cancelled(cancel))?;
+        return Ok(OpenedArchive::SevenZip(archive));
+    }
+    // A file named as a 7z that is none is not read as a ZIP either.
+    if has_seven_zip_name(name) {
+        return Err(ArchiveError::DamagedSevenZip);
+    }
+    if let Some(compression) = TarCompression::detect(&start) {
         let archive = TarArchive::open(stream, compression, MAX_MEMBERS, cancel)
             .map_err(|error| error.unless_cancelled(cancel))?;
         return Ok(OpenedArchive::Tar(archive));
     }
     // A TAR this reader does not know (old V7, compress(1)) is not read
     // as a ZIP, whose error would not say what is wrong.
-    if has_tar_name(uri.rsplit('/').next().unwrap_or_default()) {
+    if has_tar_name(name) {
         return Err(ArchiveError::DamagedArchive);
     }
     let archive = ZipArchive::open(stream, cancel)?;
@@ -180,14 +198,14 @@ pub(super) fn open_archive(
     Ok(OpenedArchive::Zip(archive))
 }
 
-/// The compression of a TAR in `stream`, by its first bytes; `None` for
-/// anything else, which is read as a ZIP. The stream is left at its start.
-fn tar_compression(stream: &mut Box<dyn ArchiveStream>) -> Result<Option<TarCompression>, ArchiveError> {
+/// The first bytes of `stream`, enough to tell a 7z or a TAR's
+/// compression from a ZIP. The stream is left at its start.
+fn first_bytes(stream: &mut Box<dyn ArchiveStream>) -> Result<Vec<u8>, ArchiveError> {
     let mut start = Vec::with_capacity(TAR_SIGNATURE_END);
     stream
         .as_mut()
         .take(TAR_SIGNATURE_END as u64)
         .read_to_end(&mut start)?;
     stream.seek(SeekFrom::Start(0))?;
-    Ok(TarCompression::detect(&start))
+    Ok(start)
 }

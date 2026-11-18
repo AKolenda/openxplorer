@@ -104,13 +104,16 @@ is missing.
 - **Terminal.** View → Terminal opens the configured external terminal in the
   current folder. An embedded VTE terminal is not available across the current
   supported build targets and Flatpak configuration.
-- **Archives.** Browsing and extraction support ZIP and compressed TAR, and
-  ZIPs with the traditional ZIP password, which ask for it. 7z, RAR and
-  AES-encrypted ZIPs still need additional codecs. A TAR's relative links
-  that stay inside the archive are listed and extracted; ZIP links stay
-  hidden and refused. Search inside an opened archive is still unavailable.
-  Compress to › 7z File writes 7z archives (sevenz-rust2); browsing and
-  extracting 7z is not supported yet.
+- **Archives.** Browsing and extraction support ZIP (including ZIP64),
+  compressed TAR and 7z, and ZIPs with the traditional ZIP password, which
+  ask for it. Compress to › 7z File writes 7z archives (sevenz-rust2). 7z
+  archives made with LZMA, LZMA2 (with their filters and BCJ2) or BZip2 are
+  browsed and extracted like ZIP; encrypted 7z archives and other methods
+  such as PPMd and Deflate are refused plainly, as Windows 11 refuses
+  encrypted archives. RAR and AES-encrypted ZIPs still need additional codecs. A TAR's
+  relative links that stay inside the archive are listed and extracted; ZIP
+  links stay hidden and refused. Search inside an opened archive is still
+  unavailable.
 - **Flatpak:** "Show in folder" answers only while OpenXplorer runs unless the
   desktop's Background portal starts it at login (native/packaging/README.md,
   "Differences inside the Flatpak"). Flathub publication needs the owner.

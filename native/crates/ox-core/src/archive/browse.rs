@@ -16,7 +16,7 @@ use super::member_names::{is_previewable, is_safe_member};
 use super::preview::MAX_PREVIEW_BYTES;
 use super::source::{open_archive, ArchiveOpener};
 use super::worker::on_worker;
-use super::zip::{Encryption, MemberFileType, ZipMember};
+use super::zip::{CompressionMethod, Encryption, MemberFileType, ZipMember};
 use super::{ArchiveError, ArchivePassword};
 use crate::transfer::Cancellation;
 
@@ -129,7 +129,7 @@ impl ArchiveBrowser {
         cancel: &Cancellation,
     ) -> Result<ArchiveListing, ArchiveError> {
         let prefix = folder_prefix(prefix)?;
-        let archive = open_archive(self.opener.as_ref(), uri, cancel)?;
+        let archive = open_archive(&self.opener, uri, cancel)?;
         let mut rows = ListingRows::new(prefix);
         let link_targets = archive.link_targets();
         for (index, member) in archive.members().iter().enumerate() {
@@ -290,7 +290,9 @@ fn entry_for(prefix: &str, relative: &str, member: &ZipMember) -> ArchiveEntry {
     // An encrypted member asks for its password when it is opened, unless
     // its encryption is one the reader cannot decrypt.
     let is_decryptable = member.encryption() != Encryption::Unsupported;
-    let is_openable_file = !is_folder && is_decryptable && member.size <= MAX_PREVIEW_BYTES;
+    let is_decodable =
+        !matches!(member.method, CompressionMethod::SevenZip(_)) || member.method_refusal().is_none();
+    let is_openable_file = !is_folder && is_decryptable && is_decodable && member.size <= MAX_PREVIEW_BYTES;
     let folder_slash = if is_folder { "/" } else { "" };
     ArchiveEntry {
         name: name.to_owned(),

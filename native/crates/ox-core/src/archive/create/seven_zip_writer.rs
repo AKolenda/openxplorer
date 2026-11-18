@@ -61,6 +61,12 @@ impl SevenZipWriter {
         (modified, mode): (u64, u32),
     ) -> Result<(), ArchiveError> {
         let mut entry = ArchiveEntry::new_directory(name.trim_end_matches('/'));
+        // sevenz-rust2 0.20.2 writes the anti-item flag inverted: an entry
+        // without data that is *not* an anti-item is marked as one, and
+        // 7-Zip and Windows then skip it, losing empty folders. Setting
+        // the flag on every such entry keeps the record out of the header,
+        // so the folder is a plain folder to every reader.
+        entry.is_anti_item = true;
         describe(
             &mut entry,
             modified,
