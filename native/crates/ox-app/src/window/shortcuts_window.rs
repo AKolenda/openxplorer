@@ -260,7 +260,7 @@ const WINDOWS_MODIFIER_ORDER: [gdk::ModifierType; 4] = [
 ];
 
 /// A key's name where Microsoft's list names it otherwise than GTK
-/// (`Return`, `BackSpace`, `Escape`, `space`, `Left`).
+/// (`Return`, `BackSpace`, `Escape`, `space`, `Left`, `Back`).
 fn windows_key_name(key: gdk::Key) -> Option<&'static str> {
     let name = match key {
         gdk::Key::Return | gdk::Key::KP_Enter => crate::i18n::message_id("Enter"),
@@ -271,6 +271,11 @@ fn windows_key_name(key: gdk::Key) -> Option<&'static str> {
         gdk::Key::Right | gdk::Key::KP_Right => crate::i18n::message_id("Right arrow"),
         gdk::Key::Up | gdk::Key::KP_Up => crate::i18n::message_id("Up arrow"),
         gdk::Key::Down | gdk::Key::KP_Down => crate::i18n::message_id("Down arrow"),
+        // A keyboard's or mouse's own keys, which GTK names by their raw
+        // key names, "Back", "Forward" and "HomePage".
+        gdk::Key::Back => crate::i18n::message_id("Browser Back key"),
+        gdk::Key::Forward => crate::i18n::message_id("Browser Forward key"),
+        gdk::Key::HomePage => crate::i18n::message_id("Browser Home key"),
         _ => return None,
     };
     Some(ox_core::i18n::gettext_static(name))
@@ -842,6 +847,35 @@ mod tests {
             let listed = row(label);
             assert_eq!(listed.keys, [keys], "{label}");
             assert_eq!(listed.group, group, "{label}");
+        }
+    }
+
+    /// The keyboard's Back, Forward and Home page keys read in words, as
+    /// Microsoft names such keys, not as their raw key names "Back",
+    /// "Forward" and "HomePage".
+    ///
+    /// parity: CMD-032
+    #[gtk::test]
+    fn browser_keys_read_in_words() {
+        let fixture = Fixture::standard();
+        let test = TestWindow::open(&fixture.uri());
+        let (rows, _) = test.window.shortcut_rows();
+        let keys_with = |key: &str| {
+            rows.iter()
+                .find(|row| row.keys.iter().any(|keys| keys == key))
+                .map_or_else(|| panic!("{key} is listed"), |row| row.keys.clone())
+        };
+        assert!(keys_with("Alt+Left arrow").contains(&"Browser Back key".to_owned()));
+        assert!(keys_with("Alt+Right arrow").contains(&"Browser Forward key".to_owned()));
+        assert!(keys_with("Alt+Home").contains(&"Browser Home key".to_owned()));
+        let raw = ["Back", "Forward", "HomePage"];
+        for row in &rows {
+            assert!(
+                !row.keys.iter().any(|keys| raw.contains(&keys.as_str())),
+                "{}: {:?}",
+                row.label,
+                row.keys
+            );
         }
     }
 

@@ -7042,6 +7042,18 @@ msgid "Backspace"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Browser Back key"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Browser Forward key"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Browser Home key"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Change the view"
 msgstr ""
 
