@@ -100,6 +100,11 @@ impl BlockStream {
         }
     }
 
+    /// The first file whose data has not been handed out.
+    pub(super) fn next_file(&self) -> usize {
+        self.next_file
+    }
+
     /// Whether this stream can still hand out file `file` of block
     /// `block`: it decodes that block and has not passed the file.
     pub(super) fn can_reach(&self, block: usize, file: usize) -> bool {

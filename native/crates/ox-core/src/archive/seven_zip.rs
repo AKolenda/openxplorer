@@ -30,7 +30,7 @@ use std::sync::Arc;
 
 use super::source::{ArchiveOpener, ArchiveStream};
 use super::zip::{CompressionMethod, DosDateTime, SevenZipCoding, ZipMember};
-use super::ArchiveError;
+use super::{ArchiveError, ExtractionLimits};
 use crate::transfer::Cancellation;
 use decode::{BlockStream, MemberChunks};
 use header::{BlockProblem, Headers, K_ENCODED_HEADER, SIGNATURE_HEADER_BYTES};
@@ -160,10 +160,19 @@ impl SevenZipArchive {
         if let Some(problem) = self.parsed.headers.blocks[block_index].problem {
             return Err(problem.error());
         }
-        let is_reusable = self
+        let reusable = self
             .stream
             .as_ref()
-            .is_some_and(|stream| stream.can_reach(block_index, index));
+            .filter(|stream| stream.can_reach(block_index, index));
+        let is_reusable = reusable.is_some();
+        // ARC-006, ARC-017: every file of the block before this one is
+        // decoded too, though only this one is wanted and checked.
+        let from = reusable.map_or(0, BlockStream::next_file);
+        let skipped = self.parsed.headers.files[from..index]
+            .iter()
+            .filter(|earlier| earlier.has_stream && earlier.block == Some(block_index))
+            .fold(0u64, |sum, earlier| sum.saturating_add(earlier.size));
+        check_skipped(skipped, &self.parsed.headers.blocks[block_index])?;
         if !is_reusable {
             self.stream = Some(BlockStream::start(
                 Arc::clone(&self.opener),
@@ -177,6 +186,24 @@ impl SevenZipArchive {
         let chunks = stream.member(index)?;
         Ok(SevenZipMemberReader { chunks: Some(chunks) })
     }
+}
+
+/// Bytes before a wanted file that are decoded without any check: small
+/// enough that a solid block of any ratio stays cheap.
+const UNCHECKED_SKIP_BYTES: u64 = 1024 * 1024;
+
+/// ARC-006, ARC-017: refuses to decode `skipped` bytes of `block` before
+/// the file wanted, as a member that large would be refused: over the
+/// per-member size limit, or from a block compressed beyond the ratio
+/// limit. Without this, a huge, highly compressed stream placed before a
+/// small file would be decompressed past every limit to open or copy it.
+fn check_skipped(skipped: u64, block: &header::Block) -> Result<(), ArchiveError> {
+    let limits = ExtractionLimits::default();
+    let is_over_ratio = block.unpack_size > block.packed_size.max(1).saturating_mul(limits.max_ratio);
+    if skipped > UNCHECKED_SKIP_BYTES && (skipped > limits.max_member_bytes || is_over_ratio) {
+        return Err(ArchiveError::MemberTooLarge);
+    }
+    Ok(())
 }
 
 /// The data of one 7z member being read.
