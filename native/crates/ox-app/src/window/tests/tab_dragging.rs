@@ -847,7 +847,7 @@ fn three_tabs_and_a_wide_tabs_grab(fixture: &Fixture) -> (TestWindow, [TabId; 3]
 }
 
 /// A tab grabbed 160 pixels into a 215 pixel tab, dragged over a row
-/// whose tabs are 100 pixels wide, near the right edge of its third tab:
+/// whose tabs are at their narrowest, near the right edge of its third tab:
 /// its stand-in is held at the same share of its width, under the pointer,
 /// so it takes the third tab's place, not the second's.
 ///
@@ -860,7 +860,9 @@ fn a_wide_tab_dragged_into_a_row_of_narrow_tabs_stays_under_the_pointer() {
     strip.set_tab_width(100);
     crate::test_support::harness::wait_for_frames(&test.window, 3);
     let width = strip.tab_width(third).expect("a shown tab");
-    assert!(width < 110.0, "narrow tabs: {width}");
+    // At its narrowest a tab keeps its icon, about three letters and its
+    // close button, as in Windows 11.
+    assert!(width < 140.0, "narrow tabs: {width}");
     let bounds = strip.tab_bounds_in(third, strip).expect("a shown tab");
     let view = strip.tab_view(first).expect("a shown tab");
 
@@ -1965,13 +1967,19 @@ fn a_tab_held_at_the_edge_of_a_row_that_does_not_fit_scrolls_it_and_lands_there(
     wait_until("the row to scroll to its end", || {
         scroll.value() >= scroll.upper() - scroll.page_size() - 0.5
     });
-    // It follows the pointer to the visible end of the row, once laid out.
+    // It follows the pointer to the visible end of the row, once laid out:
+    // the end of the part shown, before the strip's forward arrow.
     let drawn_right = || {
         let drawn = strip.tab_bounds_in(first, strip).expect("a shown tab");
         f64::from(drawn.x() + drawn.width())
     };
+    let shown_end = || {
+        let viewport = strip.tab_list().parent().expect("the row's viewport");
+        let shown = viewport.compute_bounds(strip).expect("a shown row");
+        f64::from(shown.x() + shown.width())
+    };
     wait_until("the tab to reach the visible end of the row", || {
-        (drawn_right() - f64::from(strip.width())).abs() <= 2.0
+        (drawn_right() - shown_end()).abs() <= 2.0
     });
     strip.let_go(
         true,

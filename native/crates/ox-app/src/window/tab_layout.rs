@@ -3,8 +3,9 @@
 //!
 //! Ports the flex rules of `.tabs` and `.tab` in `v2.0.0:desktop/ui/style.css`:
 //! every tab is 215 pixels wide (180 or 150 in a narrow window), tabs
-//! shrink evenly toward 100 pixels when the title bar runs out of room, and
-//! below that the strip scrolls. A `GtkBox` cannot shrink its children
+//! shrink evenly toward 100 pixels when the title bar runs out of room, or
+//! as far as keeps the icon, about three letters of the title and the
+//! close button when that is wider, and below that the strip scrolls. A `GtkBox` cannot shrink its children
 //! below their natural width without also dropping to their minimum, so
 //! the tab strip uses this layout.
 
@@ -34,10 +35,12 @@ const SNAPSHOT_TAB_EXTRA: i32 = 330 - TAB_WIDTH;
 const MIN_SNAPSHOT_TAB_WIDTH: i32 = 285;
 
 /// The width `tab` gets while the other tabs get `shared`: a snapshot
-/// tab's badge needs more room, and never less than 285 pixels.
+/// tab's badge needs more room, and never less than 285 pixels or what
+/// its own parts need, which the other tabs do not follow.
 fn width_of(tab: &gtk::Widget, shared: i32) -> i32 {
     if tab.has_css_class("snapshot-tab") {
-        (shared + SNAPSHOT_TAB_EXTRA).max(MIN_SNAPSHOT_TAB_WIDTH)
+        let own = tab.measure(gtk::Orientation::Horizontal, -1).0;
+        (shared + SNAPSHOT_TAB_EXTRA).max(MIN_SNAPSHOT_TAB_WIDTH).max(own)
     } else {
         shared
     }
@@ -140,9 +143,16 @@ mod imp {
 
     impl TabLayout {
         fn widths(&self, tabs: &[gtk::Widget]) -> TabWidths {
+            // A Previous Versions tab has its own, wider minimum
+            // (`width_of`), so its badge never makes the others wider.
+            let plain: Vec<gtk::Widget> = tabs
+                .iter()
+                .filter(|tab| !tab.has_css_class("snapshot-tab"))
+                .cloned()
+                .collect();
             TabWidths {
                 widest: self.widest.get(),
-                narrowest: widest_minimum_width(tabs).unwrap_or(MIN_TAB_WIDTH),
+                narrowest: widest_minimum_width(&plain).unwrap_or(MIN_TAB_WIDTH),
             }
         }
     }
@@ -185,7 +195,13 @@ mod imp {
         fn allocate(&self, widget: &gtk::Widget, width: i32, height: i32, _baseline: i32) {
             let tabs = laid_out_children(widget);
             let count = i32::try_from(tabs.len()).unwrap_or(i32::MAX);
-            let each = tab_width(width, count, self.widths(&tabs));
+            let widths = self.widths(&tabs);
+            let mut each = tab_width(width, count, widths);
+            // A Previous Versions tab is wider than the share: the others
+            // give up that room, down to their narrowest, so the tabs fit.
+            while each > widths.narrowest_allowed() && strip_width(&tabs, each) > width {
+                each -= 1;
+            }
             if self.each.replace(each) != each && self.held.get().is_some() {
                 // The held tab got another width: it is held at the same
                 // share of it again, under the pointer, once this frame

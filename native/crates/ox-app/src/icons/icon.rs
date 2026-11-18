@@ -99,11 +99,11 @@ pub(crate) enum Icon {
     /// settings drop-down).
     ChevronDown16,
     /// `chevron_left_16_regular`: the address bar's crumb dividers in a
-    /// right-to-left language (named by `resources/skin/navigation.css`).
-    #[cfg_attr(not(test), expect(dead_code, reason = "only the skin's CSS names it"))]
+    /// right-to-left language (named by `resources/skin/navigation.css`)
+    /// and the tab strip's arrow that scrolls it back.
     ChevronLeft16,
     /// `chevron_right_16_regular`: a settings row that opens a page of its
-    /// own.
+    /// own, and the tab strip's arrow that scrolls it forward.
     ChevronRight16,
     /// `chevron_up_16_regular`: the progress window's "Fewer details".
     ChevronUp16,

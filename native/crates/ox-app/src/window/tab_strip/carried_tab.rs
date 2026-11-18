@@ -14,7 +14,7 @@
 use gtk::pango;
 use gtk::prelude::*;
 
-use super::{mark_previous_version, tab_icon, title, TabView, CLOSE_GLYPH, ICON_TO_TITLE};
+use super::{clipped, mark_previous_version, tab_icon, title, TabView, CLOSE_GLYPH};
 use crate::icons::{self, Icon};
 
 /// The room around the carried tab for its shadow.
@@ -30,7 +30,7 @@ pub(super) fn carried_tab(
     margin: i32,
 ) -> gtk::Widget {
     let tab = gtk::Box::builder()
-        .spacing(ICON_TO_TITLE)
+        .spacing(0)
         .width_request(width.unwrap_or(-1))
         .margin_start(margin)
         .margin_end(margin)
@@ -45,7 +45,7 @@ pub(super) fn carried_tab(
         attributes.insert(pango::AttrFontDesc::new(font));
         label.set_attributes(Some(&attributes));
     }
-    tab.append(&label);
+    tab.append(&clipped(&label));
     if let Some(snapshot) = &view.previous_version {
         mark_previous_version(&tab, &view.title, snapshot);
     }

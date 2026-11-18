@@ -939,6 +939,8 @@ impl TransferEngine {
                 unreadable,
             )?;
         }
+        // Whether Replace overwrote or merged into an item that was there.
+        let replaced;
         if placement.mode == TransferMode::Move {
             state.moved_from.remember(source);
             let moved = self.move_item(
@@ -959,8 +961,9 @@ impl TransferEngine {
                         destination: placement.destination_folder.display_name(),
                     }) =>
                 {
-                    let kept =
+                    let (kept, over) =
                         self.move_by_copying(placement, selected, destination, batch.cancel, staging)?;
+                    replaced = over;
                     // The entries the user skipped stay where they were:
                     // the user's own answer, said nothing more about.
                     if let Some(notice) = kept {
@@ -969,15 +972,18 @@ impl TransferEngine {
                         state.result.errors.push(message);
                     }
                 }
-                moved => moved?,
+                moved => replaced = moved?,
             }
         } else {
-            self.copy_item(placement, selected, destination, batch.cancel, staging, None)?;
+            replaced = self.copy_item(placement, selected, destination, batch.cancel, staging, None)?;
         }
         state.result.landed.push(Landed {
             source: source.uri(),
             destination: destination.uri(),
         });
+        if replaced {
+            state.result.overwritten.push(destination.uri());
+        }
         Ok(ItemOutcome::Done)
     }
 
@@ -992,11 +998,11 @@ impl TransferEngine {
         policy: ConflictPolicy,
         cancel: &Cancellation,
         merge_check: Option<&WriteGuard>,
-    ) -> Result<(), TransferError> {
+    ) -> Result<bool, TransferError> {
         if policy == ConflictPolicy::Replace {
             commit_replace(source, destination, cancel, self.guard(), None, merge_check)
         } else {
-            source.move_native(destination, Some(cancel))
+            source.move_native(destination, Some(cancel)).map(|()| false)
         }
     }
 
@@ -1015,9 +1021,9 @@ impl TransferEngine {
         destination: &dyn Node,
         cancel: &Cancellation,
         staging: &mut ItemStaging,
-    ) -> Result<Option<String>, TransferError> {
+    ) -> Result<(Option<String>, bool), TransferError> {
         let mut copied = Vec::new();
-        self.copy_item(
+        let replaced = self.copy_item(
             placement,
             selected,
             destination,
@@ -1036,7 +1042,7 @@ impl TransferEngine {
         let kept = remove_copied_source(source, &selected.info, &copied, left_out, self.guard()).map_err(|error| {
             TransferError::RecoveryRequired(crate::i18n::format_message("The item was copied to {uri}, but the original could not be removed. Check the copy, then delete the original. {error}", &[("uri", &destination.uri()), ("error", &(error).to_string())]))
         })?;
-        Ok(kept.notice(&source.uri()))
+        Ok((kept.notice(&source.uri()), replaced))
     }
 
     /// Copies one item into the destination folder of `placement` through
@@ -1051,7 +1057,7 @@ impl TransferEngine {
         cancel: &Cancellation,
         staging: &mut ItemStaging,
         copied: Option<&mut Vec<CopiedItem>>,
-    ) -> Result<(), TransferError> {
+    ) -> Result<bool, TransferError> {
         let copy = StagedCopy {
             source: selected.node.as_ref(),
             source_kind: selected.kind,

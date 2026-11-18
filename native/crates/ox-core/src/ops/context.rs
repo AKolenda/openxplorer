@@ -228,8 +228,8 @@ pub enum ReplacedFiles {
     RecycleBin,
     /// The incoming file overwrites the replaced one, which is gone, as in
     /// Windows 11. The incoming file is first written under a temporary
-    /// name and swapped in at the end, so a cancelled Replace keeps the
-    /// old file.
+    /// name and swapped in at the end, so a cancelled or failed Replace
+    /// keeps the old file.
     Overwrite,
 }
 

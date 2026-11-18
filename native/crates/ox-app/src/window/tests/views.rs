@@ -653,7 +653,7 @@ fn text_size_keys_work_inside_dialogs() {
     let map = crate::dialogs::map_network_dialog(&test.window, &[], |_, _| {});
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
-    let properties = test.wait_for_properties("Notes 2.txt Properties");
+    let properties = test.wait_for_properties("Notes 2 Properties");
     let dialogs: [&gtk::Window; 3] = [rename.upcast_ref(), map.upcast_ref(), properties.upcast_ref()];
     let plus = gtk::ShortcutTrigger::parse_string("<Control>plus").expect("a trigger");
     let mut expected = before;

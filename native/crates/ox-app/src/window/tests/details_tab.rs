@@ -72,7 +72,13 @@ fn row_named(window: &PropertiesWindow, name: &str) -> gtk::ListBoxRow {
 fn open_details(test: &TestWindow, name: &str) -> PropertiesWindow {
     test.select_named(name);
     test.activate("properties", None);
-    let window = test.wait_for_properties(&format!("{name} Properties"));
+    // Titled as the view names it: extensions are hidden by default.
+    let shown = crate::folder_view::shown_name::shown_name(
+        name,
+        false,
+        crate::folder_view::shown_name::Extensions::Hidden,
+    );
+    let window = test.wait_for_properties(&format!("{shown} Properties"));
     // The window puts the keyboard on its tabs when it first maps.
     wait_until("the window to show", || window.is_mapped());
     settle();
@@ -260,7 +266,7 @@ fn properties_opened_on_details_read_the_media_rows() {
         crate::properties::PropertiesTab::Details,
     );
 
-    let window = test.wait_for_properties("Harbour.jpg Properties");
+    let window = test.wait_for_properties("Harbour Properties");
     assert_eq!(window.selected_tab().as_deref(), Some("details"));
     wait_until("the photo's details", || {
         lines(&window).iter().any(|line| line == "Camera model: FO-100")

@@ -41,8 +41,10 @@ use ox_core::transfer::Cancellation;
 use ox_core::versions::PreviousVersions;
 
 use super::folder_count::FolderCountRows;
+use super::item_window::PropertiesContext;
 use super::metadata::{ItemProperties, MountFacts};
 use super::window::{divider, push_button, ApplyFuture, Pending, PropertiesWindow, Rows};
+use crate::folder_view::shown_name::{hidden_extension, shown_name, shows_whole, Extensions};
 use crate::icons::{Art, ArtImage};
 
 /// The size of the item's picture beside its name.
@@ -81,15 +83,22 @@ pub(super) struct GeneralTab {
 pub(super) fn general_tab(
     window: &PropertiesWindow,
     properties: &ItemProperties,
-    locations: &LocationContext,
+    context: &PropertiesContext,
     rights: GeneralRights,
     uri: &Rc<RefCell<String>>,
-    versions: &Arc<PreviousVersions>,
 ) -> GeneralTab {
+    let locations = &context.locations;
     let entry = &properties.entry;
     let is_folder = entry.is_dir;
     let page = super::window::page();
-    let edits = GeneralEdits::new(window, properties, rights, Rc::clone(uri), Arc::clone(versions));
+    let edits = GeneralEdits::new(
+        window,
+        properties,
+        rights,
+        Rc::clone(uri),
+        Arc::clone(&context.versions),
+        context.extensions,
+    );
     page.append(&header(properties, &edits));
     page.append(&divider());
 
@@ -339,6 +348,17 @@ pub(super) struct GeneralEdits {
     uri: Rc<RefCell<String>>,
     /// The name the item has now.
     original_name: RefCell<String>,
+    /// The extension the name field leaves out, as the view does while
+    /// known types' extensions are hidden ("Notes 2" for `Notes 2.txt`),
+    /// which a typed name keeps, as a rename in place does.
+    hidden_extension: RefCell<Option<String>>,
+    /// Whether the opening window shows known types' extensions. A
+    /// folder's or a folder link's name always shows whole
+    /// ([`Self::always_whole`]); any other name is shown as the view shows
+    /// it, again after each rename: a link named with no known type's
+    /// extension is a shortcut, named whole, but renamed to `note.txt` it
+    /// is a file with an extension ([`Entry::is_shortcut`]).
+    extensions: Extensions,
     is_folder: bool,
     /// Renaming asks about a changed extension, except for a link to a
     /// folder, whose name has none (OPS-049).
@@ -367,10 +387,13 @@ impl GeneralEdits {
         rights: GeneralRights,
         uri: Rc<RefCell<String>>,
         versions: Arc<PreviousVersions>,
+        extensions: Extensions,
     ) -> Rc<Self> {
         let entry = &properties.entry;
+        // A link to a folder shows whole, as the view shows it.
+        let whole = shows_whole(entry) || properties.links_to_folder;
         let name = gtk::Entry::builder()
-            .text(&entry.name)
+            .text(shown_name(&entry.name, whole, extensions))
             .hexpand(true)
             .valign(gtk::Align::Center)
             .activates_default(true)
@@ -400,6 +423,10 @@ impl GeneralEdits {
             window: window.downgrade(),
             uri,
             original_name: RefCell::new(entry.name.clone()),
+            hidden_extension: RefCell::new(
+                hidden_extension(&entry.name, whole, extensions).map(str::to_owned),
+            ),
+            extensions,
             is_folder: entry.is_dir,
             links_to_folder: properties.links_to_folder,
             is_link: entry.is_symlink,
@@ -505,7 +532,13 @@ impl GeneralEdits {
     /// The name the item should have: the field's, with a leading dot for
     /// Hidden and none without it.
     fn wanted_name(&self) -> String {
-        let typed = self.name.text().to_string();
+        let typed = match self.hidden_extension.borrow().as_deref() {
+            // An erased name is refused as it is: it never becomes the
+            // extension alone.
+            Some(_) if self.name.text().trim().is_empty() => self.name.text().to_string(),
+            Some(extension) => format!("{}{extension}", self.name.text()),
+            None => self.name.text().to_string(),
+        };
         let was_hidden = self.original_name.borrow().starts_with('.');
         let hide = self.hidden.is_active();
         if hide == was_hidden {
@@ -516,6 +549,17 @@ impl GeneralEdits {
         } else {
             typed.trim_start_matches('.').to_owned()
         }
+    }
+
+    /// A folder or a link to a folder, whose name always shows whole.
+    fn always_whole(&self) -> bool {
+        self.is_folder || self.links_to_folder
+    }
+
+    /// How the name field and the title show `name`: without a known
+    /// type's extension while extensions are hidden.
+    fn shown<'a>(&self, name: &'a str) -> &'a str {
+        shown_name(name, self.always_whole(), self.extensions)
     }
 
     /// The read-only change to make, if any.
@@ -600,7 +644,7 @@ impl GeneralEdits {
                 // the field and Hidden show again, as No ends a rename in
                 // place; the other changes still apply.
                 self.is_updating.set(true);
-                self.name.set_text(&original);
+                self.name.set_text(self.shown(&original));
                 self.hidden.set_active(original.starts_with('.'));
                 self.is_updating.set(false);
                 return Ok(());
@@ -612,14 +656,16 @@ impl GeneralEdits {
                 self.uri.replace(renamed);
             }
             self.original_name.replace(wanted.clone());
+            self.hidden_extension
+                .replace(hidden_extension(&wanted, self.always_whole(), self.extensions).map(str::to_owned));
             self.is_updating.set(true);
-            self.name.set_text(&wanted);
+            self.name.set_text(self.shown(&wanted));
             self.hidden.set_active(wanted.starts_with('.'));
             self.is_updating.set(false);
             if let Some(window) = &window {
                 window.set_title_text(&ox_core::i18n::format_message(
                     "{title} Properties",
-                    &[("title", &wanted)],
+                    &[("title", self.shown(&wanted))],
                 ));
             }
         }

@@ -487,12 +487,15 @@ fn undo_brings_back_the_file_a_paste_replaced() {
 
 /// With Settings > Files & folders > "When replacing a file, move the old
 /// one to the Recycle Bin" off, a paste's Replace overwrites the old file
-/// as Windows does: it is gone, not in the Recycle Bin, so there is no
-/// Undo that would bring it back.
+/// as Windows 11 does (checked in Windows 11, build 26200: nothing new
+/// appeared in the Recycle Bin): it is gone, not in the Recycle Bin. Undo
+/// Copy then says plainly that it can't bring the old file back, and
+/// changes nothing; it never reaches past the Replace to undo an older
+/// operation.
 ///
-/// parity: OPS-028
+/// parity: OPS-028, OPS-029
 #[gtk::test]
-fn a_pasted_replace_overwrites_the_old_file_when_the_switch_is_off() {
+fn a_pasted_replace_overwrites_the_old_file_when_the_switch_is_off_and_undo_says_so() {
     super::file_ops_support::require_private_trash();
     let fixture = Fixture::standard();
     let test = copy_namesakes(&fixture, &["Notes 2.txt"]);
@@ -510,14 +513,68 @@ fn a_pasted_replace_overwrites_the_old_file_when_the_switch_is_off() {
 
     assert_eq!(recycled(), before, "nothing went to the Recycle Bin");
     assert!(
-        !is_enabled(&test, "undo"),
-        "no Undo brings the overwritten file back"
+        every_name_in(fixture.root())
+            .iter()
+            .all(|name| !name.starts_with(".winspace-")),
+        "no temporary file is left: {:?}",
+        every_name_in(fixture.root())
+    );
+    wait_until("Undo Copy", || is_enabled(&test, "undo"));
+    test.activate("undo", None);
+    let said = super::file_ops_support::open_dialog(&test);
+    let words = texts(&said).join(" ");
+    assert!(
+        words.contains("“Notes 2.txt” was replaced, so Undo can't bring back the old file."),
+        "{words}"
+    );
+    button(&said, "OK").emit_clicked();
+    super::file_ops_support::wait_for_no_dialog(&test);
+    wait_until("the step to be used up", || !is_enabled(&test, "undo"));
+    assert_eq!(
+        fs::read(fixture.path("Notes 2.txt")).unwrap(),
+        b"Another file\n",
+        "the replacement stays"
     );
     assert_eq!(
         fs::read(fixture.path("Documents/Notes 2.txt")).unwrap(),
         b"Another file\n",
         "the source stays"
     );
+}
+
+/// Several files overwritten with the switch off, among others copied
+/// without a conflict: Undo Copy says how many old files it can't bring
+/// back, and, once agreed, takes back only the copies that replaced
+/// nothing.
+///
+/// parity: OPS-028, OPS-029
+#[gtk::test]
+fn undo_after_replacing_several_files_takes_back_only_the_new_copies() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents/Brand new.txt"), b"New\n").unwrap();
+    let test = copy_namesakes(&fixture, &["Notes 2.txt", "Notes 10.txt", "Brand new.txt"]);
+    super::restore_conflicts::overwrite_replaced_files(&test);
+
+    test.activate("paste", None);
+    answer_conflicts(&test, ConflictAnswer::Replace);
+    wait_until("the files to be replaced", || {
+        fs::read(fixture.path("Notes 10.txt")).is_ok_and(|contents| contents == b"Another file\n")
+            && fixture.path("Brand new.txt").exists()
+    });
+    wait_until("the copy to end", || !test.window.is_writing_files());
+    wait_until("Undo Copy", || is_enabled(&test, "undo"));
+
+    test.activate("undo", None);
+    let asked = super::file_ops_support::open_dialog(&test);
+    let words = texts(&asked).join(" ");
+    assert!(
+        words.contains("2 files were replaced, so Undo can't bring back the old files."),
+        "{words}"
+    );
+    button(&asked, "Undo").emit_clicked();
+    wait_until("the new copy to go", || !fixture.path("Brand new.txt").exists());
+    assert_eq!(fs::read(fixture.path("Notes 2.txt")).unwrap(), b"Another file\n");
+    assert_eq!(fs::read(fixture.path("Notes 10.txt")).unwrap(), b"Another file\n");
 }
 
 /// Every name in `folder`, hidden ones included, sorted.

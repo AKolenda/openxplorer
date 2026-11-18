@@ -54,6 +54,7 @@ impl TabStrip {
     pub(in crate::window) fn show_dragged_tab(&self, id: Option<TabId>) {
         for (tab, widget) in self.imp().shown.borrow().iter() {
             toggle_class(widget, DRAGGED_CLASS, Some(tab.id) == id);
+            super::show_close_button_when_wanted(widget);
         }
     }
 

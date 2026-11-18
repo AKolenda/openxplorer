@@ -63,6 +63,9 @@ pub(crate) struct PropertiesContext {
     /// Brave's download-folder integration, for the Location tab's
     /// follow-up.
     pub brave: BraveIntegration,
+    /// Whether the opening window shows known types' extensions: the
+    /// General tab's name leaves a hidden one out, as the view does.
+    pub extensions: crate::folder_view::shown_name::Extensions,
 }
 
 /// The pages filled once the item is read.
@@ -436,14 +439,7 @@ impl ItemPages {
                 && !is_recycle_bin_item(&properties.entry.uri),
         };
         clear(&self.general);
-        let general = general_tab(
-            window,
-            &properties,
-            &self.context.locations,
-            rights,
-            &self.uri,
-            &self.context.versions,
-        );
+        let general = general_tab(window, &properties, &self.context, rights, &self.uri);
         self.general.append(&general.page);
         self.general_edits.replace(Some(Rc::clone(&general.edits)));
         if let Some(rows) = &general.folder_rows {

@@ -15,8 +15,17 @@
 //! ACC-008), and the arrow keys, Home and End show another tab and move
 //! focus with it, as GTK's own tab bars do.
 //!
-//! [`TabStrip`] is a widget subclass whose scroller and tab list are the
-//! template `resources/ui/tab-strip.ui`; the tabs are built here. What it
+//! When the tabs no longer fit, even at their narrowest, which still shows
+//! the icon, about three letters of the title and the close button
+//! ([`TITLE_MIN_CHARS`]), the strip scrolls, as Windows 11's does: an
+//! arrow at each end scrolls it a tab at a time, shown only while the tabs
+//! overflow, the "+" stays after the strip, the wheel scrolls it, and the
+//! tab brought to the front, by a click, Ctrl+Tab or a new tab, scrolls
+//! into view. Tab skips the arrows: the arrow keys, Ctrl+Tab and the wheel
+//! reach every tab.
+//!
+//! [`TabStrip`] is a widget subclass whose scroller, arrows and tab list
+//! are the template `resources/ui/tab-strip.ui`; the tabs are built here. What it
 //! shows while tabs and files are dragged is [`drag_marks`]'s, and the
 //! separators between tabs and the curves at the foot of the tab in front,
 //! which a tab cannot show itself, are placed by [`edges`].
@@ -26,6 +35,7 @@ mod drag_marks;
 mod edge_scroll;
 mod edges;
 mod live_drag;
+mod title_room;
 
 use std::cell::Cell;
 
@@ -44,19 +54,28 @@ use super::window_action::WindowAction;
 
 pub(in crate::window) use carried_tab::MARGIN as CARRIED_MARGIN;
 pub(in crate::window) use live_drag::Landing;
+use title_room::clipped;
 
 /// The tab icon's edge: 16 pixels (ui-spec.md I03; the web app's was 17).
 const ICON_SIZE: i32 = 16;
 /// The gap between the icon and the title (ui-spec.md S06).
 const ICON_TO_TITLE: i32 = 10;
+/// The gap between a snapshot tab's badge and its close button.
+const CLOSE_GAP: i32 = 4;
 /// The glyph of a tab's close button.
 const CLOSE_GLYPH: i32 = 12;
 
+/// How many average characters of its title a tab keeps at its
+/// narrowest: about three letters of a long name, and "Home" whole, as
+/// Windows 11 shrinks tabs no further (checked with 25 tabs in a
+/// 1920-pixel window, where its tabs are about 115 pixels wide).
+const TITLE_MIN_CHARS: i32 = 7;
+
+/// The glyph of the strip's scroll arrows.
+const SCROLL_GLYPH: i32 = 12;
+
 /// The clock in a snapshot tab's badge (`icon('clock', 12)`).
 const SNAPSHOT_BADGE_GLYPH: i32 = 12;
-
-/// The share of the window's width the strip takes at most, in percent.
-const MAX_STRIP_PERCENT: i32 = 70;
 
 /// The CSS class of a tab's icon.
 const TAB_ICON_CLASS: &str = "tab-icon";
@@ -103,6 +122,16 @@ mod imp {
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(file = "../../resources/ui/tab-strip.ui")]
     pub(crate) struct TabStrip {
+        /// The arrows and the scroller, side by side.
+        #[template_child]
+        pub(super) row: TemplateChild<gtk::Box>,
+        /// Scrolls the strip back by a tab, shown while the tabs overflow.
+        #[template_child]
+        pub(super) scroll_back: TemplateChild<gtk::Button>,
+        /// Scrolls the strip forward by a tab, shown while the tabs
+        /// overflow.
+        #[template_child]
+        pub(super) scroll_forward: TemplateChild<gtk::Button>,
         /// The strip, scrolling sideways when the tabs do not fit.
         #[template_child]
         pub(super) scroller: TemplateChild<gtk::ScrolledWindow>,
@@ -146,6 +175,9 @@ mod imp {
         pub(super) edge_step: Cell<f64>,
         /// The timer of that scroll.
         pub(super) edge_scroll: RefCell<Option<glib::SourceId>>,
+        /// Whether the arrows' showing or hiding waits for the next idle
+        /// moment.
+        pub(super) arrows_pending: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -171,6 +203,7 @@ mod imp {
             self.parent_constructed();
             crate::i18n::translate_template(&*self.obj(), "tab-strip.ui");
             gestures::scroll_sideways_with_wheel(&self.scroller);
+            self.obj().connect_scroll_arrows();
             self.obj().follow_the_pointer_as_it_scrolls();
             self.obj().add_controller(super::copy_on_double_click());
             let menu = MenuPopover::new(Vec::new());
@@ -208,7 +241,7 @@ mod imp {
         fn snapshot(&self, snapshot: &gtk::Snapshot) {
             // Not the parent's snapshot, which would also draw the edge
             // widgets at the strip's top left: the tabs, then the edges.
-            self.obj().snapshot_child(&*self.scroller, snapshot);
+            self.obj().snapshot_child(&*self.row, snapshot);
             self.obj().draw_edges(snapshot);
         }
     }
@@ -228,22 +261,151 @@ impl TabStrip {
         self.imp().layout.set_tab_width(width);
     }
 
-    /// Keeps the strip within 70% of a window `window_width` pixels wide
-    /// (`.tabs{max-width:70%}`), so the drag area beside it stays wide
-    /// enough to grab; tabs that do not fit shrink and then scroll. The
-    /// cap changes after the allocation that reports the width, because
-    /// changing it during one would start it again.
-    pub(super) fn cap_width(&self, window_width: i32) {
-        let cap = window_width * MAX_STRIP_PERCENT / 100;
-        let scroller = self.imp().scroller.get();
-        if scroller.max_content_width() == cap {
+    /// Shows the arrows while the tabs overflow and keeps them current:
+    /// each is dimmed at its end of the strip. Each click scrolls a tab's
+    /// width, without an animation, so reduced motion changes nothing.
+    fn connect_scroll_arrows(&self) {
+        let imp = self.imp();
+        imp.scroll_back
+            .set_child(Some(&icons::image(Icon::ChevronLeft16, SCROLL_GLYPH)));
+        imp.scroll_forward
+            .set_child(Some(&icons::image(Icon::ChevronRight16, SCROLL_GLYPH)));
+        for (button, step) in [(&imp.scroll_back, -1.0), (&imp.scroll_forward, 1.0)] {
+            button.connect_clicked(glib::clone!(
+                #[weak(rename_to = strip)]
+                self,
+                move |_| strip.scroll_by_tabs(step)
+            ));
+        }
+        let adjustment = imp.scroller.hadjustment();
+        let follow = glib::clone!(
+            #[weak(rename_to = strip)]
+            self,
+            move |_: &gtk::Adjustment| strip.update_arrows_soon()
+        );
+        adjustment.connect_changed(follow.clone());
+        adjustment.connect_value_changed(follow);
+    }
+
+    /// Scrolls the strip by one tab, forward when `tabs` is positive, else
+    /// back: the next tab past the edge comes wholly into view, its far
+    /// edge at the strip's edge, whatever its width.
+    fn scroll_by_tabs(&self, tabs: f64) {
+        let imp = self.imp();
+        let adjustment = imp.scroller.hadjustment();
+        let row = imp.tab_list.get();
+        // Each tab's start and end in the row, as laid out: a Previous
+        // Versions tab is wider than the others.
+        let edges: Vec<(f64, f64)> = super::widget_tree::children(&row)
+            .filter(|tab| tab.has_css_class("tab"))
+            .filter_map(|tab| tab.compute_bounds(&row))
+            .map(|bounds| (f64::from(bounds.x()), f64::from(bounds.x() + bounds.width())))
+            .collect();
+        let (value, page) = (adjustment.value(), adjustment.page_size());
+        let target = if tabs > 0.0 {
+            // The first tab not wholly shown at the right ends there.
+            edges
+                .iter()
+                .map(|(_, end)| *end)
+                .find(|end| *end > value + page + 0.5)
+                .map(|end| end - page)
+        } else {
+            // The last tab not wholly shown at the left starts there.
+            edges
+                .iter()
+                .map(|(start, _)| *start)
+                .rev()
+                .find(|start| *start < value - 0.5)
+        };
+        let end = (adjustment.upper() - page).max(adjustment.lower());
+        let next = target.unwrap_or(if tabs > 0.0 { end } else { adjustment.lower() });
+        adjustment.set_value(next.clamp(adjustment.lower(), end));
+    }
+
+    /// Shows or hides the arrows once the layout under way is done, since
+    /// showing them changes it.
+    fn update_arrows_soon(&self) {
+        if self.imp().arrows_pending.replace(true) {
             return;
         }
-        glib::idle_add_local_once(glib::clone!(
-            #[weak]
-            scroller,
-            move || scroller.set_max_content_width(cap)
-        ));
+        // Before the next frame is laid out and drawn, so busy tabs' rings,
+        // which draw every frame, never hold the arrows back.
+        glib::idle_add_local_full(
+            glib::Priority::HIGH_IDLE,
+            glib::clone!(
+                #[weak(rename_to = strip)]
+                self,
+                #[upgrade_or]
+                glib::ControlFlow::Break,
+                move || {
+                    strip.imp().arrows_pending.set(false);
+                    strip.update_arrows();
+                    glib::ControlFlow::Break
+                }
+            ),
+        );
+    }
+
+    /// The arrows show while the tabs overflow. Shown, they take room from
+    /// the tabs, so they go only once the tabs would fit in that room too.
+    fn update_arrows(&self) {
+        let imp = self.imp();
+        let adjustment = imp.scroller.hadjustment();
+        let (back, forward) = (&imp.scroll_back, &imp.scroll_forward);
+        let shown = back.is_visible();
+        let room = if shown {
+            arrow_width(back) + arrow_width(forward)
+        } else {
+            0
+        };
+        let overflow = adjustment.upper() - adjustment.page_size();
+        let overflows = if shown {
+            overflow > f64::from(room) + 0.5
+        } else {
+            overflow > 0.5
+        };
+        if overflows != shown {
+            back.set_visible(overflows);
+            forward.set_visible(overflows);
+            if overflows {
+                // The tab in front stays in view as the arrows take room.
+                if let Some(front) = self.front_widget() {
+                    self.scroll_into_view_soon(&front);
+                }
+            }
+        }
+        let value = adjustment.value();
+        back.set_sensitive(value > adjustment.lower() + 0.5);
+        forward.set_sensitive(value < adjustment.upper() - adjustment.page_size() - 0.5);
+    }
+
+    /// Scrolls `tab` into view once the strip is laid out: right after
+    /// the next frame, which lays the tabs out, is drawn. The frame clock,
+    /// unlike an idle callback, is never held back by busy tabs' rings,
+    /// which draw every frame. It is one jump, not a motion.
+    fn scroll_into_view_soon(&self, tab: &gtk::Box) {
+        let viewport = self.imp().viewport.downgrade();
+        let shown = tab.downgrade();
+        let scroll = move || {
+            if let (Some(viewport), Some(tab)) = (viewport.upgrade(), shown.upgrade()) {
+                viewport.scroll_to(&tab, None);
+            }
+        };
+        let Some(clock) = self.frame_clock() else {
+            // Not shown yet: once the main loop is free.
+            glib::idle_add_local_once(scroll);
+            return;
+        };
+        let handler: std::rc::Rc<Cell<Option<glib::SignalHandlerId>>> = std::rc::Rc::default();
+        let once = std::rc::Rc::clone(&handler);
+        let id = clock.connect_after_paint(move |clock| {
+            if let Some(id) = once.take() {
+                clock.disconnect(id);
+                scroll();
+            }
+        });
+        handler.set(Some(id));
+        clock.request_phase(gdk::FrameClockPhase::AFTER_PAINT);
     }
 
     /// Replaces the tabs with `tabs` and scrolls the active one into view.
@@ -312,12 +474,7 @@ impl TabStrip {
             active.grab_focus();
         }
         // After the new tabs are laid out, so their positions are known.
-        let viewport = imp.viewport.get();
-        glib::idle_add_local_once(glib::clone!(
-            #[weak]
-            viewport,
-            move || viewport.scroll_to(&active, None)
-        ));
+        self.scroll_into_view_soon(&active);
     }
 
     /// Puts the keyboard on the tab in front (F6, ACC-015); false when no
@@ -493,6 +650,7 @@ fn icon_of(tab: &TabView) -> gtk::Widget {
     if tab.busy {
         let ring = ProgressRing::new(ICON_SIZE);
         ring.add_css_class(TAB_ICON_CLASS);
+        ring.set_margin_end(ICON_TO_TITLE);
         ring.upcast()
     } else {
         tab_icon(tab.icon).upcast()
@@ -505,11 +663,34 @@ fn show_in_front(widget: &gtk::Box, active: bool) {
     super::widget_tree::toggle_class(widget, "active", active);
     widget.set_focusable(active);
     widget.update_state(&[gtk::accessible::State::Selected(Some(active))]);
+    show_close_button_when_wanted(widget);
 }
 
+/// As in Windows 11, only the tab in front, a hovered tab, a tab holding
+/// the keyboard focus and a tab being dragged show their close button.
+/// Elsewhere it takes no room, so the title reaches the tab's end and is
+/// cut only where it runs out of room there.
+pub(super) fn show_close_button_when_wanted(tab: &gtk::Box) {
+    let Some(close) = tab.last_child().filter(|child| child.has_css_class("tab-close")) else {
+        return;
+    };
+    let shown = tab.has_css_class("active")
+        || tab.has_css_class(drag_marks::DRAGGED_CLASS)
+        || tab
+            .state_flags()
+            .intersects(gtk::StateFlags::PRELIGHT | gtk::StateFlags::FOCUS_WITHIN);
+    if close.is_visible() != shown {
+        close.set_visible(shown);
+    }
+}
+
+/// The tab's icon, with the room before the title after it: the tab's
+/// parts sit side by side with no spacing, so the title runs right up to
+/// the close button, as in Windows 11.
 fn tab_icon(icon: Art) -> ArtImage {
     let image = ArtImage::new(icon, ICON_SIZE);
     image.add_css_class(TAB_ICON_CLASS);
+    image.set_margin_end(ICON_TO_TITLE);
     image
 }
 
@@ -518,7 +699,7 @@ fn tab_icon(icon: Art) -> ArtImage {
 /// the tab in front takes keyboard focus.
 fn tab_widget(tab: &TabView) -> gtk::Box {
     let widget = gtk::Box::builder()
-        .spacing(ICON_TO_TITLE)
+        .spacing(0)
         .focusable(tab.active)
         .accessible_role(gtk::AccessibleRole::Tab)
         .tooltip_text(&tab.tooltip)
@@ -541,11 +722,14 @@ fn tab_widget(tab: &TabView) -> gtk::Box {
     widget.update_state(&[gtk::accessible::State::Selected(Some(tab.active))]);
     widget.append(&icon_of(tab));
     widget.update_state(&[gtk::accessible::State::Busy(tab.busy)]);
-    widget.append(&title(&tab.title));
+    widget.append(&clipped(&title(&tab.title)));
     if let Some(snapshot) = &tab.previous_version {
         mark_previous_version(&widget, &tab.title, snapshot);
     }
     widget.append(&close_button(tab));
+    show_close_button_when_wanted(&widget);
+    // The pointer coming or going, and the keyboard, show or hide it.
+    widget.connect_state_flags_changed(|widget, _| show_close_button_when_wanted(widget));
     let id = tab.id.to_variant();
     widget.add_controller(select_on_click(id.clone()));
     widget.add_controller(select_on_enter(id.clone()));
@@ -663,6 +847,8 @@ fn mark_previous_version(widget: &gtk::Box, title: &str, snapshot: &str) {
             "Previous version · {snapshot}",
             &[("snapshot", snapshot)],
         ))
+        .margin_start(ICON_TO_TITLE)
+        .margin_end(CLOSE_GAP)
         .css_classes(["snapshot-tab-badge"])
         .build();
     badge.append(&icons::image(Icon::Clock, SNAPSHOT_BADGE_GLYPH));
@@ -841,12 +1027,20 @@ fn select_on_enter(id: glib::Variant) -> gtk::EventControllerKey {
     keys
 }
 
-fn title(text: &str) -> gtk::Label {
+/// The width an arrow takes beside the strip, its margins included.
+fn arrow_width(arrow: &gtk::Button) -> i32 {
+    let (_, natural, _, _) = arrow.measure(gtk::Orientation::Horizontal, -1);
+    natural + arrow.margin_start() + arrow.margin_end()
+}
+
+/// A tab's title, on one line, never shortened to an ellipsis: shown in
+/// [`title_room::clipped`], which cuts it at the last pixel, as Windows 11
+/// cuts it.
+pub(super) fn title(text: &str) -> gtk::Label {
     gtk::Label::builder()
         .label(text)
         .xalign(0.0)
-        .hexpand(true)
-        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .single_line_mode(true)
         .css_classes(["tab-title"])
         .build()
 }
@@ -910,7 +1104,7 @@ mod tests {
 
     /// parity: TAB-010
     #[gtk::test]
-    fn a_live_tab_has_no_badge_a_close_button_and_an_ellipsized_title() {
+    fn a_live_tab_has_no_badge_a_close_button_and_a_title_cut_at_the_last_pixel() {
         let widget = tab_widget(&tab_view(None));
 
         assert!(!widget.has_css_class("snapshot-tab"));
@@ -921,8 +1115,14 @@ mod tests {
         assert_eq!(close.tooltip_text().as_deref(), Some("Close tab"));
         let title = descendants::<gtk::Label>(&widget)
             .into_iter()
-            .next()
+            .find(|label| label.has_css_class("tab-title"))
             .expect("a tab shows its title");
-        assert_eq!(title.ellipsize(), gtk::pango::EllipsizeMode::End);
+        assert_eq!(
+            title.ellipsize(),
+            gtk::pango::EllipsizeMode::None,
+            "never an ellipsis"
+        );
+        let room = title.parent().expect("the title's room");
+        assert_eq!(room.overflow(), gtk::Overflow::Hidden, "cut at the last pixel");
     }
 }

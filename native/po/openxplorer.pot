@@ -269,6 +269,14 @@ msgstr ""
 msgid "Folder tabs"
 msgstr ""
 
+#: crates/ox-app/resources/ui/tab-strip.ui
+msgid "Scroll tab list backward"
+msgstr ""
+
+#: crates/ox-app/resources/ui/tab-strip.ui
+msgid "Scroll tab list forward"
+msgstr ""
+
 #: crates/ox-app/resources/ui/update-dialog.ui
 msgid "Check again"
 msgstr ""
@@ -541,7 +549,7 @@ msgstr ""
 msgid "Not provided"
 msgstr ""
 
-#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/archive_password.rs crates/ox-app/src/window/choose_details.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/gallery_locations.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
+#: crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/src/dialog/window.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/about.rs crates/ox-app/src/window/activation.rs crates/ox-app/src/window/activation/outcome.rs crates/ox-app/src/window/archive_password.rs crates/ox-app/src/window/choose_details.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/journal.rs crates/ox-app/src/window/gallery_locations.rs crates/ox-app/src/window/item_dialogs.rs crates/ox-app/src/window/loading/denied_folder.rs
 msgid "OK"
 msgstr ""
 
@@ -5110,7 +5118,7 @@ msgstr ""
 msgid "Tiles"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs crates/ox-core/src/ops/undo_apply.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/file_ops/journal.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/journal.rs crates/ox-core/src/ops/undo_apply.rs
 msgid "Undo"
 msgstr ""
 
@@ -6038,6 +6046,17 @@ msgstr ""
 msgid "Undo copy?"
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/journal.rs
+msgid "Undo the rest anyway?"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/journal.rs
+msgid "{count} file was replaced, so Undo can't bring back the old file."
+msgid_plural "{count} files were replaced, so Undo can't bring back the old files."
+msgstr[0] ""
+msgstr[1] ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/journal.rs
 msgid "{len} copies, such as “{first}”, may have changed after they were copied. Undo moves them to the Recycle Bin anyway?"
@@ -6046,6 +6065,11 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/file_ops/journal.rs
 msgid "“{first}” may have changed after it was copied. Undo moves it to the Recycle Bin anyway?"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/journal.rs
+msgid "“{name}” was replaced, so Undo can't bring back the old file."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/links.rs
