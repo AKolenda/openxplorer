@@ -554,6 +554,26 @@ fn large_text_widens_default_columns_and_the_navigation_pane() {
     assert_eq!(dragged, 150, "a width the user chose stays");
 }
 
+/// A window that opens with 200% text already chosen starts with the
+/// navigation pane and the columns nobody resized at their widths for
+/// that text, not at the 100% defaults until the text size next changes.
+///
+/// parity: ACC-012, VIEW-028
+#[gtk::test]
+fn a_window_opened_at_large_text_starts_with_wide_defaults() {
+    let skin = crate::theme::Skin::detached();
+    skin.set_text_size(TextSize::from_percent(200));
+    let fixture = Fixture::standard();
+    let test = TestWindow::open_with_skin(&fixture.uri(), &skin);
+    wait_for_frames(&test.window, 3);
+    let details = test.window.folder_pane().details();
+    let width_of = |column: SortColumn| details.column(column).expect("a column").fixed_width();
+
+    assert_eq!(test.window.workspace().position(), 420, "the navigation pane");
+    assert_eq!(width_of(SortColumn::Modified), 282);
+    assert_eq!(width_of(SortColumn::Type), 270);
+}
+
 /// The desktop's text scaling (GTK's font resolution) grows the rows on
 /// top of the app's own text size. The test follows the display's
 /// settings as the application does at startup.

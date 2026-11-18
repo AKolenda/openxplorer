@@ -4,8 +4,9 @@
 //! Windows' Preview pane shows an RTF file's text, not its markup. This
 //! reads the text the way an RTF reader does, without its formatting:
 //! paragraphs and line breaks become new lines, `\tab` a tab, `\'hh`
-//! escapes a Windows-1252 character, `\uN` a Unicode character (skipping
-//! the `\ucN` fallback characters after it), and the groups a reader
+//! escapes a Windows-1252 character, `\uN` a Unicode character (two of
+//! them a surrogate pair's character beyond the Basic Multilingual Plane,
+//! skipping the `\ucN` fallback characters after each), and the groups a reader
 //! does not show (the font, color and style tables, document information,
 //! pictures, fields' instructions and every `{\*…}` destination) are
 //! left out. Bold, italics, fonts and colors are not drawn: the pane shows
@@ -93,8 +94,10 @@ pub(super) fn rtf_text(bytes: &[u8]) -> String {
         skip: 0,
         starred: false,
         group_start: false,
+        high_surrogate: None,
     };
     reader.read();
+    reader.end_surrogate();
     reader.text
 }
 
@@ -111,6 +114,10 @@ struct Reader<'a> {
     starred: bool,
     /// Just after `{`: the first control word may name a destination.
     group_start: bool,
+    /// The first half of a UTF-16 surrogate pair a `\uN` gave, waiting
+    /// for the second, which the next `\uN` gives: a character beyond the
+    /// Basic Multilingual Plane, such as an emoji.
+    high_surrogate: Option<u32>,
 }
 
 impl Reader<'_> {
@@ -119,15 +126,52 @@ impl Reader<'_> {
     fn push(&mut self, character: char) {
         if self.skip > 0 {
             self.skip -= 1;
-        } else if !self.group.hidden {
-            self.text.push(character);
+        } else {
+            self.push_always(character);
         }
     }
 
     /// Adds `character`, never a fallback, unless its group is hidden.
     fn push_always(&mut self, character: char) {
+        self.end_surrogate();
         if !self.group.hidden {
             self.text.push(character);
+        }
+    }
+
+    /// Ends a surrogate pair that has only its first half: a replacement
+    /// character stands for it.
+    fn end_surrogate(&mut self) {
+        if self.high_surrogate.take().is_some() && !self.group.hidden {
+            self.text.push('\u{fffd}');
+        }
+    }
+
+    /// Reads the UTF-16 code unit of a `\uN`, `parameter` (negative above
+    /// 32767): a character of its own, or half of a surrogate pair, whose
+    /// halves make one character beyond the Basic Multilingual Plane. A
+    /// half without its other half is a replacement character.
+    fn unicode_unit(&mut self, parameter: Option<i64>) {
+        let unit = parameter
+            .map(|n| if n < 0 { n + 65_536 } else { n })
+            .and_then(|n| u32::try_from(n).ok());
+        match unit {
+            Some(high @ 0xd800..=0xdbff) => {
+                self.end_surrogate();
+                self.high_surrogate = Some(high);
+            }
+            Some(low @ 0xdc00..=0xdfff) => {
+                let character = self
+                    .high_surrogate
+                    .take()
+                    .and_then(|high| char::from_u32(0x1_0000 + ((high - 0xd800) << 10) + (low - 0xdc00)))
+                    .unwrap_or('\u{fffd}');
+                self.push_always(character);
+            }
+            other => {
+                let character = other.and_then(char::from_u32).unwrap_or('\u{fffd}');
+                self.push_always(character);
+            }
         }
     }
 
@@ -231,13 +275,7 @@ impl Reader<'_> {
             }
             "uc" => self.group.fallback = parameter.and_then(|n| usize::try_from(n).ok()).unwrap_or(1),
             "u" => {
-                // A negative value is a code unit above 32767.
-                let unit = parameter.map(|n| if n < 0 { n + 65_536 } else { n });
-                let character = unit
-                    .and_then(|n| u32::try_from(n).ok())
-                    .and_then(char::from_u32)
-                    .unwrap_or('\u{fffd}');
-                self.push_always(character);
+                self.unicode_unit(parameter);
                 self.skip = self.group.fallback;
             }
             "bin" => {
@@ -302,6 +340,23 @@ mod tests {
         );
         assert_eq!(rtf_text("{\\rtf1 Gr\u{fc}\u{df}e}".as_bytes()), "Grüße");
         assert_eq!(rtf_text(b"{\\rtf1 x\\bin3 {}}y}"), "xy");
+    }
+
+    /// A character beyond the Basic Multilingual Plane, such as an emoji
+    /// or a supplementary CJK character, is stored as a UTF-16 surrogate
+    /// pair in two signed `\\uN` controls and is read as that one
+    /// character; a lone half is a replacement character.
+    ///
+    /// parity: VIEW-070
+    #[test]
+    fn surrogate_pairs_are_read_as_one_character() {
+        assert_eq!(
+            rtf_text(b"{\\rtf1\\uc1\\u-10179?\\u-8704? done}"),
+            "\u{1f600} done"
+        );
+        assert_eq!(rtf_text(b"{\\rtf1\\uc0\\u-10176\\u-9191 }"), "\u{20019}");
+        assert_eq!(rtf_text(b"{\\rtf1\\uc1\\u-10179? x}"), "\u{fffd} x");
+        assert_eq!(rtf_text(b"{\\rtf1\\uc1\\u-8704? y}"), "\u{fffd} y");
     }
 
     #[test]

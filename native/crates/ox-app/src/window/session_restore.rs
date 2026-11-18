@@ -168,12 +168,25 @@ impl BrowserWindow {
         if self.imp().saved_session_text.borrow().as_deref() == Some(text.as_str()) {
             return;
         }
-        self.imp().saved_session_text.replace(Some(text));
+        // Remembered while the write runs, so the next tick does not start
+        // the same write again; forgotten if it fails, so a later tick
+        // tries again once the storage works (a full disk, for example).
+        self.imp().saved_session_text.replace(Some(text.clone()));
         let directory = self.context().settings_directory();
+        let window = self.downgrade();
         glib::spawn_future_local(async move {
             let written = gio::spawn_blocking(move || saved.save(&directory)).await;
-            if let Ok(Err(error)) = written {
-                glib::g_warning!(ox_core::LOG_DOMAIN, "The open tabs could not be saved: {error}");
+            let failure = match written {
+                Ok(Ok(())) => return,
+                Ok(Err(error)) => error.to_string(),
+                Err(_) => "the saving thread stopped".to_owned(),
+            };
+            glib::g_warning!(ox_core::LOG_DOMAIN, "The open tabs could not be saved: {failure}");
+            if let Some(window) = window.upgrade() {
+                let remembered = &window.imp().saved_session_text;
+                if remembered.borrow().as_deref() == Some(text.as_str()) {
+                    remembered.replace(None);
+                }
             }
         });
     }

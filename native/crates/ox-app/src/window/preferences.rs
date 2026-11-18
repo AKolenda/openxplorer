@@ -205,7 +205,13 @@ impl BrowserWindow {
         self.show_pane_view_state();
         self.follow_item_preferences();
         let workspace = self.workspace();
-        workspace.set_position(start_sidebar_width(preferences.sidebar_width));
+        // The text size is drawn before the preferences are applied, so a
+        // sidebar without a width of its own starts at the default for it.
+        let start = match preferences.sidebar_width {
+            Some(_) => start_sidebar_width(preferences.sidebar_width),
+            None => self.default_sidebar_width(),
+        };
+        workspace.set_position(start);
         self.save_sidebar_width_after_drags();
         self.keep_sidebar_within_limit();
         self.reset_sidebar_on_double_click();
