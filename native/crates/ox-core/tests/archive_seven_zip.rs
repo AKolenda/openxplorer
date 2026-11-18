@@ -20,8 +20,9 @@ use ox_core::transfer::Cancellation;
 
 use archive_support::{
     coded_seven_zip, encoded_header_seven_zip, gio_factory, memory_opener, one_file_seven_zip, raw_seven_zip,
-    seven_zip_bytes, seven_zip_claiming_files, seven_zip_without_sub_streams, ExtractionFixture,
-    LocalFileOutput, SevenEntry, TestCoder, AES, BCJ2, BZIP2, COPY, DEFLATE, LZMA2, PPMD, SEVEN_ZIP_MODIFIED,
+    seven_zip_bytes, seven_zip_claiming_files, seven_zip_with_empty_file_between,
+    seven_zip_without_sub_streams, ExtractionFixture, LocalFileOutput, SevenEntry, TestCoder, AES, BCJ2,
+    BZIP2, COPY, DEFLATE, LZMA2, PPMD, SEVEN_ZIP_MODIFIED,
 };
 
 /// A folder, a file in it, a folder in that and an empty file, with a
@@ -684,4 +685,82 @@ fn a_7z_without_a_substreams_record_lists_and_extracts() {
 
     let notes = fixture.destination.join("Unpacked/notes.txt");
     assert_eq!(fs::read(notes).expect("a file"), b"stored notes");
+}
+
+/// An empty file listed between two files of a solid block has no data
+/// in it: it opens and copies even when the block's method is one the
+/// reader lacks.
+///
+/// parity: ARC-016
+#[test]
+fn an_empty_file_inside_an_unreadable_solid_block_still_opens() {
+    let bytes = seven_zip_with_empty_file_between(&PPMD, &[6, 0, 0, 0, 1], &[0x42; 16], &[0x43; 16]);
+    let root = tempfile::tempdir().expect("a folder");
+    let listing = browser_of(bytes.clone(), root.path())
+        .list("file:///fixture/Bundle.7z", "", &Cancellation::new())
+        .expect("lists");
+    let can_open: Vec<(String, bool)> = listing
+        .entries
+        .into_iter()
+        .map(|entry| (entry.name, entry.can_open))
+        .collect();
+    assert_eq!(
+        can_open,
+        [
+            ("Empty.txt".to_owned(), true),
+            ("First.txt".to_owned(), false),
+            ("Second.txt".to_owned(), false),
+        ],
+    );
+
+    let fixture = fixture_with(&bytes);
+    let mut extractor = fixture.extractor().with_selection(&["Empty.txt".to_owned()]);
+    fixture.extract_with(&mut extractor, "Copy").expect("copied");
+    let copy = fixture.destination.join("Copy/Empty.txt");
+    assert_eq!(fs::read(copy).expect("a file"), b"");
+}
+
+/// A stream that loses its connection once the decoder reads data, as a
+/// GIO stream reports it (an error of no particular kind).
+struct LostConnection(std::io::Cursor<Vec<u8>>);
+
+impl Read for LostConnection {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        if self.0.position() >= 32 {
+            return Err(std::io::Error::other("Connection lost"));
+        }
+        self.0.read(buffer)
+    }
+}
+
+impl Seek for LostConnection {
+    fn seek(&mut self, position: SeekFrom) -> std::io::Result<u64> {
+        self.0.seek(position)
+    }
+}
+
+/// A connection lost while a file is decoded is that failure, so that
+/// it can be retried, and not a damaged archive.
+///
+/// parity: ARC-017
+#[test]
+fn a_connection_lost_while_decoding_is_not_called_damage() {
+    let bytes = seven_zip_bytes(&[SevenEntry::file("notes.txt", b"remote notes")], true);
+    let opener = move |_uri: &str, _cancel: &Cancellation| -> Result<Box<dyn ArchiveStream>, ArchiveError> {
+        let cursor = std::io::Cursor::new(bytes.clone());
+        if std::thread::current().name() == Some("ox-7z-decoder") {
+            Ok(Box::new(LostConnection(cursor)))
+        } else {
+            Ok(Box::new(cursor))
+        }
+    };
+    let root = tempfile::tempdir().expect("a folder");
+    let browser = ArchiveBrowser::new(Arc::new(opener), root.path().to_path_buf());
+
+    let error = browser
+        .preview_member("file:///fixture/Remote.7z", "notes.txt", &Cancellation::new())
+        .expect_err("the connection is lost");
+
+    assert!(matches!(error, ArchiveError::Backend(_)), "{error:?}");
+    assert!(error.to_string().contains("Connection lost"), "{error}");
 }

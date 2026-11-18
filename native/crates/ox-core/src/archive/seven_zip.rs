@@ -287,7 +287,12 @@ fn members(headers: &Headers) -> (Vec<ZipMember>, Vec<usize>) {
         .enumerate()
         .filter(|(_, file)| !file.is_anti)
         .map(|(index, file)| {
-            let block = file.block.map(|index| &headers.blocks[index]);
+            // An empty file between two files of a solid block is given
+            // that block, but nothing of it is decoded to open it.
+            let block = file
+                .block
+                .filter(|_| file.has_stream)
+                .map(|index| &headers.blocks[index]);
             let coding = match block.and_then(|block| block.problem) {
                 None => SevenZipCoding::Readable,
                 Some(BlockProblem::Encrypted) => SevenZipCoding::Encrypted,

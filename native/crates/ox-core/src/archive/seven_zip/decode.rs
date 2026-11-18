@@ -309,17 +309,35 @@ fn read_full(reader: &mut dyn Read, chunk: &mut [u8]) -> io::Result<usize> {
     Ok(filled)
 }
 
-/// The error of reading a file's data: a checksum or decoding failure is
-/// damage, anything else the source's own error.
+/// The error of reading a file's data: the source's own error when the
+/// archive could not be read (a lost connection stays a lost connection),
+/// and any checksum or decoding failure damage.
 fn data_error(error: io::Error) -> ArchiveError {
-    let is_from_the_decoder = error
-        .get_ref()
-        .is_some_and(<dyn std::error::Error + Send + Sync>::is::<sevenz_rust2::Error>);
-    if is_from_the_decoder || error.kind() == io::ErrorKind::Other {
-        ArchiveError::DamagedSevenZip
-    } else {
-        damaged(error)
+    match error
+        .into_inner()
+        .map(<dyn std::error::Error + Send + Sync>::downcast::<SourceError>)
+    {
+        Some(Ok(source)) => damaged(source.0),
+        _ => ArchiveError::DamagedSevenZip,
     }
+}
+
+/// An error of reading the archive itself, marked so that it is told
+/// apart from the decoders' errors, which come as I/O errors too.
+#[derive(Debug)]
+struct SourceError(io::Error);
+
+impl std::fmt::Display for SourceError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+impl std::error::Error for SourceError {}
+
+/// `error`, of the same kind, marked as the source's.
+fn source_error(error: io::Error) -> io::Error {
+    io::Error::new(error.kind(), SourceError(error))
 }
 
 /// The app's error for an error of the crate.
@@ -425,10 +443,12 @@ impl Read for WithPlainHeader {
             let wanted = usize::try_from(self.length - self.position).unwrap_or(usize::MAX);
             let limit = buffer.len().min(wanted);
             if self.inner_position != Some(self.position) {
-                self.inner.seek(SeekFrom::Start(self.position))?;
+                self.inner
+                    .seek(SeekFrom::Start(self.position))
+                    .map_err(source_error)?;
             }
             self.inner_position = None;
-            let count = self.inner.read(&mut buffer[..limit])?;
+            let count = self.inner.read(&mut buffer[..limit]).map_err(source_error)?;
             self.inner_position = Some(self.position + count as u64);
             count
         } else {

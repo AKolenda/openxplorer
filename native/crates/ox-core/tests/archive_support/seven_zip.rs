@@ -211,6 +211,41 @@ pub fn seven_zip_without_sub_streams(name: &str, data: &[u8]) -> Vec<u8> {
     raw_seven_zip(data, &header)
 }
 
+/// A solid 7z of `First.txt` holding `first` and `Second.txt` holding
+/// `second`, both in one block coded with `method` and `properties`, and
+/// an empty `Empty.txt` listed between them, as writers that keep the
+/// files' order store one.
+pub fn seven_zip_with_empty_file_between(
+    method: &[u8],
+    properties: &[u8],
+    first: &[u8],
+    second: &[u8],
+) -> Vec<u8> {
+    let size = (first.len() + second.len()) as u64;
+    let mut streams = one_block_streams(method, properties, size, size);
+    let record = streams.len() - 3;
+    assert_eq!(
+        &streams[record..],
+        [0x08, 0x00, 0x00],
+        "the substreams record, then the end"
+    );
+    streams.truncate(record);
+    streams.extend([0x08, 0x0d]); // kSubStreamsInfo, kNumUnpackStream
+    streams.extend(number(2));
+    streams.push(0x09); // kSize
+    streams.extend(number(first.len() as u64));
+    streams.extend([0x00, 0x00]);
+    let mut header = vec![0x01, 0x04];
+    header.extend(streams);
+    header.push(0x05); // kFilesInfo
+    header.extend(number(3));
+    header.extend([0x0e, 0x01, 0b0100_0000]); // kEmptyStream: the second
+    header.extend([0x0f, 0x01, 0b1000_0000]); // kEmptyFile: a file
+    header.extend(names_property(&["First.txt", "Empty.txt", "Second.txt"]));
+    header.extend([0x00, 0x00]);
+    raw_seven_zip(&[first, second].concat(), &header)
+}
+
 /// A 7z whose header is "encoded": packed with `method` (AES here, so the
 /// names cannot be read without the password).
 pub fn encoded_header_seven_zip(method: &[u8], properties: &[u8]) -> Vec<u8> {
