@@ -910,14 +910,22 @@ impl FileCell {
     }
 }
 
-/// Names a file view for screen readers as the current app names its
-/// file list (`#file-canvas` and `#main` in index.html).
+/// What screen readers call a file list: "Items View", as Windows names
+/// Explorer's list.
+pub(crate) const ITEMS_VIEW_NAME: &str = crate::i18n::message_id("Items View");
+
+/// How a file list describes itself to screen readers: what typing does
+/// there (`#main`'s `aria-label` in the web app).
+pub(crate) const ITEMS_VIEW_HINT: &str =
+    crate::i18n::message_id("Folder contents — type a filename prefix to select");
+
+/// Names a file view for screen readers as Windows names Explorer's list,
+/// [`ITEMS_VIEW_NAME`], with the typing hint, [`ITEMS_VIEW_HINT`], as its
+/// description only.
 pub(crate) fn label_view(view: &gtk::Widget) {
     view.update_property(&[
-        gtk::accessible::Property::Label(&ox_core::i18n::gettext("Files")),
-        gtk::accessible::Property::Description(&ox_core::i18n::gettext(
-            "Folder contents — type a filename prefix to select",
-        )),
+        gtk::accessible::Property::Label(ox_core::i18n::gettext_static(ITEMS_VIEW_NAME)),
+        gtk::accessible::Property::Description(ox_core::i18n::gettext_static(ITEMS_VIEW_HINT)),
     ]);
 }
 

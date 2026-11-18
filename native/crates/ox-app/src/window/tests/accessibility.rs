@@ -842,3 +842,22 @@ fn alt_alone_moves_the_keyboard_to_the_command_bar_and_escape_brings_it_back() {
     // Back to the screen's middle, as the other real-pointer tests end.
     pointer.move_to(720, 500);
 }
+
+/// The file list is named "Items View", as Windows names Explorer's list,
+/// not with the typing hint, which only describes it.
+#[gtk::test]
+fn the_file_list_is_named_items_view_and_described_by_the_hint() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the fixture folder");
+    let view = test.window.folder_pane().view_widget();
+
+    assert_eq!(crate::folder_view::cells::ITEMS_VIEW_NAME, "Items View");
+    assert_eq!(
+        crate::folder_view::cells::ITEMS_VIEW_HINT,
+        "Folder contents — type a filename prefix to select"
+    );
+    for property in [gtk::AccessibleProperty::Label, gtk::AccessibleProperty::Description] {
+        assert!(gtk::test_accessible_has_property(&view, property), "{property:?}");
+    }
+}

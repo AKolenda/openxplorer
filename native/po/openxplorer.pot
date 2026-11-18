@@ -745,12 +745,12 @@ msgstr ""
 msgid "Date modified:"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/cells.rs crates/ox-app/src/window/shortcuts_window.rs
-msgid "Files"
+#: crates/ox-app/src/folder_view/cells.rs
+msgid "Folder contents — type a filename prefix to select"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/cells.rs crates/ox-app/src/window/input.rs
-msgid "Folder contents — type a filename prefix to select"
+#: crates/ox-app/src/folder_view/cells.rs
+msgid "Items View"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/cells.rs
@@ -7123,6 +7123,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
 msgid "Expand the selected folder in the navigation pane"
+msgstr ""
+
+#: crates/ox-app/src/window/shortcuts_window.rs
+msgid "Files"
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
