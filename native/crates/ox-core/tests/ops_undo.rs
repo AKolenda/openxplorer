@@ -150,6 +150,76 @@ fn undoing_a_copy_deletes_the_agreed_copies_that_have_no_recycle_bin() {
     assert_eq!(original_paths, [destination.join("a.txt")]);
 }
 
+/// A copy that overwrote one file, as Replace does by default, and made
+/// others is a Replace record around its Copy step. Where the copies have
+/// no Recycle Bin, as on a share, Undo still lists them for Delete's own
+/// question, and once the user agreed it deletes those permanently and
+/// moves the others to the Recycle Bin, as for a plain copy; the
+/// overwritten file stays.
+///
+/// parity: OPS-028, OPS-029
+#[test]
+fn undoing_a_replacing_copy_deletes_the_agreed_copies_that_have_no_recycle_bin() {
+    require_private_trash();
+    let temp = tempfile::tempdir().unwrap();
+    let destination = temp.path().join("dst");
+    fs::create_dir(&destination).unwrap();
+    for name in ["a.txt", "b.txt", "replaced.txt"] {
+        fs::write(destination.join(name), name).unwrap();
+    }
+    let (copy_of_a, copy_of_b) = (
+        file_uri(&destination.join("a.txt")),
+        file_uri(&destination.join("b.txt")),
+    );
+    let record = UndoRecord::Replace {
+        operation: ox_core::ops::Operation::Copy,
+        steps: vec![UndoRecord::Copy {
+            copies: vec![copy_of_a.clone(), copy_of_b.clone()],
+        }],
+        replaced: Vec::new(),
+        replaced_since: 0,
+        overwritten: vec![file_uri(&destination.join("replaced.txt"))],
+    };
+    let mut removed = removed_by_undo(&record);
+    removed.sort();
+    assert_eq!(
+        removed,
+        [copy_of_a, copy_of_b.clone()],
+        "listed for Delete's question"
+    );
+
+    let reversal = block_on(reverse_deleting(
+        &record,
+        std::slice::from_ref(&copy_of_b),
+        &OperationContext::default(),
+        |_| {},
+    ))
+    .expect("an undo");
+
+    assert!(reversal.result.errors.is_empty(), "{:?}", reversal.result.errors);
+    assert!(!destination.join("a.txt").exists());
+    assert!(!destination.join("b.txt").exists());
+    assert_in_recycle_bin(&destination.join("a.txt"), true);
+    assert_in_recycle_bin(&destination.join("b.txt"), false);
+    assert_eq!(
+        fs::read(destination.join("replaced.txt")).unwrap(),
+        b"replaced.txt",
+        "the replacement stays"
+    );
+    let Some(UndoRecord::Replace { replaced, steps, .. }) = reversal.inverse else {
+        panic!(
+            "Redo restores what went to the Recycle Bin: {:?}",
+            reversal.inverse
+        );
+    };
+    assert!(steps.is_empty(), "{steps:?}");
+    assert_eq!(
+        replaced,
+        [destination.join("a.txt")],
+        "only what went to the Recycle Bin"
+    );
+}
+
 /// A file edited inside a copied folder leaves the folder's own time
 /// alone, but still counts as a change to the copy.
 ///

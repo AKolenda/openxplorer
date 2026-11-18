@@ -287,14 +287,39 @@ impl TabStrip {
         adjustment.connect_value_changed(follow);
     }
 
-    /// Scrolls the strip `tabs` tabs' widths forward, or back when
-    /// negative.
+    /// Scrolls the strip by one tab, forward when `tabs` is positive, else
+    /// back: the next tab past the edge comes wholly into view, its far
+    /// edge at the strip's edge, whatever its width.
     fn scroll_by_tabs(&self, tabs: f64) {
         let imp = self.imp();
         let adjustment = imp.scroller.hadjustment();
-        let step = f64::from(imp.layout.tab_step());
-        let end = (adjustment.upper() - adjustment.page_size()).max(adjustment.lower());
-        adjustment.set_value((adjustment.value() + tabs * step).clamp(adjustment.lower(), end));
+        let row = imp.tab_list.get();
+        // Each tab's start and end in the row, as laid out: a Previous
+        // Versions tab is wider than the others.
+        let edges: Vec<(f64, f64)> = super::widget_tree::children(&row)
+            .filter(|tab| tab.has_css_class("tab"))
+            .filter_map(|tab| tab.compute_bounds(&row))
+            .map(|bounds| (f64::from(bounds.x()), f64::from(bounds.x() + bounds.width())))
+            .collect();
+        let (value, page) = (adjustment.value(), adjustment.page_size());
+        let target = if tabs > 0.0 {
+            // The first tab not wholly shown at the right ends there.
+            edges
+                .iter()
+                .map(|(_, end)| *end)
+                .find(|end| *end > value + page + 0.5)
+                .map(|end| end - page)
+        } else {
+            // The last tab not wholly shown at the left starts there.
+            edges
+                .iter()
+                .map(|(start, _)| *start)
+                .rev()
+                .find(|start| *start < value - 0.5)
+        };
+        let end = (adjustment.upper() - page).max(adjustment.lower());
+        let next = target.unwrap_or(if tabs > 0.0 { end } else { adjustment.lower() });
+        adjustment.set_value(next.clamp(adjustment.lower(), end));
     }
 
     /// Shows or hides the arrows once the layout under way is done, since

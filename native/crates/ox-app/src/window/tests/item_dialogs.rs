@@ -2884,3 +2884,26 @@ fn properties_show_the_whole_name_while_extensions_are_shown() {
         window.title_text() == "Notes 11.txt Properties"
     });
 }
+
+/// Properties opened by address, as another app's `ShowItemProperties`
+/// opens it, of a link to a folder whose name ends in a known type's
+/// extension: it is named whole, as a folder is, in its title as in its
+/// name box, also while extensions are hidden.
+///
+/// parity: PROP-005, VIEW-069
+#[gtk::test]
+fn a_folder_links_properties_opened_by_address_keep_its_whole_name() {
+    let fixture = Fixture::standard();
+    std::os::unix::fs::symlink(fixture.path("Documents"), fixture.path("Docs.txt"))
+        .expect("the link is made");
+    let test = TestWindow::open(&fixture.uri());
+    assert!(!test.context.settings_data().preferences.show_extensions);
+
+    test.window.open_properties_of(
+        &fixture.uri_of("Docs.txt"),
+        crate::properties::PropertiesTab::General,
+    );
+
+    let window = test.wait_for_properties("Docs.txt Properties");
+    assert_eq!(name_field(&window).text(), "Docs.txt");
+}

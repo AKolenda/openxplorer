@@ -35,10 +35,12 @@ const SNAPSHOT_TAB_EXTRA: i32 = 330 - TAB_WIDTH;
 const MIN_SNAPSHOT_TAB_WIDTH: i32 = 285;
 
 /// The width `tab` gets while the other tabs get `shared`: a snapshot
-/// tab's badge needs more room, and never less than 285 pixels.
+/// tab's badge needs more room, and never less than 285 pixels or what
+/// its own parts need, which the other tabs do not follow.
 fn width_of(tab: &gtk::Widget, shared: i32) -> i32 {
     if tab.has_css_class("snapshot-tab") {
-        (shared + SNAPSHOT_TAB_EXTRA).max(MIN_SNAPSHOT_TAB_WIDTH)
+        let own = tab.measure(gtk::Orientation::Horizontal, -1).0;
+        (shared + SNAPSHOT_TAB_EXTRA).max(MIN_SNAPSHOT_TAB_WIDTH).max(own)
     } else {
         shared
     }
@@ -141,9 +143,16 @@ mod imp {
 
     impl TabLayout {
         fn widths(&self, tabs: &[gtk::Widget]) -> TabWidths {
+            // A Previous Versions tab has its own, wider minimum
+            // (`width_of`), so its badge never makes the others wider.
+            let plain: Vec<gtk::Widget> = tabs
+                .iter()
+                .filter(|tab| !tab.has_css_class("snapshot-tab"))
+                .cloned()
+                .collect();
             TabWidths {
                 widest: self.widest.get(),
-                narrowest: widest_minimum_width(tabs).unwrap_or(MIN_TAB_WIDTH),
+                narrowest: widest_minimum_width(&plain).unwrap_or(MIN_TAB_WIDTH),
             }
         }
     }
@@ -186,7 +195,13 @@ mod imp {
         fn allocate(&self, widget: &gtk::Widget, width: i32, height: i32, _baseline: i32) {
             let tabs = laid_out_children(widget);
             let count = i32::try_from(tabs.len()).unwrap_or(i32::MAX);
-            let each = tab_width(width, count, self.widths(&tabs));
+            let widths = self.widths(&tabs);
+            let mut each = tab_width(width, count, widths);
+            // A Previous Versions tab is wider than the share: the others
+            // give up that room, down to their narrowest, so the tabs fit.
+            while each > widths.narrowest_allowed() && strip_width(&tabs, each) > width {
+                each -= 1;
+            }
             if self.each.replace(each) != each && self.held.get().is_some() {
                 // The held tab got another width: it is held at the same
                 // share of it again, under the pointer, once this frame
@@ -394,12 +409,6 @@ impl TabLayout {
         if let Some(settled) = settled {
             settled.run();
         }
-    }
-
-    /// How far a tab and the gap after it reach along the strip, as the
-    /// last allocation shared it: what one click of a scroll arrow scrolls.
-    pub(crate) fn tab_step(&self) -> i32 {
-        self.imp().each.get() + TAB_GAP
     }
 
     /// Whether the tabs are laid out live.

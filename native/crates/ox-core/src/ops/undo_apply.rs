@@ -79,6 +79,8 @@ pub fn removed_by_undo(record: &UndoRecord) -> Vec<String> {
         | UndoRecord::Copy { copies: uris }
         | UndoRecord::Duplicate { copies: uris }
         | UndoRecord::Restore { restored: uris } => uris.clone(),
+        // A copy or restore that replaced files removes what its steps do.
+        UndoRecord::Replace { steps, .. } => steps.iter().flat_map(removed_by_undo).collect(),
         _ => Vec::new(),
     }
 }
@@ -99,34 +101,14 @@ pub async fn reverse_deleting(
     context: &OperationContext,
     progress: impl FnMut(Progress) + Send + 'static,
 ) -> Result<Reversal, OpsError> {
-    if !delete_permanently.is_empty() && !removed_by_undo(record).is_empty() {
+    let deleted: HashSet<String> = delete_permanently.iter().cloned().collect();
+    let is_replace = matches!(record, UndoRecord::Replace { .. });
+    if !is_replace && !deleted.is_empty() && !removed_by_undo(record).is_empty() {
         let reversed_since = unix_seconds_now();
         let record = record.clone();
-        let deleted: HashSet<String> = delete_permanently.iter().cloned().collect();
         let context = context.clone();
         return on_worker(move || {
-            let mut engine = gio_transfer_engine(&context, progress);
-            let removed = removed_by_undo(&record);
-            let (gone, trashed): (Vec<String>, Vec<String>) =
-                removed.into_iter().partition(|uri| deleted.contains(uri));
-            let gone_set: HashSet<&str> = gone.iter().map(String::as_str).collect();
-            let mut result = move_to_trash(&mut engine, &trashed, &context);
-            if !result.cancelled && !gone.is_empty() {
-                let deleted_now = engine
-                    .run(Operation::Delete, &gone, &context.cancel)
-                    .unwrap_or_else(|error| failed_request(&error.into(), &context));
-                merge_results(&mut result, deleted_now);
-            }
-            // Only what went to the Recycle Bin can come back.
-            let in_recycle_bin = TransferResult {
-                done: result
-                    .done
-                    .iter()
-                    .filter(|uri| !gone_set.contains(uri.as_str()))
-                    .cloned()
-                    .collect(),
-                ..TransferResult::default()
-            };
+            let (result, in_recycle_bin) = remove_deleting(&record, &deleted, &context, progress);
             let inverse = record.inverse(&in_recycle_bin, reversed_since);
             Ok(Reversal { result, inverse })
         })
@@ -135,11 +117,11 @@ pub async fn reverse_deleting(
     // Taken before anything moves, so a Redo restores exactly the items
     // this reversal moves to the Trash.
     let reversed_since = unix_seconds_now();
-    if let UndoRecord::Replace { .. } = record {
+    if is_replace {
         let record = record.clone();
         let context = context.clone();
         return on_worker(move || {
-            let (steps, restored) = undo_replace(&record, &context, Box::new(progress))?;
+            let (steps, restored) = undo_replace(&record, &deleted, &context, Box::new(progress))?;
             let UndoRecord::Replace { operation, .. } = record else {
                 unreachable!("only a Replace record is reversed here");
             };
@@ -158,10 +140,48 @@ pub async fn reverse_deleting(
     Ok(Reversal { result, inverse })
 }
 
+/// Moves the items an Undo of `record` removes ([`removed_by_undo`]) to
+/// the Trash, but deletes those in `deleted` permanently, as the user
+/// agreed where they have no Recycle Bin. Returns the result, and the
+/// part of it that went to the Recycle Bin, which alone can come back.
+fn remove_deleting(
+    record: &UndoRecord,
+    deleted: &HashSet<String>,
+    context: &OperationContext,
+    progress: impl FnMut(Progress) + Send + 'static,
+) -> (TransferResult, TransferResult) {
+    let mut engine = gio_transfer_engine(context, progress);
+    let removed = removed_by_undo(record);
+    let (gone, trashed): (Vec<String>, Vec<String>) =
+        removed.into_iter().partition(|uri| deleted.contains(uri));
+    let gone_set: HashSet<&str> = gone.iter().map(String::as_str).collect();
+    let mut result = move_to_trash(&mut engine, &trashed, context);
+    if !result.cancelled && !gone.is_empty() {
+        let deleted_now = engine
+            .run(Operation::Delete, &gone, &context.cancel)
+            .unwrap_or_else(|error| failed_request(&error.into(), context));
+        merge_results(&mut result, deleted_now);
+    }
+    let in_recycle_bin = TransferResult {
+        done: result
+            .done
+            .iter()
+            .filter(|uri| !gone_set.contains(uri.as_str()))
+            .cloned()
+            .collect(),
+        ..TransferResult::default()
+    };
+    (result, in_recycle_bin)
+}
+
 /// Undoes the steps of the Replace `record`, then restores its replaced
-/// files: each step with its result, and the restore's result.
+/// files: each step with its result, and the restore's result. A step's
+/// items in `deleted`, which have no Recycle Bin, are deleted permanently,
+/// as the user agreed; the result kept for a step then lists only what
+/// went to the Recycle Bin as done, so a Redo never looks for the others.
 fn undo_replace(
     record: &UndoRecord,
+    deleted: &HashSet<String>,
     context: &OperationContext,
     progress: Box<dyn FnMut(Progress) + Send>,
 ) -> Result<(Vec<(UndoRecord, TransferResult)>, TransferResult), OpsError> {
@@ -185,11 +205,21 @@ fn undo_replace(
     let mut done = Vec::new();
     for step in steps {
         let sink = Arc::clone(&progress);
-        let result = undo_blocking(step, context, move |report| {
+        let report = move |report| {
             if let Ok(mut progress) = sink.lock() {
                 progress(report);
             }
-        })?;
+        };
+        let deletes = removed_by_undo(step).iter().any(|uri| deleted.contains(uri));
+        let result = if deletes {
+            let (result, in_recycle_bin) = remove_deleting(step, deleted, context, report);
+            TransferResult {
+                done: in_recycle_bin.done,
+                ..result
+            }
+        } else {
+            undo_blocking(step, context, report)?
+        };
         let cancelled = result.cancelled;
         done.push((step.clone(), result));
         if cancelled {
@@ -250,7 +280,7 @@ fn undo_blocking(
         UndoRecord::RemadeFolders { folders } => remove_empty_folders(folders, context),
         UndoRecord::Replace { .. } => {
             drop(engine);
-            let (steps, restored) = undo_replace(record, context, Box::new(|_| {}))?;
+            let (steps, restored) = undo_replace(record, &HashSet::new(), context, Box::new(|_| {}))?;
             let mut total = TransferResult::default();
             for (_, part) in steps {
                 merge_results(&mut total, part);

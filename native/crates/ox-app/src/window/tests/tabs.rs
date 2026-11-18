@@ -677,3 +677,89 @@ fn a_tab_at_its_narrowest_gives_its_title_all_the_room_after_its_icon() {
         "the tab in front is no wider than the others"
     );
 }
+
+/// Where each tab starts and ends in the strip's scrolled row.
+fn tab_edges(test: &TestWindow) -> Vec<(f64, f64)> {
+    let row = test.window.tab_strip().tab_list();
+    crate::window::widget_tree::children(&row)
+        .filter(|tab| tab.has_css_class("tab"))
+        .filter_map(|tab| tab.compute_bounds(&row))
+        .map(|bounds| (f64::from(bounds.x()), f64::from(bounds.x() + bounds.width())))
+        .collect()
+}
+
+/// Each click of a scroll arrow brings exactly the next tab into view,
+/// its far edge at the strip's edge, also past a Previous Versions tab,
+/// which is wider than the others: forward, a tab's end lands on the
+/// strip's right edge; back, a tab's start lands on its left edge.
+///
+/// parity: TAB-019
+#[gtk::test]
+fn an_arrow_scrolls_one_whole_tab_also_past_a_wide_snapshot_tab() {
+    let fixture = super::item_dialogs::fixture_with_snapshot();
+    let snapshot = fixture
+        .path("Documents")
+        .join(".snapshot")
+        .join(super::item_dialogs::SNAPSHOT_NAME);
+    let test = TestWindow::open(&fixture.uri());
+    super::narrow_windows::resize(&test, 1366);
+    have_tabs(&test, &fixture, 10);
+    test.window
+        .add_tab(&ox_core::location::file_uri(&snapshot))
+        .expect("the snapshot's folder");
+    test.wait_for_listing("the snapshot's tab");
+    have_tabs(&test, &fixture, 30);
+    wait_until("the snapshot's tab", || {
+        descendants::<gtk::Widget>(test.window.tab_strip())
+            .iter()
+            .any(|widget| widget.has_css_class("snapshot-tab"))
+    });
+    crate::test_support::harness::wait_for_frames(&test.window, 4);
+    let (back, forward) = scroll_arrows(&test);
+    wait_until("the arrows", || back.is_visible());
+    let adjustment = strip_scroll(&test);
+    // The strip's own animated scroll to the tab in front ends first.
+    let settle = || {
+        let last = std::cell::Cell::new(f64::NAN);
+        wait_until("the strip to stop scrolling", || {
+            crate::test_support::harness::wait_for_frames(&test.window, 2);
+            let now = adjustment.value();
+            (now - last.replace(now)).abs() < 0.01
+        });
+    };
+    settle();
+    adjustment.set_value(0.0);
+    settle();
+
+    let lands_on = |edge: f64, ends: bool| {
+        tab_edges(&test)
+            .iter()
+            .any(|(start, end)| ((if ends { *end } else { *start }) - edge).abs() <= 1.0)
+    };
+    let end = adjustment.upper() - adjustment.page_size();
+    let mut clicks = 0;
+    while adjustment.value() < end - 0.5 {
+        forward.emit_clicked();
+        settle();
+        let right = adjustment.value() + adjustment.page_size();
+        assert!(
+            lands_on(right, true),
+            "click {clicks}: a tab ends at the right edge {right}: {:?}",
+            tab_edges(&test)
+        );
+        clicks += 1;
+        assert!(clicks < 40, "the strip reaches its end");
+    }
+    while adjustment.value() > 0.5 {
+        back.emit_clicked();
+        settle();
+        let left = adjustment.value();
+        assert!(
+            lands_on(left, false),
+            "a tab starts at the left edge {left}: {:?}",
+            tab_edges(&test)
+        );
+        clicks += 1;
+        assert!(clicks < 80, "the strip reaches its start");
+    }
+}

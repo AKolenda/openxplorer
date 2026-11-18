@@ -246,6 +246,19 @@ impl BrowserWindow {
                         glib::Priority::DEFAULT,
                     )
                     .await;
+                // A link to a folder is named whole, as a folder is and as
+                // the General tab names it (`links_to_folder`).
+                let links_to_folder = match &queried {
+                    Ok(info) if info.file_type() == gio::FileType::SymbolicLink => file
+                        .query_info_future(
+                            "standard::type",
+                            gio::FileQueryInfoFlags::NONE,
+                            glib::Priority::DEFAULT,
+                        )
+                        .await
+                        .is_ok_and(|target| target.file_type() == gio::FileType::Directory),
+                    _ => false,
+                };
                 let (name, kind) = match queried {
                     // The root is Local Disk, as the sidebar names it.
                     Ok(info) if info.display_name() == "/" => {
@@ -255,7 +268,8 @@ impl BrowserWindow {
                         let kind = item_kind(&info);
                         let name = info.display_name();
                         let extensions = window.file_name_extensions();
-                        let shown = shown_name(&name, kind == ItemKind::Folder, extensions);
+                        let whole = kind == ItemKind::Folder || links_to_folder;
+                        let shown = shown_name(&name, whole, extensions);
                         (shown.to_owned(), kind)
                     }
                     // The General tab says why the item cannot be read.
