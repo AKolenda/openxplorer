@@ -149,6 +149,11 @@ impl MenuPopover {
         let menu = frame.measure(gtk::Orientation::Vertical, -1).1;
         let chrome = menu - rows.measure(gtk::Orientation::Vertical, -1).1;
         rows.set_max_content_height(rows_limit(monitor_height, chrome));
+        // A submenu opening over its menu points at its row's end, below
+        // which it stays: beside the menu there is no room for it.
+        if self.imp().over_menu.get() {
+            return;
+        }
         if let Some(anchor_height) = self.point_anchor_height() {
             let full_menu = chrome + self.list().measure(gtk::Orientation::Vertical, -1).1;
             self.set_position(if fits_below_or_above(full_menu, anchor_height, monitor_height) {

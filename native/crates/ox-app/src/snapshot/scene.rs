@@ -25,6 +25,10 @@
 //!   while it is open;
 //! - `submenu=<label>`: opens the submenu of the open context menu's
 //!   item `<label>`, such as `Send to`, as Right on its row does;
+//! - `hover=<label>`: rests the pointer on the row `<label>` of the open
+//!   menu, the innermost one with such a row, so its submenu opens after
+//!   the menu show delay with the keyboard left on the row, as when the
+//!   pointer rests there;
 //! - `tab=<name>`: shows the tab named `<name>` (`general`, `security`,
 //!   `details`, `versions`, ...) of the Properties window opened last;
 //! - `row=<property>`: selects the Details row of that property (such
@@ -102,6 +106,8 @@ pub(crate) enum SceneStep {
     CommandMenu(String),
     /// Open the submenu of the open context menu's item with this label.
     Submenu(String),
+    /// Rest the pointer on the open menu's row with this label.
+    Hover(String),
     /// Show this tab of the Properties window opened last.
     Tab(String),
     /// Select and focus this Details row of the Properties window opened
@@ -159,6 +165,7 @@ impl SceneStep {
         match verb.trim() {
             "select" => Some(Self::Select(argument.to_owned())),
             "submenu" => Some(Self::Submenu(argument.to_owned())),
+            "hover" => Some(Self::Hover(argument.to_owned())),
             "tab-menu" => argument
                 .parse()
                 .ok()
@@ -238,6 +245,10 @@ impl SceneStep {
                 || window.open_search_options_submenu(label))
             .then_some(crate::window::MENU_OPENING_MOTION)
             .ok_or_else(|| format!("the open menu has no submenu “{label}”")),
+            Self::Hover(label) => window
+                .rest_pointer_on_menu_row(label)
+                .then_some(crate::window::SUBMENU_DELAY + crate::window::MENU_OPENING_MOTION)
+                .ok_or_else(|| format!("no open menu has a row “{label}”")),
             Self::Tab(name) => {
                 let properties = window
                     .properties_windows()
@@ -475,6 +486,18 @@ mod tests {
             ])
         );
         assert_eq!(SceneStep::parse_scene("command-menu="), None);
+    }
+
+    #[test]
+    fn a_scene_rests_the_pointer_on_a_menu_row() {
+        assert_eq!(
+            SceneStep::parse_scene("command-menu=View; hover=Show"),
+            Some(vec![
+                SceneStep::CommandMenu("View".to_owned()),
+                SceneStep::Hover("Show".to_owned()),
+            ])
+        );
+        assert_eq!(SceneStep::parse_scene("hover="), None);
     }
 
     #[test]

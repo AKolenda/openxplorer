@@ -21,7 +21,7 @@ use crate::window::home_page;
 const HOME_PAGE: &str = "ox:home";
 
 /// Sets "Open Quick access on Home" for `test`'s settings.
-fn open_quick_access_on_home(test: &TestWindow, on: bool) {
+pub(super) fn open_quick_access_on_home(test: &TestWindow, on: bool) {
     let update = PreferencesUpdate {
         home_quick_access: Some(on),
         ..PreferencesUpdate::default()

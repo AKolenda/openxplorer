@@ -222,6 +222,7 @@ pub(crate) use compact_density::DENSITY_CLASS as COMPACT_DENSITY_CLASS;
 pub(crate) use disk_tools::is_installed as is_disk_tool_installed;
 pub(crate) use folder_pane::FolderView;
 pub(crate) use menu_popover::OPENING_MOTION as MENU_OPENING_MOTION;
+pub(crate) use menu_popover::SUBMENU_DELAY;
 pub(crate) use progress_window::ProgressWindow;
 pub(crate) use search_box::{show_bundled_clear_icon, show_bundled_magnifier};
 pub(crate) use title_bar::list_open_windows_on_click;
