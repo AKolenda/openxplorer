@@ -7,9 +7,11 @@
 //! it a chunk at a time, as it reads a ZIP or TAR member. The thread stops
 //! as soon as the reader is dropped or the user cancels.
 //!
-//! The crate is given only headers checked by `header`: for an archive
-//! whose header is packed, it reads the header unpacked and checked here,
-//! placed after the archive's own bytes, instead of unpacking it again.
+//! The archive opened again must be the one whose headers were checked
+//! (the same length and start header), and the crate is given only the
+//! header checked by `header`, placed after the archive's own bytes, never
+//! the archive's own: a packed header is not unpacked again, and a header
+//! that leaves out the optional substreams record gets an empty one.
 
 use std::io::{self, Read, Seek, SeekFrom};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -201,11 +203,17 @@ impl Decoding {
         parsed: &Parsed,
         block: usize,
     ) -> Result<(), ArchiveError> {
-        let stream = opener.open(uri, &self.cancel)?;
-        let mut source: Box<dyn ArchiveStream> = match &parsed.plain_header {
-            Some(plain) => Box::new(WithPlainHeader::new(stream, parsed.length, plain.clone())),
-            None => stream,
-        };
+        let mut stream = opener.open(uri, &self.cancel)?;
+        // The archive is opened again here: it must still be the one whose
+        // headers were checked, or its data would be read under them.
+        if !is_same_archive(stream.as_mut(), parsed)? {
+            return Err(ArchiveError::SevenZipChanged);
+        }
+        let mut source: Box<dyn ArchiveStream> = Box::new(WithPlainHeader::new(
+            stream,
+            parsed.length,
+            Arc::clone(&parsed.checked_header),
+        ));
         let password = Password::empty();
         let archive = Archive::read(&mut source, &password).map_err(|error| crate_error(&error))?;
         if archive.files.len() != parsed.headers.files.len()
@@ -266,6 +274,20 @@ impl Decoding {
         // The reader is gone: stop quietly.
         self.sender.send(message).map_err(|_| ArchiveError::Cancelled)
     }
+}
+
+/// Whether `stream` is the archive `parsed` was read from: the same
+/// length and the same first 32 bytes, which hold the checksum of its last
+/// header. Any change to the names, sizes or checksums of its files
+/// changes that header; damaged data then fails its own checksum.
+fn is_same_archive(stream: &mut dyn ArchiveStream, parsed: &Parsed) -> Result<bool, ArchiveError> {
+    let length = stream.seek(SeekFrom::End(0))?;
+    stream.seek(SeekFrom::Start(0))?;
+    let mut start = [0u8; 32];
+    if length != parsed.length || stream.read_exact(&mut start).is_err() {
+        return Ok(false);
+    }
+    Ok(start == parsed.start)
 }
 
 /// Fills `chunk` as far as `reader` goes; fewer bytes only at its end.
@@ -348,22 +370,21 @@ pub(super) fn unpack_header(stream: &mut dyn ArchiveStream, block: &Block) -> Re
     Ok(plain)
 }
 
-/// An archive whose packed header is replaced by the same header
-/// unpacked: a new start header pointing past the archive's own bytes,
-/// where the unpacked header follows. The packed data stays where the
-/// headers say it is.
+/// An archive whose header is replaced by the header checked here: a new
+/// start header pointing past the archive's own bytes, where the checked
+/// header follows. The packed data stays where the headers say it is.
 struct WithPlainHeader {
     inner: Box<dyn ArchiveStream>,
     start: [u8; 32],
     length: u64,
-    plain: Vec<u8>,
+    plain: Arc<[u8]>,
     position: u64,
     /// Where `inner` is, when known.
     inner_position: Option<u64>,
 }
 
 impl WithPlainHeader {
-    fn new(inner: Box<dyn ArchiveStream>, length: u64, plain: Vec<u8>) -> Self {
+    fn new(inner: Box<dyn ArchiveStream>, length: u64, plain: Arc<[u8]>) -> Self {
         let mut fields = Vec::with_capacity(20);
         fields.extend_from_slice(&(length - SIGNATURE_HEADER_BYTES).to_le_bytes());
         fields.extend_from_slice(&(plain.len() as u64).to_le_bytes());

@@ -51,6 +51,9 @@ const SYMBOLIC_LINK: u32 = 0o120_777;
 /// Hundreds of nanoseconds from 1601-01-01 to 1970-01-01.
 const NT_UNIX_EPOCH: u64 = 116_444_736_000_000_000;
 const NT_TICKS_PER_SECOND: u64 = 10_000_000;
+/// The property ids of an empty substreams record.
+const SUB_STREAMS_INFO: u8 = 0x08;
+const END: u8 = 0x00;
 
 /// The checked headers of one archive, shared by its listings and the
 /// threads decoding it.
@@ -59,10 +62,13 @@ pub(super) struct Parsed {
     headers: Headers,
     /// The archive's length in bytes.
     length: u64,
-    /// For an archive whose header is packed: the header unpacked and
-    /// checked here, which the decoder reads instead of unpacking it
-    /// again.
-    plain_header: Option<Vec<u8>>,
+    /// Its first 32 bytes, which say where its last header is and hold
+    /// that header's checksum: the decoder checks the archive it opens
+    /// again against them.
+    start: [u8; 32],
+    /// The header checked here, unpacked when the archive packs it: the
+    /// only header the decoder hands the `sevenz-rust2` reader.
+    checked_header: Arc<[u8]>,
 }
 
 /// An open 7z archive.
@@ -207,23 +213,31 @@ fn read_headers(
     if crc32fast::hash(&bytes) != next.crc {
         return Err(ArchiveError::DamagedSevenZip);
     }
-    if bytes.first() != Some(&K_ENCODED_HEADER) {
-        let headers = header::plain_header(&bytes, length)?;
-        return Ok(Parsed {
-            headers,
-            length,
-            plain_header: None,
-        });
-    }
-    let encoded = header::encoded_header(&bytes[1..], length)?;
-    cancel.check()?;
-    let plain = decode::unpack_header(stream, &encoded.block)?;
+    let plain = if bytes.first() == Some(&K_ENCODED_HEADER) {
+        let encoded = header::encoded_header(&bytes[1..], length)?;
+        cancel.check()?;
+        decode::unpack_header(stream, &encoded.block)?
+    } else {
+        bytes
+    };
     let headers = header::plain_header(&plain, length)?;
+    let checked_header = with_sub_streams_record(plain, headers.missing_sub_streams_at);
     Ok(Parsed {
         headers,
         length,
-        plain_header: Some(plain),
+        start: *start,
+        checked_header: checked_header.into(),
     })
+}
+
+/// `header` with an empty substreams record (`kSubStreamsInfo`, `kEnd`)
+/// put `at` the place the archive left it out: it means one file per
+/// block either way, and the `sevenz-rust2` reader needs the record.
+fn with_sub_streams_record(mut header: Vec<u8>, at: Option<usize>) -> Vec<u8> {
+    if let Some(at) = at {
+        header.splice(at..at, [SUB_STREAMS_INFO, END]);
+    }
+    header
 }
 
 /// `size` bytes at `offset` of `stream`.

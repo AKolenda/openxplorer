@@ -143,6 +143,10 @@ pub(super) struct FileRecord {
 pub(super) struct Headers {
     pub(super) files: Vec<FileRecord>,
     pub(super) blocks: Vec<Block>,
+    /// Where an empty substreams record (`kSubStreamsInfo`, `kEnd`) goes
+    /// in the header when the main streams info leaves it out, so that
+    /// the `sevenz-rust2` reader, which needs it, reads the same defaults.
+    pub(super) missing_sub_streams_at: Option<usize>,
 }
 
 /// Where the last header is and its checksum, as the start header says.
@@ -267,9 +271,14 @@ pub(super) fn plain_header(bytes: &[u8], length: u64) -> Result<Headers, Archive
         return Err(ArchiveError::DamagedSevenZip);
     }
     let sub_sizes = streams.sub_sizes.clone();
+    let missing_sub_streams_at = streams.missing_sub_streams_at;
     let blocks = place_blocks(streams, length)?;
     assign_blocks(&mut files, &blocks, sub_sizes.as_deref())?;
-    Ok(Headers { files, blocks })
+    Ok(Headers {
+        files,
+        blocks,
+        missing_sub_streams_at,
+    })
 }
 
 /// The streams info as read, before it is checked against the file.
@@ -281,6 +290,8 @@ struct Streams {
     /// The size of each file's data, in block order; `None` without a
     /// substreams record.
     sub_sizes: Option<Vec<u64>>,
+    /// Where the left-out substreams record would have been.
+    missing_sub_streams_at: Option<usize>,
 }
 
 /// A block as read.
@@ -625,6 +636,15 @@ impl<'a> Reader<'a> {
         if id == K_SUB_STREAMS_INFO {
             self.sub_streams_info(&mut streams)?;
             id = self.byte()?;
+        } else if !streams.blocks.is_empty() {
+            // The record is optional (`7zFormat.txt`): without it each
+            // block holds one file of the block's size, with the block's
+            // checksum.
+            for block in &mut streams.blocks {
+                block.sub_streams = 1;
+            }
+            streams.sub_sizes = Some(streams.blocks.iter().map(RawBlock::unpack_size).collect());
+            streams.missing_sub_streams_at = Some(self.position - 1);
         }
         if id != K_END {
             return Err(ArchiveError::DamagedSevenZip);
