@@ -83,9 +83,6 @@ class Picture:
     # A tab of the Properties window the scene opened last, saved in place
     # of the browser window (customize, security, ...).
     properties: str = ''
-    # GTK's whole-number scale (GDK_SCALE), 2 for a picture as a high
-    # resolution screen draws the app; 1 leaves GTK's default.
-    scale: int = 1
 
     def variables(self) -> dict[str, str]:
         """Return the snapshot hook's variables for this picture."""
@@ -98,7 +95,6 @@ class Picture:
             'OPENXPLORER_SEARCH': self.search,
             'OPENXPLORER_SCENE': ';'.join(self.scene),
             'OPENXPLORER_PROPERTIES': self.properties,
-            'GDK_SCALE': str(self.scale) if self.scale != 1 else '',
         }
         return {name: value for name, value in variables.items() if value}
 
@@ -333,10 +329,7 @@ def isolated_command(program: Path, home: Path, runtime: Path,
             command += ['--tmpfs', applications]
     for name, value in {**session, **variables}.items():
         command += ['--setenv', name, value]
-    scale = int(variables.get('GDK_SCALE', '1'))
     return command + ['dbus-run-session', '--', 'xvfb-run', '--auto-servernum',
                       # Taller than the window, so a menu that opens near its
-                      # bottom fits on the screen, as on a real desktop; as
-                      # many times larger as the picture's scale.
-                      f'--server-args=-screen 0 {1600 * scale}x{1400 * scale}x24',
-                      capture_program]
+                      # bottom fits on the screen, as on a real desktop.
+                      '--server-args=-screen 0 1600x1400x24', capture_program]
