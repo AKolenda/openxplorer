@@ -48,7 +48,7 @@ See [native setup](native/README.md), [website setup](apps/web/README.md) and th
 
 ## Contribute
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) and submit a pull request from a feature branch. `main` requires PRs, including for administrators. Report vulnerabilities using [SECURITY.md](SECURITY.md).
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and submit a pull request from a feature branch. Pull requests from outside contributors accept the [Contributor License Agreement](CLA.md) with a `CLA: I agree` line. `main` requires PRs, including for administrators. Report vulnerabilities using [SECURITY.md](SECURITY.md).
 
 ## License
 
