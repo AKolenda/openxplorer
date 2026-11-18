@@ -403,6 +403,40 @@ fn moving_away_from_an_open_submenu_closes_it_after_the_delay() {
 /// parity: CMD-010
 #[gtk::test]
 fn a_submenu_with_no_room_beside_its_menu_opens_over_it() {
+    let (width, _, position) = no_room_submenu_opened_on_hover(2);
+    assert!(width >= 900, "at its full width: {width}");
+    assert_eq!(position, Some(gtk::PositionType::Bottom), "below its row's end");
+}
+
+/// A submenu with no room beside its menu on either side and taller than
+/// half the monitor still opens over the menu, its rows scrolling within
+/// the monitor: fitting it to the monitor's height does not move it
+/// back beside the menu, where GTK would close it again.
+///
+/// parity: CMD-010
+#[gtk::test]
+fn a_tall_submenu_with_no_room_beside_its_menu_opens_over_it() {
+    let (width, height, position) = no_room_submenu_opened_on_hover(40);
+    assert!(width >= 900, "at its full width: {width}");
+    assert_eq!(position, Some(gtk::PositionType::Bottom), "below its row's end");
+    let monitor = gdk::Display::default()
+        .and_then(|display| display.monitors().item(0))
+        .and_downcast::<gdk::Monitor>()
+        .expect("the private display's monitor")
+        .geometry()
+        .height();
+    assert!(
+        height > 0 && height <= monitor,
+        "{height} pixels tall, within the {monitor} pixel monitor"
+    );
+}
+
+/// Opens a menu in the middle of the monitor whose submenu, `rows` rows
+/// long, is too wide for either side of it, and rests the real pointer
+/// on the submenu's row; the width of the submenu shown, the height of
+/// its frame (without the shadow around it) and where it opens from its
+/// anchor, or zeros and `None` when none shows.
+fn no_room_submenu_opened_on_hover(rows: usize) -> (i32, i32, Option<gtk::PositionType>) {
     use crate::icons::Icon;
     use crate::window::menu_popover::MenuItem;
     use crate::window::window_action::WindowAction;
@@ -414,10 +448,16 @@ fn a_submenu_with_no_room_beside_its_menu_opens_over_it() {
     wide.load_from_string("popover.ox-menu.submenu > contents { min-width: 900px; }");
     let display = gdk::Display::default().expect("the private display");
     gtk::style_context_add_provider_for_display(&display, &wide, gtk::STYLE_PROVIDER_PRIORITY_USER);
-    let submenu = vec![
-        MenuItem::new("Example item", Icon::Copy, WindowAction::CopyAddress).into(),
-        MenuItem::new("Another example item", Icon::Copy, WindowAction::CopyAddress).into(),
-    ];
+    let submenu = (0..rows)
+        .map(|row| {
+            MenuItem::new(
+                &format!("Example item {row}"),
+                Icon::Copy,
+                WindowAction::CopyAddress,
+            )
+            .into()
+        })
+        .collect();
     let menu = MenuPopover::new(vec![
         MenuItem::new("First", Icon::Copy, WindowAction::CopyAddress).into(),
         MenuItem::submenu(
@@ -438,13 +478,18 @@ fn a_submenu_with_no_room_beside_its_menu_opens_over_it() {
     let on_row = point_on_row(&session, &menu, "Example submenu", 0.5);
     session.pointer.glide(first, on_row, GLIDE_STEPS);
     wait_for(PAST_THE_DELAY);
-    let opened = shows_submenu_of(&menu, "Example submenu");
-    let width = menu.open_submenu_menu().map_or(0, |submenu| submenu.width());
+    let size = if shows_submenu_of(&menu, "Example submenu") {
+        menu.open_submenu_menu().map_or((0, 0, None), |submenu| {
+            let frame = submenu.first_child().map_or(0, |frame| frame.height());
+            (submenu.width(), frame, Some(submenu.position()))
+        })
+    } else {
+        (0, 0, None)
+    };
     menu.popdown();
     menu.unparent();
     gtk::style_context_remove_provider_for_display(&display, &wide);
-    assert!(opened, "the submenu opens over its menu");
-    assert!(width >= 900, "at its full width: {width}");
+    size
 }
 
 /// The pointer brought onto Show in one move as soon as View opens, and
