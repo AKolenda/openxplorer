@@ -2969,6 +2969,15 @@ msgid "Dark"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "English"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "English: no translation for {language} is installed"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Hide expand arrows in the sidebar"
 msgstr ""
 
@@ -2989,7 +2998,7 @@ msgid "Near the pointer (default)"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
-msgid "OpenXplorer shows its menus, buttons and messages in your desktop's language. Change it in your desktop's language or region settings, then start OpenXplorer again."
+msgid "OpenXplorer shows its menus, buttons and messages in your desktop's language when a translation for it is installed, and in English otherwise. Change the language in your desktop's language or region settings, then start OpenXplorer again."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/window/type_applications.rs
@@ -3792,7 +3801,7 @@ msgid "Dragging tabs and files"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
-msgid "Drop files on a writable folder to copy them, or drop folders in Quick access to pin them. Hold Shift to move, Ctrl+Shift to create links or Alt to choose; drop files on a program to open them with it."
+msgid "Drop files on a folder to move them there on the same drive or copy them to another, or drop folders in Quick access to pin them. Hold Shift to move, Ctrl to copy or Alt to create shortcuts, or drag with the right mouse button to choose; drop files on a program to open them with it."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
@@ -3892,7 +3901,7 @@ msgid "drag drop attach"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
-msgid "drag drop copy move link pin program run"
+msgid "drag drop copy move link shortcut alt ctrl shift right pin program run"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/general.rs
