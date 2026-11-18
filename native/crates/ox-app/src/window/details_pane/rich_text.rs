@@ -55,14 +55,11 @@ struct Group {
 
 /// The characters 0x80 to 0xFF of the single-byte ANSI code page
 /// `code_page` (`\ansicpgN`), through the system's converters; `None`
-/// for Windows-1252. A byte the converters cannot read as one character
-/// (a code page they lack, or a byte it does not map) is read as
-/// Windows-1252.
+/// when they lack it. A byte the code page does not map as one character
+/// is read as Windows-1252.
 fn code_page_characters(code_page: i64) -> Option<Vec<char>> {
-    if code_page == 1252 {
-        return None;
-    }
     let codeset = format!("CP{code_page}");
+    gtk::glib::IConv::new("UTF-8", codeset.as_str())?;
     let characters = (0x80..=0xff_u8)
         .map(|byte| {
             gtk::glib::convert(&[byte], "UTF-8", codeset.as_str())
@@ -75,6 +72,19 @@ fn code_page_characters(code_page: i64) -> Option<Vec<char>> {
         })
         .collect();
     Some(characters)
+}
+
+/// The ANSI code page an RTF header names (`\ansicpgN`).
+#[derive(Debug)]
+enum CodePage {
+    /// None named yet: raw bytes above 127 may be UTF-8.
+    Unnamed,
+    /// One the system's converters lack, read as [`CodePage::Unnamed`].
+    Unreadable,
+    /// Windows-1252.
+    Windows1252,
+    /// Another single-byte code page: its characters 0x80 to 0xFF.
+    Other(Vec<char>),
 }
 
 /// The character of the Windows-1252 byte `byte`.
@@ -114,8 +124,7 @@ pub(super) fn rtf_text(bytes: &[u8]) -> String {
         text: String::new(),
         stack: Vec::new(),
         untracked: 0,
-        code_page: None,
-        code_page_read: false,
+        code_page: CodePage::Unnamed,
         group: Group {
             hidden: false,
             fallback: 1,
@@ -139,12 +148,8 @@ struct Reader<'a> {
     /// Groups opened past [`MAX_DEPTH`] and not closed yet: their `}`
     /// close no group of the stack.
     untracked: usize,
-    /// The characters 0x80 to 0xFF of the document's ANSI code page;
-    /// `None` for Windows-1252.
-    code_page: Option<Vec<char>>,
-    /// The header's `\ansicpgN` was read; later ones are ignored, so a
-    /// file of them cannot keep the converters busy.
-    code_page_read: bool,
+    /// The ANSI code page the header named.
+    code_page: CodePage,
     group: Group,
     /// Fallback characters still to skip after a `\uN`.
     skip: usize,
@@ -162,9 +167,15 @@ impl Reader<'_> {
     /// The character of the byte `byte` in the document's ANSI code page.
     fn ansi(&self, byte: u8) -> char {
         match &self.code_page {
-            Some(characters) if byte >= 0x80 => characters[usize::from(byte - 0x80)],
+            CodePage::Other(characters) if byte >= 0x80 => characters[usize::from(byte - 0x80)],
             _ => windows_1252(byte),
         }
+    }
+
+    /// Whether the header named a code page this reader can read: raw
+    /// bytes above 127 are its characters, never guessed as UTF-8.
+    fn code_page_named(&self) -> bool {
+        matches!(self.code_page, CodePage::Windows1252 | CodePage::Other(_))
     }
 
     /// Adds `character` to the text unless it is a fallback to skip or
@@ -323,9 +334,16 @@ impl Reader<'_> {
             "par" | "line" | "sect" | "page" | "row" | "tab" | "cell" => {
                 self.push_always(word_character(word).unwrap_or('\n'));
             }
-            "ansicpg" if !self.code_page_read => {
-                self.code_page_read = true;
-                self.code_page = parameter.and_then(code_page_characters);
+            // Only the header's: a file of them cannot keep the converters
+            // busy.
+            "ansicpg" if matches!(self.code_page, CodePage::Unnamed) => {
+                self.code_page = match parameter {
+                    Some(1252) => CodePage::Windows1252,
+                    Some(code_page) => {
+                        code_page_characters(code_page).map_or(CodePage::Unreadable, CodePage::Other)
+                    }
+                    None => CodePage::Unreadable,
+                };
             }
             "uc" => self.group.fallback = parameter.and_then(|n| usize::try_from(n).ok()).unwrap_or(1),
             "u" => {
@@ -345,12 +363,15 @@ impl Reader<'_> {
         }
     }
 
-    /// Reads a character of text: ASCII, or UTF-8 a hand-written file may
-    /// hold (bytes above 127 are not RTF), else the ANSI code page's.
+    /// Reads a character of text: ASCII, a character of the code page the
+    /// header named, or, without one, UTF-8 a hand-written file may hold
+    /// (bytes above 127 are not RTF), else Windows-1252.
     fn character(&mut self, byte: u8) {
         let start = self.index - 1;
         let character = if byte.is_ascii() {
             char::from(byte)
+        } else if self.code_page_named() {
+            self.ansi(byte)
         } else {
             let end = (start + 4).min(self.bytes.len());
             let decoded = (start + 2..=end)
@@ -428,6 +449,8 @@ mod tests {
             "\u{41f}\u{440}\u{438}\u{432}\u{435}\u{442} \u{434}\u{430}"
         );
         assert_eq!(rtf_text(b"{\\rtf1\\ansi\\ansicpg1252 Caf\\'e9}"), "Caf\u{e9}");
+        // Raw bytes that would also be UTF-8 are still the code page's.
+        assert_eq!(rtf_text(b"{\\rtf1\\ansi\\ansicpg1251 \xc2\xa9}"), "\u{412}\u{a9}");
     }
 
     /// Groups nested past the deepest followed still close their own `}`,
