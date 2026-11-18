@@ -1,3 +1,41 @@
+# 2.0.20 — 2026-11-18
+
+7z archives open like folders, as ZIP and TAR archives do. Properties leaves out an extension the window hides, overflowing tabs scroll with arrows, and Replace can overwrite the old file as Windows 11 does. A mistyped address, new files, RTF previews, large text and screen readers all work more like Windows 11. Much of this release is the work of @addition-official.
+
+## Updating from 2.0.19
+* In the Debian package, **Check for updates** installs 2.0.20 without asking for a password when **Settings › About › Install updates without asking for a password** is on (the default). As before, that holds for an administrator in an active session at the computer; anyone else, and any remote or inactive session, is asked for an administrator's password.
+* Replace still moves the old file to the Recycle Bin by default. Turning **Settings › Files & folders › When replacing a file, move the old one to the Recycle Bin** off now overwrites it as Windows 11 does, safely: the new file is written under a temporary name and swapped in at the end.
+* Files made with **New** are created as other apps create them (readable by others, as your umask allows), no longer private to you.
+
+## What's Changed
+* **7z archives:** double-clicking a `.7z` opens it like a folder, following the same setting as ZIP files. Its folders can be browsed and sorted, a file inside opens as a read-only copy, and Extract all and Extract here unpack it with progress, Cancel and Replace or Skip. Encrypted 7z archives and the rare Deflate and PPMd methods are refused with a plain message, and an archive that can't be read says so on its own page instead of the network "unavailable" page. Empty folders in a 7z made with Compress to are kept when 7-Zip or Windows extracts it.
+* **Replace:** with the Recycle Bin switch off, Replace overwrites the old file, and Undo says it can't bring the old file back while still undoing the rest of the copy.
+* **Properties:** with **Hide extensions for known file types** on, the General tab's name box and the window title leave the extension out, and a name typed there keeps it, as renaming in place does.
+* **Tabs:** many tabs shrink only as far as their icon, about three letters and the close button, and arrow buttons at the ends of the tab strip scroll through the rest.
+* **Address bar:** a mistyped address is answered as Windows 11 answers it, with a message box saying OpenXplorer can't find it, and the typed text stays in the address bar.
+* **Preview pane:** an RTF file shows its text, with paragraphs, tabs and accented letters, instead of its markup.
+* **This PC:** the status bar counts the drives, the Details pane shows This PC's own icon, and a drive's free space and capacity are the same on This PC and in its Properties.
+* **Large text:** at 200% text, default column widths and the navigation pane's default width grow with the text and shrink back with it, and the list scrolls sideways when the window is too narrow. In split view with the details pane open, a horizontal scroll bar shows while the columns are wider than the pane.
+* **Reopen my tabs:** the open tabs are saved while the window is open and when the session ends, so tabs are kept when the app is closed by a logout or a signal.
+* **Settings:** a Language row names the language the window is in, searching Settings for "language" finds it, and rows with nothing to change show their help under the title.
+* **Keyboard shortcuts and screen readers:** the keyboard shortcuts window writes keys as Windows does (Ctrl+Shift+N, Esc, Spacebar) and lists more of Windows' File Explorer keys. The Details button, the search box, tabs, rows and column titles have the names the window shows.
+* **Other fixes:** sizes in bytes say "1 byte", and a new bitmap too small to see as a thumbnail keeps its type icon.
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.20_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.20-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.20-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.20-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.20-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.19...v2.0.20
+
 # 2.0.19 — 2026-11-17
 
 Gallery looks and works as in Windows 11, the search box understands Windows search syntax, and folders of 100,000 items stay responsive. Network folders show type icons again by default, as Windows 11 does. Properties, Folder Options, the Recycle Bin, ZIP archives, drag and drop and the keyboard all work more like Windows 11's. Much of this release is the work of @addition-official.
