@@ -2907,3 +2907,38 @@ fn a_folder_links_properties_opened_by_address_keep_its_whole_name() {
     let window = test.wait_for_properties("Docs.txt Properties");
     assert_eq!(name_field(&window).text(), "Docs.txt");
 }
+
+/// A link to a file whose name has no known type's extension is a
+/// shortcut, named whole. Renamed in Properties to `note.txt`, it is a
+/// file with an extension, as the view shows it, so with extensions hidden
+/// the name box and the title then leave `.txt` out, and a name typed next
+/// keeps it.
+///
+/// parity: PROP-005, VIEW-069
+#[gtk::test]
+fn a_link_renamed_in_properties_to_a_known_type_hides_its_extension_after() {
+    let fixture = Fixture::standard();
+    std::os::unix::fs::symlink(fixture.path("Notes 2.txt"), fixture.path("note-link"))
+        .expect("the link is made");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("note-link");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("note-link Properties");
+    let name = name_field(&window);
+    assert_eq!(name.text(), "note-link");
+
+    name.set_text("note.txt");
+    press(&window, "Apply");
+    wait_until("the rename", || fixture.path("note.txt").is_symlink());
+    wait_until("the title to leave out .txt", || {
+        window.title_text() == "note Properties"
+    });
+    assert_eq!(name.text(), "note");
+
+    name.set_text("memo");
+    press(&window, "Apply");
+    wait_until("the hidden extension kept", || {
+        fixture.path("memo.txt").is_symlink()
+    });
+    assert_eq!(window.title_text(), "memo Properties");
+}

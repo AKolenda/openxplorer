@@ -138,10 +138,14 @@ impl BrowserWindow {
                 &[("name", &name)],
             )
         } else {
-            ox_core::i18n::format_message(
+            // Through ngettext, so each count takes its language's form.
+            let count = overwritten.len();
+            ox_core::i18n::ngettext(
+                "{count} file was replaced, so Undo can't bring back the old file.",
                 "{count} files were replaced, so Undo can't bring back the old files.",
-                &[("count", &overwritten.len().to_string())],
+                u64::try_from(count).unwrap_or(u64::MAX),
             )
+            .replace("{count}", &count.to_string())
         };
         let title = step.label(JournalDirection::Undo);
         // A Windows message box, as the app's other file questions are:
@@ -223,5 +227,22 @@ impl BrowserWindow {
         self.context()
             .journal_label(direction)
             .unwrap_or_else(|| direction.command_name().to_owned())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// How many old files Undo can't bring back is said through
+    /// `ngettext`, so a translation can give each count its own form: the
+    /// message template has the plural.
+    ///
+    /// parity: OPS-028
+    #[test]
+    fn the_count_of_replaced_files_has_plural_forms() {
+        let template = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../po/openxplorer.pot");
+        let template = std::fs::read_to_string(template).expect("the message template");
+        let plural = "msgid \"{count} file was replaced, so Undo can't bring back the old file.\"\n\
+                      msgid_plural \"{count} files were replaced, so Undo can't bring back the old files.\"";
+        assert!(template.contains(plural), "a plural entry in the template");
     }
 }

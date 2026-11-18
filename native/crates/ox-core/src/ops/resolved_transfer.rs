@@ -538,8 +538,9 @@ impl<'a> Run<'a> {
             recycles && both_files && path.is_some() && existing.can_trash(Some(cancel)).unwrap_or(false);
         let (true, Some(path)) = (keepable, path) else {
             let part = run_on_engine(&mut self.engine, &request(ConflictPolicy::Replace), self.context)?;
-            self.overwritten
-                .extend(part.result.landed.iter().map(|landed| landed.destination.clone()));
+            // Only what the engine really overwrote: a name found free by
+            // then was published as any copy and stays undoable.
+            self.overwritten.extend(part.result.overwritten.iter().cloned());
             return Ok(part);
         };
         let context = self.context;

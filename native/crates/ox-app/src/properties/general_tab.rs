@@ -352,9 +352,12 @@ pub(super) struct GeneralEdits {
     /// known types' extensions are hidden ("Notes 2" for `Notes 2.txt`),
     /// which a typed name keeps, as a rename in place does.
     hidden_extension: RefCell<Option<String>>,
-    /// Whether the name leaves out a known type's extension: as the
-    /// opening window shows names, but always whole for a folder, a
-    /// shortcut or a link to a folder.
+    /// Whether the opening window shows known types' extensions. A
+    /// folder's or a folder link's name always shows whole
+    /// ([`Self::always_whole`]); any other name is shown as the view shows
+    /// it, again after each rename: a link named with no known type's
+    /// extension is a shortcut, named whole, but renamed to `note.txt` it
+    /// is a file with an extension ([`Entry::is_shortcut`]).
     extensions: Extensions,
     is_folder: bool,
     /// Renaming asks about a changed extension, except for a link to a
@@ -423,7 +426,7 @@ impl GeneralEdits {
             hidden_extension: RefCell::new(
                 hidden_extension(&entry.name, whole, extensions).map(str::to_owned),
             ),
-            extensions: if whole { Extensions::Shown } else { extensions },
+            extensions,
             is_folder: entry.is_dir,
             links_to_folder: properties.links_to_folder,
             is_link: entry.is_symlink,
@@ -548,10 +551,15 @@ impl GeneralEdits {
         }
     }
 
+    /// A folder or a link to a folder, whose name always shows whole.
+    fn always_whole(&self) -> bool {
+        self.is_folder || self.links_to_folder
+    }
+
     /// How the name field and the title show `name`: without a known
     /// type's extension while extensions are hidden.
     fn shown<'a>(&self, name: &'a str) -> &'a str {
-        shown_name(name, false, self.extensions)
+        shown_name(name, self.always_whole(), self.extensions)
     }
 
     /// The read-only change to make, if any.
@@ -649,7 +657,7 @@ impl GeneralEdits {
             }
             self.original_name.replace(wanted.clone());
             self.hidden_extension
-                .replace(hidden_extension(&wanted, false, self.extensions).map(str::to_owned));
+                .replace(hidden_extension(&wanted, self.always_whole(), self.extensions).map(str::to_owned));
             self.is_updating.set(true);
             self.name.set_text(self.shown(&wanted));
             self.hidden.set_active(wanted.starts_with('.'));

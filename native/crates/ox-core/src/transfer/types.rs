@@ -242,6 +242,11 @@ pub struct TransferResult {
     /// name or a name with unstorable characters replaced). Undo and the
     /// selection after a paste use it (OPS-029, SEL-016).
     pub landed: Vec<Landed>,
+    /// The destinations of `landed` where Replace overwrote or merged into
+    /// an item that was there when the item was committed; a name found
+    /// free by then, as when another program removed the item after the
+    /// conflict was found, is not here.
+    pub overwritten: Vec<String>,
 }
 
 /// One copied or moved item and where it is now.

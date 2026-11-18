@@ -226,6 +226,7 @@ pub(crate) fn merge_results(total: &mut TransferResult, part: TransferResult) {
     total.presented.extend(part.presented);
     total.cancelled |= part.cancelled;
     total.landed.extend(part.landed);
+    total.overwritten.extend(part.overwritten);
 }
 
 #[cfg(test)]

@@ -784,6 +784,41 @@ fn replace_overwrites_without_the_recycle_bin_when_chosen() {
     assert_eq!(overwritten, &[file_uri(&dst.join("report.png"))]);
 }
 
+/// A conflict whose file another program removed after the check and
+/// before the answered copy ran is published as a plain copy: nothing was
+/// overwritten, so Undo takes the copy back as for any copy instead of
+/// saying an old file was replaced.
+///
+/// parity: OPS-028, OPS-029
+#[test]
+fn a_conflict_gone_before_its_replace_is_undone_as_a_plain_copy() {
+    let folders = Folders::new();
+    let (src, dst) = (folders.source(), folders.destination());
+    write(&src.join("report.png"), b"incoming");
+    write(&dst.join("report.png"), b"existing");
+    let scan = scan(TransferMode::Copy, &src, &["report.png"], &dst);
+    assert_eq!(scan.conflicts.len(), 1, "{scan:?}");
+    fs::remove_file(dst.join("report.png")).unwrap();
+
+    let outcome = block_on(run_resolved_transfer(
+        &scan,
+        &[Resolution::Replace],
+        &overwriting(),
+        |_| {},
+    ))
+    .unwrap();
+
+    assert!(outcome.result.errors.is_empty(), "{:?}", outcome.result);
+    assert_eq!(fs::read(dst.join("report.png")).unwrap(), b"incoming");
+    assert_eq!(
+        outcome.undo,
+        Some(UndoRecord::Copy {
+            copies: vec![file_uri(&dst.join("report.png"))]
+        }),
+        "an ordinary copy to undo"
+    );
+}
+
 /// By default Replace overwrites the old file, as Windows 11 does
 /// (checked in Windows 11, build 26200: nothing new appeared in the
 /// Recycle Bin), through private staging, so no temporary file is left.
