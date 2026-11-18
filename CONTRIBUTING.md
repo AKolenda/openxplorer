@@ -39,7 +39,7 @@ Create a feature branch and open a pull request into `main`. Direct pushes, forc
 
 Pull requests are squash-merged under their title, so the title must follow [Conventional Commits](https://www.conventionalcommits.org/) as `type(scope): description`, for example `fix(dialogs): Keep an Open dialog answerable until it closes`. The type is one of `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore` or `revert`; the scope names the area changed, such as `dialogs`, `transfers`, `web` or `deps`, and `!` after it marks a breaking change. The required **PR title** check enforces this, and runs again when you edit the title.
 
-The description must name the model that generated the pull request on a line of its own, such as `Model: claude-opus-5-5`, or `Model: none` for a pull request written without one. The required **PR model** check enforces this. Dependabot pull requests are exempt.
+The description must name the model that generated the pull request on a line of its own, such as `Model: claude-opus-5-5`, or `Model: none` for a pull request written without one. The required **PR model** check enforces this. Dependabot pull requests are exempt. Outside contributors also add `CLA: I agree`; see [Compatibility and license](#compatibility-and-license).
 
 ## Checks before a pull request
 
@@ -88,7 +88,9 @@ Keep documentation and release claims synchronized with behavior and tests. Gene
 
 The `winspace` configuration paths, `io.winspace.Development` application/desktop identity and credential schemas are stable compatibility contracts. Propose an explicit migration before renaming them. Pinning a folder also adds a line to the desktop's `~/.config/gtk-3.0/bookmarks`; the app records the lines it added in `desktop-bookmarks` in its settings folder and removes only those. Preserve existing notices.
 
-Contributions are submitted under AGPL-3.0-only unless a documented file-level exception applies. Preserve the root [LICENSE](LICENSE), [NOTICE](NOTICE), upstream [MIT notice](licenses/Winspace-MIT.txt), desktop copies and [third-party notices](THIRD_PARTY_NOTICES.md). Include provenance for copied code/assets and ensure you are authorized to contribute them. No CLA is required by this repository.
+Contributions are submitted under AGPL-3.0-only unless a documented file-level exception applies. Preserve the root [LICENSE](LICENSE), [NOTICE](NOTICE), upstream [MIT notice](licenses/Winspace-MIT.txt), desktop copies and [third-party notices](THIRD_PARTY_NOTICES.md). Include provenance for copied code/assets and ensure you are authorized to contribute them.
+
+Pull requests from anyone but the maintainer also need the [Contributor License Agreement](CLA.md): write `CLA: I agree` on a line of its own in the description. You keep your copyright and give the project an irrevocable copyright and patent licence, which also lets it move to a later AGPL version or another open-source licence, never a closed one. The required **PR CLA** check enforces this; Dependabot pull requests are exempt. AGPL-3.0 section 2 already makes the licence of merged code irrevocable; the agreement adds the patent licence and your promise that you could contribute the work.
 
 ## Suggested pull-request summary
 

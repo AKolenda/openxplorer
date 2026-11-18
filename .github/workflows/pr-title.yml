@@ -3,7 +3,9 @@ name: Pull request title
 # Conventional Commits: type(scope): description, for example
 # "fix(dialogs): Keep an Open dialog answerable until it closes". Branch
 # protection on main requires this check. The description must also name the
-# model that generated the pull request in a "Model:" line (PR model check).
+# model that generated the pull request in a "Model:" line (PR model check),
+# and a pull request from anyone but the owner must accept CLA.md with a
+# "CLA: I agree" line (PR CLA check).
 on:
   pull_request:
     # edited: a corrected title is checked again. synchronize: a new push
@@ -50,5 +52,27 @@ jobs:
             echo "OK: Model: $model"
           else
             echo "::error title=Pull request model::The description needs a line \"Model: <name>\" naming the model that generated the pull request, for example \"Model: claude-opus-5-5\". Write \"Model: none\" for a pull request written without one."
+            exit 1
+          fi
+  cla:
+    name: PR CLA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check the description accepts the contributor licence agreement
+        env:
+          # Through the environment, never pasted into the script.
+          BODY: ${{ github.event.pull_request.body }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          if [[ "$AUTHOR" == 'dependabot[bot]' || "$AUTHOR" == "$OWNER" ]]; then
+            echo "OK: $AUTHOR does not need the agreement"
+            exit 0
+          fi
+          if printf '%s\n' "$BODY" | tr -d '\r' | grep -qiE '^[[:space:]]*CLA:[[:space:]]*I agree[[:space:]]*\.?[[:space:]]*$'; then
+            echo "OK: CLA: I agree"
+          else
+            echo "::error title=Contributor License Agreement::The description needs a line \"CLA: I agree\" accepting CLA.md (https://github.com/$GITHUB_REPOSITORY/blob/main/CLA.md). Edit the description to add it; the check runs again."
             exit 1
           fi

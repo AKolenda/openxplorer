@@ -1,6 +1,8 @@
 <!-- Title: type(scope): description, for example "fix(dialogs): Keep an Open dialog answerable until it closes". See CONTRIBUTING.md. -->
 
 Model: <name of the model that generated this pull request, or none>
+CLA: I agree
+<!-- Keep the line above to accept CLA.md; the maintainer and Dependabot may delete it. -->
 
 ## Problem and resulting behavior
 
