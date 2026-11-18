@@ -325,7 +325,20 @@ fn header(properties: &ItemProperties, edits: &GeneralEdits) -> gtk::Box {
         .orientation(gtk::Orientation::Horizontal)
         .css_classes(["properties-header"])
         .build();
-    header.append(&ArtImage::new(Art::for_entry(&properties.entry), HEADER_ART_SIZE));
+    // A picture chosen in File icons for the item's kind (LOOK-029), else
+    // its art.
+    match crate::icons::file_icons::picture_for(&properties.entry) {
+        Some(picture) => {
+            let icon = gtk::gio::FileIcon::new(&gtk::gio::File::for_uri(&picture));
+            let image = gtk::Image::builder()
+                .gicon(&icon)
+                .pixel_size(HEADER_ART_SIZE)
+                .accessible_role(gtk::AccessibleRole::Presentation)
+                .build();
+            header.append(&image);
+        }
+        None => header.append(&ArtImage::new(Art::for_entry(&properties.entry), HEADER_ART_SIZE)),
+    }
     header.append(&edits.name);
     header
 }
