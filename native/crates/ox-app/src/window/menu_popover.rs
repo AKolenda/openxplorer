@@ -281,6 +281,27 @@ mod imp {
             self.parent_show();
         }
 
+        fn measure(&self, orientation: gtk::Orientation, for_size: i32) -> (i32, i32, i32, i32) {
+            let (least, natural, least_baseline, natural_baseline) =
+                self.parent_measure(orientation, for_size);
+            // GTK 4.24 lets a popup narrower than the room beside its
+            // anchor only when it can be narrower than it asks to be; one
+            // that cannot is placed at its full width beside its row and
+            // runs off the monitor, where GTK 4.14 to 4.20 cut it to the
+            // room left and then closed it (`gtk_popover_present`). A
+            // submenu that can be a pixel narrower is cut to the room again
+            // on every version, so GTK closes it when it has none and it
+            // opens over the menu (`MenuPopover::open_submenu`).
+            if self.is_submenu.get()
+                && orientation == gtk::Orientation::Horizontal
+                && least == natural
+                && least > 0
+            {
+                return (least - 1, natural, least_baseline, natural_baseline);
+            }
+            (least, natural, least_baseline, natural_baseline)
+        }
+
         fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
             self.parent_size_allocate(width, height, baseline);
             // A submenu opened before the menu laid its rows out, as Right
@@ -992,7 +1013,9 @@ impl MenuPopover {
                 // GTK closes a popup that the monitor has no room for,
                 // once it is laid out smaller than it can be: with no room
                 // beside the row on either side, it opens again over the
-                // menu.
+                // menu. (GTK 4.24 cuts it only as it can be narrower than
+                // it asks to be, which a submenu always can be: see
+                // `measure`.)
                 if closed.was_squeezed() && !closed.imp().over_menu.get() {
                     closed.imp().over_menu.set(true);
                     let closed = closed.clone();

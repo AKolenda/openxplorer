@@ -403,9 +403,14 @@ fn moving_away_from_an_open_submenu_closes_it_after_the_delay() {
 /// parity: CMD-010
 #[gtk::test]
 fn a_submenu_with_no_room_beside_its_menu_opens_over_it() {
-    let (width, _, position) = no_room_submenu_opened_on_hover(2);
-    assert!(width >= 900, "at its full width: {width}");
-    assert_eq!(position, Some(gtk::PositionType::Bottom), "below its row's end");
+    let shown = no_room_submenu_opened_on_hover(2);
+    assert!(shown.width >= 900, "at its full width: {}", shown.width);
+    assert_eq!(
+        shown.position,
+        Some(gtk::PositionType::Bottom),
+        "below its row's end"
+    );
+    shown.assert_on_the_monitor();
 }
 
 /// A submenu with no room beside its menu on either side and taller than
@@ -416,27 +421,64 @@ fn a_submenu_with_no_room_beside_its_menu_opens_over_it() {
 /// parity: CMD-010
 #[gtk::test]
 fn a_tall_submenu_with_no_room_beside_its_menu_opens_over_it() {
-    let (width, height, position) = no_room_submenu_opened_on_hover(40);
-    assert!(width >= 900, "at its full width: {width}");
-    assert_eq!(position, Some(gtk::PositionType::Bottom), "below its row's end");
-    let monitor = gdk::Display::default()
-        .and_then(|display| display.monitors().item(0))
-        .and_downcast::<gdk::Monitor>()
-        .expect("the private display's monitor")
-        .geometry()
-        .height();
+    let shown = no_room_submenu_opened_on_hover(40);
+    assert!(shown.width >= 900, "at its full width: {}", shown.width);
+    assert_eq!(
+        shown.position,
+        Some(gtk::PositionType::Bottom),
+        "below its row's end"
+    );
+    shown.assert_on_the_monitor();
+    let monitor = private_monitor().geometry().height();
+    let height = shown.height;
     assert!(
         height > 0 && height <= monitor,
         "{height} pixels tall, within the {monitor} pixel monitor"
     );
 }
 
+/// The private display's one monitor.
+fn private_monitor() -> gdk::Monitor {
+    gdk::Display::default()
+        .and_then(|display| display.monitors().item(0))
+        .and_downcast::<gdk::Monitor>()
+        .expect("the private display's monitor")
+}
+
+/// A submenu with no room beside its menu, as it showed.
+struct NoRoomSubmenu {
+    /// The submenu's width, or 0 when none showed.
+    width: i32,
+    /// The height of its frame, without the shadow around it.
+    height: i32,
+    /// Where it opens from its anchor.
+    position: Option<gtk::PositionType>,
+    /// The screen columns its frame spans, left and right edges.
+    columns: Option<(i32, i32)>,
+}
+
+impl NoRoomSubmenu {
+    /// Asserts that the submenu's frame shows in full on the monitor, not
+    /// beside the menu running off its edge.
+    fn assert_on_the_monitor(&self) {
+        let monitor = private_monitor();
+        // Screen columns are device pixels; the monitor's are logical.
+        let scale = monitor.scale_factor();
+        let geometry = monitor.geometry();
+        let (start, end) = (geometry.x() * scale, (geometry.x() + geometry.width()) * scale);
+        let (left, right) = self.columns.expect("the submenu shows");
+        assert!(
+            left >= start && right <= end,
+            "columns {left} to {right}, on the monitor's {start} to {end}"
+        );
+    }
+}
+
 /// Opens a menu in the middle of the monitor whose submenu, `rows` rows
 /// long, is too wide for either side of it, and rests the real pointer
-/// on the submenu's row; the width of the submenu shown, the height of
-/// its frame (without the shadow around it) and where it opens from its
-/// anchor, or zeros and `None` when none shows.
-fn no_room_submenu_opened_on_hover(rows: usize) -> (i32, i32, Option<gtk::PositionType>) {
+/// on the submenu's row; the submenu as it shows, or zeros and `None`
+/// when none shows.
+fn no_room_submenu_opened_on_hover(rows: usize) -> NoRoomSubmenu {
     use crate::icons::Icon;
     use crate::window::menu_popover::MenuItem;
     use crate::window::window_action::WindowAction;
@@ -478,18 +520,31 @@ fn no_room_submenu_opened_on_hover(rows: usize) -> (i32, i32, Option<gtk::Positi
     let on_row = point_on_row(&session, &menu, "Example submenu", 0.5);
     session.pointer.glide(first, on_row, GLIDE_STEPS);
     wait_for(PAST_THE_DELAY);
-    let size = if shows_submenu_of(&menu, "Example submenu") {
-        menu.open_submenu_menu().map_or((0, 0, None), |submenu| {
-            let frame = submenu.first_child().map_or(0, |frame| frame.height());
-            (submenu.width(), frame, Some(submenu.position()))
+    let none = NoRoomSubmenu {
+        width: 0,
+        height: 0,
+        position: None,
+        columns: None,
+    };
+    let shown = if shows_submenu_of(&menu, "Example submenu") {
+        menu.open_submenu_menu().map_or(none, |submenu| {
+            let frame = submenu.first_child().expect("the submenu's frame");
+            let left = session.on_screen(&frame, (0.0, 0.0)).0;
+            let right = session.on_screen(&frame, (f64::from(frame.width()), 0.0)).0;
+            NoRoomSubmenu {
+                width: submenu.width(),
+                height: frame.height(),
+                position: Some(submenu.position()),
+                columns: Some((left, right)),
+            }
         })
     } else {
-        (0, 0, None)
+        none
     };
     menu.popdown();
     menu.unparent();
     gtk::style_context_remove_provider_for_display(&display, &wide);
-    size
+    shown
 }
 
 /// The pointer brought onto Show in one move as soon as View opens, and
