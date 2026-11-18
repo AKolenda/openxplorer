@@ -64,7 +64,11 @@ impl EmptyState {
     /// ("Software caused connection abort") under Details. Every other
     /// error is already said for people, and is shown as it is.
     pub(super) fn unavailable(uri: &str, error: &EntryError) -> EmptyState {
-        if ox_core::location::is_archive_location(uri) {
+        // Only an archive that can't be read gets the archive page; a
+        // folder or file a readable archive does not have (a typed or
+        // stale address) is not found, as anywhere else.
+        let is_missing_inside = matches!(error, EntryError::NotFound(_) | EntryError::NotDirectory(_));
+        if ox_core::location::is_archive_location(uri) && !is_missing_inside {
             return EmptyState::ArchiveUnavailable(error.to_string());
         }
         let raw = match error {
