@@ -21,7 +21,8 @@ use ox_core::archive::{
 use ox_core::transfer::Cancellation;
 
 use archive_support::{
-    file_type, file_uri, gio_factory, make_fifo, mode_of, opener, zip_bytes, ExtractionFixture, TestMember,
+    file_type, file_uri, gio_factory, make_fifo, mode_of, opener, process_umask, seven_zip_bytes, zip_bytes, ExtractionFixture,
+    SevenEntry, TestMember, SEVEN_ZIP_MODIFIED,
 };
 use short_reads::{Seeking, ShortReadStream};
 use unsized_file::UnsizedFile;
@@ -433,9 +434,11 @@ fn a_fifo_named_like_an_archive_fails_instead_of_blocking() {
     assert!(listing.is_err(), "{listing:?}");
 }
 
-/// ARC-018: through the production GIO adapters, files are new and
-/// owner-only and the new folder is owner-only, whatever the archive
-/// records.
+/// ARC-018: through the production GIO adapters, the archive's own
+/// permissions are never applied: an extracted file gets the mode any
+/// app's new file gets, 0666 less the umask, and a folder 0777 less the
+/// umask, as Windows' Extract all leaves files readable where the folder
+/// is. Each file keeps the modified time the archive records.
 ///
 /// parity: ARC-013, ARC-018
 #[test]
@@ -454,11 +457,58 @@ fn extraction_through_gio_never_applies_archive_permissions() {
         fs::read_to_string(folder.join("readme.txt")).expect("extracted"),
         "hello"
     );
-    assert_eq!(mode_of(&folder.join("bin/run.sh")), 0o600);
-    assert_eq!(mode_of(&folder.join("readme.txt")), 0o600);
-    assert_eq!(mode_of(&folder), 0o700);
+    let umask = process_umask();
+    assert_eq!(mode_of(&folder.join("bin/run.sh")), 0o666 & !umask);
+    assert_eq!(mode_of(&folder.join("readme.txt")), 0o666 & !umask);
+    assert_eq!(mode_of(&folder.join("bin")), 0o777 & !umask);
+    assert_eq!(mode_of(&folder), 0o777 & !umask);
+    // Every test member is dated 2026-09-28 12:00 local time.
+    let recorded = glib::DateTime::from_local(2026, 9, 28, 12, 0, 0.0)
+        .expect("a valid date")
+        .to_unix();
+    assert_eq!(modified_seconds(&folder.join("readme.txt")), recorded);
+    assert_eq!(modified_seconds(&folder.join("bin/run.sh")), recorded);
     assert_eq!(extracted.summary.file_count, 2);
     assert_eq!(fixture.destination_names(), ["Unpacked"]);
+}
+
+/// A 7z extracts the same way: readable files with the archive's times.
+///
+/// parity: ARC-018, ARC-024
+#[test]
+fn a_7z_through_gio_gets_umask_modes_and_the_archives_times() {
+    let mut fixture = ExtractionFixture::new();
+    fixture.archive = fixture.root.join("sample.7z");
+    let entries = [
+        SevenEntry::folder("Docs"),
+        SevenEntry::file("Docs/Guide.txt", b"hello world"),
+        SevenEntry::file("readme.txt", b"read me first"),
+    ];
+    fs::write(&fixture.archive, seven_zip_bytes(&entries, false)).expect("the 7z");
+    let mut extractor = ZipExtractor::new(opener(), gio_factory(), Arc::new(GioExtractionOutput));
+
+    fixture
+        .extract_with(&mut extractor, "Unpacked")
+        .expect("the 7z extracts");
+
+    let folder = fixture.destination.join("Unpacked");
+    let umask = process_umask();
+    for file in ["Docs/Guide.txt", "readme.txt"] {
+        assert_eq!(mode_of(&folder.join(file)), 0o666 & !umask, "{file}");
+        assert_eq!(
+            modified_seconds(&folder.join(file)),
+            i64::try_from(SEVEN_ZIP_MODIFIED).expect("a 2026 time"),
+            "{file}"
+        );
+    }
+    assert_eq!(mode_of(&folder.join("Docs")), 0o777 & !umask);
+    assert_eq!(mode_of(&folder), 0o777 & !umask);
+}
+
+/// When `path` was last modified, in seconds since the Unix epoch.
+fn modified_seconds(path: &std::path::Path) -> i64 {
+    use std::os::unix::fs::MetadataExt;
+    fs::metadata(path).expect("the extracted item").mtime()
 }
 
 /// The background variants run on a GIO worker thread and hand the result

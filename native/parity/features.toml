@@ -13571,7 +13571,7 @@ native_note = "Core: native/crates/ox-core/tests/archive_extract_checks.rs; the 
 id = "ARC-018"
 area = "ARC"
 title = "Extracted files never get archive permissions"
-behaviour = "Archive modes, owners, executable and setuid bits are never applied. Files are created owner-only (0600, no replacement), and the staging and published folder is 0700 on local disks."
+behaviour = "Archive modes, owners, executable and setuid bits are never applied. Files are created owner-only (0600, no replacement) inside a staging folder that is 0700 on local disks while it is built. Once complete, a local file gets the mode any new file gets (0666 less the umask) and the modified time the archive records, and the folder gets 0777 less the umask just before it is published, as Windows' Extract all leaves files readable with their archive dates."
 origin = ["openxplorer"]
 priority = "must"
 openxplorer = "has"
@@ -13581,7 +13581,7 @@ python_tests = [
 ]
 bridge = ["archiveExtract"]
 native = "done"
-native_note = "Core: native/crates/ox-core/tests/archive_extract.rs and archive_gio.rs; the native UI extracts through GioExtractionOutput (native/crates/ox-app/src/window/archive_actions.rs). Earlier evidence: native/crates/ox-core/tests/archive_extract.rs (archive_permissions_are_never_applied, a_device_destination_gets_no_unix_modes); native/crates/ox-core/tests/archive_gio.rs (extraction_through_gio_never_applies_archive_permissions)."
+native_note = "Core: native/crates/ox-core/tests/archive_extract.rs and archive_gio.rs; the native UI extracts through GioExtractionOutput (native/crates/ox-app/src/window/archive_actions.rs). Earlier evidence: native/crates/ox-core/tests/archive_extract.rs (archive_permissions_are_never_applied, a_device_destination_gets_no_unix_modes); native/crates/ox-core/tests/archive_gio.rs (extraction_through_gio_never_applies_archive_permissions, a_7z_through_gio_gets_umask_modes_and_the_archives_times)."
 
 [[feature]]
 id = "ARC-019"
