@@ -755,9 +755,7 @@ impl FileCell {
     pub(crate) fn bind(&self, item: &FileItem) {
         self.hide_name_editor();
         let imp = self.imp();
-        let icon_size = imp.icon_size.get();
-        imp.image.set_art(item.art(), icon_size);
-        imp.image.set_emblems(item.emblems(), icon_size);
+        self.show_art(item);
         imp.label.set_text(&item.entry().name);
         if imp.shows_item_lines.get() {
             let mut lines = ItemLines::of(item);
@@ -767,6 +765,15 @@ impl FileCell {
             }
             self.show_item_lines(&lines);
         }
+    }
+
+    /// Shows `item`'s art and emblems, as File icons now has them
+    /// (LOOK-029).
+    pub(crate) fn show_art(&self, item: &FileItem) {
+        let imp = self.imp();
+        let icon_size = imp.icon_size.get();
+        imp.image.set_art(item.art(), icon_size);
+        imp.image.set_emblems(item.emblems(), icon_size);
     }
 
     /// Shows `lines` beside the name, each line hidden while empty.
