@@ -17,6 +17,8 @@ const LONG_DATE: &str = crate::i18n::message_id("%B %-d, %Y");
 /// digits, truncated as Explorer truncates them, then every byte.
 pub fn exact_size_text(bytes: u64) -> String {
     let pattern = crate::i18n::ngettext("{short} ({bytes} byte)", "{short} ({bytes} bytes)", bytes);
+    // The byte count stays with its unit; the short size joins its own.
+    let pattern = pattern.replace("{bytes} ", "{bytes}\u{a0}");
     crate::i18n::format_message(
         &pattern,
         &[("short", &short_size(bytes)), ("bytes", &grouped(bytes))],
@@ -43,7 +45,7 @@ fn short_size_with(bytes: u64, separators: &Separators) -> String {
     else {
         let pattern = crate::i18n::ngettext("{bytes} byte", "{bytes} bytes", bytes);
         return crate::i18n::format_message(
-            &pattern,
+            &unbreakable(&pattern),
             &[("bytes", &grouped_with(bytes, &separators.thousands))],
         );
     };
@@ -57,7 +59,15 @@ fn short_size_with(bytes: u64, separators: &Separators) -> String {
     } else {
         (hundredths / 100).to_string()
     };
-    crate::i18n::format_message("{value} {unit}", &[("value", &value), ("unit", symbol)])
+    let pattern = crate::i18n::gettext("{value} {unit}");
+    crate::i18n::format_message(&unbreakable(&pattern), &[("value", &value), ("unit", symbol)])
+}
+
+/// `pattern`, the translation of a number and its unit such as
+/// `{value} {unit}` or `{bytes} bytes`, with each space a no-break space,
+/// so the number and its unit never wrap onto separate lines.
+pub(crate) fn unbreakable(pattern: &str) -> String {
+    pattern.replace(' ', "\u{a0}")
 }
 
 /// The decimal point and the thousands separator numbers are written
@@ -95,7 +105,7 @@ pub fn free_of_text(free: u64, size: u64) -> String {
 /// separator, as Properties writes a drive's space.
 pub fn exact_bytes(bytes: u64) -> String {
     let pattern = crate::i18n::ngettext("{bytes} byte", "{bytes} bytes", bytes);
-    crate::i18n::format_message(&pattern, &[("bytes", &grouped(bytes))])
+    crate::i18n::format_message(&unbreakable(&pattern), &[("bytes", &grouped(bytes))])
 }
 
 /// `1234567` as `1,234,567`, with the user's thousands separator.
@@ -178,21 +188,42 @@ fn day_date_time(
 mod tests {
     use super::*;
 
+    /// A number and its unit never wrap apart: a no-break space joins them,
+    /// so a narrow Details pane never shows "251" with "GB" on the next
+    /// line. Other spaces still let a long value wrap.
+    #[test]
+    fn numbers_and_units_are_joined_by_a_no_break_space() {
+        let joined = '\u{a0}';
+        assert_eq!(short_size(2_048), format!("2.00{joined}KB"));
+        assert_eq!(short_size(20), format!("20{joined}bytes"));
+        assert_eq!(short_size(1), format!("1{joined}byte"));
+        assert_eq!(
+            free_of_text(29_313_744_896, 269_509_197_824),
+            format!("27.3{joined}GB free of 251{joined}GB")
+        );
+        assert_eq!(
+            exact_size_text(322_003),
+            format!("314{joined}KB (322,003{joined}bytes)")
+        );
+        assert_eq!(exact_bytes(1_234_567), format!("1,234,567{joined}bytes"));
+        assert_eq!(super::super::column_size_text(Some(2_345 * 1024)), format!("2,345{joined}KB"));
+    }
+
     /// The size reads as Explorer's: three significant digits, truncated,
     /// and every byte in brackets.
     ///
     /// parity: PROP-003
     #[test]
     fn sizes_read_as_explorer_writes_them() {
-        assert_eq!(exact_size_text(322_003), "314 KB (322,003 bytes)");
-        assert_eq!(exact_size_text(323_584), "316 KB (323,584 bytes)");
-        assert_eq!(exact_size_text(16_154_811), "15.4 MB (16,154,811 bytes)");
-        assert_eq!(exact_size_text(16_281_600), "15.5 MB (16,281,600 bytes)");
-        assert_eq!(exact_size_text(1_536), "1.50 KB (1,536 bytes)");
-        assert_eq!(exact_size_text(20), "20 bytes (20 bytes)");
-        assert_eq!(exact_size_text(0), "0 bytes (0 bytes)");
-        assert_eq!(exact_size_text(1_023_999), "999 KB (1,023,999 bytes)");
-        assert_eq!(exact_size_text(1_024_000), "0.97 MB (1,024,000 bytes)");
+        assert_eq!(exact_size_text(322_003), "314\u{a0}KB (322,003\u{a0}bytes)");
+        assert_eq!(exact_size_text(323_584), "316\u{a0}KB (323,584\u{a0}bytes)");
+        assert_eq!(exact_size_text(16_154_811), "15.4\u{a0}MB (16,154,811\u{a0}bytes)");
+        assert_eq!(exact_size_text(16_281_600), "15.5\u{a0}MB (16,281,600\u{a0}bytes)");
+        assert_eq!(exact_size_text(1_536), "1.50\u{a0}KB (1,536\u{a0}bytes)");
+        assert_eq!(exact_size_text(20), "20\u{a0}bytes (20\u{a0}bytes)");
+        assert_eq!(exact_size_text(0), "0\u{a0}bytes (0\u{a0}bytes)");
+        assert_eq!(exact_size_text(1_023_999), "999\u{a0}KB (1,023,999\u{a0}bytes)");
+        assert_eq!(exact_size_text(1_024_000), "0.97\u{a0}MB (1,024,000\u{a0}bytes)");
     }
 
     /// One byte is written in the singular, as every other count is.
@@ -200,10 +231,10 @@ mod tests {
     /// parity: PROP-003
     #[test]
     fn one_byte_is_one_byte() {
-        assert_eq!(short_size(1), "1 byte");
-        assert_eq!(short_size(0), "0 bytes");
-        assert_eq!(short_size(2), "2 bytes");
-        assert_eq!(exact_size_text(1), "1 byte (1 byte)");
+        assert_eq!(short_size(1), "1\u{a0}byte");
+        assert_eq!(short_size(0), "0\u{a0}bytes");
+        assert_eq!(short_size(2), "2\u{a0}bytes");
+        assert_eq!(exact_size_text(1), "1\u{a0}byte (1\u{a0}byte)");
     }
 
     /// Numbers take the language's separators: a German translation's
@@ -216,8 +247,8 @@ mod tests {
             decimal: ",".to_owned(),
             thousands: ".".to_owned(),
         };
-        assert_eq!(short_size_with(16_154_811, &german), "15,4 MB");
-        assert_eq!(short_size_with(1_536, &german), "1,50 KB");
+        assert_eq!(short_size_with(16_154_811, &german), "15,4\u{a0}MB");
+        assert_eq!(short_size_with(1_536, &german), "1,50\u{a0}KB");
         assert_eq!(grouped_with(16_154_811, &german.thousands), "16.154.811");
         assert_eq!(grouped_with(1_234_567, "\u{202f}"), "1\u{202f}234\u{202f}567");
         assert_eq!(

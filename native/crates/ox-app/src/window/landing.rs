@@ -1370,7 +1370,7 @@ mod tests {
             size: 270_553_174_016,
             free: 29_600_000_000,
         };
-        assert_eq!(capacity.text(), "27.5 GB free of 251 GB");
+        assert_eq!(capacity.text(), "27.5\u{a0}GB free of 251\u{a0}GB");
         assert_eq!(
             capacity.text(),
             ox_core::format::short_size(29_600_000_000)

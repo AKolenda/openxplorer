@@ -4,7 +4,7 @@
 //! Ports `footer.statusbar` in `v2.0.0:desktop/ui/index.html` and `updateStatus`
 //! in `v2.0.0:desktop/ui/app.js`, laid out as Windows 11 File Explorer's
 //! status bar: the item count ("6 items"), a thin divider and the
-//! selection ("1 item selected  19.0 KB", the size only when every
+//! selection ("1 item selected  19.0\u{a0}KB", the size only when every
 //! selected item is a file), the type-to-select hint, then at the right
 //! "Check for updates" while a check found a newer release or a restart
 //! to finish one (the build it names is hidden, as Windows 11 Explorer's
@@ -397,25 +397,25 @@ mod tests {
             bytes: 19_456,
             all_files: true,
         };
-        assert_eq!(selection_text(one_file), "1 item selected  19.0 KB");
+        assert_eq!(selection_text(one_file), "1 item selected  19.0\u{a0}KB");
         let tooltip_example = SelectionSummary {
             count: 1,
             bytes: 4_486,
             all_files: true,
         };
-        assert_eq!(selection_text(tooltip_example), "1 item selected  4.38 KB");
+        assert_eq!(selection_text(tooltip_example), "1 item selected  4.38\u{a0}KB");
         let one_byte = SelectionSummary {
             count: 1,
             bytes: 1,
             all_files: true,
         };
-        assert_eq!(selection_text(one_byte), "1 item selected  1 byte");
+        assert_eq!(selection_text(one_byte), "1 item selected  1\u{a0}byte");
         let three_files = SelectionSummary {
             count: 3,
             bytes: 1_300_000,
             all_files: true,
         };
-        assert_eq!(selection_text(three_files), "3 items selected  1.23 MB");
+        assert_eq!(selection_text(three_files), "3 items selected  1.23\u{a0}MB");
         let folders = SelectionSummary {
             count: 3,
             bytes: 0,

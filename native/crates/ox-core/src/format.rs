@@ -123,8 +123,9 @@ pub fn column_size_text(bytes: Option<u64>) -> String {
         return String::new();
     };
     let kilobytes = bytes.div_ceil(1024);
+    let pattern = explorer_text::unbreakable(&crate::i18n::gettext("{value} {unit}"));
     crate::i18n::format_message(
-        "{value} {unit}",
+        &pattern,
         &[
             ("value", &group_digits(kilobytes)),
             ("unit", crate::i18n::gettext_static("KB")),
@@ -431,10 +432,10 @@ mod tests {
     /// parity: VIEW-001
     #[test]
     fn the_size_column_writes_whole_kilobytes_rounded_up() {
-        assert_eq!(column_size_text(Some(0)), "0 KB");
-        assert_eq!(column_size_text(Some(20)), "1 KB");
-        assert_eq!(column_size_text(Some(1024)), "1 KB");
-        assert_eq!(column_size_text(Some(1025)), "2 KB");
+        assert_eq!(column_size_text(Some(0)), "0\u{a0}KB");
+        assert_eq!(column_size_text(Some(20)), "1\u{a0}KB");
+        assert_eq!(column_size_text(Some(1024)), "1\u{a0}KB");
+        assert_eq!(column_size_text(Some(1025)), "2\u{a0}KB");
         assert_eq!(column_size_text(None), "");
         let commas = DigitGrouping::COMMAS;
         assert_eq!(commas.group(2_345), "2,345");
@@ -569,8 +570,8 @@ mod tests {
         assert_eq!(pretty_bytes(1), "1 byte");
         assert_eq!(pretty_bytes(2), "2 bytes");
         assert_eq!(size_text(Some(1)), "1 byte");
-        assert_eq!(exact_bytes(1), "1 byte");
-        assert_eq!(exact_bytes(1_234_567), "1,234,567 bytes");
+        assert_eq!(exact_bytes(1), "1\u{a0}byte");
+        assert_eq!(exact_bytes(1_234_567), "1,234,567\u{a0}bytes");
     }
 
     /// Ported from the size examples in `v2.0.0:desktop/ui/app.js::prettyBytes`.

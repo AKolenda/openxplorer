@@ -165,7 +165,7 @@ fn the_status_bar_counts_this_pc_and_a_folder() {
     model.select_only(1);
     assert_eq!(
         status_bar.texts(),
-        ("4 items".to_owned(), "1 item selected  20 bytes".to_owned())
+        ("4 items".to_owned(), "1 item selected  20\u{a0}bytes".to_owned())
     );
     assert!(status_bar.shows_selection_divider());
     model.select_only(0);
