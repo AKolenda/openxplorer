@@ -1,6 +1,6 @@
 # 2.0.20 — 2026-11-18
 
-7z archives open like folders, as ZIP and TAR archives do. Properties leaves out an extension the window hides, overflowing tabs scroll with arrows, and Replace can overwrite the old file as Windows 11 does. A mistyped address, new files, RTF previews, large text and screen readers all work more like Windows 11. Much of this release is the work of @addition-official.
+7z archives open like folders, as ZIP and TAR archives do, and every submenu opens when the pointer rests on its row. Properties leaves out an extension the window hides, overflowing tabs scroll with arrows, and Replace can overwrite the old file as Windows 11 does. A mistyped address, new files, RTF previews, large text and screen readers all work more like Windows 11. Much of this release is the work of @addition-official.
 
 ## Updating from 2.0.19
 * In the Debian package, **Check for updates** installs 2.0.20 without asking for a password when **Settings › About › Install updates without asking for a password** is on (the default). As before, that holds for an administrator in an active session at the computer; anyone else, and any remote or inactive session, is asked for an administrator's password.
@@ -9,6 +9,7 @@
 
 ## What's Changed
 * **7z archives:** double-clicking a `.7z` opens it like a folder, following the same setting as ZIP files. Its folders can be browsed and sorted, a file inside opens as a read-only copy, and Extract all and Extract here unpack it with progress, Cancel and Replace or Skip. Encrypted 7z archives and the rare Deflate and PPMd methods are refused with a plain message, and an archive that can't be read says so on its own page instead of the network "unavailable" page. Empty folders in a 7z made with Compress to are kept when 7-Zip or Windows extracts it.
+* **Menus:** resting the pointer on a row with a submenu, such as View › Show in the command bar, opens it after a moment, as in Windows 11; before, the command bar's submenus often opened only on a click. Moving towards an open submenu across other rows keeps it open, and a submenu with no room beside its menu opens over the menu instead of not at all.
 * **Replace:** with the Recycle Bin switch off, Replace overwrites the old file, and Undo says it can't bring the old file back while still undoing the rest of the copy.
 * **Properties:** with **Hide extensions for known file types** on, the General tab's name box and the window title leave the extension out, and a name typed there keeps it, as renaming in place does.
 * **Tabs:** many tabs shrink only as far as their icon, about three letters and the close button, and arrow buttons at the ends of the tab strip scroll through the rest.

@@ -143,8 +143,8 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 
 %changelog
 * Wed Nov 18 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.20-1
-- OpenXplorer 2.0.20: 7z archives open like folders, overwrite on Replace
-  when chosen, Properties without hidden extensions, scrolling tab arrows,
+- OpenXplorer 2.0.20: 7z archives open like folders, submenus open on
+  hover, overwrite on Replace when chosen, Properties without hidden extensions, scrolling tab arrows,
   RTF previews, large-text column widths and screen-reader names.
 
 * Tue Nov 17 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.19-1
