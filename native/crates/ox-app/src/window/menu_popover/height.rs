@@ -46,6 +46,21 @@ pub(super) fn rows_limit(monitor_height: i32, chrome: i32) -> i32 {
     (monitor_height - 2 * MONITOR_MARGIN - chrome.max(0)).max(LEAST_ROWS_HEIGHT)
 }
 
+/// The tallest the rows of a menu may be on Wayland, where the menu
+/// cannot read where it is on a monitor `monitor_height` tall: the room
+/// below its anchor, which spans `anchor` (top and bottom) in the window,
+/// or above it, whichever is larger, as if the window's top were the
+/// monitor's, as a maximized window's is; within [`rows_limit`].
+pub(super) fn wayland_rows_limit(monitor_height: i32, chrome: i32, (anchor_top, anchor_bottom): (i32, i32)) -> i32 {
+    let chrome = chrome.max(0);
+    let below = monitor_height - anchor_bottom - MONITOR_MARGIN - chrome;
+    let above = anchor_top - MONITOR_MARGIN - chrome;
+    below
+        .max(above)
+        .min(rows_limit(monitor_height, chrome))
+        .max(LEAST_ROWS_HEIGHT)
+}
+
 /// Whether a menu `menu_height` tall that opens at an anchor
 /// `anchor_height` tall on a monitor `monitor_height` tall surely fits
 /// below or above it, wherever it is.
@@ -148,7 +163,11 @@ impl MenuPopover {
         let Some(frame) = self.first_child() else { return };
         let menu = frame.measure(gtk::Orientation::Vertical, -1).1;
         let chrome = menu - rows.measure(gtk::Orientation::Vertical, -1).1;
-        rows.set_max_content_height(rows_limit(monitor_height, chrome));
+        let limit = match self.anchor_in_window().filter(|_| self.on_wayland()) {
+            Some(anchor) => wayland_rows_limit(monitor_height, chrome, anchor),
+            None => rows_limit(monitor_height, chrome),
+        };
+        rows.set_max_content_height(limit);
         // A submenu opening over its menu points at its row's end, below
         // which it stays: beside the menu there is no room for it.
         if self.imp().over_menu.get() {
@@ -163,6 +182,34 @@ impl MenuPopover {
             });
             self.set_valign(gtk::Align::Start);
         }
+    }
+
+    /// Whether the menu shows on Wayland, where it cannot read where it is
+    /// on the monitor, and the compositor alone keeps it on the screen.
+    fn on_wayland(&self) -> bool {
+        self.display().is::<gdk_wayland::WaylandDisplay>()
+    }
+
+    /// The top and bottom of what the menu opens at, in its window: the
+    /// button, or the point in it the menu points to. `None` for a
+    /// submenu, whose menu is a popup of its own.
+    fn anchor_in_window(&self) -> Option<(i32, i32)> {
+        if self.imp().is_submenu.get() {
+            return None;
+        }
+        let parent = self.parent()?;
+        let root = parent.root()?;
+        let bounds = parent.compute_bounds(root.upcast_ref::<gtk::Widget>())?;
+        let (set, area) = self.pointing_to();
+        #[expect(clippy::cast_possible_truncation, reason = "a window is far smaller than 2^31 pixels")]
+        let top = bounds.y().round() as i32;
+        #[expect(clippy::cast_possible_truncation, reason = "a window is far smaller than 2^31 pixels")]
+        let height = bounds.height().round() as i32;
+        Some(if set {
+            (top + area.y(), top + area.y() + area.height())
+        } else {
+            (top, top + height)
+        })
     }
 
     /// The side a menu opens beside its anchor on: the way its rows read.
@@ -201,6 +248,24 @@ mod tests {
     use crate::test_support::harness::{settle, skin, wait_until};
     use crate::window::menu_popover::{MenuEntry, MenuItem, MenuStyle};
     use crate::window::window_action::WindowAction;
+
+    /// On Wayland a menu cannot read where it is on the monitor, so it is
+    /// fitted to the room below or above its anchor as if the window's top
+    /// were the monitor's, as a maximized window's is: the View menu,
+    /// below a button 130 pixels down a 768-pixel monitor, scrolls rather
+    /// than run off the bottom, and a context menu near the window's
+    /// bottom fits the room above it, where it flips.
+    #[test]
+    fn on_wayland_a_menu_fits_the_room_beside_its_anchor() {
+        // The View menu: 8 + 130 above, the chrome 20 and 8 below.
+        assert_eq!(wayland_rows_limit(768, 20, (100, 130)), 768 - 130 - 8 - 20);
+        // Near the bottom, the room above is the larger.
+        assert_eq!(wayland_rows_limit(768, 20, (700, 701)), 700 - 8 - 20);
+        // Never less than the least room the rows keep.
+        assert_eq!(wayland_rows_limit(200, 20, (100, 101)), LEAST_ROWS_HEIGHT);
+        // Never more than the whole monitor allows.
+        assert_eq!(wayland_rows_limit(768, 20, (0, 0)), rows_limit(768, 20));
+    }
 
     /// The height of the test display's only monitor (check.py's Xvfb).
     const TEST_MONITOR_HEIGHT: i32 = 1000;
