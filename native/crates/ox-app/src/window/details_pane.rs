@@ -71,7 +71,7 @@ const SMALL_ART: i32 = 20;
 /// The glyphs in the pane's buttons.
 const SMALL_GLYPH: i32 = 16;
 
-/// The width of the names column, so every value starts at one line.
+/// The narrowest the names column is, so every value starts at one line.
 const PROPERTY_NAME_WIDTH: i32 = 88;
 /// The Details column of the names.
 const NAME_COLUMN: i32 = 0;
@@ -634,9 +634,14 @@ fn property_label(text: &str, css_class: &str) -> gtk::Label {
         .build()
 }
 
-/// A property's name in the left column.
+/// A property's name in the left column, on one line: the column is as
+/// wide as its widest name, at least [`PROPERTY_NAME_WIDTH`], so larger
+/// text widens the column only as much as the names need and leaves the
+/// rest of the pane to the values.
 fn property_name(name: &str) -> gtk::Label {
     let label = property_label(name, "detail-key");
+    label.set_wrap(false);
+    label.set_max_width_chars(-1);
     label.set_width_request(PROPERTY_NAME_WIDTH);
     label.set_yalign(0.0);
     label

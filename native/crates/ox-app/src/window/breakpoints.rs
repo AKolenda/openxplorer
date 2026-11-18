@@ -148,11 +148,24 @@ impl WindowWidth {
     }
 }
 
-/// The details pane's width in a window `width` pixels wide: [`PANE_WIDTH`]
-/// above 1190 pixels; below, from [`NARROW_PANE_WIDTH`] down to
-/// [`NARROWEST_PANE_WIDTH`] as the window narrows towards 961 pixels, so
-/// the pane gives way to the list rather than leaving its columns cut off.
-pub(super) fn details_pane_width_for(width: i32) -> i32 {
+/// The details pane's width in a window `width` pixels wide with text
+/// drawn `scale` times its 100% size: [`PANE_WIDTH`] above 1190 pixels;
+/// below, from [`NARROW_PANE_WIDTH`] down to [`NARROWEST_PANE_WIDTH`] as
+/// the window narrows towards 961 pixels, so the pane gives way to the
+/// list rather than leaving its columns cut off. Larger text widens it as
+/// much as the text grows, as it widens the navigation pane (ACC-012), so
+/// its values do not wrap a few letters per line, but never past the room
+/// the list keeps beside a navigation pane at its default width.
+pub(super) fn details_pane_width_for(width: i32, scale: f64) -> i32 {
+    let base = unscaled_details_pane_width(width);
+    #[expect(clippy::cast_possible_truncation, reason = "pane widths are small")]
+    let scaled = (f64::from(base) * scale.max(1.0)).round() as i32;
+    let room = width - super::preferences::DEFAULT_SIDEBAR_WIDTH - super::preferences::FOLDER_PANE_ROOM;
+    scaled.min(room.max(base))
+}
+
+/// [`details_pane_width_for`] at 100% text.
+fn unscaled_details_pane_width(width: i32) -> i32 {
     let band = WindowWidth::for_width(width);
     if band < WindowWidth::Medium {
         return PANE_WIDTH;
@@ -206,10 +219,12 @@ impl BrowserWindow {
     }
 
     /// Gives the details pane its width for a window `width` pixels wide
-    /// ([`details_pane_width_for`]), after the allocation under way, as a
-    /// new width request during one would start it again.
-    fn fit_details_pane_width(&self, width: i32) {
-        let wanted = details_pane_width_for(width);
+    /// at the text size drawn now ([`details_pane_width_for`]), after the
+    /// allocation under way, as a new width request during one would start
+    /// it again.
+    pub(super) fn fit_details_pane_width(&self, width: i32) {
+        let scale = self.skin().drawn_text_size().scale();
+        let wanted = details_pane_width_for(width, scale);
         if self.details_pane().width_request() == wanted {
             return;
         }
@@ -315,15 +330,31 @@ mod tests {
         }
     }
 
+    /// Larger text widens the details pane as it widens the navigation
+    /// pane: twice the text, twice the width, as long as the list keeps
+    /// its room beside a navigation pane at its default width; never
+    /// narrower than at 100%.
+    ///
+    /// parity: ACC-012
+    #[test]
+    fn larger_text_widens_the_details_pane() {
+        assert_eq!(details_pane_width_for(1366, 2.0), 524);
+        assert_eq!(details_pane_width_for(1366, 1.5), 393);
+        assert_eq!(details_pane_width_for(1366, 0.8), 262);
+        assert_eq!(details_pane_width_for(1000, 2.0), 378);
+        // 961 - 210 - 300 leaves the pane 451 pixels.
+        assert_eq!(details_pane_width_for(961, 3.0), 451);
+    }
+
     /// parity: LOOK-022
     #[test]
     fn narrow_windows_drop_the_details_pane_and_narrow_the_tabs() {
         assert!(WindowWidth::Reduced.has_room_for_details());
         assert!(!WindowWidth::Narrow.has_room_for_details());
-        assert_eq!(details_pane_width_for(1320), 262);
-        assert_eq!(details_pane_width_for(1190), 235);
-        assert_eq!(details_pane_width_for(961), 180);
-        assert_eq!(details_pane_width_for(1000), 189);
+        assert_eq!(details_pane_width_for(1320, 1.0), 262);
+        assert_eq!(details_pane_width_for(1190, 1.0), 235);
+        assert_eq!(details_pane_width_for(961, 1.0), 180);
+        assert_eq!(details_pane_width_for(1000, 1.0), 189);
         assert_eq!(WindowWidth::Narrow.tab_width(), 180);
         assert_eq!(WindowWidth::Compact.tab_width(), 150);
         assert!(!WindowWidth::Reduced.shows_appearance_label());

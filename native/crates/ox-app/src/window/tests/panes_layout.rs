@@ -366,6 +366,49 @@ fn the_details_values_line_up() {
     }
 }
 
+/// At 200% text the details pane is twice as wide and its names column
+/// as wide as its widest name, which never wraps, so a value such as
+/// "Text Document" reads on one line instead of a few letters per line.
+///
+/// parity: ACC-012, PROP-009
+#[gtk::test]
+fn large_text_widens_the_details_pane_and_keeps_names_and_values_whole() {
+    let fixture = Fixture::standard();
+    let test = laid_out_with_details_pane(&fixture.uri());
+    let skin = crate::test_support::harness::skin();
+    let before = skin.text_size();
+    test.window.set_default_size(1366, 768);
+    wait_for_frames(&test.window, 3);
+    let pane = test.window.details_pane();
+    let normal = pane.width_request();
+
+    skin.set_text_size(crate::text_size::TextSize::from_percent(200));
+    wait_for_frames(&test.window, 3);
+    test.select_named("Notes 2.txt");
+    wait_for_frames(&test.window, 3);
+    let large = pane.width_request();
+    let grid = descendants::<gtk::Grid>(pane).remove(0);
+    let labels = descendants::<gtk::Label>(&grid);
+    let lines = |label: &gtk::Label| label.layout().line_count();
+    let names: Vec<(String, i32)> = labels
+        .iter()
+        .filter(|label| label.has_css_class("detail-key"))
+        .map(|label| (label.label().to_string(), lines(label)))
+        .collect();
+    let type_value = labels
+        .iter()
+        .find(|label| label.has_css_class("detail-value") && label.label().contains("Document"))
+        .map(|label| (label.label().to_string(), lines(label)));
+    skin.set_text_size(before);
+    wait_for_frames(&test.window, 3);
+    let back = pane.width_request();
+
+    assert_eq!((normal, large, back), (262, 524, 262), "the pane's widths");
+    assert!(names.iter().all(|(_, count)| *count == 1), "names on one line: {names:?}");
+    let (text, count) = type_value.expect("the Type value");
+    assert_eq!(count, 1, "{text:?} on one line");
+}
+
 /// parity: VIEW-006
 #[gtk::test]
 fn the_status_bar_view_buttons_are_24_pixels_3_apart_with_the_view_highlighted() {
