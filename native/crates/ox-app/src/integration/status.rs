@@ -53,15 +53,17 @@ impl DefaultsReport {
             )
             .to_owned();
         }
-        let handler = self.status.handler(MimeType::Zip);
-        let handler = if handler.is_empty() {
-            "the desktop choice".to_owned()
-        } else {
-            self.handler_label(MimeType::Zip)
-        };
+        // A whole sentence of its own, so no untranslated English phrase
+        // is put into a translated one.
+        if self.status.handler(MimeType::Zip).is_empty() {
+            return ox_core::i18n::gettext_static(
+                "ZIP opening uses the desktop choice. Opening a download is not Show in folder.",
+            )
+            .to_owned();
+        }
         ox_core::i18n::format_message(
             "ZIP opening uses {handler}. Opening a download is not Show in folder.",
-            &[("handler", &handler)],
+            &[("handler", &self.handler_label(MimeType::Zip))],
         )
     }
 }

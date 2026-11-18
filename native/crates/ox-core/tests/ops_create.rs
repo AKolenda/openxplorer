@@ -257,8 +257,12 @@ fn at_most_one_hundred_user_templates_are_listed() {
     assert_eq!(ids.len(), MAX_USER_TEMPLATES);
 }
 
+/// A new file gets the mode other apps give new files, 0666 less the
+/// umask, not its private stage's 0600.
+///
+/// parity: OPS-048
 #[test]
-fn a_starter_writes_its_content_to_a_private_new_file() {
+fn a_starter_writes_its_content_to_a_new_file_with_the_umask_mode() {
     let temp = tempfile::tempdir().unwrap();
     let templates = temp.path().join("Templates");
 
@@ -283,7 +287,7 @@ fn a_starter_writes_its_content_to_a_private_new_file() {
     );
     let html = fs::read_to_string(temp.path().join("index.html")).unwrap();
     assert!(html.starts_with("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\">"));
-    assert_eq!(mode_of(&temp.path().join("Plan.md")), 0o600);
+    assert_eq!(mode_of(&temp.path().join("Plan.md")), new_file_mode());
     assert_eq!(names_in(temp.path()), ["Plan.md", "index.html"]);
 }
 
@@ -310,9 +314,23 @@ fn a_user_template_is_copied_without_its_permissions() {
         fs::read(target.join("copy.sh")).unwrap(),
         b"#!/bin/sh\necho template\n"
     );
-    assert_eq!(mode_of(&target.join("copy.sh")), 0o600);
+    assert_eq!(
+        mode_of(&target.join("copy.sh")),
+        new_file_mode(),
+        "no execute bits"
+    );
     assert_eq!(mode_of(&templates.join("script.sh")), 0o755);
     assert_eq!(names_in(&target), ["copy.sh"]);
+}
+
+/// The mode a new file gets: 0666 less this process's umask, read from
+/// `/proc/self/status` (setting the umask to read it would race with the
+/// other tests).
+fn new_file_mode() -> u32 {
+    let status = fs::read_to_string("/proc/self/status").unwrap();
+    let line = status.lines().find(|line| line.starts_with("Umask:")).unwrap();
+    let umask = u32::from_str_radix(line.trim_start_matches("Umask:").trim(), 8).unwrap();
+    0o666 & !umask
 }
 
 #[test]

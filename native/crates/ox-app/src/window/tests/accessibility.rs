@@ -566,6 +566,105 @@ fn large_text_grows_rows_and_dialogs_still_fit_800_by_600() {
     assert!(dialog_height <= 600, "{dialog_height} pixels high");
 }
 
+/// At 200% text, the columns nobody resized and the navigation pane at
+/// its default width grow with the text, so dates, types and folder names
+/// are not cut short; back at 100% they return to their default widths.
+/// A width the user dragged is kept.
+///
+/// parity: ACC-012, VIEW-028
+#[gtk::test]
+fn large_text_widens_default_columns_and_the_navigation_pane() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.set_default_size(1800, 900);
+    wait_for_frames(&test.window, 3);
+    let skin = skin();
+    let before = skin.text_size();
+    let details = test.window.folder_pane().details();
+    let width_of = |column: SortColumn| details.column(column).expect("a column").fixed_width();
+    let widths = || {
+        (
+            width_of(SortColumn::Modified),
+            width_of(SortColumn::Type),
+            test.window.workspace().position(),
+        )
+    };
+    assert_eq!(widths(), (176, 135, 210), "the 100% defaults");
+
+    skin.set_text_size(TextSize::from_percent(200));
+    wait_for_frames(&test.window, 3);
+    let large = widths();
+    // Name, which fills the rest, keeps room for names: the list scrolls
+    // sideways instead.
+    let header = details.header().expect("the column titles");
+    let name_title = header.first_child().expect("Name's title");
+    let name_room = name_title.width_request();
+    let header_width = header.width();
+    skin.set_text_size(TextSize::from_percent(100));
+    wait_for_frames(&test.window, 3);
+    let back = widths();
+    details
+        .column(SortColumn::Type)
+        .expect("Type")
+        .set_fixed_width(150);
+    skin.set_text_size(TextSize::from_percent(200));
+    wait_for_frames(&test.window, 3);
+    let dragged = width_of(SortColumn::Type);
+    skin.set_text_size(before);
+
+    assert_eq!(large, (282, 270, 420), "twice the text, wider columns and pane");
+    assert_eq!(name_room, 280, "Name keeps room for names");
+    assert!(
+        header_width >= 280 + 282 + 270,
+        "the list scrolls sideways: {header_width}"
+    );
+    assert_eq!(back, (176, 135, 210));
+    assert_eq!(dragged, 150, "a width the user chose stays");
+}
+
+/// A window that opens with 200% text already chosen starts with the
+/// navigation pane and the columns nobody resized at their widths for
+/// that text, not at the 100% defaults until the text size next changes.
+///
+/// parity: ACC-012, VIEW-028
+#[gtk::test]
+fn a_window_opened_at_large_text_starts_with_wide_defaults() {
+    let skin = crate::theme::Skin::detached();
+    skin.set_text_size(TextSize::from_percent(200));
+    let fixture = Fixture::standard();
+    let test = TestWindow::open_with_skin(&fixture.uri(), &skin);
+    wait_for_frames(&test.window, 3);
+    let details = test.window.folder_pane().details();
+    let width_of = |column: SortColumn| details.column(column).expect("a column").fixed_width();
+
+    assert_eq!(test.window.workspace().position(), 420, "the navigation pane");
+    assert_eq!(width_of(SortColumn::Modified), 282);
+    assert_eq!(width_of(SortColumn::Type), 270);
+}
+
+/// In a window too narrow for the navigation pane's 200% default, the pane
+/// stops where the folder pane keeps its room, and still returns to 210
+/// pixels at 100% text: it was at its default, cut short.
+///
+/// parity: ACC-012
+#[gtk::test]
+fn a_navigation_pane_cut_short_at_large_text_returns_to_210() {
+    let skin = crate::theme::Skin::detached();
+    let fixture = Fixture::standard();
+    let test = TestWindow::open_with_skin(&fixture.uri(), &skin);
+    test.window.set_default_size(640, 700);
+    wait_for_frames(&test.window, 3);
+
+    skin.set_text_size(TextSize::from_percent(200));
+    wait_for_frames(&test.window, 3);
+    let large = test.window.workspace().position();
+    skin.set_text_size(TextSize::from_percent(100));
+    wait_for_frames(&test.window, 3);
+
+    assert!((211..420).contains(&large), "cut short at 200%: {large}");
+    assert_eq!(test.window.workspace().position(), 210);
+}
+
 /// The desktop's text scaling (GTK's font resolution) grows the rows on
 /// top of the app's own text size. The test follows the display's
 /// settings as the application does at startup.

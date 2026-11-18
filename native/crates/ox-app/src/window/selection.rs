@@ -18,9 +18,11 @@ use crate::folder_view::shown_name::{shown_name, shows_whole};
 use crate::locations::Page;
 
 use super::details_pane::{self, PaneFacts, PreviewRules};
+use super::landing;
 use super::status_bar::StatusSubject;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+use crate::folder_view::model::SelectionSummary;
 
 /// The position to select once the items at `selected` (ascending) are
 /// removed from `count` shown items: the first one after the last removed
@@ -37,7 +39,8 @@ impl BrowserWindow {
     /// Selects only the item called `name` in the active tab, as the
     /// snapshot hook's scene asks; `false` when no such item is listed.
     pub(crate) fn select_named(&self, name: &str) -> bool {
-        if super::home_page::select_named(self.folder_pane().landing(), name) {
+        let landing = self.folder_pane().landing();
+        if super::home_page::select_named(landing, name) || landing::select_named(landing, name) {
             return true;
         }
         let model = self.folder_pane().model();
@@ -157,6 +160,10 @@ impl BrowserWindow {
         let shown = self.folder_pane().model().n_items();
         let home_items =
             super::home_page::item_count(self.folder_pane().landing()).filter(|_| page == Some(Page::Home));
+        // This PC counts its tiles and the selected ones, as Windows 11's
+        // status bar counts This PC's drives.
+        let this_pc = self.this_pc_tiles().filter(|_| page == Some(Page::ThisPc));
+        let home_items = home_items.or(this_pc.as_ref().map(|tiles| tiles.count));
         let subject = if let Some(shown) = home_items {
             // Home counts its tiles and rows, as Windows 11's does.
             StatusSubject::Folder {
@@ -175,7 +182,14 @@ impl BrowserWindow {
                 loading: self.is_busy() && (self.is_slow() || self.lists_gallery()),
             }
         };
-        let selected = self.folder_pane().model().summary();
+        let selected = match &this_pc {
+            Some(tiles) => SelectionSummary {
+                count: u32::try_from(tiles.selected.len()).unwrap_or(u32::MAX),
+                bytes: 0,
+                all_files: false,
+            },
+            None => self.folder_pane().model().summary(),
+        };
         self.status_bar().set_counts(subject, selected);
         self.show_watch_state();
     }
@@ -184,6 +198,9 @@ impl BrowserWindow {
     /// selected: a search's results while searching, as the status bar
     /// counts them and Windows' pane does; else the folder's listed items.
     fn shown_item_count(&self) -> u32 {
+        if let Some(tiles) = self.this_pc_tiles() {
+            return tiles.count;
+        }
         let model = self.folder_pane().model();
         if let Some(count) = self.search_count(model.n_items()) {
             return count.shown;
@@ -268,7 +285,19 @@ impl BrowserWindow {
                 shown_name(&entry.name, shows_whole(entry), extensions).clone_into(&mut content.name);
             }
         }
+        if let Some(tiles) = self.this_pc_tiles().filter(|_| hovered.is_none()) {
+            details_pane::describe_tiles(&mut content, &tiles.selected);
+        }
         pane.set_content(&content);
+    }
+
+    /// This PC's tiles, while the active tab shows This PC.
+    fn this_pc_tiles(&self) -> Option<landing::ThisPcTiles> {
+        let page = self.current_uri().as_deref().and_then(Page::from_uri);
+        if page != Some(Page::ThisPc) || self.shows_search_step() {
+            return None;
+        }
+        landing::this_pc_tiles(self.folder_pane().landing())
     }
 }
 

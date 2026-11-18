@@ -132,13 +132,83 @@ fn this_pc_shows_its_groups_with_no_heading_or_quick_access_and_nothing_to_creat
     wait_until("the Network locations group", || {
         landing::section_titles(landing) == ["Devices and drives", "Network locations"]
     });
-    assert_eq!(test.window.status_bar().texts().0, "Ready");
+    let tiles: usize = landing::tile_groups(landing)
+        .iter()
+        .map(|(_, tiles)| tiles.len())
+        .sum();
+    wait_until("This PC's tiles counted", || {
+        test.window.status_bar().texts().0 == format!("{tiles} items")
+    });
     assert!(!test.window.search_box().is_sensitive(), "Search");
     assert!(!is_enabled(&test, "up"), "Up");
     assert!(
         !menu_button_with_class(&test, "new-command").is_sensitive(),
         "New"
     );
+}
+
+/// This PC counts its tiles as Windows 11 counts items: the status bar
+/// says "N items", and "1 item selected" once a tile is selected; the
+/// Details pane names This PC with its own icon and the count, and a
+/// selected drive with the drive's icon, name and space. It used to say
+/// "Ready" and "This PC (0 items)" beside a yellow folder.
+///
+/// parity: HOME-001, PROP-009
+#[gtk::test]
+fn this_pc_counts_its_tiles_in_the_status_bar_and_the_details_pane() {
+    let fixture = Fixture::standard();
+    let test = super::geometry::laid_out_with_details_pane(&fixture.uri());
+    test.window.navigate(Page::ThisPc.uri()).expect("This PC");
+    test.wait_for_listing("This PC");
+    let landing = test.window.folder_pane().landing();
+    let groups = landing::tile_groups(landing);
+    let tiles: usize = groups.iter().map(|(_, tiles)| tiles.len()).sum();
+    let items = if tiles == 1 {
+        "1 item".to_owned()
+    } else {
+        format!("{tiles} items")
+    };
+    let pane = test.window.imp().details_pane.get();
+    for (flow, _) in &groups {
+        flow.unselect_all();
+    }
+
+    wait_until("the count", || {
+        test.window.status_bar().texts() == (items.clone(), String::new())
+    });
+    wait_until("This PC in the pane", || {
+        pane.shown_name() == format!("This PC ({items})")
+    });
+    let this_pc = Art::TintedGlyph(Page::ThisPc.icon(), crate::icons::Tint::ThisPc);
+    assert!(art_image_showing(&pane, this_pc).is_some(), "This PC's own icon");
+    assert!(
+        art_image_showing(&pane, Art::Folder).is_none(),
+        "no yellow folder"
+    );
+
+    let (flow, children) = &groups[0];
+    flow.select_child(&children[0]);
+    wait_until("the selected tile counted", || {
+        test.window.status_bar().texts() == (items.clone(), "1 item selected".to_owned())
+    });
+    wait_until("Local Disk in the pane", || pane.shown_name() == "Local Disk");
+    assert!(
+        art_image_showing(&pane, Art::Glyph(Icon::HardDrive)).is_some(),
+        "the drive's icon"
+    );
+    wait_until("its space", || {
+        pane.shown_properties()
+            .iter()
+            .any(|property| property.value.contains(" free of "))
+    });
+
+    flow.unselect_all();
+    wait_until("nothing selected", || {
+        test.window.status_bar().texts() == (items.clone(), String::new())
+    });
+    wait_until("This PC again", || {
+        pane.shown_name() == format!("This PC ({items})")
+    });
 }
 
 /// Drive tiles are the Tiles view's: at least 256 pixels a column with

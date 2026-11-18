@@ -23,8 +23,10 @@ use ox_core::places::NetworkLocation;
 
 use crate::folder_view::item::FileItem;
 use crate::i18n::message_id;
-use crate::icons::Art;
+use crate::icons::{Art, Tint};
+use crate::locations::Page;
 use crate::media_details::MediaKind;
+use crate::window::landing::TileFacts;
 
 use super::preview_page::{preview_page, PreviewPage, PreviewRules, NO_PREVIEW};
 
@@ -376,6 +378,35 @@ fn folder_content(facts: &PaneFacts<'_>) -> PaneContent {
     }
 }
 
+/// The Details pane's `content` for This PC with the tiles `selected`:
+/// one tile's picture, name and what it says under its name ("27.6 GB
+/// free of 252 GB"), or "N items selected" with their pictures. Nothing
+/// selected keeps This PC's own picture and count.
+pub(in crate::window) fn describe_tiles(content: &mut PaneContent, selected: &[TileFacts]) {
+    match selected {
+        [] => {}
+        [tile] => {
+            content.preview = Preview::Art(tile.art);
+            content.name.clone_from(&tile.name);
+            content.subject = Subject::Selection;
+            content.properties = tile
+                .note
+                .iter()
+                .map(|note| Property::new(keys::SIZE, message_id("Space"), note.clone()))
+                .collect();
+        }
+        several => {
+            let count = ox_core::format::group_digits(several.len() as u64);
+            content.name =
+                ox_core::i18n::format_message("{selected} items selected", &[("selected", &count)]);
+            content.preview =
+                Preview::Stack(several.iter().take(STACKED_ITEMS).map(|tile| tile.art).collect());
+            content.subject = Subject::Selection;
+            content.properties = Vec::new();
+        }
+    }
+}
+
 /// Whether `uri` is the top of a ZIP opened like a folder (ARC-026).
 fn is_zip_top(uri: &str) -> bool {
     ArchiveLocation::from_uri(uri).is_some_and(|location| location.parent().is_none())
@@ -384,7 +415,10 @@ fn is_zip_top(uri: &str) -> bool {
 /// The picture of the folder itself: a ZIP's top as a compressed folder,
 /// on an SMB share the art its tab shows, else the folder.
 fn folder_art(facts: &PaneFacts<'_>) -> Art {
-    if is_zip_top(facts.folder_uri) {
+    if Page::from_uri(facts.folder_uri) == Some(Page::ThisPc) {
+        // This PC's own icon, as its tab and navigation pane row show it.
+        Art::TintedGlyph(Page::ThisPc.icon(), Tint::ThisPc)
+    } else if is_zip_top(facts.folder_uri) {
         Art::ZipFolder
     } else if is_smb_location(facts.folder_uri) {
         Art::for_smb_location(facts.folder_uri, facts.network)
@@ -428,7 +462,6 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::locations::Page;
     use crate::test_support::{file_entry, folder_entry, studio_nas_mapped_drive};
 
     fn context() -> LocationContext {
