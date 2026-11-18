@@ -18,8 +18,8 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use ox_core::ops::{
-    run_resolved_transfer, run_transfer, scan_name_conflicts, OperationContext, OpsError, Resolution,
-    TransferRequest, UndoRecord,
+    run_resolved_transfer, run_transfer, scan_name_conflicts, OperationContext, OpsError, ReplacedFiles,
+    Resolution, TransferRequest, UndoRecord,
 };
 use ox_core::transfer::{Cancellation, ConflictPolicy, ItemCount, Progress, ProgressScope, TransferMode};
 
@@ -254,6 +254,15 @@ fn a_deletion_counts_the_selected_items() {
     );
 }
 
+/// A context whose Replace overwrites, so these progress tests never put
+/// fixture files in the Recycle Bin.
+fn overwriting() -> OperationContext {
+    OperationContext {
+        replaced_files: ReplacedFiles::Overwrite,
+        ..OperationContext::default()
+    }
+}
+
 /// A paste whose conflicts were answered runs in several steps, and
 /// the action reads complete only when its last group is: an earlier
 /// step's end is its share of the paste, not the whole.
@@ -283,7 +292,7 @@ fn a_paste_run_in_groups_is_complete_only_after_its_last_group() {
     block_on(run_resolved_transfer(
         &scan,
         &[Resolution::Replace],
-        &OperationContext::default(),
+        &overwriting(),
         move |progress| sink.lock().unwrap().push(progress),
     ))
     .unwrap();
@@ -327,7 +336,7 @@ fn a_paste_run_as_one_group_counts_its_items() {
     block_on(run_resolved_transfer(
         &scan,
         &[Resolution::Replace],
-        &OperationContext::default(),
+        &overwriting(),
         move |progress| sink.lock().unwrap().push(progress),
     ))
     .unwrap();

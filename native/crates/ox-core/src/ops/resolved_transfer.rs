@@ -13,17 +13,18 @@
 //! - Both versions kept in the File Conflict window: the copied file gets
 //!   Windows' number, `report (2).png`, the first free one.
 //! - Replace: Windows overwrites the existing file. With
-//!   [`ReplacedFiles::RecycleBin`] (Settings > Files & folders), the
+//!   [`ReplacedFiles::RecycleBin`] (the default, the owner's choice), the
 //!   existing file goes to the Recycle Bin first, where the desktop's
 //!   Trash works, and the incoming file then takes its free name, so Undo
 //!   can bring the replaced file back. Should the incoming file not
 //!   arrive, the replaced one is restored at once. With
-//!   [`ReplacedFiles::Overwrite`] (the default, as Windows does it), where nothing can go to the
-//!   Recycle Bin (most shares and devices), or where a file meets a
-//!   folder, the engine's own Replace runs: a copy is written into
-//!   private staging and swapped in at the end, a move renames over the
-//!   old file, and a folder is never replaced by a file or the other way
-//!   round (XFER-009, XFER-010). A cancelled or failed copy leaves the
+//!   [`ReplacedFiles::Overwrite`] (Settings > Files & folders, the opt-out,
+//!   as Windows does it), where nothing can go to the Recycle Bin (most
+//!   shares and devices), or where a file meets a folder, the engine's
+//!   own Replace runs: a copy is written into private staging and
+//!   swapped in at the end, a move renames over the old file, and a
+//!   folder is never replaced by a file or the other way round
+//!   (XFER-009, XFER-010). A cancelled or failed copy leaves the
 //!   old file as it was. That replaced file is gone, so Undo says it
 //!   can't bring it back and leaves its replacement in place.
 //!
