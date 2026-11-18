@@ -213,13 +213,14 @@ fn language_status(picked: Option<&str>, asked: &[String]) -> String {
             &[("language", language)],
         );
     }
-    // The first language asked for before English or the C locale, which
-    // end the search for a catalogue as they do in Catalog::find.
+    // The first language asked for before the C locale, encoded or not
+    // (`C.UTF-8` comes before `C` with LANG=C.UTF-8), unless it is English.
     let wanted = asked
         .iter()
-        .take_while(|name| !matches!(name.as_str(), "C" | "POSIX"))
         .map(|name| name.split(['.', '@']).next().unwrap_or_default())
-        .find(|name| !name.is_empty())
+        .filter(|name| !name.is_empty())
+        .take_while(|name| !matches!(*name, "C" | "POSIX"))
+        .next()
         .filter(|name| name.split('_').next() != Some("en"));
     match wanted {
         Some(language) => ox_core::i18n::format_message(
@@ -574,5 +575,16 @@ mod language_tests {
         let english = names(&["en_US.UTF-8", "en_US", "en", "C"]);
         assert_eq!(language_status(None, &english), "English");
         assert_eq!(language_status(None, &names(&["C"])), "English");
+        // GLib lists an encoded C locale before the plain one (LANG=C.UTF-8).
+        assert_eq!(language_status(None, &names(&["C.UTF-8", "C"])), "English");
+        assert_eq!(
+            language_status(None, &names(&["POSIX.UTF-8", "POSIX"])),
+            "English"
+        );
+        assert_eq!(
+            language_status(None, &names(&["C.UTF-8", "fr_FR", "C"])),
+            "English",
+            "the C locale ends the search"
+        );
     }
 }
