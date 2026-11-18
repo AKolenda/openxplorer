@@ -33,8 +33,11 @@
             <property name="name">details</property>
             <property name="child">
               <!-- The pane scrolls when the window is too short for it, so its
-                   wrapped properties never set the window's height. -->
+                   wrapped properties never set the window's height. Tab from
+                   the file list stops here; as a group it carries the pane's
+                   name, which GTK leaves out for the generic role. -->
               <object class="GtkScrolledWindow" id="scroller">
+                <property name="accessible-role">group</property>
                 <property name="hscrollbar-policy">never</property>
                 <property name="child">
                   <object class="GtkBox">
