@@ -644,7 +644,9 @@ fn columns_of_a_folder_opened_at_large_text_shrink_after_ctrl_0() {
 
     skin.set_text_size(TextSize::from_percent(200));
     wait_for_frames(&test.window, 3);
-    test.window.navigate(&fixture.uri_of("Documents")).expect("Documents");
+    test.window
+        .navigate(&fixture.uri_of("Documents"))
+        .expect("Documents");
     test.wait_for_listing("Documents");
     wait_for_frames(&test.window, 3);
     let large = widths();
@@ -653,8 +655,14 @@ fn columns_of_a_folder_opened_at_large_text_shrink_after_ctrl_0() {
     let back = widths();
     skin.set_text_size(before);
 
-    assert!(large[0] > normal[0] && large[1] > normal[1], "{large:?} after {normal:?}");
-    assert!(large[2] > normal[2], "Size holds its larger text: {large:?} after {normal:?}");
+    assert!(
+        large[0] > normal[0] && large[1] > normal[1],
+        "{large:?} after {normal:?}"
+    );
+    assert!(
+        large[2] > normal[2],
+        "Size holds its larger text: {large:?} after {normal:?}"
+    );
     assert_eq!(back, normal, "back at the 100% defaults");
 }
 
@@ -857,7 +865,10 @@ fn the_file_list_is_named_items_view_and_described_by_the_hint() {
         crate::folder_view::cells::ITEMS_VIEW_HINT,
         "Folder contents — type a filename prefix to select"
     );
-    for property in [gtk::AccessibleProperty::Label, gtk::AccessibleProperty::Description] {
+    for property in [
+        gtk::AccessibleProperty::Label,
+        gtk::AccessibleProperty::Description,
+    ] {
         assert!(gtk::test_accessible_has_property(&view, property), "{property:?}");
     }
 }

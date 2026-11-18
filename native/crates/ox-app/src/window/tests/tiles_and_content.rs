@@ -68,7 +68,10 @@ fn tiles_and_content_show_each_items_type_and_size_beside_its_name() {
         let notes = cell_named(&test, "Notes 2").shown_item_lines();
         let lines = notes.unwrap_or_else(|| panic!("{view:?} shows the item's lines"));
         assert_eq!(lines.kind, "Text Document", "{view:?}");
-        assert_eq!(lines.size, "20\u{a0}bytes", "{view:?}: the fixture's 20-byte file");
+        assert_eq!(
+            lines.size, "20\u{a0}bytes",
+            "{view:?}: the fixture's 20-byte file"
+        );
         assert!(!lines.modified.is_empty(), "{view:?}: a date modified");
         let survey = cell_named(&test, "Survey.bin").shown_item_lines();
         let survey = survey.unwrap_or_else(|| panic!("{view:?} shows the large file's lines"));

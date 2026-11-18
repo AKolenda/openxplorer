@@ -24,8 +24,8 @@ use std::sync::Arc;
 use ox_core::archive::{ArchiveError, ExtractionRequest};
 
 use archive_support::{
-    file_type, file_uri, mode_of, process_umask, write_zip_with_python, CreatedMode, ExtractionFixture, LocalFileOutput,
-    TestMember,
+    file_type, file_uri, mode_of, process_umask, write_zip_with_python, CreatedMode, ExtractionFixture,
+    LocalFileOutput, TestMember,
 };
 use transfer_support::local::{LocalNode, Provider};
 use transfer_support::versions::{PreviousVersions, READ_ONLY};

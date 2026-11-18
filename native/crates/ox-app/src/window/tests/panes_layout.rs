@@ -404,7 +404,10 @@ fn large_text_widens_the_details_pane_and_keeps_names_and_values_whole() {
     let back = pane.width_request();
 
     assert_eq!((normal, large, back), (262, 524, 262), "the pane's widths");
-    assert!(names.iter().all(|(_, count)| *count == 1), "names on one line: {names:?}");
+    assert!(
+        names.iter().all(|(_, count)| *count == 1),
+        "names on one line: {names:?}"
+    );
     let (text, count) = type_value.expect("the Type value");
     assert_eq!(count, 1, "{text:?} on one line");
 }

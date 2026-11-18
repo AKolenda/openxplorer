@@ -882,7 +882,8 @@ impl DetailsView {
             return;
         };
         let default_for = |minimum: u32| {
-            let width = column_widths::start_width_at(SortColumn::Size, None, 1.0).map(|width| width.max(minimum));
+            let width =
+                column_widths::start_width_at(SortColumn::Size, None, 1.0).map(|width| width.max(minimum));
             column_widths::fixed_width(SortColumn::Size, width)
         };
         let at_old_default = size.fixed_width() >= 0 && size.fixed_width() == default_for(old_minimum);

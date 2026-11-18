@@ -21,8 +21,8 @@ use ox_core::archive::{
 use ox_core::transfer::Cancellation;
 
 use archive_support::{
-    file_type, file_uri, gio_factory, make_fifo, mode_of, opener, process_umask, seven_zip_bytes, zip_bytes, ExtractionFixture,
-    SevenEntry, TestMember, SEVEN_ZIP_MODIFIED,
+    file_type, file_uri, gio_factory, make_fifo, mode_of, opener, process_umask, seven_zip_bytes, zip_bytes,
+    ExtractionFixture, SevenEntry, TestMember, SEVEN_ZIP_MODIFIED,
 };
 use short_reads::{Seeking, ShortReadStream};
 use unsized_file::UnsizedFile;

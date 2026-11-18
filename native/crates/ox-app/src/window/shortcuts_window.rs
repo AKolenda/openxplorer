@@ -851,8 +851,8 @@ mod tests {
     }
 
     /// The keyboard's Back, Forward and Home page keys read in words, as
-    /// Microsoft names such keys, not as their raw key names "Back",
-    /// "Forward" and "HomePage".
+    /// Microsoft names such keys, not as their raw key names `Back`,
+    /// `Forward` and `HomePage`.
     ///
     /// parity: CMD-032
     #[gtk::test]

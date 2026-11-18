@@ -206,7 +206,10 @@ mod tests {
             format!("314{joined}KB (322,003{joined}bytes)")
         );
         assert_eq!(exact_bytes(1_234_567), format!("1,234,567{joined}bytes"));
-        assert_eq!(super::super::column_size_text(Some(2_345 * 1024)), format!("2,345{joined}KB"));
+        assert_eq!(
+            super::super::column_size_text(Some(2_345 * 1024)),
+            format!("2,345{joined}KB")
+        );
     }
 
     /// The size reads as Explorer's: three significant digits, truncated,
@@ -217,8 +220,14 @@ mod tests {
     fn sizes_read_as_explorer_writes_them() {
         assert_eq!(exact_size_text(322_003), "314\u{a0}KB (322,003\u{a0}bytes)");
         assert_eq!(exact_size_text(323_584), "316\u{a0}KB (323,584\u{a0}bytes)");
-        assert_eq!(exact_size_text(16_154_811), "15.4\u{a0}MB (16,154,811\u{a0}bytes)");
-        assert_eq!(exact_size_text(16_281_600), "15.5\u{a0}MB (16,281,600\u{a0}bytes)");
+        assert_eq!(
+            exact_size_text(16_154_811),
+            "15.4\u{a0}MB (16,154,811\u{a0}bytes)"
+        );
+        assert_eq!(
+            exact_size_text(16_281_600),
+            "15.5\u{a0}MB (16,281,600\u{a0}bytes)"
+        );
         assert_eq!(exact_size_text(1_536), "1.50\u{a0}KB (1,536\u{a0}bytes)");
         assert_eq!(exact_size_text(20), "20\u{a0}bytes (20\u{a0}bytes)");
         assert_eq!(exact_size_text(0), "0\u{a0}bytes (0\u{a0}bytes)");

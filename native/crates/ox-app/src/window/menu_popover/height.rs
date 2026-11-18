@@ -51,7 +51,11 @@ pub(super) fn rows_limit(monitor_height: i32, chrome: i32) -> i32 {
 /// below its anchor, which spans `anchor` (top and bottom) in the window,
 /// or above it, whichever is larger, as if the window's top were the
 /// monitor's, as a maximized window's is; within [`rows_limit`].
-pub(super) fn wayland_rows_limit(monitor_height: i32, chrome: i32, (anchor_top, anchor_bottom): (i32, i32)) -> i32 {
+pub(super) fn wayland_rows_limit(
+    monitor_height: i32,
+    chrome: i32,
+    (anchor_top, anchor_bottom): (i32, i32),
+) -> i32 {
     let chrome = chrome.max(0);
     let below = monitor_height - anchor_bottom - MONITOR_MARGIN - chrome;
     let above = anchor_top - MONITOR_MARGIN - chrome;
@@ -201,9 +205,15 @@ impl MenuPopover {
         let root = parent.root()?;
         let bounds = parent.compute_bounds(root.upcast_ref::<gtk::Widget>())?;
         let (set, area) = self.pointing_to();
-        #[expect(clippy::cast_possible_truncation, reason = "a window is far smaller than 2^31 pixels")]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a window is far smaller than 2^31 pixels"
+        )]
         let top = bounds.y().round() as i32;
-        #[expect(clippy::cast_possible_truncation, reason = "a window is far smaller than 2^31 pixels")]
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a window is far smaller than 2^31 pixels"
+        )]
         let height = bounds.height().round() as i32;
         Some(if set {
             (top + area.y(), top + area.y() + area.height())

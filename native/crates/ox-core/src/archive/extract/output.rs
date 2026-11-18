@@ -77,7 +77,11 @@ impl ExtractionOutput for GioExtractionOutput {
         let target = gio::File::for_uri(&file.uri());
         let stream = target.create(gio::FileCreateFlags::PRIVATE, Some(cancel.cancellable()))?;
         let local = file.uri().starts_with("file:") && target.path().is_some();
-        Ok(Box::new(GioOutputFile { stream, target, local }))
+        Ok(Box::new(GioOutputFile {
+            stream,
+            target,
+            local,
+        }))
     }
 }
 

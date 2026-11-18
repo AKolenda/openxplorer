@@ -98,7 +98,10 @@ fn this_pc_opens_with_the_first_tile_focused_and_nothing_selected() {
         focus.is_some_and(|focus| focus == first || focus.is_ancestor(&first)),
         "the first tile has the keyboard"
     );
-    let selected: usize = groups.iter().map(|(flow, _)| flow.selected_children().len()).sum();
+    let selected: usize = groups
+        .iter()
+        .map(|(flow, _)| flow.selected_children().len())
+        .sum();
     assert_eq!(selected, 0, "nothing is selected");
     let status = test.window.status_bar().texts();
     assert_eq!(status.1, "", "no selection in the status bar: {status:?}");
@@ -107,7 +110,7 @@ fn this_pc_opens_with_the_first_tile_focused_and_nothing_selected() {
 
 /// Opening This PC, and switching the Details pane there, draws its
 /// drives' capacity bars without GTK warning that a bar has a negative
-/// size ("GtkGizmo (progress) reported min width -2").
+/// size (`GtkGizmo (progress) reported min width -2`).
 #[gtk::test]
 fn this_pc_draws_its_capacity_bars_without_gtk_warnings() {
     let recorder = crate::test_support::gtk_log::LogRecorder::start();
@@ -121,7 +124,10 @@ fn this_pc_draws_its_capacity_bars_without_gtk_warnings() {
     drop(recorder);
 
     let landing = test.window.folder_pane().landing();
-    assert!(!landing::tile_groups(landing).is_empty(), "This PC shows its drives");
+    assert!(
+        !landing::tile_groups(landing).is_empty(),
+        "This PC shows its drives"
+    );
     assert!(
         !warnings.iter().any(|warning| warning.contains("reported min")),
         "{warnings:?}"

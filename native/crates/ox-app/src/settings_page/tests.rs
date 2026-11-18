@@ -1246,14 +1246,25 @@ fn windows_folder_option_words_find_their_settings() {
 fn several_words_find_the_settings_they_all_name() {
     let settings = SettingsTest::open();
     let cases: [(&str, &str, &str); 2] = [
-        ("hidden files", "Show hidden files, folders, and drives", "Indexed folders"),
-        ("status bar", "Folder Options", "Show the Update button in the command bar"),
+        (
+            "hidden files",
+            "Show hidden files, folders, and drives",
+            "Indexed folders",
+        ),
+        (
+            "status bar",
+            "Folder Options",
+            "Show the Update button in the command bar",
+        ),
     ];
     for (typed, found, left_out) in cases {
         settings.page.search(typed);
         let shown = settings.shown_rows();
         assert!(shown.contains(&found), "{typed:?} finds {found:?}: {shown:?}");
-        assert!(!shown.contains(&left_out), "{typed:?} leaves out {left_out:?}: {shown:?}");
+        assert!(
+            !shown.contains(&left_out),
+            "{typed:?} leaves out {left_out:?}: {shown:?}"
+        );
     }
     settings.page.search("unpinning removes");
     let shown = settings.shown_rows();
@@ -1465,4 +1476,3 @@ fn the_dragging_help_says_alt_creates_shortcuts() {
     assert!(text.contains("Ctrl to copy"), "{text}");
     assert!(!text.contains("Alt to choose"), "{text}");
 }
-
