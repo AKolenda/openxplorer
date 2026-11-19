@@ -10761,6 +10761,10 @@ msgid "Search results no longer refresh every few seconds while folders are bein
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Settings › Appearance › File icons chooses the icon of folders, ZIP archives, each file type and files whose names end a certain way, such as .iso: one of the app's own pictures, including a document with a zipper so a ZIP archive no longer looks like a folder, or a picture of your own. Folder views and the details pane change at once, and screen readers name the chosen icon."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "TAR archives open like folders, Compress to makes TAR files, and Additional options opens a Create archive window laid out like Windows 11's. Windows resize from just inside their edges and corners, and resize cursors show on Wayland when the desktop's cursor theme is missing. Renaming an extension and saving over a file ask in Windows 11's compact message boxes, the Save dialog hides known extensions, the column titles' menu offers Choose Details, Shift+F10 opens the right-click menu, and Ctrl+T, Ctrl+W and Esc work as in Windows 11. Settings can turn on Windows 11's Home page with Quick access, Recent and Favorites, switch to its tab menu and navigation pane, and hide the command bar's Update button. Typing Recycle Bin or Recent in the address bar opens it, the tab menu can close tabs to the right, Properties dates name the weekday, and Downloads stays grouped in a split tab's other pane."
 msgstr ""
 
