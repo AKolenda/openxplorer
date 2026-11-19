@@ -11,7 +11,8 @@
 //! once in `fileIcons` and every window draws its items again
 //! ([`crate::icons::file_icons`]).
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use gtk::prelude::*;
@@ -488,10 +489,26 @@ fn chooser(page: &SettingsPage, label: &str, kind: KindOf) -> gtk::MenuButton {
     button
 }
 
+thread_local! {
+    /// How many icons were asked for each kind, so a picture still being
+    /// read is not saved over an icon asked for after it.
+    static ASKED: RefCell<HashMap<String, u32>> = RefCell::default();
+}
+
+/// Counts a new icon asked for `kind`, returning its number.
+fn ask_for_icon(kind: &str) -> u32 {
+    ASKED.with_borrow_mut(|asked| {
+        let count = asked.entry(kind.to_owned()).or_default();
+        *count = count.wrapping_add(1);
+        *count
+    })
+}
+
 impl SettingsPage {
     /// Gives the items of `kind` the icon `icon`, or their usual one with
     /// `None`; every window draws its items again once it is saved.
     fn save_file_icon(&self, kind: String, icon: Option<String>) {
+        ask_for_icon(&kind);
         let page = self.downgrade();
         let change: crate::settings_store::Change =
             Box::new(move |settings| settings.set_file_icon(&kind, icon.as_deref()).map(|_| ()));
@@ -529,21 +546,12 @@ impl SettingsPage {
                 return;
             };
             let uri = gio::File::for_path(path).uri().to_string();
-            let chosen_before = |page: &SettingsPage| {
-                page.context()
-                    .settings_data()
-                    .preferences
-                    .file_icons
-                    .get(&kind)
-                    .cloned()
-            };
-            let Some(before) = page.upgrade().map(|page| chosen_before(&page)) else {
-                return;
-            };
+            let asked = ask_for_icon(&kind);
             // Only a picture the file list can show, read as it reads one.
             let readable = icon_texture(uri.clone()).await.is_some();
-            // An icon chosen for the kind while the picture was read wins.
-            let Some(page) = page.upgrade().filter(|page| chosen_before(page) == before) else {
+            // An icon asked for the kind while the picture was read wins.
+            let current = ASKED.with_borrow(|asked| asked.get(&kind).copied());
+            let Some(page) = page.upgrade().filter(|_| current == Some(asked)) else {
                 return;
             };
             if readable {
