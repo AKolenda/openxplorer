@@ -10466,6 +10466,10 @@ msgid "Preview of the native OpenXplorer file manager"
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "7z archives open like folders, as ZIP and TAR archives do: browse them, open a file inside, and extract them with Extract all or Extract here. Every submenu opens when the pointer rests on its row, and a submenu with no room beside its menu opens over it. Properties leaves out an extension the window hides, overflowing tabs scroll with arrow buttons, and with the Recycle Bin switch for Replace off, Replace overwrites the old file as Windows 11 does. A mistyped address is answered with a message box, new files get the usual permissions, the Preview pane shows the text of RTF files, and at large text sizes columns and the navigation pane grow with the text. Reopen my tabs keeps the open tabs when the session ends, drive sizes agree between This PC and Properties, the keyboard shortcuts window uses Windows key names, and screen readers get the names the window shows."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "A name being renamed in place no longer closes when you use its own right-click menu, such as Paste or Select All, or switch to another window. Item check boxes are off by default, so a selected item is only highlighted, as in Windows; View > Item check boxes turns them back on. A search word found only in a name's extension no longer matches, so pd no longer finds every PDF."
 msgstr ""
 

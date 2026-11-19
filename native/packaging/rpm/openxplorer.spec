@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.19
+Version:        2.0.20
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -142,6 +142,11 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Wed Nov 18 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.20-1
+- OpenXplorer 2.0.20: 7z archives open like folders, submenus open on
+  hover, overwrite on Replace when chosen, Properties without hidden extensions, scrolling tab arrows,
+  RTF previews, large-text column widths and screen-reader names.
+
 * Tue Nov 17 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.19-1
 - OpenXplorer 2.0.19: Gallery as in Windows 11, Windows search syntax,
   responsive folders of 100,000 items, a fast Recycle Bin, type icons in
