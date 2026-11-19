@@ -12,16 +12,17 @@ use gtk::gio;
 use super::*;
 use crate::picture_guard::{decode_file_to_fit, decode_to_fit};
 
-/// Not a test of its own: the child the tests start, which decodes the
-/// picture on its standard input when [`TEST_PARAMETERS`] is set, as the
+/// Not a test of its own: the decoder the tests start, which serves the
+/// requests on its standard input when [`TEST_DECODER`] is set, as the
 /// app does with [`DECODER_FLAG`], and exits before the test harness
-/// writes anything after its answer. `abort` and `hang` in the parameters
-/// make it crash or hang instead, as a broken C loader would.
+/// writes anything after its answers. [`TEST_ABORT`] and [`TEST_HANG`]
+/// make it crash or hang at once instead, as a broken C loader would; a
+/// request [`CRASH_WIDTH`] wide crashes it mid-stream.
 #[test]
 fn picture_decoder_child() {
-    let Ok(parameters) = std::env::var(TEST_PARAMETERS) else {
+    if std::env::var_os(TEST_DECODER).is_none() {
         return;
-    };
+    }
     if std::env::var_os(TEST_ABORT).is_some() {
         std::process::abort();
     }
@@ -30,13 +31,14 @@ fn picture_decoder_child() {
             std::thread::sleep(Duration::from_secs(1));
         }
     }
-    let ok = parse_parameters(parameters.split(' '))
-        .is_some_and(|(width, height, limits)| decode_standard_input(width, height, limits));
+    let ok = serve_standard_input();
     std::process::exit(i32::from(!ok));
 }
 
 const TEST_ABORT: &str = "OX_TEST_PICTURE_DECODER_ABORT";
 const TEST_HANG: &str = "OX_TEST_PICTURE_DECODER_HANG";
+/// A request this wide crashes the test decoder mid-stream.
+pub(super) const CRASH_WIDTH: i32 = 31_337;
 
 /// The test program as the child.
 fn child_words() -> Vec<OsString> {
@@ -275,4 +277,112 @@ fn the_sandboxed_decoder_decodes_where_bubblewrap_works() {
     if let Ok(decoded) = run(&words, source, 1, 1, Limits::DISPLAY, None) {
         assert_eq!(decoded.width, 1);
     }
+}
+
+/// One decoder serves many pictures in turn, through the pool; a decoder
+/// that crashes on one is replaced, and the next picture is decoded.
+#[test]
+fn the_pool_reuses_its_decoders_and_replaces_one_that_crashed() {
+    let folder = tempfile::tempdir().expect("a temporary folder");
+    let path = saved_png(folder.path(), "Harbor.png", 120, 80);
+    let pool = Pool::new(child_words());
+    let decode = |width: i32| {
+        let file = std::fs::File::open(&path).expect("opened");
+        pool.decode(
+            Source::Reader(Box::new(file)),
+            width,
+            width,
+            Limits::DISPLAY,
+            None,
+        )
+    };
+    let pid = || {
+        let idle = pool.idle.lock().expect("the pool");
+        idle.first().map(|decoder| (decoder.child.0.id(), decoder.served))
+    };
+    for _ in 0..30 {
+        assert_eq!(decode(60).expect("decoded").pixbuf.width(), 60);
+    }
+    let (first, served) = pid().expect("an idle decoder");
+    assert_eq!(served, 30);
+    assert_eq!(decode(CRASH_WIDTH).map(|_| ()), Err(Refusal::Damaged));
+    assert!(pid().is_none(), "the crashed decoder is not kept");
+    assert_eq!(decode(40).expect("decoded again").pixbuf.width(), 40);
+    let (second, served) = pid().expect("a new decoder");
+    assert_ne!(first, second);
+    assert_eq!(served, 1);
+    // A large picture after small ones in the same decoder: its answer is
+    // held to its own limit, not the last one's.
+    let large = saved_png(folder.path(), "Panorama.png", 2400, 1200);
+    let file = std::fs::File::open(&large).expect("opened");
+    let decoded = pool
+        .decode(Source::Reader(Box::new(file)), 4096, 4096, Limits::DISPLAY, None)
+        .expect("decoded at its own size");
+    assert_eq!(decoded.pixbuf.width(), 2400);
+    assert_eq!(pid().map(|(pid, _)| pid), Some(second));
+    // A picture whose answer comes before its end (a refused header) is
+    // drained, and the decoder serves the next one.
+    let mut huge =
+        Vec::from(&b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR\x7f\xff\xff\xff\x7f\xff\xff\xff\x08\x06\0\0\0"[..]);
+    huge.extend(std::iter::repeat_n(0_u8, 3 * 1024 * 1024));
+    let refused = pool.decode(
+        Source::Reader(Box::new(Cursor::new(huge))),
+        64,
+        64,
+        Limits::DISPLAY,
+        None,
+    );
+    assert!(refused.is_err());
+    assert_eq!(decode(30).expect("decoded after a refusal").pixbuf.width(), 30);
+    assert_eq!(pid().map(|(pid, _)| pid), Some(second));
+}
+
+/// The answers' frames are found after other output, and one larger than
+/// its limit, cut short or missing is no answer.
+#[test]
+fn an_answers_frame_is_read_with_care() {
+    let mut wire = b"running 1 test\n".to_vec();
+    wire.extend_from_slice(FRAME);
+    wire.extend_from_slice(&3_u64.to_le_bytes());
+    wire.extend_from_slice(b"abc");
+    wire.extend_from_slice(FRAME);
+    wire.extend_from_slice(&2_u64.to_le_bytes());
+    wire.extend_from_slice(b"de");
+    let mut reader = Cursor::new(wire.clone());
+    assert_eq!(
+        read_frame(&mut reader, &std::sync::atomic::AtomicU64::new(16)).as_deref(),
+        Some(&b"abc"[..])
+    );
+    assert_eq!(
+        read_frame(&mut reader, &std::sync::atomic::AtomicU64::new(16)).as_deref(),
+        Some(&b"de"[..])
+    );
+    assert_eq!(
+        read_frame(&mut reader, &std::sync::atomic::AtomicU64::new(16)),
+        None
+    );
+    assert_eq!(
+        read_frame(
+            &mut Cursor::new(wire.clone()),
+            &std::sync::atomic::AtomicU64::new(2)
+        ),
+        None
+    );
+    assert_eq!(
+        read_frame(
+            &mut Cursor::new(&wire[..wire.len() - 9]),
+            &std::sync::atomic::AtomicU64::new(16)
+        )
+        .as_deref(),
+        Some(&b"abc"[..])
+    );
+    let mut cut = Cursor::new(&wire[..27]);
+    assert_eq!(read_frame(&mut cut, &std::sync::atomic::AtomicU64::new(16)), None);
+    assert_eq!(
+        read_frame(
+            &mut Cursor::new(vec![0_u8; 100_000]),
+            &std::sync::atomic::AtomicU64::new(16)
+        ),
+        None
+    );
 }

@@ -304,7 +304,9 @@ impl DetailsPane {
                         return;
                     };
                     match read {
-                        Ok(Some(text)) => pane.show_text(&text),
+                        Ok(Some(text)) => {
+                            crate::crash_guard::guarded("the Preview pane", || pane.show_text(&text));
+                        }
                         _ => pane.contents().show_message(NO_PREVIEW),
                     }
                 }
@@ -320,7 +322,9 @@ impl DetailsPane {
                         return;
                     };
                     match decoded {
-                        Ok(Some(texture)) => pane.show_picture(&texture),
+                        Ok(Some(texture)) => {
+                            crate::crash_guard::guarded("the Preview pane", || pane.show_picture(&texture));
+                        }
                         _ => pane.contents().show_message(NO_PREVIEW),
                     }
                 }
@@ -482,7 +486,7 @@ async fn pdf_pages(
             return;
         };
         for page in &pages {
-            pane.add_pdf_page(page);
+            crate::crash_guard::guarded("the Preview pane", || pane.add_pdf_page(page));
             let size = |side: i32| u64::try_from(side).unwrap_or_default();
             pixels += size(page.width()) * size(page.height());
         }

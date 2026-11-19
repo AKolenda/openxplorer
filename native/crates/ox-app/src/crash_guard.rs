@@ -127,6 +127,27 @@ pub(crate) fn append_to_log(folder: &Path, entry: &str) {
     }
 }
 
+/// Runs `work`, a main-thread step that handles what a file gave (a
+/// selection's details, a preview, an archive's listing), and catches a
+/// panic in it: the panic hook has written it to the crash log, and the
+/// step is skipped instead of aborting the app, which a panic does when
+/// it reaches GTK's C callbacks. `None` after a panic.
+///
+/// Catching is sound here because nothing is left borrowed (`RefCell`
+/// guards are released while unwinding) and the step only changes what
+/// widgets show; at worst a pane shows stale content until the next
+/// selection.
+pub(crate) fn guarded<T>(what: &str, work: impl FnOnce() -> T) -> Option<T> {
+    let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(work));
+    if caught.is_err() {
+        glib::g_warning!(
+            ox_core::LOG_DOMAIN,
+            "Showing {what} failed, and was skipped; see crash.log"
+        );
+    }
+    caught.ok()
+}
+
 /// Marks this run as running in `folder`, and finds how the runs before
 /// it ended. Called once, when the app starts.
 pub(crate) fn mark_running(folder: &Path, app_id: &str) -> PreviousRun {
@@ -269,5 +290,26 @@ mod tests {
         let log = fs::read_to_string(folder.join(CRASH_LOG)).expect("the crash log");
         assert!(log.contains("thread 'archive-worker' panicked"));
         assert!(log.contains("a parser met a header it never foresaw"));
+    }
+
+    /// A panic in a guarded step is caught, the step skipped, and the
+    /// next one runs, even from inside a GTK callback.
+    #[gtk::test]
+    fn a_panic_in_a_guarded_step_is_caught() {
+        use gtk::prelude::*;
+
+        assert_eq!(guarded("a test step", || 7), Some(7));
+        let fired = std::rc::Rc::new(std::cell::Cell::new(false));
+        let button = gtk::Button::new();
+        let seen = std::rc::Rc::clone(&fired);
+        button.connect_clicked(move |_| {
+            let skipped = guarded("a test step", || -> u8 {
+                let rows: Vec<u8> = Vec::new();
+                rows[std::hint::black_box(3)]
+            });
+            seen.set(skipped.is_none());
+        });
+        button.emit_clicked();
+        assert!(fired.get());
     }
 }

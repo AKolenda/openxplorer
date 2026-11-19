@@ -2578,6 +2578,10 @@ msgid "The shortcut could not be changed."
 msgstr ""
 
 #: crates/ox-app/src/properties/shortcut_tab.rs
+msgid "The shortcut could not be saved because its location isn't responding."
+msgstr ""
+
+#: crates/ox-app/src/properties/shortcut_tab.rs
 msgid "The target cannot be found."
 msgstr ""
 

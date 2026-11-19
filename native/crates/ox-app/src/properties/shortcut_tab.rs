@@ -86,6 +86,13 @@ impl ShortcutKind {
     }
 }
 
+/// How long Apply waits for a shortcut to be written before it says the
+/// location isn't responding: much longer than a look at a file
+/// ([`crate::bounded_io::MAIN_THREAD_WAIT`]), since a slow share that is
+/// still answering must not be told it failed, and nothing waits on the
+/// main thread meanwhile.
+const SAVE_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// The largest launcher read: a real one is a few kilobytes.
 const LAUNCHER_SIZE_LIMIT: u64 = 1024 * 1024;
 
@@ -453,7 +460,7 @@ impl ShortcutEdits {
             if target.is_empty() {
                 return Err(ox_core::i18n::gettext("Type the target the shortcut opens."));
             }
-            let made = gio::spawn_blocking(move || match kind {
+            saved_within(SAVE_WAIT, move || match kind {
                 ShortcutKind::Link => repoint_link(&path, &target),
                 ShortcutKind::Application | ShortcutKind::Address => {
                     let change = LauncherChange {
@@ -465,9 +472,24 @@ impl ShortcutEdits {
                 }
             })
             .await
-            .unwrap_or_else(|_| Err(ox_core::i18n::gettext("The shortcut could not be changed.")));
-            made
         })
+    }
+}
+
+/// Runs `save` on a worker thread, so the window never waits on it, and
+/// gives up on it after `wait`, with a message: a share that stopped
+/// answering. (A write still blocked then may land once the share answers
+/// again.)
+async fn saved_within(
+    wait: std::time::Duration,
+    save: impl FnOnce() -> Result<(), String> + Send + 'static,
+) -> Result<(), String> {
+    match glib::future_with_timeout(wait, gio::spawn_blocking(save)).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(_)) => Err(ox_core::i18n::gettext("The shortcut could not be changed.")),
+        Err(_) => Err(ox_core::i18n::gettext(
+            "The shortcut could not be saved because its location isn't responding.",
+        )),
     }
 }
 
@@ -553,6 +575,29 @@ fn failure(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A save that a stalled share holds is given up on, with a message,
+    /// and one that works or fails says so.
+    #[test]
+    fn a_save_a_stalled_share_holds_is_given_up_with_a_message() {
+        let context = glib::MainContext::new();
+        let wait = std::time::Duration::from_millis(300);
+        let started = std::time::Instant::now();
+        let stalled = context.block_on(saved_within(wait, || {
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            Ok(())
+        }));
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+        assert_eq!(
+            stalled,
+            Err("The shortcut could not be saved because its location isn't responding.".to_owned())
+        );
+        assert_eq!(context.block_on(saved_within(wait, || Ok(()))), Ok(()));
+        assert_eq!(
+            context.block_on(saved_within(wait, || Err("Access is denied.".to_owned()))),
+            Err("Access is denied.".to_owned())
+        );
+    }
 
     /// A pipe, a huge file or garbage named `.desktop` has no Shortcut
     /// tab, at once: the window is never held waiting on it.

@@ -225,6 +225,13 @@ impl BrowserWindow {
     /// Shows the selection's properties, or the folder's, in the details
     /// pane.
     pub(super) fn update_details_pane(&self) {
+        // The selection's details come from files: a panic while they are
+        // shown is logged and skipped, never an abort (crash_guard).
+        crate::crash_guard::guarded("the details pane", || self.update_details_pane_now());
+    }
+
+    /// [`Self::update_details_pane`], unguarded.
+    fn update_details_pane_now(&self) {
         let pane = self.details_pane();
         let hovered = pane.hovered();
         let selected;

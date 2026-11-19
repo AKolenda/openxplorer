@@ -5,27 +5,29 @@
 //! gdk-pixbuf's loaders are C libraries (libpng, libjpeg, libtiff,
 //! librsvg, and on newer systems glycin's glue), and a malformed file can
 //! make one of them abort, crash or loop. [`super::decode_to_fit`]
-//! therefore never runs them in the app: it starts the app again with
-//! [`DECODER_FLAG`], streams the picture's bytes to that child's standard
-//! input, and reads the decoded pixels back from its standard output. The
-//! child runs the same guarded decoding as before
-//! ([`super::decode_here_to_fit`]), limits its own processor time, memory
-//! and file size first, and, where bubblewrap works, runs in the
-//! thumbnailers' sandbox without the network, the session bus or any of
-//! the user's files ([`crate::thumbnails::decoder_sandbox`]).
+//! therefore never runs them in the app: it keeps a small pool of
+//! decoder processes, the app started again with [`DECODER_FLAG`], each
+//! serving one picture at a time for many pictures in turn ([`Pool`]). A
+//! picture's bytes are streamed to a decoder's standard input and its
+//! pixels read back from its standard output. The decoder runs the same
+//! guarded decoding as before ([`super::decode_here_to_fit`]), limits its
+//! own processor time, memory and file size first, and, where bubblewrap
+//! works, runs in the thumbnailers' sandbox without the network, the
+//! session bus or any of the user's files
+//! ([`crate::thumbnails::decoder_sandbox`]).
 //!
 //! The app waits at most the picture's time limit and a little more, and
-//! kills the child when the caller cancels (the selection moved on). A
-//! child that crashed, hung, was killed or wrote nonsense is a
+//! kills the decoder when the caller cancels (the selection moved on). A
+//! decoder that crashed, hung, was killed or wrote nonsense is a
 //! [`Refusal`], and every caller shows the file's icon or "No preview
-//! available" for one.
+//! available" for one; the next picture starts a new decoder.
 
 use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{mpsc, Arc, Mutex, OnceLock, PoisonError};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -37,9 +39,8 @@ use rustix::process::{kill_process_group, Pid, Signal};
 
 use super::{Decoded, Limits, Refusal, READ_CHUNK};
 
-/// The first argument that starts the app as a picture decoder:
-/// `<app> --ox-decode-picture <width> <height> <max pixels> <max JPEG
-/// pixels> <milliseconds>`, the picture on standard input.
+/// The first argument that starts the app as a picture decoder, which
+/// serves requests ([`REQUEST`]) on standard input until it ends.
 pub(crate) const DECODER_FLAG: &str = "--ox-decode-picture";
 
 /// What every answer starts with.
@@ -52,9 +53,6 @@ const GRACE: Duration = Duration::from_secs(3);
 /// How often the app looks whether the child finished, was cancelled or
 /// ran out of time.
 const POLL: Duration = Duration::from_millis(5);
-
-/// The processor time the child may use beyond the picture's time limit.
-const CPU_GRACE_SECONDS: u64 = 5;
 
 /// The memory the child may allocate (`RLIMIT_DATA`): a progressive JPEG
 /// at the JPEG limit needs its coefficients in memory, and anything more
@@ -94,12 +92,12 @@ pub(super) enum Source {
     Reader(Box<dyn Read + Send>),
 }
 
-/// How the child is started on this computer, found once per run.
-#[derive(Debug, Clone)]
+/// How the decoders are started on this computer, found once per run.
+#[derive(Debug)]
 enum Runner {
-    /// The words before the child's own arguments: the app itself, in
-    /// bubblewrap where that works here.
-    Child(Vec<OsString>),
+    /// A pool of decoder processes started with these words: the app
+    /// itself, in bubblewrap where that works here.
+    Pool(Pool),
     /// No child can be started here (the app's own program cannot be run
     /// again): pictures are decoded in the app, as before.
     InProcess,
@@ -108,7 +106,7 @@ enum Runner {
 static RUNNER: OnceLock<Runner> = OnceLock::new();
 
 /// The picture `source` gives, decoded to fit `width` × `height` within
-/// `limits` in a child process. Blocks.
+/// `limits` by a decoder process. Blocks.
 pub(super) fn decode(
     source: Source,
     width: i32,
@@ -120,7 +118,7 @@ pub(super) fn decode(
         return Err(Refusal::Cancelled);
     }
     match RUNNER.get_or_init(find_runner) {
-        Runner::Child(words) => run(words, source, width, height, limits, cancellable),
+        Runner::Pool(pool) => pool.decode(source, width, height, limits, cancellable),
         Runner::InProcess => match source {
             Source::File(file) => super::decode_here_to_fit(&file, width, height, limits, cancellable),
             Source::Reader(mut reader) => {
@@ -130,9 +128,9 @@ pub(super) fn decode(
     }
 }
 
-/// How this computer runs the child: sandboxed where bubblewrap works
+/// How this computer runs the decoders: sandboxed where bubblewrap works
 /// (with a `/proc` of its own, then without, as for the thumbnailers),
-/// else on its own; each way is tried on a picture of one pixel.
+/// else on their own; each way is tried on a picture of one pixel.
 fn find_runner() -> Runner {
     let Some(program) = program() else {
         glib::g_warning!(
@@ -151,7 +149,7 @@ fn find_runner() -> Runner {
     plain.extend(program.1.iter().cloned());
     candidates.push(plain);
     if let Some(words) = candidates.into_iter().find(|words| works(words)) {
-        return Runner::Child(words);
+        return Runner::Pool(Pool::new(words));
     }
     glib::g_warning!(
         ox_core::LOG_DOMAIN,
@@ -160,17 +158,18 @@ fn find_runner() -> Runner {
     Runner::InProcess
 }
 
-/// Whether the child started with `words` decodes a picture of one pixel.
+/// Whether the decoder started with `words` decodes a picture of one
+/// pixel.
 fn works(words: &[OsString]) -> bool {
     let probe = Source::Reader(Box::new(std::io::Cursor::new(super::ONE_PIXEL_PNG)));
     run(words, probe, 1, 1, Limits::DISPLAY, None).is_ok_and(|decoded| decoded.width == 1)
 }
 
-/// The child's program and the arguments before its own: the running app
-/// itself, by the path of its file (bubblewrap needs a path it can show
-/// inside the sandbox; `/proc/self/exe` when the file was replaced by an
-/// update while the app runs). In a test, the test program, made to run
-/// [`tests::picture_decoder_child`] alone.
+/// The decoder's program and the arguments before its own: the running
+/// app itself, by the path of its file (bubblewrap needs a path it can
+/// show inside the sandbox; `/proc/self/exe` when the file was replaced
+/// by an update while the app runs). In a test, the test program, made to
+/// run [`tests::picture_decoder_child`] alone.
 fn program() -> Option<(std::path::PathBuf, Vec<OsString>)> {
     let running = std::fs::read_link("/proc/self/exe")
         .ok()
@@ -196,7 +195,65 @@ fn program() -> Option<(std::path::PathBuf, Vec<OsString>)> {
     Some((running, before))
 }
 
-/// Starts the child with `words`, feeds it `source` and reads its answer.
+/// How many idle decoders are kept waiting for the next picture: the
+/// thumbnail slots decode a few at a time, and each decoder serves one
+/// picture at a time.
+const POOL_SIZE: usize = 4;
+
+/// How many pictures one decoder serves before it is replaced, so that
+/// nothing a picture left in it (a leak, a fragmented heap) builds up.
+const PICTURES_PER_DECODER: u32 = 500;
+
+/// The processor time one decoder may use over its whole life, in
+/// seconds; each picture is held to its own time limit by the app.
+const DECODER_CPU_SECONDS: u64 = 600;
+
+/// How long a decoder may take to take the rest of a picture back once
+/// it answered, before it is replaced instead.
+const RETURN_WAIT: Duration = Duration::from_secs(2);
+
+/// The decoders kept idle, and how to start more.
+#[derive(Debug)]
+struct Pool {
+    words: Vec<OsString>,
+    idle: Mutex<Vec<Decoder>>,
+}
+
+impl Pool {
+    fn new(words: Vec<OsString>) -> Self {
+        Self {
+            words,
+            idle: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Decodes with an idle decoder, or a new one; a decoder that served
+    /// well goes back to the pool, any other is stopped.
+    fn decode(
+        &self,
+        source: Source,
+        width: i32,
+        height: i32,
+        limits: Limits,
+        cancellable: Option<&gio::Cancellable>,
+    ) -> Result<Decoded, Refusal> {
+        let idle = self.idle.lock().unwrap_or_else(PoisonError::into_inner).pop();
+        let decoder = match idle {
+            Some(decoder) => decoder,
+            None => Decoder::start(&self.words)?,
+        };
+        let (result, kept) = decoder.decode(source, width, height, limits, cancellable);
+        if let Some(decoder) = kept {
+            let mut idle = self.idle.lock().unwrap_or_else(PoisonError::into_inner);
+            if idle.len() < POOL_SIZE && decoder.served < PICTURES_PER_DECODER {
+                idle.push(decoder);
+            }
+        }
+        result
+    }
+}
+
+/// Starts a decoder with `words`, decodes `source` with it and stops it.
 fn run(
     words: &[OsString],
     source: Source,
@@ -205,77 +262,205 @@ fn run(
     limits: Limits,
     cancellable: Option<&gio::Cancellable>,
 ) -> Result<Decoded, Refusal> {
-    let (program, before) = words.split_first().ok_or(Refusal::Unreadable)?;
-    let milliseconds = u64::try_from(limits.time.as_millis()).unwrap_or(u64::MAX);
-    let parameters = format!(
-        "{width} {height} {} {} {milliseconds}",
-        limits.max_pixels, limits.max_jpeg_pixels
-    );
-    let mut command = Command::new(program);
-    command
-        .args(before)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        // The child shows nothing and talks to nobody: it is handed none
-        // of the app's environment beyond what finds gdk-pixbuf's loaders
-        // and the user's language.
-        .env_clear()
-        .envs(std::env::vars_os().filter(|(name, _)| name.to_str().is_some_and(passed_on)))
-        // A group of its own, so stopping it stops whatever it started.
-        .process_group(0);
-    if cfg!(test) {
-        command.env(TEST_PARAMETERS, &parameters);
-    } else {
-        command.arg(DECODER_FLAG).args(parameters.split(' '));
-    }
-    let mut child = command.spawn().map_err(|_| Refusal::Unreadable)?;
-    let stop_feeding = Arc::new(AtomicBool::new(false));
-    if let Some(stdin) = child.stdin.take() {
-        feed(source, stdin, Arc::clone(&stop_feeding), cancellable.cloned());
-    }
-    let answer = child.stdout.take().map(|stdout| {
-        let limit = answer_limit(width, height, limits);
-        thread::spawn(move || {
-            let mut answer = Vec::new();
-            let read = stdout.take(limit).read_to_end(&mut answer);
-            read.ok().map(|_| answer)
+    Decoder::start(words)?
+        .decode(source, width, height, limits, cancellable)
+        .0
+}
+
+/// One decoder process, waiting for pictures.
+#[derive(Debug)]
+struct Decoder {
+    child: Process,
+    stdin: std::process::ChildStdin,
+    /// Its answers, read off its standard output by a thread of their own:
+    /// each one whole, or nothing more once it ended or lied.
+    answers: mpsc::Receiver<Vec<u8>>,
+    /// The most the next answer may be, which the reading thread holds to.
+    limit: Arc<std::sync::atomic::AtomicU64>,
+    /// How many pictures it decoded.
+    served: u32,
+}
+
+impl Decoder {
+    /// Starts a decoder with `words`.
+    fn start(words: &[OsString]) -> Result<Self, Refusal> {
+        let (program, before) = words.split_first().ok_or(Refusal::Unreadable)?;
+        let mut command = Command::new(program);
+        command
+            .args(before)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            // The child shows nothing and talks to nobody: it is handed none
+            // of the app's environment beyond what finds gdk-pixbuf's loaders
+            // and the user's language.
+            .env_clear()
+            .envs(std::env::vars_os().filter(|(name, _)| name.to_str().is_some_and(passed_on)))
+            // A group of its own, so stopping it stops whatever it started.
+            .process_group(0);
+        if cfg!(test) {
+            command.env(TEST_DECODER, "1");
+        } else {
+            command.arg(DECODER_FLAG);
+        }
+        let mut child = Process(command.spawn().map_err(|_| Refusal::Unreadable)?);
+        let (Some(stdin), Some(stdout)) = (child.0.stdin.take(), child.0.stdout.take()) else {
+            return Err(Refusal::Unreadable);
+        };
+        let (sender, answers) = mpsc::channel();
+        let limit = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let reading = Arc::clone(&limit);
+        thread::Builder::new()
+            .name("ox-picture-answers".to_owned())
+            .spawn(move || {
+                let mut stdout = std::io::BufReader::new(stdout);
+                while let Some(answer) = read_frame(&mut stdout, &reading) {
+                    if sender.send(answer).is_err() {
+                        return;
+                    }
+                }
+            })
+            .map_err(|_| Refusal::Unreadable)?;
+        Ok(Self {
+            child,
+            stdin,
+            answers,
+            limit,
+            served: 0,
         })
-    });
-    let deadline = Instant::now() + limits.time.saturating_add(GRACE);
-    let ended = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Ok(status),
-            Ok(None) => {}
-            Err(_) => break Err(Refusal::Unreadable),
-        }
-        if cancellable.is_some_and(CancellableExt::is_cancelled) {
-            break Err(Refusal::Cancelled);
-        }
-        if Instant::now() >= deadline {
-            break Err(Refusal::TimedOut);
-        }
-        thread::sleep(POLL);
-    };
-    stop_feeding.store(true, Ordering::Relaxed);
-    let status = match ended {
-        Ok(status) => status,
-        Err(refusal) => {
-            stop(&mut child);
-            return Err(refusal);
-        }
-    };
-    // Whatever it started is stopped too, so its output ends.
-    stop(&mut child);
-    let answer = answer.and_then(|reader| reader.join().ok()).flatten();
-    if !status.success() {
-        glib::g_debug!(
-            ox_core::LOG_DOMAIN,
-            "A picture's decoder ended without an answer ({status}): the picture is not shown"
-        );
-        return Err(Refusal::Damaged);
     }
-    parse_answer(&answer.ok_or(Refusal::Unreadable)?)
+
+    /// Decodes `source`: the result, and the decoder again when it can
+    /// serve another picture (it answered, and took the rest of this one
+    /// back in time). A decoder that crashed, hung past the time limit,
+    /// lied or was no longer wanted is stopped.
+    fn decode(
+        self,
+        source: Source,
+        width: i32,
+        height: i32,
+        limits: Limits,
+        cancellable: Option<&gio::Cancellable>,
+    ) -> (Result<Decoded, Refusal>, Option<Self>) {
+        self.limit
+            .store(answer_limit(width, height, limits), Ordering::Relaxed);
+        // Drop any answer left from an earlier picture: there is none, as
+        // each is taken before the decoder is reused.
+        while self.answers.try_recv().is_ok() {}
+        let mut request = REQUEST.to_vec();
+        request.extend_from_slice(&width.to_le_bytes());
+        request.extend_from_slice(&height.to_le_bytes());
+        request.extend_from_slice(&limits.max_pixels.to_le_bytes());
+        request.extend_from_slice(&limits.max_jpeg_pixels.to_le_bytes());
+        let milliseconds = u64::try_from(limits.time.as_millis()).unwrap_or(u64::MAX);
+        request.extend_from_slice(&milliseconds.to_le_bytes());
+        let answered = Arc::new(AtomicBool::new(false));
+        let (give_back, returned) = mpsc::channel();
+        let stdin = self.stdin;
+        feed(
+            source,
+            stdin,
+            request,
+            Arc::clone(&answered),
+            cancellable.cloned(),
+            give_back,
+        );
+        let deadline = Instant::now() + limits.time.saturating_add(GRACE);
+        let outcome = loop {
+            match self.answers.recv_timeout(POLL) {
+                Ok(answer) => break Ok(answer),
+                Err(mpsc::RecvTimeoutError::Disconnected) => break Err(Refusal::Damaged),
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+            }
+            if cancellable.is_some_and(CancellableExt::is_cancelled) {
+                break Err(Refusal::Cancelled);
+            }
+            if Instant::now() >= deadline {
+                break Err(Refusal::TimedOut);
+            }
+        };
+        answered.store(true, Ordering::Relaxed);
+        let child = self.child;
+        let answer = match outcome {
+            Ok(answer) => answer,
+            Err(refusal) => {
+                if refusal == Refusal::Damaged {
+                    glib::g_debug!(
+                        ox_core::LOG_DOMAIN,
+                        "A picture's decoder ended without an answer: the picture is not shown"
+                    );
+                }
+                drop(child);
+                return (Err(refusal), None);
+            }
+        };
+        let result = parse_answer(&answer);
+        // The decoder serves the next picture once it has taken the rest of
+        // this one, which the feeding thread ends and hands back.
+        // A decoder that did not take the rest in time is dropped, which
+        // stops it.
+        let kept = returned
+            .recv_timeout(RETURN_WAIT)
+            .ok()
+            .flatten()
+            .map(|stdin| Self {
+                child,
+                stdin,
+                answers: self.answers,
+                limit: self.limit,
+                served: self.served.saturating_add(1),
+            });
+        (result, kept)
+    }
+}
+
+/// A decoder's process, stopped with everything it started when dropped.
+#[derive(Debug)]
+struct Process(Child);
+
+impl Drop for Process {
+    fn drop(&mut self) {
+        stop(&mut self.0);
+    }
+}
+
+/// What starts every request: then the width, height, pixel limits and
+/// time limit, little-endian, then the picture in chunks, each its
+/// length (`u32`) and its bytes, ended by a chunk of no bytes.
+const REQUEST: &[u8; 8] = b"\0OXREQ1\0";
+
+/// What starts every answer on the wire, before its length (`u64`).
+const FRAME: &[u8; 8] = b"\0OXFRM1\0";
+
+/// The next answer `stdout` gives, of at most `limit` bytes, the limit of
+/// the request it answers, read once its length has come (the request is
+/// made after this starts waiting): `None` when the decoder ended, or
+/// wrote one larger than that or nonsense. Bytes before the frame (a test
+/// harness's own lines) are skipped.
+fn read_frame(stdout: &mut impl Read, limit: &std::sync::atomic::AtomicU64) -> Option<Vec<u8>> {
+    let mut window = [0_u8; 8];
+    let mut seen = 0_usize;
+    let mut byte = [0_u8; 1];
+    // Only the first answer may follow other output; a few kilobytes of
+    // it at most.
+    for _ in 0..64 * 1024 {
+        stdout.read_exact(&mut byte).ok()?;
+        window.rotate_left(1);
+        window[7] = byte[0];
+        seen += 1;
+        if seen >= 8 && &window == FRAME {
+            let mut length = [0_u8; 8];
+            stdout.read_exact(&mut length).ok()?;
+            let length = u64::from_le_bytes(length);
+            if length > limit.load(Ordering::Relaxed) {
+                return None;
+            }
+            let mut answer = vec![0; usize::try_from(length).ok()?];
+            stdout.read_exact(&mut answer).ok()?;
+            return Some(answer);
+        }
+    }
+    None
 }
 
 /// Whether the child is handed the environment variable `name`.
@@ -296,42 +481,61 @@ fn passed_on(name: &str) -> bool {
 /// `None` on an error.
 type ReadChunk = dyn FnMut(&mut [u8]) -> Option<usize>;
 
-/// Streams `source` to the child's `stdin` on a thread of its own, so a
-/// child that stops reading (it decoded a GIF's first frame, refused the
-/// header, or hangs) never holds the caller. Reading stops when `stop`
-/// is set or `cancellable` is cancelled; a read that blocks (a share that
-/// stopped answering) leaves only this thread waiting.
+/// Sends `request`, then `source` in chunks, then the end, to a decoder's
+/// `stdin`, on a thread of its own, so a decoder that stops reading (it
+/// decoded a GIF's first frame, refused the header, or hangs) never holds
+/// the caller. The picture's bytes stop once `answered` is set or
+/// `cancellable` is cancelled, and the end is sent then; `stdin` is
+/// handed back through `give_back` once the request is complete, or
+/// `None` when it could not be. A read that blocks (a share that stopped
+/// answering) leaves only this thread waiting, and the decoder is stopped
+/// instead of handed back.
 fn feed(
     source: Source,
     mut stdin: std::process::ChildStdin,
-    stop: Arc<AtomicBool>,
+    request: Vec<u8>,
+    answered: Arc<AtomicBool>,
     cancellable: Option<gio::Cancellable>,
+    give_back: mpsc::Sender<Option<std::process::ChildStdin>>,
 ) {
-    thread::spawn(move || {
-        let mut buffer = vec![0; READ_CHUNK];
-        let mut next: Box<ReadChunk> = match source {
-            Source::File(file) => {
-                let Ok(stream) = file.read(cancellable.as_ref()) else {
-                    return;
+    let spawned = thread::Builder::new()
+        .name("ox-picture-feed".to_owned())
+        .spawn(move || {
+            let sent = (|| -> Option<()> {
+                stdin.write_all(&request).ok()?;
+                let mut buffer = vec![0; READ_CHUNK];
+                let mut next: Option<Box<ReadChunk>> = match source {
+                    Source::File(file) => file.read(cancellable.as_ref()).ok().map(|stream| {
+                        let cancellable = cancellable.clone();
+                        Box::new(move |buffer: &mut [u8]| stream.read(buffer, cancellable.as_ref()).ok())
+                            as Box<ReadChunk>
+                    }),
+                    Source::Reader(mut reader) => {
+                        Some(Box::new(move |buffer: &mut [u8]| reader.read(buffer).ok()) as Box<ReadChunk>)
+                    }
                 };
-                let cancellable = cancellable.clone();
-                Box::new(move |buffer| stream.read(buffer, cancellable.as_ref()).ok())
-            }
-            Source::Reader(mut reader) => Box::new(move |buffer| reader.read(buffer).ok()),
-        };
-        while !stop.load(Ordering::Relaxed) && !cancellable.as_ref().is_some_and(CancellableExt::is_cancelled)
-        {
-            let Some(read) = next(&mut buffer) else {
-                return;
-            };
-            let Some(bytes) = buffer.get(..read).filter(|bytes| !bytes.is_empty()) else {
-                return;
-            };
-            if stdin.write_all(bytes).is_err() {
-                return;
-            }
-        }
-    });
+                while let Some(read_chunk) = next.as_mut() {
+                    let stopped = answered.load(Ordering::Relaxed)
+                        || cancellable.as_ref().is_some_and(CancellableExt::is_cancelled);
+                    if stopped {
+                        break;
+                    }
+                    let Some(read) = read_chunk(&mut buffer).filter(|read| *read > 0) else {
+                        break;
+                    };
+                    let bytes = buffer.get(..read)?;
+                    stdin.write_all(&u32::try_from(read).ok()?.to_le_bytes()).ok()?;
+                    stdin.write_all(bytes).ok()?;
+                }
+                next.take();
+                stdin.write_all(&0_u32.to_le_bytes()).ok()?;
+                stdin.flush().ok()
+            })();
+            let _ = give_back.send(sent.map(|()| stdin));
+        });
+    // Without a thread the request is never sent, and the caller's wait
+    // ends at the time limit.
+    let _ = spawned;
 }
 
 /// The most the app reads of the child's answer: the pixels of the
@@ -540,31 +744,105 @@ fn answer(result: &Result<Decoded, Refusal>) -> Vec<u8> {
     bytes
 }
 
-/// The parameters of a decode: `<width> <height> <max pixels> <max JPEG
-/// pixels> <milliseconds>`.
-fn parse_parameters<'a>(mut words: impl Iterator<Item = &'a str>) -> Option<(i32, i32, Limits)> {
-    let width = words.next()?.parse().ok()?;
-    let height = words.next()?.parse().ok()?;
-    let max_pixels = words.next()?.parse().ok()?;
-    let max_jpeg_pixels = words.next()?.parse().ok()?;
-    let time = Duration::from_millis(words.next()?.parse().ok()?);
-    let limits = Limits {
-        max_pixels,
-        max_jpeg_pixels,
-        time,
-    };
-    Some((width, height, limits))
+/// The picture's chunks as the decoder reads them: each its length and
+/// its bytes, until a chunk of no bytes ends it.
+struct Chunks<'a, R: Read> {
+    input: &'a mut R,
+    /// What is left of the chunk being read.
+    left: usize,
+    /// The chunk of no bytes was read.
+    ended: bool,
 }
 
-/// Decodes the picture on standard input with the parameters given, and
-/// writes the answer to standard output: what the child does.
-fn decode_standard_input(width: i32, height: i32, limits: Limits) -> bool {
-    // A picture that keeps the child busy, or makes it allocate without
-    // end, is stopped by the kernel too; it writes no files and leaves no
-    // core.
-    let cpu = limits.time.as_secs().saturating_add(CPU_GRACE_SECONDS);
+impl<R: Read> Read for Chunks<'_, R> {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        while self.left == 0 {
+            if self.ended {
+                return Ok(0);
+            }
+            let mut length = [0_u8; 4];
+            self.input.read_exact(&mut length)?;
+            self.left = usize::try_from(u32::from_le_bytes(length)).unwrap_or(0);
+            self.ended = self.left == 0;
+        }
+        let wanted = buffer.len().min(self.left);
+        let read = self.input.read(&mut buffer[..wanted])?;
+        if read == 0 {
+            return Err(std::io::ErrorKind::UnexpectedEof.into());
+        }
+        self.left -= read;
+        Ok(read)
+    }
+}
+
+impl<R: Read> Chunks<'_, R> {
+    /// Reads what is left of the picture, to the chunk that ends it.
+    fn drain(&mut self) -> bool {
+        let mut buffer = [0_u8; 8192];
+        loop {
+            match self.read(&mut buffer) {
+                Ok(0) => return true,
+                Ok(_) => {}
+                Err(_) => return false,
+            }
+        }
+    }
+}
+
+/// The parameters after a request's [`REQUEST`]: `None` at the end of the
+/// input or for anything else.
+fn read_request(input: &mut impl Read) -> Option<(i32, i32, Limits)> {
+    let mut start = [0_u8; 8];
+    input.read_exact(&mut start).ok()?;
+    if &start != REQUEST {
+        return None;
+    }
+    let mut fields = [0_u8; 32];
+    input.read_exact(&mut fields).ok()?;
+    let int = |at: usize| Some(i32::from_le_bytes(fields.get(at..at + 4)?.try_into().ok()?));
+    let long = |at: usize| Some(u64::from_le_bytes(fields.get(at..at + 8)?.try_into().ok()?));
+    let limits = Limits {
+        max_pixels: long(8)?,
+        max_jpeg_pixels: long(16)?,
+        time: Duration::from_millis(long(24)?),
+    };
+    Some((int(0)?, int(4)?, limits))
+}
+
+/// Serves requests from `input` until it ends: decodes each picture and
+/// writes its answer to `output` as soon as it is known, then takes the
+/// rest of the picture. What a decoder process runs.
+fn serve(input: &mut impl Read, output: &mut impl Write) -> bool {
+    while let Some((width, height, limits)) = read_request(input) {
+        let mut chunks = Chunks {
+            input: &mut *input,
+            left: 0,
+            ended: false,
+        };
+        #[cfg(test)]
+        if width == tests::CRASH_WIDTH {
+            std::process::abort();
+        }
+        let result = super::decode_reader_here_to_fit(&mut chunks, width, height, limits, None);
+        let answer = answer(&result);
+        let written = output
+            .write_all(FRAME)
+            .and_then(|()| output.write_all(&u64::try_from(answer.len()).unwrap_or(u64::MAX).to_le_bytes()))
+            .and_then(|()| output.write_all(&answer))
+            .and_then(|()| output.flush());
+        if written.is_err() || !chunks.drain() {
+            return false;
+        }
+    }
+    true
+}
+
+/// Limits the decoder process's own resources: a picture that keeps it
+/// busy, or makes it allocate without end, is stopped by the kernel too;
+/// it writes no files and leaves no core.
+fn limit_resources() {
     for (resource, limit) in [
-        (rustix::process::Resource::Cpu, cpu),
+        (rustix::process::Resource::Cpu, DECODER_CPU_SECONDS),
         (rustix::process::Resource::Data, MEMORY_LIMIT),
         (rustix::process::Resource::Fsize, 0),
         (rustix::process::Resource::Core, 0),
@@ -580,10 +858,14 @@ fn decode_standard_input(width: i32, height: i32, limits: Limits) -> bool {
             },
         );
     }
-    let mut input = std::io::stdin().lock();
-    let result = super::decode_reader_here_to_fit(&mut input, width, height, limits, None);
+}
+
+/// Serves the requests on standard input: what the decoder process does.
+fn serve_standard_input() -> bool {
+    limit_resources();
+    let mut input = std::io::BufReader::new(std::io::stdin().lock());
     let mut output = std::io::stdout().lock();
-    output.write_all(&answer(&result)).is_ok() && output.flush().is_ok()
+    serve(&mut input, &mut output)
 }
 
 /// Runs the app as a picture decoder when `arguments` ask for it. Returns
@@ -592,18 +874,15 @@ pub(crate) fn run_as_decoder(arguments: &[String]) -> Option<glib::ExitCode> {
     if arguments.get(1).map(String::as_str) != Some(DECODER_FLAG) {
         return None;
     }
-    let Some((width, height, limits)) = parse_parameters(arguments.iter().skip(2).map(String::as_str)) else {
-        return Some(glib::ExitCode::FAILURE);
-    };
-    Some(if decode_standard_input(width, height, limits) {
+    Some(if serve_standard_input() {
         glib::ExitCode::SUCCESS
     } else {
         glib::ExitCode::FAILURE
     })
 }
 
-/// The environment variable that carries a test child's parameters.
-const TEST_PARAMETERS: &str = "OX_TEST_PICTURE_DECODER";
+/// The environment variable that makes a test program a decoder.
+const TEST_DECODER: &str = "OX_TEST_PICTURE_DECODER";
 
 #[cfg(test)]
 pub(crate) mod tests;
