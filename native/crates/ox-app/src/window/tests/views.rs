@@ -172,6 +172,60 @@ fn both_views_show_each_name_with_its_icon() {
     }
 }
 
+/// An icon chosen in Settings > Appearance > File icons for ZIP archives,
+/// or for a name ending, takes the place of the usual one in the open
+/// folder at once, and Reset brings the usual one back.
+///
+/// parity: LOOK-029
+#[gtk::test]
+fn icons_chosen_in_file_icons_replace_the_usual_ones_at_once() {
+    let fixture = Fixture::standard();
+    fixture.write("Photos 2026.zip");
+    fixture.write("Disc.iso");
+    let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
+    let art_of = |name: &str| {
+        let view_widget = test.window.folder_pane().view_widget();
+        descendants::<FileCell>(&view_widget)
+            .into_iter()
+            .find(|cell| cell.name() == name)
+            .and_then(|cell| cell.art())
+    };
+    let choose = |kind: &str, icon: Option<&str>| {
+        let (kind, icon) = (kind.to_owned(), icon.map(str::to_owned));
+        test.context.change_settings(
+            Box::new(move |settings| settings.set_file_icon(&kind, icon.as_deref()).map(|_| ())),
+            |result| result.expect("the icon is saved"),
+        );
+    };
+    wait_until("the archive to be listed", || art_of("Photos 2026.zip").is_some());
+    assert_eq!(
+        art_of("Photos 2026.zip"),
+        Some(Art::ZipFolder),
+        "the usual folder with a zipper"
+    );
+    assert_eq!(art_of("Disc.iso"), Some(Art::File(FileType::Document)));
+
+    choose("zip", Some("zip-document"));
+    choose(".iso", Some("zip-folder"));
+    wait_until("the archive to show the document with a zipper", || {
+        art_of("Photos 2026.zip") == Some(Art::ZipDocument)
+    });
+    wait_until("the .iso file to show its ending's icon", || {
+        art_of("Disc.iso") == Some(Art::ZipFolder)
+    });
+    assert_eq!(
+        art_of("Notes 2.txt"),
+        Some(Art::File(FileType::Text)),
+        "other types keep theirs"
+    );
+
+    choose("zip", None);
+    wait_until("the archive to show the usual icon again", || {
+        art_of("Photos 2026.zip") == Some(Art::ZipFolder)
+    });
+}
+
 /// A real symbolic link carries the link emblem and a file without write
 /// permission the lock, as GIO lists them, in both views; other items
 /// carry none.

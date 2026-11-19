@@ -12,6 +12,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use super::choices::{ContextMenu, StripPosition, Theme, View, ZipOpening};
+use super::file_icons::{canonical_file_icons, read_file_icons, FileIcons};
 use super::pane_options::DetailsPaneOptions;
 use super::tree_options::FolderTreeOptions;
 use super::view_options::ViewOptions;
@@ -434,6 +435,11 @@ pub struct Preferences {
     /// Stored only when there is one.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub gallery_folders: Vec<String>,
+    /// The icon each kind of item shows, where the user chose one
+    /// (LOOK-029); see [`super::file_icons`]. Stored only when there is
+    /// one.
+    #[serde(skip_serializing_if = "FileIcons::is_empty")]
+    pub file_icons: FileIcons,
     /// A start without locations reopens the tabs of the last window
     /// closed (Dolphin's `RememberOpenedTabs`, Explorer's "Restore
     /// previous folder windows at logon"); off, as in Explorer.
@@ -656,6 +662,7 @@ impl Default for Preferences {
             favorites: Vec::new(),
             home_folded: Vec::new(),
             gallery_folders: Vec::new(),
+            file_icons: FileIcons::new(),
             restore_session: false,
             startup_folder: None,
             begin_in_split_view: false,
@@ -783,6 +790,9 @@ impl Preferences {
         }
         if let Some(folders) = &update.gallery_folders {
             self.gallery_folders = canonical_gallery_folders(folders);
+        }
+        if let Some(icons) = &update.file_icons {
+            self.file_icons = canonical_file_icons(icons);
         }
     }
 
@@ -1081,6 +1091,9 @@ pub struct PreferencesUpdate {
     /// Replaces the folders added to Gallery; local folders only, up to
     /// 64, each once.
     pub gallery_folders: Option<Vec<String>>,
+    /// Replaces the chosen file icons; kinds and icons the app does not
+    /// know are dropped.
+    pub file_icons: Option<FileIcons>,
     /// Reopen the last window's tabs on a start without locations.
     pub restore_session: Option<bool>,
     /// Where new windows open; empty for Home. A location the location
@@ -1211,6 +1224,7 @@ impl PreferencesUpdate {
             favorites: values.get("favorites").and_then(read_keys),
             home_folded: values.get("homeFolded").and_then(read_keys),
             gallery_folders: values.get("galleryFolders").and_then(read_keys),
+            file_icons: values.get("fileIcons").and_then(read_file_icons),
             restore_session: flag("restoreSession"),
             startup_folder: text("startupFolder").map(str::to_owned),
             begin_in_split_view: flag("beginInSplitView"),

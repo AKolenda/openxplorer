@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Appearance: the theme, the text size and font, the compact view, the
 //! navigation pane's arrows, the app's extra navigation pane rows and tab
-//! menu items, the right-click menu and the pane widths.
+//! menu items, the right-click menu, the pane widths and the icons of
+//! kinds of item ([`super::file_icons`], LOOK-029).
 //!
 //! Ports the "Appearance & layout" section of `renderSettingsPage`,
 //! `textSizeControls` and `menuPreferenceControls` in
@@ -173,6 +174,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::Appearance;
     let appearance = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     appearance.append_group(&theme_group(page));
+    appearance.append_group(&super::file_icons::group(page));
     appearance.append_group(&layout_group(page));
     appearance
 }

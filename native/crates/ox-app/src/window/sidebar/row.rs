@@ -46,7 +46,9 @@ const PIN_DROP_TAIL_CLASS: &str = "quick-drop-tail";
 fn row_icon(icon: Art, chosen_size: u32) -> ArtImage {
     let (size, class) = match icon {
         Art::Glyph(_) | Art::TintedGlyph(..) => (GLYPH_SIZE, "side-glyph"),
-        Art::Folder | Art::ZipFolder | Art::File(_) | Art::Network(_) => (ART_SIZE, "side-art"),
+        Art::Folder | Art::ZipFolder | Art::ZipDocument | Art::File(_) | Art::Network(_) => {
+            (ART_SIZE, "side-art")
+        }
     };
     let size = i32::try_from(chosen_size)
         .ok()

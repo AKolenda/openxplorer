@@ -214,6 +214,9 @@ pub(crate) struct CellOwners {
     hides_infotips: Cell<bool>,
     /// Which items show previews in the folder shown.
     previews: Cell<PreviewPolicy>,
+    /// The generation of the icons chosen in File icons the cells show
+    /// (LOOK-029).
+    file_icons: Cell<u32>,
     /// Folders in the Size column say how many items they hold.
     counts_items: Cell<bool>,
     /// Item check boxes are off (SEL-014); on by default, as in Windows 11.
@@ -354,6 +357,29 @@ impl CellOwners {
     pub(crate) fn set_previews(&self, previews: PreviewPolicy) {
         if self.previews.replace(previews) != previews {
             self.look_up_pictures(|_| true);
+        }
+    }
+
+    /// Draws every cell on screen again when the icons chosen in File
+    /// icons changed since they were drawn (LOOK-029): their art, and the
+    /// pictures that may stand in its place.
+    pub(crate) fn follow_file_icons(&self) {
+        let generation = crate::icons::file_icons::generation();
+        if self.file_icons.replace(generation) == generation {
+            return;
+        }
+        let showing: Vec<(gtk::Widget, FileItem)> = self
+            .owners
+            .borrow()
+            .iter()
+            .filter_map(CellOwner::bound_cell)
+            .collect();
+        let previews = self.previews();
+        for (cell, item) in showing {
+            if let Some(cell) = cell.downcast_ref::<FileCell>() {
+                cell.show_art(&item);
+                cell.look_up_picture(&item, previews);
+            }
         }
     }
 
