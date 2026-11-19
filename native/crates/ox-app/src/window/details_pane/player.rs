@@ -3,6 +3,10 @@
 //! decoded in a player process of its own ([`crate::media_player`]), so a
 //! file `GStreamer` aborts on never closes the window.
 
+use std::path::PathBuf;
+use std::time::Duration;
+
+use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
@@ -10,13 +14,36 @@ use super::media::{length_text, AUDIO_ART_SIZE, PREVIEW_HEIGHT, PREVIEW_WIDTH};
 use super::DetailsPane;
 use crate::icons::{Art, ArtImage};
 
+/// How long the selection stays on a recording before its player starts:
+/// arrowing through a folder of recordings starts none of them, and at
+/// most one runs at a time.
+const PLAYER_DELAY: Duration = Duration::from_millis(400);
+
 impl DetailsPane {
+    /// Shows the player of the audio or video file at `path` once the
+    /// selection has stayed on it for [`PLAYER_DELAY`]; the item keeps its
+    /// art until then.
+    pub(super) fn show_player(&self, path: &std::path::Path, is_video: bool, art: Art) {
+        let generation = self.imp().media_generation.get();
+        let path = PathBuf::from(path);
+        let pane = self.downgrade();
+        glib::spawn_future_local(async move {
+            glib::timeout_future(PLAYER_DELAY).await;
+            let Some(pane) = pane.upgrade() else {
+                return;
+            };
+            if pane.imp().media_generation.get() == generation {
+                pane.start_player(&path, is_video, art);
+            }
+        });
+    }
+
     /// An inline player for the audio or video file at `path`, decoded
     /// in a player process ([`crate::media_player`]); its length joins the
     /// Properties once the stream knows it. A player that fails or dies
     /// leaves the item's art, as does one the app stops before changing
     /// its file.
-    pub(super) fn show_player(&self, path: &std::path::Path, is_video: bool, art: Art) {
+    fn start_player(&self, path: &std::path::Path, is_video: bool, art: Art) {
         let imp = self.imp();
         let scale = u32::try_from(self.scale_factor().max(1)).unwrap_or(1);
         let kind = if is_video {
