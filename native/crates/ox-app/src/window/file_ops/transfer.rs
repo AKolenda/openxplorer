@@ -225,6 +225,14 @@ impl BrowserWindow {
             None => starting_label(mode),
         };
         let context = self.begin_transfer(label, &incoming.uris, Some(&destination))?;
+        // A player of a file the job moves or may overwrite stops before
+        // the job starts; a copy's source keeps playing.
+        crate::media_player::release_players_within(&super::jobs::changed_locations(
+            mode,
+            &incoming.uris,
+            Some(&destination),
+        ))
+        .await;
         let action = match extracted_from {
             Some(archive) => Some(Action::extracted_items(archive, &incoming.uris, &destination)),
             None => Action::of(Verb::of_mode(mode), &incoming.uris, Some(&destination)),

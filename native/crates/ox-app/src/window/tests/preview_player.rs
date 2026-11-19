@@ -265,7 +265,7 @@ fn deleting_moving_or_replacing_a_playing_recording_stops_its_player_first() {
     );
 }
 
-/// A player process that aborts, as GStreamer's decoders do on a failed
+/// A player process that aborts, as `GStreamer`'s decoders do on a failed
 /// assertion, takes only the preview with it: the pane shows the file's
 /// icon in its place, and the next recording selected plays.
 ///

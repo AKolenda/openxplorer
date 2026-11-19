@@ -23,6 +23,7 @@ mod contents;
 mod media;
 mod metadata;
 mod options_menu;
+mod player;
 mod preview_page;
 mod rich_text;
 
@@ -176,6 +177,12 @@ mod imp {
         /// The content preview shown, which a redraw for the same item
         /// keeps (PROP-011).
         pub(super) shown_media: RefCell<Option<super::content::MediaPreview>>,
+        /// The player of the recording shown, in its own process.
+        pub(super) player: RefCell<Option<crate::media_player::PlayerStream>>,
+        /// The app stopped the last player before changing its file: the
+        /// next one waits for Play, even with auto-play on, so a folder's
+        /// change never starts a recording again in mid-playback.
+        pub(super) holds_auto_play: Cell<bool>,
         /// The Preview pane shows the item's icon in place of its
         /// contents (Folder Options' "Show preview handlers in preview
         /// pane" off).

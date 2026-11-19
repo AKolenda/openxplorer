@@ -455,6 +455,8 @@ impl BrowserWindow {
                 return None;
             }
         };
+        // Its player stops before the file is renamed.
+        crate::media_player::release_players_within(&[uri.to_owned()]).await;
         Some(rename_item(uri, name, &context).await)
     }
 

@@ -7,7 +7,7 @@ use gtk::gio;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::ops::OperationContext;
-use ox_core::transfer::Cancellation;
+use ox_core::transfer::{Cancellation, TransferMode};
 
 pub(in crate::window) const MAX_JOBS: usize = 4;
 
@@ -22,6 +22,26 @@ fn overlaps(left: &str, right: &str) -> bool {
     let left = gio::File::for_uri(left);
     let right = gio::File::for_uri(right);
     left == right || left.has_prefix(&right) || right.has_prefix(&left)
+}
+
+/// The files a transfer of `uris` into `destination` in `mode` may change:
+/// the sources unless they are copied, and the namesakes in the
+/// destination that a Replace overwrites.
+pub(super) fn changed_locations(
+    mode: TransferMode,
+    uris: &[String],
+    destination: Option<&str>,
+) -> Vec<String> {
+    let sources = uris.iter().filter(|_| mode != TransferMode::Copy).cloned();
+    let namesakes = destination.into_iter().flat_map(|destination| {
+        let folder = gio::File::for_uri(destination);
+        uris.iter().filter_map(move |uri| {
+            gio::File::for_uri(uri)
+                .basename()
+                .map(|name| folder.child(name).uri().to_string())
+        })
+    });
+    sources.chain(namesakes).collect()
 }
 
 impl BrowserWindow {
