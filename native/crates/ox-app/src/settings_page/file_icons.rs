@@ -546,12 +546,23 @@ impl SettingsPage {
                 return;
             };
             let uri = gio::File::for_path(path).uri().to_string();
+            let saved = |page: &SettingsPage| {
+                let icons = page.context().settings_data().preferences.file_icons;
+                icons.get(&kind).cloned()
+            };
+            let Some(before) = page.upgrade().map(|page| saved(&page)) else {
+                return;
+            };
             let asked = ask_for_icon(&kind);
             // Only a picture the file list can show, read as it reads one.
             let readable = icon_texture(uri.clone()).await.is_some();
-            // An icon asked for the kind while the picture was read wins.
+            // An icon asked for the kind while the picture was read wins,
+            // here or saved by another window of the app.
             let current = ASKED.with_borrow(|asked| asked.get(&kind).copied());
-            let Some(page) = page.upgrade().filter(|_| current == Some(asked)) else {
+            let Some(page) = page
+                .upgrade()
+                .filter(|page| current == Some(asked) && saved(page) == before)
+            else {
                 return;
             };
             if readable {
