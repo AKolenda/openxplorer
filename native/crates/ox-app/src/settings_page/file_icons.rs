@@ -11,6 +11,7 @@
 //! once in `fileIcons` and every window draws its items again
 //! ([`crate::icons::file_icons`]).
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use gtk::prelude::*;
@@ -22,6 +23,7 @@ use super::parts;
 use super::row::{ControlName, RowLayout, SettingRow};
 use super::search::RowText;
 use super::{SettingsPage, MESSAGE};
+use crate::folder_view::icon_texture;
 use crate::icons::file_icons::{ChosenIcon, ART_CHOICES};
 use crate::icons::{self, Art, ArtImage, FileType, Icon};
 use crate::window::ButtonStyle;
@@ -296,13 +298,19 @@ struct ShownIcon {
     art: ArtImage,
     picture: gtk::Image,
     usual: Art,
+    /// Counts what the row was asked to show, so a picture that loads
+    /// after the row moved on to another icon is dropped.
+    shown: Rc<Cell<u32>>,
 }
 
 impl ShownIcon {
     fn new(usual: Art) -> Self {
+        // An image named for what it shows, so screen readers tell the
+        // icon chosen now.
         let widget = gtk::Box::builder()
             .valign(gtk::Align::Center)
             .css_classes(["file-icon-shown"])
+            .accessible_role(gtk::AccessibleRole::Img)
             .build();
         let art = ArtImage::new(usual, ICON_SIZE);
         let picture = gtk::Image::builder()
@@ -317,18 +325,36 @@ impl ShownIcon {
             art,
             picture,
             usual,
+            shown: Rc::default(),
         }
     }
 
     /// Shows the icon `fileIcons` holds as `icon`, or the usual art for
     /// `None` or an icon the app does not know.
     fn show(&self, icon: Option<&str>) {
-        match icon.and_then(ChosenIcon::from_key) {
+        let chosen = icon.and_then(ChosenIcon::from_key);
+        let name = match &chosen {
+            Some(ChosenIcon::Picture(_)) => ox_core::i18n::gettext("A picture of yours"),
+            Some(ChosenIcon::Art(art)) => art_name(*art),
+            None => art_name(self.usual),
+        };
+        self.widget
+            .update_property(&[gtk::accessible::Property::Label(&name)]);
+        match chosen {
             Some(ChosenIcon::Picture(uri)) => {
-                self.picture
-                    .set_from_gicon(&gio::FileIcon::new(&gio::File::for_uri(&uri)));
-                self.picture.set_visible(true);
-                self.art.set_visible(false);
+                // The usual art until the picture is read, as the file list
+                // reads it.
+                self.show_art(self.usual);
+                let asked = self.shown.get();
+                let row = self.clone();
+                glib::spawn_future_local(async move {
+                    let texture = icon_texture(uri).await;
+                    if let Some(texture) = texture.filter(|_| row.shown.get() == asked) {
+                        row.picture.set_paintable(Some(&texture));
+                        row.picture.set_visible(true);
+                        row.art.set_visible(false);
+                    }
+                });
             }
             Some(ChosenIcon::Art(art)) => self.show_art(art),
             None => self.show_art(self.usual),
@@ -336,10 +362,20 @@ impl ShownIcon {
     }
 
     fn show_art(&self, art: Art) {
+        self.shown.set(self.shown.get().wrapping_add(1));
         self.art.set_art(art, ICON_SIZE);
         self.art.set_visible(true);
         self.picture.set_visible(false);
     }
+}
+
+/// The translated name of the app's picture `art`, as the chooser names it.
+fn art_name(art: Art) -> String {
+    ART_CHOICES
+        .iter()
+        .find(|choice| choice.art == art)
+        .map(|choice| ox_core::i18n::gettext(choice.name))
+        .unwrap_or_default()
 }
 
 /// A button called `label` whose popover offers the app's pictures and
@@ -432,11 +468,19 @@ fn chooser(page: &SettingsPage, label: &str, kind: KindOf) -> gtk::MenuButton {
                 .iter()
                 .filter_map(|(key, tile)| Some((key, tile.upgrade()?)))
             {
-                if chosen.as_deref() == Some(*key) {
+                let is_chosen = chosen.as_deref() == Some(*key);
+                if is_chosen {
                     tile.add_css_class("chosen");
                 } else {
                     tile.remove_css_class("chosen");
                 }
+                // Screen readers tell the chosen one by its state.
+                let pressed = if is_chosen {
+                    gtk::AccessibleTristate::True
+                } else {
+                    gtk::AccessibleTristate::False
+                };
+                tile.update_state(&[gtk::accessible::State::Pressed(pressed)]);
             }
         }
     ));
@@ -481,9 +525,20 @@ impl SettingsPage {
             let Ok(chosen) = dialog.open_future(window.as_ref()).await else {
                 return;
             };
-            if let (Some(page), Some(path)) = (page.upgrade(), chosen.path()) {
-                let uri = gio::File::for_path(path).uri().to_string();
+            let Some(path) = chosen.path() else {
+                return;
+            };
+            let uri = gio::File::for_path(path).uri().to_string();
+            // Only a picture the file list can show, read as it reads one.
+            let readable = icon_texture(uri.clone()).await.is_some();
+            let Some(page) = page.upgrade() else {
+                return;
+            };
+            if readable {
                 page.save_file_icon(kind, Some(uri));
+            } else {
+                let message = ox_core::i18n::gettext("This picture cannot be used as an icon.");
+                page.emit_by_name::<()>(MESSAGE, &[&message]);
             }
         });
     }

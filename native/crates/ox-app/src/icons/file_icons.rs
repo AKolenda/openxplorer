@@ -165,11 +165,7 @@ fn chosen_for(name: &str, usual: Art) -> Option<ChosenIcon> {
                 let name = name.to_lowercase();
                 chosen
                     .iter()
-                    .filter(|(ending, _)| {
-                        ending.starts_with('.')
-                            && name.len() > ending.len()
-                            && name.ends_with(ending.as_str())
-                    })
+                    .filter(|(ending, _)| ending.starts_with('.') && name.ends_with(ending.as_str()))
                     .max_by_key(|(ending, _)| ending.len())
                     .map(|(_, icon)| icon)
             })

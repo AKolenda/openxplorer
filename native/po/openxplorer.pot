@@ -3569,6 +3569,10 @@ msgid ".zip files, which look like folders unless you choose another icon."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/file_icons.rs
+msgid "A picture of yours"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/file_icons.rs
 msgid "Browse for a picture…"
 msgstr ""
 
@@ -3665,6 +3669,10 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/settings_page/file_icons.rs
 msgid "The icon could not be saved: {error}"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/file_icons.rs
+msgid "This picture cannot be used as an icon."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/file_icons.rs
@@ -10112,6 +10120,10 @@ msgstr ""
 
 #: crates/ox-core/src/session/error.rs
 msgid "Tab history must contain 1–200 locations."
+msgstr ""
+
+#: crates/ox-core/src/settings.rs
+msgid "No more icons can be chosen. Reset one first."
 msgstr ""
 
 #: crates/ox-core/src/settings.rs

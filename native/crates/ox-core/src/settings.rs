@@ -333,6 +333,12 @@ impl Settings {
     pub fn set_file_icon(&mut self, kind: &str, icon: Option<&str>) -> Result<Preferences, SettingsError> {
         self.mutate(|data| {
             let mut icons = data.preferences.file_icons.clone();
+            // At the most kept, a new kind would push out another one.
+            if icon.is_some() && !icons.contains_key(kind) && icons.len() >= MAX_FILE_ICONS {
+                return Err(SettingsError::invalid(crate::i18n::gettext(
+                    "No more icons can be chosen. Reset one first.",
+                )));
+            }
             match icon {
                 Some(icon) => icons.insert(kind.to_owned(), icon.to_owned()),
                 None => icons.remove(kind),
