@@ -497,10 +497,15 @@ fn software_rendering_notice(asks: bool, is_remote: bool, renderer: Option<&str>
 /// The interface's translations are loaded before any text is made
 /// (INT-031), from this build channel's catalogue (`I18N_DOMAIN`).
 /// Started with `--ox-read-media-details`, it is the Details tab's reader
-/// process instead, which shows nothing (see `media_details.rs`).
+/// process instead, which shows nothing (see `media_details.rs`); started
+/// with `--ox-draw-vector-picture`, it draws one vector picture for the
+/// app (see `picture_guard/vector.rs`).
 pub fn run() -> glib::ExitCode {
     let arguments: Vec<String> = std::env::args().collect();
     if let Some(status) = crate::media_details::run_as_reader(&arguments) {
+        return status;
+    }
+    if let Some(status) = crate::picture_guard::run_as_drawer(&arguments) {
         return status;
     }
     ox_core::i18n::install(crate::config::I18N_DOMAIN);

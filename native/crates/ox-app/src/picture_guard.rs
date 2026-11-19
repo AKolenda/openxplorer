@@ -27,7 +27,10 @@
 //! drawn at the size shown whatever size they declare. An animated GIF
 //! is fed only up to the end of its first frame, as Windows shows a GIF's
 //! first frame, so thousands of frames are never held. Reading stops
-//! once the time limit has passed, looked at between reads ([`TIME_LIMIT`]). Every failure is a [`Refusal`], and
+//! once the time limit has passed, looked at between reads ([`TIME_LIMIT`]).
+//! A vector picture is drawn in a child process with limits of its own
+//! ([`vector`]), as drawing one can take any time and memory and cannot be
+//! stopped once started. Every failure is a [`Refusal`], and
 //! callers show the file's type icon instead, as Windows Explorer does
 //! for a picture it cannot preview.
 //!
@@ -41,6 +44,10 @@ use std::time::{Duration, Instant};
 use gtk::gdk_pixbuf::{Pixbuf, PixbufFormat, PixbufLoader};
 use gtk::gio;
 use gtk::prelude::*;
+
+mod vector;
+
+pub(crate) use vector::run_as_drawer;
 
 /// The most pixels a raster picture may have to be decoded for display:
 /// 64 megapixels (8192 × 8192), more than any camera's photo, 256 MB
@@ -180,8 +187,59 @@ pub(crate) fn decode_reader_to_fit(
 }
 
 /// The picture `next_chunk` hands over a chunk at a time, decoded within
-/// `limits` from `started`.
+/// `limits` from `started`: a vector picture in a drawing process
+/// ([`vector`]), any other here.
 fn decode_read_to_fit(
+    mut next_chunk: impl FnMut(&mut [u8]) -> Result<usize, ()>,
+    started: Instant,
+    width: i32,
+    height: i32,
+    limits: Limits,
+    cancellable: Option<&gio::Cancellable>,
+) -> Result<Decoded, Refusal> {
+    // The first bytes tell a vector picture.
+    let mut first = Vec::new();
+    let mut buffer = vec![0; READ_CHUNK];
+    let mut ended = false;
+    while first.len() < vector::SNIFF_BYTES {
+        if cancellable.is_some_and(CancellableExt::is_cancelled) {
+            return Err(Refusal::Cancelled);
+        }
+        if started.elapsed() >= limits.time {
+            return Err(Refusal::TimedOut);
+        }
+        let read = next_chunk(&mut buffer).map_err(|()| refusal_for(cancellable))?;
+        if read == 0 {
+            ended = true;
+            break;
+        }
+        first.extend_from_slice(&buffer[..read]);
+    }
+    if vector::may_be_vector(&first) {
+        let rest = |buffer: &mut [u8]| if ended { Ok(0) } else { next_chunk(buffer) };
+        let document = vector::read_document(first, rest, started, limits, cancellable)?;
+        return vector::draw(&document, width, height, limits, started, cancellable);
+    }
+    // Any other picture is read here, from those first bytes on.
+    let mut at = 0;
+    let replayed = move |buffer: &mut [u8]| {
+        if at < first.len() {
+            let count = (first.len() - at).min(buffer.len());
+            buffer[..count].copy_from_slice(&first[at..at + count]);
+            at += count;
+            Ok(count)
+        } else if ended {
+            Ok(0)
+        } else {
+            next_chunk(buffer)
+        }
+    };
+    decode_loaded(replayed, started, width, height, limits, cancellable)
+}
+
+/// The picture `next_chunk` hands over a chunk at a time, decoded here by
+/// gdk-pixbuf within `limits` from `started`.
+fn decode_loaded(
     mut next_chunk: impl FnMut(&mut [u8]) -> Result<usize, ()>,
     started: Instant,
     width: i32,
@@ -1295,6 +1353,49 @@ mod tests {
         let decoded = decode(&huge, Limits::DISPLAY).expect("a vector picture is drawn");
         assert_eq!((decoded.width, decoded.height), (100_000, 50_000));
         assert_eq!((decoded.pixbuf.width(), decoded.pixbuf.height()), (256, 128));
+    }
+
+    /// An SVG of `length` letters of text in one line, which costs far
+    /// more to draw than its file size suggests.
+    fn long_text_svg(folder: &Path, name: &str, length: usize) -> PathBuf {
+        let path = folder.join(name);
+        let text = "a".repeat(length);
+        let svg = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\">\
+             <text y=\"20\">{text}</text></svg>"
+        );
+        std::fs::write(&path, svg).expect("svg");
+        path
+    }
+
+    /// An SVG that needs more memory to draw whole than a picture may have
+    /// is drawn without what does not fit, or refused, in time, and the
+    /// app goes on running.
+    #[test]
+    fn an_svg_too_large_to_draw_whole_is_drawn_in_part_or_refused() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let path = long_text_svg(folder.path(), "Poster.svg", 1_000_000);
+        let started = Instant::now();
+        if let Ok(decoded) = decode(&path, Limits::DISPLAY) {
+            assert_eq!((decoded.width, decoded.height), (100, 100));
+            assert!(decoded.pixbuf.width() <= 256 && decoded.pixbuf.height() <= 256);
+        }
+        assert!(started.elapsed() < TIME_LIMIT + Duration::from_secs(5));
+    }
+
+    /// An SVG that takes longer to draw than the time limit is refused once
+    /// the limit has passed, not when drawing ends.
+    #[test]
+    fn an_svg_slow_to_draw_is_refused_at_the_time_limit() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let path = long_text_svg(folder.path(), "Leaflet.svg", 100_000);
+        let short = Limits {
+            time: Duration::from_secs(2),
+            ..Limits::DISPLAY
+        };
+        let started = Instant::now();
+        assert_eq!(decode(&path, short).map(|_| ()), Err(Refusal::TimedOut));
+        assert!(started.elapsed() < Duration::from_secs(6));
     }
 
     /// Reading stops at the time limit, and when the caller cancels.
