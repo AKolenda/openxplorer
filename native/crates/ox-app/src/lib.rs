@@ -21,6 +21,7 @@ mod app_context;
 pub mod application;
 mod archive_view;
 mod arguments;
+mod bounded_io;
 mod config;
 mod crash_guard;
 mod devices;

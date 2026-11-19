@@ -48,7 +48,20 @@ impl ShortcutKind {
     /// The kind of the item at `uri`: a local symbolic link, or a local
     /// `.desktop` file of an application or a link; `None` for anything
     /// else, which has no Shortcut tab.
+    ///
+    /// Looked at on a worker thread for at most
+    /// [`crate::bounded_io::MAIN_THREAD_WAIT`]: a launcher on a share that
+    /// stopped answering gets no Shortcut tab, and the window opens.
     pub(super) fn of(uri: &str) -> Option<Self> {
+        let owned = uri.to_owned();
+        crate::bounded_io::wait_for(uri, crate::bounded_io::MAIN_THREAD_WAIT, move || {
+            Self::read(&owned)
+        })
+        .flatten()
+    }
+
+    /// [`Self::of`], on the calling thread. Blocks.
+    fn read(uri: &str) -> Option<Self> {
         let path = gio::File::for_uri(uri).path()?;
         if std::fs::symlink_metadata(&path).ok()?.file_type().is_symlink() {
             return Some(Self::Link);
@@ -140,10 +153,7 @@ impl ShortcutPanel {
         let Some(path) = gio::File::for_uri(&properties.entry.uri).path() else {
             return;
         };
-        let facts = match self.kind {
-            ShortcutKind::Link => link_facts(&path, properties.link_target.as_deref().unwrap_or_default()),
-            ShortcutKind::Application | ShortcutKind::Address => launcher_facts(&path, &self.kind),
-        };
+        let facts = read_facts(&path, &self.kind, properties.link_target.as_deref());
         let Some(facts) = facts else {
             return;
         };
@@ -277,6 +287,19 @@ struct Facts {
     /// The target's path, which Target type, Target location and Open File
     /// Location describe; `None` when there is none to find (an address).
     located: Option<PathBuf>,
+}
+
+/// The facts of the shortcut of `kind` at `path`, a link to `link_target`
+/// or a launcher, read on a worker thread as its kind was
+/// ([`ShortcutKind::of`]): `None` when a share stopped answering.
+fn read_facts(path: &Path, kind: &ShortcutKind, link_target: Option<&str>) -> Option<Facts> {
+    let (kind, link_target) = (kind.clone(), link_target.unwrap_or_default().to_owned());
+    let (key, looked) = (path.to_string_lossy().into_owned(), path.to_path_buf());
+    crate::bounded_io::wait_for(&key, crate::bounded_io::MAIN_THREAD_WAIT, move || match kind {
+        ShortcutKind::Link => link_facts(&looked, &link_target),
+        ShortcutKind::Application | ShortcutKind::Address => launcher_facts(&looked, &kind),
+    })
+    .flatten()
 }
 
 /// The link at `path`, pointing at `target`.
@@ -550,6 +573,18 @@ mod tests {
         text.push_str(&"#".repeat(2 * 1024 * 1024));
         std::fs::write(&huge, text).expect("written");
         assert_eq!(ShortcutKind::of(&gio::File::for_path(&huge).uri()), None);
+        // A launcher on a mount that stopped answering: no tab, at once.
+        let launcher = folder.path().join("Launcher.desktop");
+        std::fs::write(&launcher, "[Desktop Entry]\nType=Application\nExec=true\n").expect("written");
+        assert_eq!(
+            ShortcutKind::of(&gio::File::for_path(&launcher).uri()),
+            Some(ShortcutKind::Application)
+        );
+        let stalled = crate::bounded_io::stall::stall(folder.path());
+        let started = std::time::Instant::now();
+        assert_eq!(ShortcutKind::of(&gio::File::for_path(&launcher).uri()), None);
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+        drop(stalled);
         let garbage = folder.path().join("Garbage.desktop");
         std::fs::write(&garbage, [0xFF, 0xFE, 0, b'[', 0x80]).expect("written");
         assert_eq!(ShortcutKind::of(&gio::File::for_path(&garbage).uri()), None);

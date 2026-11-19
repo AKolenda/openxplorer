@@ -406,8 +406,13 @@ fn startup_location(context: &AppContext) -> String {
     let exists = |uri: &String| {
         let file = gio::File::for_uri(uri);
         // Only a local folder is checked: a share may need a sign-in, which
-        // its listing asks for.
-        file.path().is_none_or(|path| path.is_dir())
+        // its listing asks for. A path may still be a mount of a share, so
+        // it is looked at on a worker thread for a moment; one that does
+        // not answer is opened, and its listing says what is wrong.
+        file.path().is_none_or(|path| {
+            crate::bounded_io::wait_for(uri, crate::bounded_io::MAIN_THREAD_WAIT, move || path.is_dir())
+                .unwrap_or(true)
+        })
     };
     // An unset startup folder opens Home: the home folder (NAV-038), or,
     // while "Open Quick access on Home" is on, the Home page, as "Open

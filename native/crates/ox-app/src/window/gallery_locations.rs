@@ -345,9 +345,15 @@ impl GalleryLocations {
     /// Puts the local folder at `uri` in the list, once.
     pub(crate) fn add_folder(&self, uri: &str) {
         let file = gio::File::for_uri(uri);
+        // Looked at on a worker thread for a moment: a path may be a mount
+        // of a share that stopped answering.
+        let looked = file.clone();
         let is_local_folder = file.path().is_some()
-            && file.query_file_type(gio::FileQueryInfoFlags::NONE, gio::Cancellable::NONE)
-                == gio::FileType::Directory;
+            && crate::bounded_io::wait_for(uri, crate::bounded_io::MAIN_THREAD_WAIT, move || {
+                looked.query_file_type(gio::FileQueryInfoFlags::NONE, gio::Cancellable::NONE)
+                    == gio::FileType::Directory
+            })
+            .unwrap_or(false);
         if !is_local_folder {
             self.frame.show_error(&ox_core::i18n::gettext(
                 "Only folders on this computer can be added.",

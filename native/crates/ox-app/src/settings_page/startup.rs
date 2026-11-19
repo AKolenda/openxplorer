@@ -67,7 +67,13 @@ pub(super) fn startup_folder_for(typed: &str, base: Option<&str>) -> Result<Stri
         return Err(ox_core::i18n::gettext("Settings cannot be the startup folder."));
     }
     // A share is checked when it is listed, which may ask for a sign-in.
-    let is_missing = gio::File::for_uri(&uri).path().is_some_and(|path| !path.is_dir());
+    // A path may be a mount of a share that stopped answering: it is looked
+    // at on a worker thread for a moment, and one that does not answer is
+    // accepted, as a share is.
+    let is_missing = gio::File::for_uri(&uri).path().is_some_and(|path| {
+        crate::bounded_io::wait_for(&uri, crate::bounded_io::MAIN_THREAD_WAIT, move || !path.is_dir())
+            .unwrap_or(false)
+    });
     if is_missing {
         return Err(ox_core::i18n::format_message(
             "“{typed}” is not a folder that exists.",
@@ -198,5 +204,17 @@ mod tests {
         assert_eq!(startup_folder_for("  ", None), Ok(String::new()));
         let message = missing.expect_err("a missing folder is refused");
         assert!(message.ends_with("is not a folder that exists."), "{message}");
+    }
+
+    /// A folder on a mount that stopped answering is accepted at once, as
+    /// a share is, instead of freezing Settings.
+    #[test]
+    fn a_folder_on_a_stalled_mount_is_accepted_at_once() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let path = folder.path().to_str().expect("a UTF-8 path");
+        let _stalled = crate::bounded_io::stall::stall(folder.path());
+        let started = std::time::Instant::now();
+        assert!(startup_folder_for(&format!("{path}/Projects"), None).is_ok());
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
     }
 }
