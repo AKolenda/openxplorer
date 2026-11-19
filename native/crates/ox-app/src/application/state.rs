@@ -222,8 +222,10 @@ impl AppState {
     /// saved, else a window at the startup folder.
     fn open_first_window(&self, app: &gtk::Application) {
         let preferences = self.context.settings_data().preferences;
-        let saved = preferences
-            .restore_session
+        // Not after a crash loop: a saved tab that takes the app down
+        // would otherwise take it down at every start.
+        let restore = preferences.restore_session && crate::crash_guard::previous_run().may_restore_tabs();
+        let saved = restore
             .then(|| SavedSession::load(&self.context.settings_directory()))
             .flatten();
         let Some(saved) = saved else {

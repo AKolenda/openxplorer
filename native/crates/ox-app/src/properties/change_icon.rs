@@ -64,7 +64,7 @@ impl IconGrid {
         let name = file
             .basename()
             .map_or_else(|| uri.clone(), |name| name.display().to_string());
-        let image = gtk::Image::from_gicon(&gio::FileIcon::new(&file));
+        let image = crate::picture_guard::guarded_image(&uri, ICON_SIZE);
         let tile = self.insert(&image, uri, &name, 0);
         self.grid.select_child(&tile);
     }

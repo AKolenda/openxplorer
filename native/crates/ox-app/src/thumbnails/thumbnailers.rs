@@ -1009,26 +1009,9 @@ fn sandbox_arguments(
     program: &[PathBuf],
     proc: bool,
 ) -> Vec<OsString> {
-    let mut arguments: Vec<OsString> = Vec::new();
+    let mut arguments = system_arguments(program, proc);
     let mut add = |words: &[&OsStr]| arguments.extend(words.iter().map(|word| (*word).to_owned()));
     let word = OsStr::new;
-    add(&[word("--ro-bind"), word("/usr"), word("/usr")]);
-    for extra in SYSTEM_EXTRAS {
-        add(&[word("--ro-bind-try"), word(extra), word(extra)]);
-    }
-    for folder in SYSTEM_FOLDERS {
-        if let Ok(target) = fs::read_link(folder) {
-            add(&[word("--symlink"), target.as_os_str(), word(folder)]);
-        } else if Path::new(folder).is_dir() {
-            add(&[word("--ro-bind"), word(folder), word(folder)]);
-        }
-    }
-    for folder in program {
-        add(&[word("--ro-bind"), folder.as_os_str(), folder.as_os_str()]);
-    }
-    if proc {
-        add(&[word("--proc"), word("/proc")]);
-    }
     add(&[
         word("--dev"),
         word("/dev"),
@@ -1054,6 +1037,76 @@ fn sandbox_arguments(
         inside_item.as_os_str(),
     ]);
     arguments
+}
+
+/// bubblewrap's arguments that show the system read-only (`/usr`, the
+/// [`SYSTEM_EXTRAS`] and the [`SYSTEM_FOLDERS`]) and the `program`
+/// folders of [`program_folders`] read-only, with a `/proc` of its own
+/// when `proc`.
+fn system_arguments(program: &[PathBuf], proc: bool) -> Vec<OsString> {
+    let mut arguments: Vec<OsString> = Vec::new();
+    let mut add = |words: &[&OsStr]| arguments.extend(words.iter().map(|word| (*word).to_owned()));
+    let word = OsStr::new;
+    add(&[word("--ro-bind"), word("/usr"), word("/usr")]);
+    for extra in SYSTEM_EXTRAS {
+        add(&[word("--ro-bind-try"), word(extra), word(extra)]);
+    }
+    for folder in SYSTEM_FOLDERS {
+        if let Ok(target) = fs::read_link(folder) {
+            add(&[word("--symlink"), target.as_os_str(), word(folder)]);
+        } else if Path::new(folder).is_dir() {
+            add(&[word("--ro-bind"), word(folder), word(folder)]);
+        }
+    }
+    for folder in program {
+        add(&[word("--ro-bind"), folder.as_os_str(), folder.as_os_str()]);
+    }
+    if proc {
+        add(&[word("--proc"), word("/proc")]);
+    }
+    arguments
+}
+
+/// The words that start `program` in a bubblewrap sandbox of its own, for
+/// the app's picture decoder ([`crate::picture_guard`]): the system and
+/// the program's install folder read-only as a thumbnailer sees them
+/// ([`system_arguments`]), an empty private `/tmp` as its home, no
+/// network, no session bus, none of the user's files and no other
+/// process, ending with the app. The decoder reads the picture from its
+/// standard input, so no file is shown to it. `None` when bubblewrap is
+/// not installed; whether the sandbox works here is for the caller to
+/// try.
+pub(crate) fn decoder_sandbox(program: &Path, proc: bool) -> Option<Vec<OsString>> {
+    let bwrap = glib::find_program_in_path("bwrap")?;
+    let folders = program_folders(program, &UserFolders::of_session());
+    let mut words = vec![bwrap.into_os_string()];
+    words.extend(system_arguments(&folders, proc));
+    words.extend(
+        [
+            "--dev",
+            "/dev",
+            "--tmpfs",
+            INSIDE,
+            "--chdir",
+            "/",
+            "--setenv",
+            "GIO_USE_VFS",
+            "local",
+            "--setenv",
+            "HOME",
+            INSIDE,
+            "--setenv",
+            "TMPDIR",
+            INSIDE,
+            "--unshare-all",
+            "--die-with-parent",
+            "--new-session",
+            "--",
+        ]
+        .map(OsString::from),
+    );
+    words.push(program.as_os_str().to_owned());
+    Some(words)
 }
 
 /// The user's folders no thumbnailer's install folder may be or hold.

@@ -214,23 +214,21 @@ fn read_photo_facts(entry: &Entry) -> PhotoFacts {
     let Some(path) = gio::File::for_uri(&entry.uri).path() else {
         return PhotoFacts::default();
     };
+    let mut head = Vec::new();
+    let read = std::fs::File::open(&path).and_then(|file| file.take(EXIF_HEAD).read_to_end(&mut head));
     let exif = entry
         .content_type
         .as_deref()
-        .filter(|content_type| EXIF_TYPES.contains(content_type))
-        .and_then(|_| {
-            let mut head = Vec::new();
-            std::fs::File::open(&path)
-                .ok()?
-                .take(EXIF_HEAD)
-                .read_to_end(&mut head)
-                .ok()?;
-            Some(exif_facts_in(&head))
-        })
+        .filter(|content_type| read.is_ok() && EXIF_TYPES.contains(content_type))
+        .map(|_| exif_facts_in(&head))
         .unwrap_or_default();
-    // The header only: gdk-pixbuf reads as little as it needs for the size.
-    let pixel_size = gtk::gdk_pixbuf::Pixbuf::file_info(&path).and_then(|(_, width, height)| {
-        let (width, height) = (u32::try_from(width).ok()?, u32::try_from(height).ok()?);
+    // The header only, read in pure Rust where the format allows it, else
+    // by the picture decoder process: no C loader reads it in the app.
+    let declared = crate::picture_guard::declared_dimensions(&head).or_else(|| {
+        let (width, height) = crate::picture_guard::dimensions(&gio::File::for_path(&path))?;
+        Some((u32::try_from(width).ok()?, u32::try_from(height).ok()?))
+    });
+    let pixel_size = declared.and_then(|(width, height)| {
         let turned = matches!(exif.orientation, Some(5..=8));
         (width > 0 && height > 0).then_some(if turned { (height, width) } else { (width, height) })
     });

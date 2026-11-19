@@ -19,15 +19,12 @@ use std::fs;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
-use gtk::gdk_pixbuf::{Pixbuf, PixbufLoader};
+use gtk::gdk_pixbuf::Pixbuf;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::{thumbnail_file, ThumbnailFlavor};
 
 use crate::picture_guard::{self, Limits, Refusal};
-
-/// How much of a picture is read at a time.
-const READ_CHUNK: usize = 64 * 1024;
 
 /// What the thumbnail is made of.
 #[derive(Debug, Clone)]
@@ -184,16 +181,12 @@ fn create_folder(folder: &Path) -> Option<()> {
 /// The PNG in `bytes`, decoded to fit `edge` pixels square as
 /// [`scaled_picture`] decodes a file: a desktop thumbnailer's picture,
 /// which the app read into memory itself and checked the size of (see
-/// [`super::thumbnailers`]). Only gdk-pixbuf's PNG loader reads it.
+/// [`super::thumbnailers`]). It was made from an untrusted file, so it is
+/// decoded by the picture decoder process, never in the app.
 pub(super) fn scaled_png(bytes: &[u8], edge: i32) -> Option<Pixbuf> {
-    let loader = scaling(PixbufLoader::with_type("png").ok()?, edge);
-    for chunk in bytes.chunks(READ_CHUNK) {
-        if loader.write(chunk).is_err() {
-            let _ = loader.close();
-            return None;
-        }
-    }
-    finish(&loader)
+    picture_guard::decode_bytes_to_fit(bytes.to_vec(), edge, edge, Limits::DISPLAY, None)
+        .ok()
+        .map(|decoded| decoded.pixbuf)
 }
 
 /// The picture at `uri`, turned upright and decoded to fit `edge` pixels
@@ -205,34 +198,6 @@ fn scaled_picture(uri: &str, edge: i32, cancellation: &gio::Cancellable) -> Resu
     let file = gio::File::for_uri(uri);
     picture_guard::decode_to_fit(&file, edge, edge, Limits::DISPLAY, Some(cancellation))
         .map(|decoded| decoded.pixbuf)
-}
-
-/// `loader`, made to decode its picture to fit `edge` pixels square, or
-/// at its own size when smaller.
-fn scaling(loader: PixbufLoader, edge: i32) -> PixbufLoader {
-    loader.connect_size_prepared(move |loader, width, height| {
-        if width > edge || height > edge {
-            let (width, height) = fit(width, height, edge);
-            loader.set_size(width, height);
-        }
-    });
-    loader
-}
-
-/// The picture `loader` was given, turned upright.
-fn finish(loader: &PixbufLoader) -> Option<Pixbuf> {
-    loader.close().ok()?;
-    let pixbuf = loader.pixbuf()?;
-    Some(pixbuf.apply_embedded_orientation().unwrap_or(pixbuf))
-}
-
-/// `width` × `height` scaled to fit `edge` square, keeping the aspect
-/// ratio and at least one pixel.
-fn fit(width: i32, height: i32, edge: i32) -> (i32, i32) {
-    let longest = width.max(height).max(1);
-    let scale = |side: i32| (i64::from(side) * i64::from(edge) / i64::from(longest)).max(1);
-    let to_i32 = |side: i64| i32::try_from(side).unwrap_or(edge);
-    (to_i32(scale(width)), to_i32(scale(height)))
 }
 
 #[cfg(test)]

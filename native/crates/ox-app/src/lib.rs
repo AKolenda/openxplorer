@@ -22,6 +22,7 @@ pub mod application;
 mod archive_view;
 mod arguments;
 mod config;
+mod crash_guard;
 mod devices;
 mod dialog;
 mod dialogs;

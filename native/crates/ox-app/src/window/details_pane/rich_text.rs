@@ -471,4 +471,58 @@ mod tests {
         assert_eq!(rtf_text(new), "\n");
         assert!(!is_rtf(b"plain text"));
     }
+
+    /// Seeded mutations of RTF documents, and deep or endless groups, are
+    /// read to text without a panic and in bounded time, as is any text
+    /// the Preview pane decodes.
+    #[test]
+    fn mutated_rtf_and_text_are_read_without_a_panic() {
+        let samples: [&[u8]; 4] = [
+            br"{\rtf1\ansi\ansicpg1252{\fonttbl{\f0 Arial;}}\f0 Hello \'e9t\'e9 \u8364? \par World}",
+            br"{\rtf1{\*\generator x}\uc2\u55357\'3f\'3f\u56832\'3f\'3f text\bin5 abcde}",
+            br"{\rtf1\ansicpg932 \'82\'a0\'82 {\field{\*\fldinst HYPERLINK}{\fldrslt link}}}",
+            br"{\rtf1 \-\~\_\{\}\\\tab\line\u-10000 \u99999999999999999999 end",
+        ];
+        let mut seed = 0xC0FF_EE11_u32;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            usize::try_from(seed).unwrap_or(0)
+        };
+        for sample in samples {
+            // `OX_FUZZ_ROUNDS` raises the rounds for a longer local run.
+            let rounds = std::env::var("OX_FUZZ_ROUNDS")
+                .ok()
+                .and_then(|rounds| rounds.parse().ok());
+            for _ in 0..rounds.unwrap_or(3000) {
+                let mut bytes = sample.to_vec();
+                for _ in 0..=(next() % 6) {
+                    let at = next() % (bytes.len() + 1);
+                    let byte = b"{}\\'u0123456789-? abz\xff\x00"[next() % 22];
+                    if next() % 3 == 0 && at < bytes.len() {
+                        bytes[at] = byte;
+                    } else {
+                        bytes.insert(at, byte);
+                    }
+                }
+                let _ = rtf_text(&bytes);
+                let _ = crate::window::details_pane::preview_page::decode_text(&bytes, next() % 2 == 0);
+            }
+        }
+        let started = std::time::Instant::now();
+        let mut deep = b"{\\rtf1 ".to_vec();
+        deep.extend(std::iter::repeat_n(b'{', 1_000_000));
+        let _ = rtf_text(&deep);
+        let mut words = b"{\\rtf1 ".to_vec();
+        words.extend(b"\\u65535".iter().copied().cycle().take(1_000_000));
+        let _ = rtf_text(&words);
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+        for length in 0..512 {
+            let bytes: Vec<u8> = (0..length)
+                .map(|_| u8::try_from(next() % 256).unwrap_or(0))
+                .collect();
+            let _ = crate::window::details_pane::preview_page::decode_text(&bytes, length % 2 == 0);
+        }
+    }
 }

@@ -553,10 +553,9 @@ fn read_text(path: &Path, rich: bool, cancellation: &gio::Cancellable) -> Option
 /// file ([`open_plain_file`]) or a picture gdk-pixbuf reads, or was
 /// refused. Blocks.
 fn decode_picture(path: &Path, edge: i32, cancellation: &gio::Cancellable) -> Option<gdk::Texture> {
-    let mut file = open_plain_file(path)?;
+    let file = open_plain_file(path)?;
     let decoded =
-        picture_guard::decode_reader_to_fit(&mut file, edge, edge, Limits::DISPLAY, Some(cancellation))
-            .ok()?;
+        picture_guard::decode_file_to_fit(file, edge, edge, Limits::DISPLAY, Some(cancellation)).ok()?;
     Some(gdk::Texture::for_pixbuf(&decoded.pixbuf))
 }
 
