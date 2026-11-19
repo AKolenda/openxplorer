@@ -313,3 +313,70 @@ impl Drop for AbortingPlayer {
         std::env::remove_var(ABORT_VARIABLE);
     }
 }
+
+/// The app's open files and threads.
+fn open_files_and_threads() -> (usize, usize) {
+    let count = |folder: &str| fs::read_dir(folder).map_or(0, Iterator::count);
+    (count("/proc/self/fd"), count("/proc/self/task"))
+}
+
+/// Selects each of `names` in turn, staying `dwell` on each.
+fn walk(test: &TestWindow, names: &[String], dwell: Duration) {
+    for name in names {
+        select_names(test, &[name.as_str()]);
+        wait_for(dwell);
+    }
+}
+
+/// Arrowing through 200 recordings with the Details pane, then with the
+/// Preview pane, quickly and then slowly enough for each player to start,
+/// leaves the app with the open files and threads it had: no player, nor
+/// anything `GStreamer` leaks, stays behind in the app. GTK 4.14's own
+/// player leaked about ten files and eight threads for each recording
+/// shown, until the app ran out of files and `GLib` aborted it.
+///
+/// parity: PROP-011
+#[gtk::test]
+fn arrowing_through_200_recordings_leaves_nothing_behind() {
+    let fixture = Fixture::standard();
+    write_clip(&fixture.path("Clip 000.ogv"), 2);
+    write_song(&fixture.path("Song 000.ogg"));
+    let mut names = Vec::new();
+    for number in 1..=100 {
+        for (stem, extension) in [("Clip", "ogv"), ("Song", "ogg")] {
+            let name = format!("{stem} {number:03}.{extension}");
+            fs::copy(
+                fixture.path(&format!("{stem} 000.{extension}")),
+                fixture.path(&name),
+            )
+            .expect("a copy");
+            names.push(name);
+        }
+    }
+    let test = window_with_player(&fixture, true);
+    let pane = test.window.details_pane();
+    wait_until("the recordings", || test.names().len() > 200);
+    // What the app has open once one player ran and stopped.
+    play(&test, "Clip 000.ogv");
+    select_names(&test, &["Notes 2.txt"]);
+    wait_until("the player to go", || !shows_player(pane));
+    wait_for(Duration::from_secs(1));
+    let (files, threads) = open_files_and_threads();
+
+    for preview_pane in [false, true] {
+        if preview_pane {
+            test.activate("preview-pane", None);
+            wait_until("the Preview pane", || pane.is_visible());
+        }
+        walk(&test, &names, Duration::from_millis(30));
+        walk(&test, &names[..12], Duration::from_millis(700));
+        wait_until("a player for the last recording", || {
+            player_stream(pane).is_some()
+        });
+        select_names(&test, &["Notes 2.txt"]);
+        wait_until("the open files and threads to come back", || {
+            let (now_files, now_threads) = open_files_and_threads();
+            now_files <= files + 4 && now_threads <= threads + 4
+        });
+    }
+}
