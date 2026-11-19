@@ -82,6 +82,7 @@ mod opening;
 mod panes_layout;
 mod pointer_feedback;
 mod preview_pane;
+mod preview_player;
 mod properties_width;
 mod recent_rows;
 mod recycle_bin;
