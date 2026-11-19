@@ -2940,5 +2940,9 @@ fn a_link_renamed_in_properties_to_a_known_type_hides_its_extension_after() {
     wait_until("the hidden extension kept", || {
         fixture.path("memo.txt").is_symlink()
     });
-    assert_eq!(window.title_text(), "memo Properties");
+    // The title follows once the rename has answered, a moment after the
+    // link has its new name on disk.
+    wait_until("the title to follow the rename", || {
+        window.title_text() == "memo Properties"
+    });
 }
