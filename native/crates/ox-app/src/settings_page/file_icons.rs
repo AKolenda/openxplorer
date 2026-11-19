@@ -175,7 +175,7 @@ fn kind_row(page: &SettingsPage, kind: &'static Kind) -> SettingRow {
             reset.set_visible(chosen.is_some());
         }
     ));
-    row.add_control(&shown.widget, ControlName::RowTitle);
+    row.add_control(&shown.widget, ControlName::OwnLabel);
     row.add_control(&reset, ControlName::OwnLabel);
     row.add_control(&change, ControlName::OwnLabel);
     row
@@ -529,9 +529,21 @@ impl SettingsPage {
                 return;
             };
             let uri = gio::File::for_path(path).uri().to_string();
+            let chosen_before = |page: &SettingsPage| {
+                page.context()
+                    .settings_data()
+                    .preferences
+                    .file_icons
+                    .get(&kind)
+                    .cloned()
+            };
+            let Some(before) = page.upgrade().map(|page| chosen_before(&page)) else {
+                return;
+            };
             // Only a picture the file list can show, read as it reads one.
             let readable = icon_texture(uri.clone()).await.is_some();
-            let Some(page) = page.upgrade() else {
+            // An icon chosen for the kind while the picture was read wins.
+            let Some(page) = page.upgrade().filter(|page| chosen_before(page) == before) else {
                 return;
             };
             if readable {
