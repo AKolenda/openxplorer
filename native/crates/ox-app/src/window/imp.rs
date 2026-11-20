@@ -89,6 +89,9 @@ pub(crate) struct BrowserWindow {
     pub(super) sidebar_show_all: Cell<bool>,
     /// How many items the Recycle Bin holds, as its sidebar row shows.
     pub(super) trash_items: Cell<u32>,
+    /// The generation of the icons chosen in File icons (LOOK-029) the
+    /// details pane last showed.
+    pub(super) file_icons_shown: Cell<u32>,
     /// Watches the Recycle Bin for its sidebar row.
     pub(super) recycle_bin_watch: RecycleBinWatch,
     /// The Places button shown in the navigation row while the navigation

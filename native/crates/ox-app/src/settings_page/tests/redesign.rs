@@ -240,6 +240,17 @@ fn every_setting_of_the_earlier_layout_is_on_one_of_the_new_pages() {
         "Show hidden files, folders, and drives",
         "Hide extensions for known file types",
         "Folder Options",
+        // File icons (LOOK-029).
+        "Folder icon",
+        "ZIP archive icon",
+        "Document icon",
+        "Text file icon",
+        "Spreadsheet icon",
+        "Picture icon",
+        "Video icon",
+        "Music icon",
+        "Code icon",
+        "File name endings",
     ];
     for title in added_since {
         settings.row(title);

@@ -36,6 +36,7 @@ mod art;
 mod art_image;
 mod composition;
 mod emblem;
+pub(crate) mod file_icons;
 mod file_type;
 mod icon;
 mod tint;

@@ -1,3 +1,29 @@
+# 2.0.21 — 2026-11-19
+
+You can choose the icon of folders, ZIP archives and each type of file, so a ZIP archive no longer has to look like a folder. Files whose names end a certain way, such as `.iso`, can have an icon of their own.
+
+## Updating from 2.0.20
+* Nothing looks different until you choose an icon: every item keeps its usual one.
+
+## What's Changed
+* **File icons:** **Settings › Appearance › File icons** has a row for folders, ZIP archives, documents, text files, spreadsheets, pictures, videos, music and code. **Change…** offers the app's own pictures, including a document with a zipper for ZIP archives, or **Browse for a picture…** for one of your own, and **Reset** brings the usual icon back. **File name endings** gives files ending in `.iso`, `.tar.gz` and so on an icon of their own; the longest matching ending wins. Open folder views and the Details pane change at once, Properties shows the icon when opened, and screen readers name the chosen icon ([#357](https://github.com/AKolenda/openxplorer/issues/357)).
+* **Contributing:** pull requests from outside contributors accept the new [contributor licence agreement](https://github.com/AKolenda/openxplorer/blob/main/CLA.md) with a `CLA: I agree` line.
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.21_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.21-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.21-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.21-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.21-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.20...v2.0.21
+
 # 2.0.20 — 2026-11-18
 
 7z archives open like folders, as ZIP and TAR archives do, and every submenu opens when the pointer rests on its row. Properties leaves out an extension the window hides, overflowing tabs scroll with arrows, and Replace can overwrite the old file as Windows 11 does. A mistyped address, new files, RTF previews, large text and screen readers all work more like Windows 11. Much of this release is the work of @addition-official.

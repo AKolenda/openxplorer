@@ -15659,6 +15659,23 @@ native = "partial"
 native_note = "native/crates/ox-app/tests/display_scale.rs (twice_the_scale_draws_the_bars_on_whole_device_pixels) runs the built app with GDK_SCALE=1 and 2 through the snapshot hook: the layout doubles exactly; down one column of the navigation row and the command bar each line and fill covers whole device pixels; and the first row's folder artwork at 2x equals the bundled vector file drawn at 32 device pixels, pixel for pixel, rather than the 16-pixel picture enlarged. Every icon is a bundled SVG looked up by name and every line is CSS, so GTK draws them at the surface scale; the app keeps no bitmap rendered at one scale. Remaining: fractional scales (125/150/175%) and the redraw when a window moves to a monitor of another scale need a Wayland compositor with fractional scaling, which check.py's Xvfb display is not; focus outlines and hit targets at 2x are not checked."
 
 [[feature]]
+id = "LOOK-029"
+area = "LOOK"
+title = "Choose the icon of each kind of item"
+behaviour = "Settings > Appearance > File icons has a row for folders, ZIP archives, documents, text files, spreadsheets, pictures, videos, music and code (Folder icon, ZIP archive icon and so on), each with the icon its items show now. Change... offers the app's pictures (folder, folder with a zipper, document with a zipper, document, text, spreadsheet, picture, video, music, code) and Browse for a picture... for one of the user's own; Reset shows while another icon is chosen and brings the usual one back. File name endings gives files ending a certain way, such as .iso or .tar.gz, an icon of their own, which takes the place of their type's; the longest matching ending wins. Every open folder view and the details pane show the new icon at once, and Properties shows it when opened. A folder's own icon from its Properties, a folder picture and a preview still come first."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "https://github.com/AKolenda/openxplorer/issues/357 (a user with low vision cannot tell ZIP archives from folders and asks to choose file-type and folder icons)",
+]
+python_tests = []
+bridge = []
+gnome = "Files has no per-type icon setting; desktop icon themes map MIME types to icons"
+native = "done"
+native_note = "native/crates/ox-core/src/settings/file_icons.rs keeps fileIcons (a kind or a name ending to one of the app's pictures or a file:// picture) and Settings::set_file_icon changes one entry. native/crates/ox-app/src/icons/file_icons.rs holds the choice on the main thread, so Art::for_entry follows it, and counts a generation that CellOwners::follow_file_icons compares to draw the cells on screen again; a picture of the user's stands in the icon's place after the item's own custom icon, its folder picture and its preview (folder_view/cells/custom_icon.rs), in the details pane after its thumbnail or folder picture (window/details_pane/media.rs) and in the Properties header (properties/general_tab.rs). The tabs, the address bar and the navigation pane keep the usual folder. native/crates/ox-app/src/settings_page/file_icons.rs is the group. Tested in native/crates/ox-app/src/window/tests/views.rs (icons_chosen_in_file_icons_replace_the_usual_ones_at_once)."
+
+[[feature]]
 id = "INT-001"
 area = "INT"
 title = "Single-instance application"

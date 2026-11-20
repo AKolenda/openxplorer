@@ -64,16 +64,21 @@ impl DetailsPane {
         };
         match media {
             MediaPreview::Image { path, size } if *size <= MAX_IMAGE_BYTES => {
-                self.load_picture(generation, Some(path.clone()), None, true);
+                self.load_picture(generation, Some(path.clone()), None, None, true);
             }
             // Too many bytes to decode for the pane: the thumbnail the
             // views made of it, when there is one, as for a document.
             MediaPreview::Image { path, .. } => {
                 let uri = gio::File::for_path(path).uri().to_string();
-                self.load_picture(generation, None, Some(uri), false);
+                self.load_picture(generation, None, Some(uri), None, false);
             }
-            MediaPreview::Document { uri } => self.load_picture(generation, None, Some(uri.clone()), false),
-            MediaPreview::Folder { uri } => self.load_folder_picture(generation, uri.clone()),
+            MediaPreview::Document { uri, chosen } => {
+                let chosen = chosen.as_deref().and_then(local_picture_path);
+                self.load_picture(generation, None, Some(uri.clone()), chosen, false);
+            }
+            MediaPreview::Folder { uri, chosen } => {
+                self.load_folder_picture(generation, uri.clone(), chosen.clone());
+            }
             MediaPreview::Recording {
                 uri,
                 local_only,
@@ -99,18 +104,21 @@ impl DetailsPane {
     }
 
     /// Reads the picture of the folder at `uri` ([`folder_picture`]) and
-    /// shows it, if the selection is still `generation`'s; the folder
-    /// keeps its art without one.
-    fn load_folder_picture(&self, generation: u64, uri: String) {
+    /// shows it, or else the picture `chosen` for folders in File icons
+    /// (LOOK-029), if the selection is still `generation`'s; the folder
+    /// keeps its art without either.
+    fn load_folder_picture(&self, generation: u64, uri: String, chosen: Option<String>) {
         let pane = self.downgrade();
         glib::spawn_future_local(async move {
             let picture = folder_picture(&uri).await;
             let Some(pane) = pane.upgrade() else {
                 return;
             };
-            let path = picture.and_then(|picture| local_picture_path(&picture));
+            let path = picture
+                .and_then(|picture| local_picture_path(&picture))
+                .or_else(|| chosen.as_deref().and_then(local_picture_path));
             if pane.imp().media_generation.get() == generation && path.is_some() {
-                pane.load_picture(generation, path, None, false);
+                pane.load_picture(generation, path, None, None, false);
             }
         });
     }
@@ -129,14 +137,16 @@ impl DetailsPane {
     }
 
     /// Decodes the image at `path`, or the cached thumbnail of the item at
-    /// `uri`, scaled to the preview area, and shows it if the selection is
-    /// still `generation`'s; an image's own size, from its header, joins
-    /// the rows when `names_dimensions`.
+    /// `uri` or else the picture at `fallback`, scaled to the preview
+    /// area, and shows it if the selection is still `generation`'s; an
+    /// image's own size, from its header, joins the rows when
+    /// `names_dimensions`.
     fn load_picture(
         &self,
         generation: u64,
         path: Option<PathBuf>,
         uri: Option<String>,
+        fallback: Option<PathBuf>,
         names_dimensions: bool,
     ) {
         let pane = self.downgrade();
@@ -149,7 +159,10 @@ impl DetailsPane {
                 // the thumbnail cache no larger than a thumbnail.
                 let (path, limits) = match path {
                     Some(path) => (path, Limits::DISPLAY),
-                    None => (cached_thumbnail(uri.as_deref()?)?, Limits::THUMBNAIL_FILE),
+                    None => match uri.as_deref().and_then(cached_thumbnail) {
+                        Some(thumbnail) => (thumbnail, Limits::THUMBNAIL_FILE),
+                        None => (fallback?, Limits::DISPLAY),
+                    },
                 };
                 let preview = (PREVIEW_WIDTH * scale, PREVIEW_HEIGHT * scale);
                 let file = gio::File::for_path(&path);

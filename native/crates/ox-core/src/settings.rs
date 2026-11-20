@@ -31,6 +31,7 @@
 
 mod choices;
 mod error;
+mod file_icons;
 mod labels;
 mod model;
 mod mutate;
@@ -51,6 +52,10 @@ use std::path::{Path, PathBuf};
 pub use crate::private_storage::{StorageError, StorageRefusal};
 pub use choices::{Appearance, ContextMenu, StripPosition, Theme, View, ZipOpening};
 pub use error::SettingsError;
+pub use file_icons::{
+    file_name_ending, is_file_icon, is_file_icon_kind, FileIcons, FILE_ICON_ARTS, FILE_ICON_KINDS,
+    MAX_FILE_ICONS,
+};
 pub use model::{Bookmark, RecentEntry, SettingsData};
 pub use mutate::{BookmarkAction, BookmarkKind, BookmarkRequest};
 pub use pane_options::DetailsPaneOptions;
@@ -310,6 +315,36 @@ impl Settings {
             }
             let update = PreferencesUpdate {
                 gallery_folders: Some(folders),
+                ..PreferencesUpdate::default()
+            };
+            data.preferences.apply(&update);
+            Ok(data.preferences.clone())
+        })
+    }
+
+    /// Gives the items of `kind` the icon `icon`, or their usual one with
+    /// `None` (LOOK-029), changing only that entry of `fileIcons` as the
+    /// file now holds it. A kind or icon the app does not know changes
+    /// nothing. Returns the resulting preferences.
+    ///
+    /// # Errors
+    ///
+    /// Every error of [`update_preferences`](Self::update_preferences).
+    pub fn set_file_icon(&mut self, kind: &str, icon: Option<&str>) -> Result<Preferences, SettingsError> {
+        self.mutate(|data| {
+            let mut icons = data.preferences.file_icons.clone();
+            // At the most kept, a new kind would push out another one.
+            if icon.is_some() && !icons.contains_key(kind) && icons.len() >= MAX_FILE_ICONS {
+                return Err(SettingsError::invalid(crate::i18n::gettext(
+                    "No more icons can be chosen. Reset one first.",
+                )));
+            }
+            match icon {
+                Some(icon) => icons.insert(kind.to_owned(), icon.to_owned()),
+                None => icons.remove(kind),
+            };
+            let update = PreferencesUpdate {
+                file_icons: Some(icons),
                 ..PreferencesUpdate::default()
             };
             data.preferences.apply(&update);
