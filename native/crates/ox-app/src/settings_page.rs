@@ -31,6 +31,7 @@ mod category_row;
 mod choice_list;
 mod confirmations;
 mod default_apps;
+mod file_icons;
 mod files_folders;
 mod general;
 mod group;

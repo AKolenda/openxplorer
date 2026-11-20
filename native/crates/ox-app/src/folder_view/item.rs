@@ -32,6 +32,7 @@ struct PreparedEntry {
     name_sort_key: SortKey,
     type_sort_key: SortKey,
     lowercase_name: String,
+    /// The art with no icon chosen in File icons.
     art: Art,
     emblems: Emblems,
     entry: Entry,
@@ -122,7 +123,7 @@ impl PreparedEntry {
             name_sort_key: SortKey::new(&entry.name),
             type_sort_key: SortKey::new(&entry.type_label),
             lowercase_name: entry.name.to_lowercase(),
-            art: Art::for_entry(&entry),
+            art: Art::usual_for_entry(&entry),
             emblems: Emblems::for_entry(&entry),
             entry,
             folder_path: OnceCell::new(),
@@ -253,9 +254,10 @@ impl FileItem {
             .get_or_init(|| AddressFacts::of(&prepared.entry.uri))
     }
 
-    /// The icon art for the item.
+    /// The icon art for the item, as File icons now has it (LOOK-029).
     pub(crate) fn art(&self) -> Art {
-        self.prepared().art
+        let prepared = self.prepared();
+        crate::icons::file_icons::art_for(&prepared.entry.name, prepared.art)
     }
 
     /// The emblems over the item's icon: a link, a lock.

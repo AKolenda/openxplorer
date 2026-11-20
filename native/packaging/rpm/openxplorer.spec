@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.20
+Version:        2.0.21
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -142,6 +142,10 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Thu Nov 19 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.21-1
+- OpenXplorer 2.0.21: choose the icon of folders, ZIP archives, each file
+  type and file name endings in Settings > Appearance > File icons.
+
 * Wed Nov 18 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.20-1
 - OpenXplorer 2.0.20: 7z archives open like folders, submenus open on
   hover, overwrite on Replace when chosen, Properties without hidden extensions, scrolling tab arrows,

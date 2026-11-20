@@ -331,9 +331,15 @@ impl BrowserWindow {
         let preferences = self.context().settings_data().preferences;
         self.show_item_check_boxes(preferences.selection_marker);
         self.wait_for_ctrl_with_item_checks(preferences.item_checks_on_ctrl);
+        crate::icons::file_icons::follow(&preferences.file_icons);
         for pane in self.folder_panes() {
             pane.details().set_date_style(date_style(&preferences));
             self.update_expandability_for(pane);
+            pane.owners().follow_file_icons();
+        }
+        let icons = crate::icons::file_icons::generation();
+        if self.imp().file_icons_shown.replace(icons) != icons {
+            self.update_details_pane();
         }
         self.follow_hidden_files(preferences.show_hidden);
         self.follow_file_name_extensions_preference();

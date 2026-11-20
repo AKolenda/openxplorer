@@ -112,6 +112,8 @@ impl BrowserWindow {
     /// that shows a place is redrawn.
     fn places_changed(&self) {
         self.imp().locations.borrow_mut().network_mounts = self.network_mount_points();
+        // The places show the icons chosen in File icons (LOOK-029) too.
+        crate::icons::file_icons::follow(&self.context().settings_data().preferences.file_icons);
         self.render_places();
         // The settings may have changed too.
         self.apply_view_options();

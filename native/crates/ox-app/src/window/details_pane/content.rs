@@ -84,11 +84,13 @@ pub(in crate::window) enum MediaPreview {
         art: Art,
     },
     /// Another local document, shown by its cached thumbnail if it has
-    /// one.
-    Document { uri: String },
+    /// one, else by the picture `chosen` for its kind in File icons
+    /// (LOOK-029), if any.
+    Document { uri: String, chosen: Option<String> },
     /// A local folder, shown by its own picture if it has one
-    /// ([`super::media`]'s `folder_picture`), else by its art.
-    Folder { uri: String },
+    /// ([`super::media`]'s `folder_picture`), else by the picture `chosen`
+    /// for folders in File icons, else by its art.
+    Folder { uri: String, chosen: Option<String> },
 }
 
 impl MediaPreview {
@@ -97,8 +99,8 @@ impl MediaPreview {
         match self {
             Self::Image { path, .. } => gio::File::for_path(path).uri() == uri,
             Self::Recording { uri: shown, .. }
-            | Self::Document { uri: shown }
-            | Self::Folder { uri: shown } => shown == uri,
+            | Self::Document { uri: shown, .. }
+            | Self::Folder { uri: shown, .. } => shown == uri,
         }
     }
 
@@ -117,6 +119,7 @@ impl MediaPreview {
         if entry.is_dir {
             return entry.uri.starts_with("file:").then(|| Self::Folder {
                 uri: entry.uri.clone(),
+                chosen: crate::icons::file_icons::picture_for(entry),
             });
         }
         let path = gio::File::for_uri(&entry.uri)
@@ -131,6 +134,7 @@ impl MediaPreview {
             },
             _ => Self::Document {
                 uri: entry.uri.clone(),
+                chosen: crate::icons::file_icons::picture_for(entry),
             },
         })
     }
@@ -702,7 +706,10 @@ mod tests {
         );
         assert_eq!(
             content.media,
-            Some(MediaPreview::Folder { uri: uri.clone() }),
+            Some(MediaPreview::Folder {
+                uri: uri.clone(),
+                chosen: None
+            }),
             "a local folder's own picture is looked up"
         );
         assert!(content.media.as_ref().is_some_and(|media| media.is_of(&uri)));

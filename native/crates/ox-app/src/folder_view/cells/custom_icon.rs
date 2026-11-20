@@ -8,7 +8,8 @@
 //! back to an item does not decode its picture again. An item without a
 //! custom icon shows its preview in the same place, when it has one
 //! ([`crate::thumbnails`]). A folder without one shows the picture chosen
-//! for it ([`super::folder_picture`]).
+//! for it ([`super::folder_picture`]). Last comes a picture the user chose
+//! in File icons for the item's kind (LOOK-029).
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -79,7 +80,8 @@ impl FileCell {
         let uri = entry.uri.clone();
         let pixels = imp.icon_size.get() * self.scale_factor().max(1);
         let preview = previews.request(entry, pixels);
-        if !uri.starts_with("file:") && preview.is_none() {
+        let kind_picture = crate::icons::file_icons::picture_for(entry);
+        if !uri.starts_with("file:") && preview.is_none() && kind_picture.is_none() {
             return;
         }
         let is_folder = entry.is_dir;
@@ -108,6 +110,9 @@ impl FileCell {
                 if let Some(request) = preview {
                     texture = thumbnails::preview(request).await.filter(is_big_enough_to_see);
                 }
+            }
+            if let Some(picture) = kind_picture.filter(|_| texture.is_none()) {
+                texture = icon_texture(picture).await;
             }
             if let (Some(cell), Some(texture)) = (cell.upgrade(), texture) {
                 let imp = cell.imp();
