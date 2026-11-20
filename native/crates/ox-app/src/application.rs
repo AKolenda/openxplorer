@@ -507,14 +507,19 @@ fn software_rendering_notice(asks: bool, is_remote: bool, renderer: Option<&str>
 /// The interface's translations are loaded before any text is made
 /// (INT-031), from this build channel's catalogue (`I18N_DOMAIN`).
 /// Started with `--ox-read-media-details`, it is the Details tab's reader
-/// process instead, which shows nothing (see `media_details.rs`), and with
-/// `--ox-decode-picture` a picture decoder (see `picture_guard`).
+/// process instead, which shows nothing (see `media_details.rs`), with
+/// `--ox-decode-picture` a picture decoder (see `picture_guard`), and
+/// with `--ox-draw-vector-picture` it draws one vector picture for the app
+/// (see `picture_guard/vector.rs`).
 pub fn run() -> glib::ExitCode {
     let arguments: Vec<String> = std::env::args().collect();
     if let Some(status) = crate::media_details::run_as_reader(&arguments) {
         return status;
     }
     if let Some(status) = crate::picture_guard::run_as_decoder(&arguments) {
+        return status;
+    }
+    if let Some(status) = crate::picture_guard::run_as_drawer(&arguments) {
         return status;
     }
     crate::crash_guard::install_panic_hook();

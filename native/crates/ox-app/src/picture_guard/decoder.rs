@@ -395,6 +395,11 @@ impl Decoder {
             }
         };
         let result = parse_answer(&answer);
+        // A decoder that lowered its limits for this picture ends after it.
+        if answer.first() == Some(&ENDING_MARK) {
+            drop(child);
+            return (result, None);
+        }
         // The decoder serves the next picture once it has taken the rest of
         // this one, which the feeding thread ends and hands back.
         // A decoder that did not take the rest in time is dropped, which
@@ -809,6 +814,28 @@ fn read_request(input: &mut impl Read) -> Option<(i32, i32, Limits)> {
     Some((int(0)?, int(4)?, limits))
 }
 
+/// Set in a decoder process, which then draws a vector picture itself.
+static IN_CHILD: AtomicBool = AtomicBool::new(false);
+
+/// Set once a picture lowered this decoder's limits: it ends after
+/// answering for that picture, and the app does not keep it.
+static ENDING: AtomicBool = AtomicBool::new(false);
+
+/// What comes before the [`MAGIC`] of the answer of a decoder that ends
+/// after it, so the app drops that decoder rather than handing it another
+/// picture. [`parse_answer`] reads the answer from its magic on.
+const ENDING_MARK: u8 = b'E';
+
+/// True in a picture decoder process.
+pub(super) fn in_child() -> bool {
+    IN_CHILD.load(Ordering::Relaxed)
+}
+
+/// Makes this decoder end after it answers for the picture it decodes.
+pub(super) fn end_after_this_picture() {
+    ENDING.store(true, Ordering::Relaxed);
+}
+
 /// Serves requests from `input` until it ends: decodes each picture and
 /// writes its answer to `output` as soon as it is known, then takes the
 /// rest of the picture. What a decoder process runs.
@@ -824,12 +851,19 @@ fn serve(input: &mut impl Read, output: &mut impl Write) -> bool {
             std::process::abort();
         }
         let result = super::decode_reader_here_to_fit(&mut chunks, width, height, limits, None);
-        let answer = answer(&result);
+        let ending = ENDING.load(Ordering::Relaxed);
+        let mut answer = answer(&result);
+        if ending {
+            answer.insert(0, ENDING_MARK);
+        }
         let written = output
             .write_all(FRAME)
             .and_then(|()| output.write_all(&u64::try_from(answer.len()).unwrap_or(u64::MAX).to_le_bytes()))
             .and_then(|()| output.write_all(&answer))
             .and_then(|()| output.flush());
+        if ending {
+            return written.is_ok();
+        }
         if written.is_err() || !chunks.drain() {
             return false;
         }
@@ -862,6 +896,7 @@ fn limit_resources() {
 
 /// Serves the requests on standard input: what the decoder process does.
 fn serve_standard_input() -> bool {
+    IN_CHILD.store(true, Ordering::Relaxed);
     limit_resources();
     let mut input = std::io::BufReader::new(std::io::stdin().lock());
     let mut output = std::io::stdout().lock();

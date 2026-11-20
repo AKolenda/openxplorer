@@ -386,3 +386,39 @@ fn an_answers_frame_is_read_with_care() {
         None
     );
 }
+
+/// A vector picture is drawn in a decoder within the drawing limits of
+/// one, and that decoder then ends, so those limits never reach the next
+/// picture: the pool starts a new decoder for it, which decodes it.
+#[test]
+fn a_decoder_ends_after_a_vector_picture_and_the_next_picture_is_decoded() {
+    let folder = tempfile::tempdir().expect("a temporary folder");
+    let path = saved_png(folder.path(), "Harbor.png", 120, 80);
+    let pool = Pool::new(child_words());
+    let decode_png = || {
+        let file = std::fs::File::open(&path).expect("opened");
+        pool.decode(Source::Reader(Box::new(file)), 60, 60, Limits::DISPLAY, None)
+    };
+    let pid = || {
+        let idle = pool.idle.lock().expect("the pool");
+        idle.first().map(|decoder| decoder.child.0.id())
+    };
+    assert_eq!(decode_png().expect("decoded").pixbuf.width(), 60);
+    let first = pid().expect("an idle decoder");
+    let svg = b"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"20\">\
+                <rect width=\"40\" height=\"20\" fill=\"#336699\"/></svg>";
+    let drawn = pool
+        .decode(
+            Source::Reader(Box::new(Cursor::new(&svg[..]))),
+            80,
+            80,
+            Limits::DISPLAY,
+            None,
+        )
+        .expect("drawn");
+    assert_eq!((drawn.width, drawn.height), (40, 20));
+    assert!(pid().is_none(), "the decoder that drew it is not kept");
+    assert_eq!(decode_png().expect("decoded after it").pixbuf.width(), 60);
+    let second = pid().expect("a new decoder");
+    assert_ne!(first, second);
+}
