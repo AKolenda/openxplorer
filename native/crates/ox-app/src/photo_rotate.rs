@@ -110,7 +110,7 @@ fn replace_file(path: &Path, bytes: &[u8]) -> Result<(), RotateError> {
 /// The PNG at `path` with its pixels turned a quarter.
 fn turn_png(path: &Path, clockwise: bool) -> Result<Vec<u8>, RotateError> {
     use gtk::gdk_pixbuf::PixbufRotation;
-    // Decoded whole, by the picture decoder process: a PNG is untrusted,
+    // Decoded whole, by the picture decoder process: a PNG may be damaged,
     // and no C loader reads it in the app.
     let limits = crate::picture_guard::Limits {
         max_pixels: u64::try_from(PNG_PIXEL_LIMIT).unwrap_or(0),

@@ -181,7 +181,7 @@ fn create_folder(folder: &Path) -> Option<()> {
 /// The PNG in `bytes`, decoded to fit `edge` pixels square as
 /// [`scaled_picture`] decodes a file: a desktop thumbnailer's picture,
 /// which the app read into memory itself and checked the size of (see
-/// [`super::thumbnailers`]). It was made from an untrusted file, so it is
+/// [`super::thumbnailers`]). It was made from a file that may be damaged, so it is
 /// decoded by the picture decoder process, never in the app.
 pub(super) fn scaled_png(bytes: &[u8], edge: i32) -> Option<Pixbuf> {
     picture_guard::decode_bytes_to_fit(bytes.to_vec(), edge, edge, Limits::DISPLAY, None)

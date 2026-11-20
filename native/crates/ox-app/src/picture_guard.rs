@@ -254,7 +254,7 @@ fn decode_reader_here_to_fit(
 /// An image of the picture at `uri`, `pixels` square, which shows nothing
 /// until the picture is decoded off the main thread by
 /// [`decode_to_fit`], and stays empty when it is refused: a picture the
-/// user chose as an icon is untrusted, and GTK's own icon loading would
+/// user chose as an icon may be damaged or slow, and GTK's own icon loading would
 /// decode it on the main thread, in the app.
 pub(crate) fn guarded_image(uri: &str, pixels: i32) -> gtk::Image {
     let image = gtk::Image::new();

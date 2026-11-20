@@ -573,7 +573,7 @@ fn stop(child: &mut Child) {
 /// Reads an answer in `bytes`: [`MAGIC`], then a status byte, then for a
 /// decoded picture its own size, the decoded size, row stride, alpha,
 /// options and pixels; for a refusal its size. Nothing the child wrote is
-/// trusted: every length and size is checked before it is used.
+/// taken as it is: every length and size is checked before it is used.
 fn parse_answer(bytes: &[u8]) -> Result<Decoded, Refusal> {
     let start = find(bytes, MAGIC).ok_or(Refusal::Unreadable)?;
     let mut reader = Wire(bytes.get(start + MAGIC.len()..).ok_or(Refusal::Unreadable)?);

@@ -1046,19 +1046,19 @@ mod tests {
         ));
     }
 
-    /// A forged files record that names its empty streams again after
+    /// A damaged files record that names its empty streams again after
     /// their empty-file bits, so the bits no longer cover them, is
     /// refused instead of read past the end; so are the records of a
     /// seeded fuzz, each refused or read without a panic.
     #[test]
     fn a_files_record_that_repeats_its_empty_streams_is_refused() {
         let names = [0x11, 9, 0, b'a', 0, 0, 0, b'b', 0, 0, 0];
-        let mut forged = vec![2, K_EMPTY_STREAM, 1, 0b0100_0000, K_EMPTY_FILE, 1, 0x80];
-        forged.extend_from_slice(&[K_EMPTY_STREAM, 1, 0b1100_0000]);
-        forged.extend_from_slice(&names);
-        forged.push(K_END);
+        let mut damaged = vec![2, K_EMPTY_STREAM, 1, 0b0100_0000, K_EMPTY_FILE, 1, 0x80];
+        damaged.extend_from_slice(&[K_EMPTY_STREAM, 1, 0b1100_0000]);
+        damaged.extend_from_slice(&names);
+        damaged.push(K_END);
         assert!(matches!(
-            Reader::new(&forged).files_info(),
+            Reader::new(&damaged).files_info(),
             Err(ArchiveError::DamagedSevenZip)
         ));
         let mut anti = vec![2, K_EMPTY_STREAM, 1, 0b0100_0000, K_ANTI, 1, 0x80];

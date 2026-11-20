@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The picture decoder process: broken, hostile and hanging pictures are
+//! The picture decoder process: broken, oversized and hanging pictures are
 //! refused, and the app (here, the test process) keeps running.
 
 use std::io::Cursor;
@@ -177,8 +177,7 @@ fn run_with_env(words: &[OsString], source: Source, limits: Limits) -> Result<De
     run(words, source, 1, 1, limits, None)
 }
 
-/// Every answer a broken or hostile child could write is refused, never
-/// trusted: cut short, lying about its size or row stride, or nonsense.
+/// Every answer a broken child could write is refused: cut short, lying about its size or row stride, or nonsense.
 #[test]
 fn a_broken_answer_is_refused() {
     let pixbuf = Pixbuf::new(Colorspace::Rgb, true, 8, 4, 3).expect("a picture");
