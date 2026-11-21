@@ -84,13 +84,17 @@ fn the_sort_menu_leaves_one_arrow_on_the_sorted_column() {
 }
 
 /// The sorted column shows the current app's chevron, up while
-/// ascending, and no other column shows an arrow (`renderColumns`).
+/// ascending, and no other column shows an arrow (`renderColumns`). A
+/// sort other than Name ascending is drawn in the accent, and both stay
+/// on the sorted column's own title when the column moves.
 /// parity: VIEW-014
 #[gtk::test]
 fn only_the_sorted_column_shows_the_apps_arrow() {
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
-    let details = test.window.folder_pane().details().column_view();
+    let pane = test.window.folder_pane();
+    let view = pane.details();
+    let details = view.column_view();
     assert_eq!(
         column_titles::shown_carets(details),
         [Some(SortDirection::Ascending), None, None, None]
@@ -100,6 +104,56 @@ fn only_the_sorted_column_shows_the_apps_arrow() {
     assert_eq!(
         column_titles::shown_carets(details),
         [None, None, None, Some(SortDirection::Descending)]
+    );
+
+    // Date modified, which the view moves behind the search and Recycle
+    // Bin columns as it is built, shows its chevron too.
+    test.activate("sort", Some("modified"));
+    test.activate("direction", Some("ascending"));
+    assert_eq!(
+        column_titles::shown_carets(details),
+        [None, Some(SortDirection::Ascending), None, None]
+    );
+    let titles = view.titles_by_column();
+    let title = |column| titles.title(column).expect("a title for every column");
+    assert!(column_titles::is_custom_sort(title(SortColumn::Modified)));
+
+    // Moved one place right, as a drag does, past Type.
+    let modified = view.column(SortColumn::Modified).expect("a Date modified column");
+    let place_of = |column| view.column_order().iter().position(|shown| *shown == column);
+    let type_place = place_of(SortColumn::Type).expect("a Type column");
+    details.insert_column(u32::try_from(type_place).expect("a small place"), &modified);
+    wait_until("Date modified to follow Type", || {
+        place_of(SortColumn::Modified) > place_of(SortColumn::Type)
+    });
+    assert_eq!(
+        column_titles::caret_of(title(SortColumn::Modified)),
+        Some(SortDirection::Ascending)
+    );
+    assert_eq!(column_titles::caret_of(title(SortColumn::Type)), None);
+    assert!(column_titles::is_custom_sort(title(SortColumn::Modified)));
+    assert!(!column_titles::is_custom_sort(title(SortColumn::Type)));
+    assert!(
+        column_titles::title_buttons(details).contains(title(SortColumn::Modified)),
+        "the moved column keeps its title in the header"
+    );
+    test.activate("direction", Some("descending"));
+    assert_eq!(
+        column_titles::caret_of(title(SortColumn::Modified)),
+        Some(SortDirection::Descending)
+    );
+
+    test.activate("sort", Some("name"));
+    test.activate("direction", Some("ascending"));
+    assert_eq!(
+        column_titles::caret_of(title(SortColumn::Name)),
+        Some(SortDirection::Ascending)
+    );
+    assert!(
+        SortColumn::ALL
+            .into_iter()
+            .all(|column| !column_titles::is_custom_sort(title(column))),
+        "Name ascending is drawn as the default"
     );
 }
 

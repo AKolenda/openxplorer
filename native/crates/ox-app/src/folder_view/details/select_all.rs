@@ -19,7 +19,6 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
 use super::DetailsView;
-use crate::folder_view::column_titles;
 use crate::folder_view::sorting::SortColumn;
 
 /// How the check box shows a selection of `selected` items out of
@@ -37,7 +36,7 @@ fn check_name() -> &'static str {
 impl DetailsView {
     /// Puts the check box before the Name title, following `selection`.
     pub(super) fn add_select_all(&self, selection: &gtk::MultiSelection) {
-        let Some(title) = column_titles::title_box_of(self.column_view(), SortColumn::Name) else {
+        let Some(title) = self.titles_by_column().title_box(SortColumn::Name) else {
             return;
         };
         let check = gtk::CheckButton::new();
