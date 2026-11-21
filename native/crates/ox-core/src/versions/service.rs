@@ -10,6 +10,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use super::paths::{is_conventional_snapshot, is_within};
+use super::shadow_copies::ShadowCopyLister;
 use super::source_file::{SourceFile, MAX_SOURCES};
 use super::{SnapshotLayout, SnapshotSource, VersionsError};
 use crate::location::normalise;
@@ -27,6 +28,9 @@ pub struct PreviousVersions {
     /// Snapshot collections a lookup could read. They are read-only for
     /// the rest of the session, like configured ones.
     discovered_collections: Mutex<BTreeSet<String>>,
+    /// Asks SMB servers for their shadow copies; `None` looks only in
+    /// snapshot folders.
+    shadow_copies: Option<Arc<dyn ShadowCopyLister>>,
 }
 
 impl PreviousVersions {
@@ -36,7 +40,21 @@ impl PreviousVersions {
         Self {
             source_file: SourceFile::new(settings_directory),
             discovered_collections: Mutex::new(BTreeSet::new()),
+            shadow_copies: None,
         }
+    }
+
+    /// This service, also asking SMB servers for their shadow copies
+    /// through `lister` when it looks up a share's item.
+    #[must_use]
+    pub fn with_shadow_copies(mut self, lister: Arc<dyn ShadowCopyLister>) -> Self {
+        self.shadow_copies = Some(lister);
+        self
+    }
+
+    /// What asks SMB servers for their shadow copies, if anything does.
+    pub(super) fn shadow_copy_lister(&self) -> Option<&dyn ShadowCopyLister> {
+        self.shadow_copies.as_deref()
     }
 
     /// The configured sources, read from the settings directory each time

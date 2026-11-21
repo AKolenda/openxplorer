@@ -145,6 +145,18 @@ pub trait Keyring: Send + Sync {
     /// A [`KeyringError`] when the keyring cannot be searched or read.
     fn lookup(&self, query: &SecretAttributes) -> Result<Option<String>, KeyringError>;
 
+    /// The attributes and text of the first item matching `query`,
+    /// unlocking it if needed, for an item whose attributes say more than
+    /// the query, such as the user of a password `GVfs` saved.
+    ///
+    /// # Errors
+    ///
+    /// A [`KeyringError`] when the keyring cannot be searched or read.
+    fn lookup_item(
+        &self,
+        query: &SecretAttributes,
+    ) -> Result<Option<(SecretAttributes, String)>, KeyringError>;
+
     /// Stores `secret`, replacing an item with the same attributes.
     ///
     /// # Errors

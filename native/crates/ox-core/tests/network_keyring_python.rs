@@ -72,6 +72,15 @@ impl Keyring for RecordedKeyring {
         Ok(found.map(|(_, text)| text.clone()))
     }
 
+    fn lookup_item(
+        &self,
+        query: &SecretAttributes,
+    ) -> Result<Option<(SecretAttributes, String)>, KeyringError> {
+        let items = self.items.lock().unwrap_or_else(PoisonError::into_inner);
+        let found = items.iter().find(|(attributes, _)| query.matches(attributes));
+        Ok(found.cloned())
+    }
+
     fn store(&self, secret: &NewSecret<'_>) -> Result<(), KeyringError> {
         let mut items = self.items.lock().unwrap_or_else(PoisonError::into_inner);
         items.retain(|(attributes, _)| attributes != secret.attributes);

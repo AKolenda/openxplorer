@@ -3,15 +3,17 @@
 //!
 //! Ports `PreviousVersions.candidates` and `PreviousVersions.list` from
 //! `v2.0.0:desktop/previous_versions.py`. The lookup reads the metadata of
-//! snapshot folders the server already exposes. It is not an SMB
-//! `FSCTL_SRV_ENUMERATE_SNAPSHOTS` client and never creates snapshots, so
-//! finding nothing does not prove that there is no history.
+//! snapshot folders the server already exposes and, for an SMB share's
+//! item, of the shadow copies the server lists
+//! ([`ShadowCopyLister`]). It never creates snapshots, so finding nothing
+//! does not prove that there is no history.
 
 use std::cmp::Reverse;
 use std::sync::Arc;
 
 use super::paths::{child_uri, relative_uri, SNAPPER_FILES_FOLDER};
 use super::provider::{CollectionListing, GioSnapshotProvider, SnapshotProvider};
+use super::shadow_copies::{ShadowCopyError, ShadowCopyLister};
 use super::{PreviousVersions, SnapshotDate, SnapshotLayout, SnapshotSource, VersionsError};
 use crate::entry::{Entry, EntryError};
 use crate::location::{normalise, split_location, ItemKind, LocationError, LocationKind};
@@ -121,10 +123,12 @@ impl PreviousVersions {
     /// [`find_versions_in_background`](Self::find_versions_in_background).
     ///
     /// Where it looks: the configured source whose live folder holds the
-    /// item most specifically; without one, the collection folders at the
-    /// root of an SMB share, or else next to the item (in its folder for a
-    /// file). A filesystem root cannot be inferred from a path, so local
-    /// items are only looked up nearby unless a source is configured.
+    /// item most specifically; without one, for an SMB share's item, the
+    /// shadow copies its server lists or, when it lists none, the
+    /// collection folders at the root of the share; or else next to the
+    /// item (in its folder for a file). A filesystem root
+    /// cannot be inferred from a path, so local items are only looked up
+    /// nearby unless a source is configured.
     ///
     /// # Errors
     ///
@@ -140,7 +144,26 @@ impl PreviousVersions {
     ) -> Result<VersionList, VersionsError> {
         let uri = normalise(uri)?;
         let configured = self.sources();
+        let covering: Vec<SnapshotSource> = configured
+            .iter()
+            .filter(|source| source.covers(&uri))
+            .cloned()
+            .collect();
         let mut search = VersionSearch::new(provider, &uri, cancel);
+        // A share's server, asked as Windows asks it, names every shadow
+        // copy, newest first; its snapshot folders are only read when it
+        // names none. The share root is not remembered as a snapshot
+        // root, which would make the live share read-only: each `@GMT-`
+        // folder is read-only by its name (PROP-024).
+        if let (Some(lister), Some(share_root), true) = (
+            self.shadow_copy_lister(),
+            smb_share_root(&uri),
+            covering.is_empty(),
+        ) {
+            if search.check_shadow_copies(lister, &share_root)? {
+                return Ok(search.finish(covering));
+            }
+        }
         for source in candidate_sources(&configured, &uri, kind) {
             check_cancelled(cancel)?;
             let Some(listing) = search.read_collection(&source)? else {
@@ -152,10 +175,6 @@ impl PreviousVersions {
                 break;
             }
         }
-        let covering = configured
-            .into_iter()
-            .filter(|source| source.covers(&uri))
-            .collect();
         Ok(search.finish(covering))
     }
 
@@ -328,7 +347,7 @@ impl<'a> VersionSearch<'a> {
             match self.version_in(source, snapshot) {
                 Ok(Some(version)) => self.versions.push(version),
                 Ok(None) => {}
-                Err(problem) => self.report_problem(snapshot, &problem)?,
+                Err(problem) => self.report_problem(&snapshot.name, &problem)?,
             }
             if self.is_full() {
                 self.is_truncated = true;
@@ -346,29 +365,14 @@ impl<'a> VersionSearch<'a> {
     ) -> Result<Option<PreviousVersion>, SnapshotProblem> {
         let snapshot_root = snapshot_root(source, &snapshot.name)?;
         let relative = relative_uri(self.uri, source.live()).ok_or(SnapshotProblem::OutsideLiveFolder)?;
-        let mut item_uri = child_uri(source.collection(), &snapshot.name)?;
-        let mut entry = snapshot.clone();
+        let item_uri = child_uri(source.collection(), &snapshot.name)?;
         let layout = (source.layout() == SnapshotLayout::Snapper).then_some(SNAPPER_FILES_FOLDER);
         let components = layout
             .into_iter()
             .chain(relative.split('/').filter(|part| !part.is_empty()));
-        // NOFOLLOW_SYMLINKS checks only the final component of a query.
-        // Inspect each descendant before proceeding through it, including
-        // Snapper's layout directory, so a static link cannot make a live
-        // file appear to be a previous version. These metadata checks do
-        // not make traversal atomic against concurrent replacements.
-        for component in components {
-            if !entry.is_dir || entry.is_symlink {
-                return Ok(None);
-            }
-            item_uri.push('/');
-            item_uri.push_str(component);
-            entry = self.provider.inspect(&item_uri, self.cancel)?;
-            if entry.is_symlink {
-                return Ok(None);
-            }
-        }
-        entry.uri = item_uri;
+        let Some(entry) = self.walk(item_uri, Some(snapshot.clone()), components)? else {
+            return Ok(None);
+        };
         Ok(Some(PreviousVersion {
             entry,
             label: snapshot.name.clone(),
@@ -378,16 +382,111 @@ impl<'a> VersionSearch<'a> {
         }))
     }
 
-    /// Records why `snapshot` could not be checked, unless the item is
-    /// simply missing from it.
-    fn report_problem(&mut self, snapshot: &Entry, problem: &SnapshotProblem) -> Result<(), VersionsError> {
+    /// Follows `components` down from the folder at `start_uri` to the
+    /// item; `None` when the item is a link or lies below one. `start` is
+    /// that folder's entry, or `None` for a folder that is one by
+    /// definition, such as a shadow copy of a share, which is then only
+    /// queried when it is the item itself.
+    fn walk<'c>(
+        &self,
+        start_uri: String,
+        start: Option<Entry>,
+        components: impl Iterator<Item = &'c str>,
+    ) -> Result<Option<Entry>, SnapshotProblem> {
+        let mut item_uri = start_uri;
+        let mut entry = start;
+        // NOFOLLOW_SYMLINKS checks only the final component of a query.
+        // Inspect each descendant before proceeding through it, including
+        // Snapper's layout directory, so a static link cannot make a live
+        // file appear to be a previous version. These metadata checks do
+        // not make traversal atomic against concurrent replacements.
+        for component in components {
+            if entry
+                .as_ref()
+                .is_some_and(|folder| !folder.is_dir || folder.is_symlink)
+            {
+                return Ok(None);
+            }
+            item_uri.push('/');
+            item_uri.push_str(component);
+            entry = Some(self.provider.inspect(&item_uri, self.cancel)?);
+        }
+        let mut entry = match entry {
+            Some(entry) => entry,
+            None => self.provider.inspect(&item_uri, self.cancel)?,
+        };
+        if entry.is_symlink {
+            return Ok(None);
+        }
+        entry.uri = item_uri;
+        Ok(Some(entry))
+    }
+
+    /// Looks for the item in each shadow copy the server of the share at
+    /// `share_root` lists, newest first, or records why it could not ask.
+    /// Returns whether the server listed any.
+    fn check_shadow_copies(
+        &mut self,
+        lister: &dyn ShadowCopyLister,
+        share_root: &str,
+    ) -> Result<bool, VersionsError> {
+        let copies = match lister.list(self.uri, self.cancel) {
+            Ok(copies) => copies,
+            Err(ShadowCopyError::Cancelled) => return Err(VersionsError::Cancelled),
+            Err(error) => {
+                check_cancelled(self.cancel)?;
+                self.warnings.push(format!("{share_root}: {error}"));
+                return Ok(false);
+            }
+        };
+        self.is_truncated |= copies.is_truncated;
+        for token in &copies.tokens {
+            check_cancelled(self.cancel)?;
+            match self.version_in_shadow_copy(share_root, token) {
+                Ok(Some(version)) => self.versions.push(version),
+                Ok(None) => {}
+                Err(problem) => self.report_problem(token, &problem)?,
+            }
+            if self.is_full() {
+                self.is_truncated = true;
+                break;
+            }
+        }
+        Ok(!copies.tokens.is_empty())
+    }
+
+    /// The item in the shadow copy `token` of the share at `share_root`,
+    /// or `None` when it is a link there.
+    fn version_in_shadow_copy(
+        &self,
+        share_root: &str,
+        token: &str,
+    ) -> Result<Option<PreviousVersion>, SnapshotProblem> {
+        let relative = relative_uri(self.uri, share_root).ok_or(SnapshotProblem::OutsideLiveFolder)?;
+        let snapshot_root = child_uri(share_root, token)?;
+        let components = relative.split('/').filter(|part| !part.is_empty());
+        let Some(entry) = self.walk(snapshot_root.clone(), None, components)? else {
+            return Ok(None);
+        };
+        Ok(Some(PreviousVersion {
+            entry,
+            label: token.to_owned(),
+            snapshot_root,
+            collection: share_root.to_owned(),
+            snapshot_modified: None,
+        }))
+    }
+
+    /// Records why the snapshot `name` could not be checked, unless the
+    /// item is simply missing from it.
+    fn report_problem(&mut self, name: &str, problem: &SnapshotProblem) -> Result<(), VersionsError> {
         check_cancelled(self.cancel)?;
         // An item missing from an older snapshot is normal, while
         // permission and network failures must not look like "no history".
         if matches!(problem, SnapshotProblem::Read(EntryError::NotFound(_))) {
             return Ok(());
         }
-        self.warnings.push(format!("{}: {problem}", snapshot.name));
+        self.warnings.push(format!("{name}: {problem}"));
         Ok(())
     }
 

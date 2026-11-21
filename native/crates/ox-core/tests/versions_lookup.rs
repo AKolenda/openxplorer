@@ -16,8 +16,11 @@ mod versions_support;
 use ox_core::entry::{Entry, EntryError};
 use ox_core::location::ItemKind;
 use ox_core::transfer::Cancellation;
+use std::sync::Arc;
+
 use ox_core::versions::{
-    CollectionListing, PreviousVersions, SnapshotLayout, SnapshotProvider, VersionsError, NO_VERSIONS_FOUND,
+    CollectionListing, PreviousVersions, ShadowCopies, ShadowCopyError, ShadowCopyLister, SnapshotLayout,
+    SnapshotProvider, VersionsError, NO_VERSIONS_FOUND,
 };
 use serde_json::{json, Value};
 use versions_support::{labels, lookup_in_both_apps, Lookup, TreeProvider};
@@ -317,4 +320,123 @@ fn a_collection_read_by_a_lookup_becomes_read_only() {
         Err(VersionsError::ReadOnly)
     ));
     assert_eq!(versions.snapshot_roots(), ["file:///srv/history"]);
+}
+
+/// A server that names fixed shadow copies, or cannot be asked.
+#[derive(Debug)]
+struct FixedShadowCopies(Result<Vec<&'static str>, ShadowCopyError>);
+
+impl ShadowCopyLister for FixedShadowCopies {
+    fn list(&self, _: &str, _: &Cancellation) -> Result<ShadowCopies, ShadowCopyError> {
+        self.0.clone().map(|names| ShadowCopies::from_names(names, false))
+    }
+}
+
+/// A share item is looked up in each shadow copy its server lists, newest
+/// first, as Windows' Previous Versions does: found in one, a link in
+/// another and missing from a third. The live share stays writable and
+/// the versions are read-only.
+///
+/// parity: PROP-032, PROP-024
+#[test]
+fn a_share_item_is_found_in_the_shadow_copies_its_server_lists() {
+    let temporary = tempfile::tempdir().unwrap();
+    let server = FixedShadowCopies(Ok(vec![
+        "@GMT-2026.11.20-08.00.00",
+        "@GMT-2026.11.21-00.30.00",
+        "@GMT-2026.11.19-08.00.00",
+        "../outside",
+    ]));
+    let versions = PreviousVersions::new(temporary.path()).with_shadow_copies(Arc::new(server));
+    let provider = TreeProvider::new(json!({
+        "collections": {"smb://nas/share/.zfs/snapshot": {"entries": [{"name": "auto-1", "isDir": true}]}},
+        "items": {
+            "smb://nas/share/%40GMT-2026.11.21-00.30.00/work": {"name": "work", "isDir": true},
+            "smb://nas/share/%40GMT-2026.11.21-00.30.00/work/a.txt": {"name": "a.txt"},
+            "smb://nas/share/%40GMT-2026.11.20-08.00.00/work": {"name": "work", "symlink": true},
+            "smb://nas/share/%40GMT-2026.11.20-08.00.00/work/a.txt": {"name": "a.txt"},
+            "smb://nas/share/.zfs/snapshot/auto-1/work/a.txt": {"name": "a.txt"},
+        },
+    }));
+
+    let list = versions
+        .find_versions(
+            &provider,
+            "smb://nas/share/work/a.txt",
+            ItemKind::File,
+            &Cancellation::new(),
+        )
+        .unwrap();
+
+    let labels: Vec<&str> = list
+        .versions
+        .iter()
+        .map(|version| version.label.as_str())
+        .collect();
+    assert_eq!(labels, ["@GMT-2026.11.21-00.30.00"]);
+    let version = &list.versions[0];
+    assert_eq!(
+        version.entry.uri,
+        "smb://nas/share/%40GMT-2026.11.21-00.30.00/work/a.txt"
+    );
+    assert_eq!(
+        version.snapshot_root,
+        "smb://nas/share/%40GMT-2026.11.21-00.30.00"
+    );
+    assert_eq!(
+        version.date().map(|date| date.iso_8601()).as_deref(),
+        Some("2026-11-21T00:30:00Z")
+    );
+    assert!(list.warnings.is_empty(), "{:?}", list.warnings);
+    assert!(versions.check_writable("smb://nas/share/work/a.txt").is_ok());
+    assert!(matches!(
+        versions.check_writable(&version.entry.uri),
+        Err(VersionsError::ReadOnly)
+    ));
+    assert!(versions.snapshot_roots().is_empty());
+    assert!(provider.into_listed().is_empty());
+}
+
+/// A server that cannot be asked is a warning, never "no history"; the
+/// share's snapshot folders are read instead, and a configured source
+/// still replaces every other place to look.
+///
+/// parity: PROP-032
+#[test]
+fn a_server_that_cannot_list_shadow_copies_is_a_warning() {
+    let temporary = tempfile::tempdir().unwrap();
+    let server = FixedShadowCopies(Err(ShadowCopyError::NoCredential));
+    let versions = PreviousVersions::new(temporary.path()).with_shadow_copies(Arc::new(server));
+    let provider = TreeProvider::new(json!({"collections": {}, "items": {}}));
+
+    let unasked = versions
+        .find_versions(
+            &provider,
+            "smb://nas/share/a.txt",
+            ItemKind::File,
+            &Cancellation::new(),
+        )
+        .unwrap();
+    assert_eq!(provider.into_listed().len(), 4);
+    let provider = TreeProvider::new(json!({"collections": {}, "items": {}}));
+    versions
+        .configure("smb://nas/share", "smb://nas/backups", SnapshotLayout::Direct)
+        .unwrap();
+    let configured = versions
+        .find_versions(
+            &provider,
+            "smb://nas/share/a.txt",
+            ItemKind::File,
+            &Cancellation::new(),
+        )
+        .unwrap();
+
+    let expected = format!("smb://nas/share: {}", ShadowCopyError::NoCredential);
+    assert!(unasked.warnings.contains(&expected), "{:?}", unasked.warnings);
+    assert_eq!(unasked.message(), Some(NO_VERSIONS_FOUND));
+    assert!(
+        !configured.warnings.contains(&expected),
+        "{:?}",
+        configured.warnings
+    );
 }

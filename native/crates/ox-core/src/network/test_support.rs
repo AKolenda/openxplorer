@@ -107,6 +107,15 @@ impl Keyring for MemoryKeyring {
         Ok(found.map(|item| item.text.clone()))
     }
 
+    fn lookup_item(
+        &self,
+        query: &SecretAttributes,
+    ) -> Result<Option<(SecretAttributes, String)>, KeyringError> {
+        let items = locked(&self.items);
+        let found = items.iter().find(|item| query.matches(&item.attributes));
+        Ok(found.map(|item| (item.attributes.clone(), item.text.clone())))
+    }
+
     fn store(&self, secret: &NewSecret<'_>) -> Result<(), KeyringError> {
         if let Some(hook) = locked(&self.store_hook).as_ref() {
             hook();

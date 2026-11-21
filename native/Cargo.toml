@@ -76,6 +76,13 @@ gstreamer-pbutils = "0.25"
 # A picture's EXIF for the same tab: pure Rust, reading only bytes already
 # in memory, so no C library parses the picture.
 kamadak-exif = "0.6.1"
+# The SMB client that asks a server for the shadow copies of a share, as
+# Windows' Previous Versions tab does (FSCTL_SRV_ENUMERATE_SNAPSHOTS): GIO,
+# GVfs and libsmbclient cannot send that request. Pure Rust, MIT, and
+# "single_threaded" keeps it off any async runtime. Signing and encryption
+# let it reach shares that require them; nothing else is enabled. Pinned,
+# as its sub-crates are pinned to the same version.
+smb = { version = "=0.12.1", default-features = false, features = ["single_threaded", "sign", "encrypt"] }
 ox-core = { path = "crates/ox-core" }
 
 # Every crate inherits these lints with `[lints] workspace = true`, so editors,

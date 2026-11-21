@@ -44,6 +44,34 @@ impl Keyring for SecretService {
         })
     }
 
+    fn lookup_item(
+        &self,
+        query: &SecretAttributes,
+    ) -> Result<Option<(SecretAttributes, String)>, KeyringError> {
+        block_on(async {
+            let service = connect().await?;
+            let items = matching_items(&service, query).await?;
+            let Some(item) = first_unlocked_or_locked(items).await? else {
+                return Ok(None);
+            };
+            if item.is_locked().await? {
+                item.unlock(None).await?;
+            }
+            let attributes = item
+                .attributes()
+                .await?
+                .iter()
+                .fold(SecretAttributes::any_schema(), |found, (name, value)| {
+                    found.with(name, value)
+                });
+            let secret = item.secret().await?;
+            // A secret that is not text is not a password.
+            Ok(String::from_utf8(secret.as_bytes().to_vec())
+                .ok()
+                .map(|text| (attributes, text)))
+        })
+    }
+
     fn store(&self, secret: &NewSecret<'_>) -> Result<(), KeyringError> {
         block_on(async {
             let service = connect().await?;
