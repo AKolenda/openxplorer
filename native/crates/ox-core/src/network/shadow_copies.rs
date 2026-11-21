@@ -18,14 +18,14 @@
 //! this session, so looking again cannot lock the account out.
 
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::io::{Read, Seek};
 use std::net::{IpAddr, ToSocketAddrs};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use smb::{
     Client, ClientConfig, ConnectionConfig, FileAccessMask, FileCreateArgs, FsctlCodes, FsctlRequest,
@@ -44,6 +44,15 @@ use crate::LOG_DOMAIN;
 /// How long the server may take to answer each request, the first reply
 /// of the negotiation included.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How long a lookup waits for the whole exchange. The `smb` client can
+/// also wait without a timeout (for request credits, and when it logs off
+/// as it is dropped), so it runs on a thread of its own that the lookup
+/// stops waiting for.
+const LOOKUP_DEADLINE: Duration = Duration::from_secs(30);
+
+/// How often a waiting lookup checks whether it was cancelled.
+const CANCEL_POLL: Duration = Duration::from_millis(250);
 
 /// The first reply size asked for: room for about 1,200 shadow copies,
 /// which one credit covers.
@@ -83,10 +92,16 @@ mod status {
 /// the account saved for the server.
 pub struct SmbShadowCopies {
     store: Arc<CredentialStore>,
-    /// Accounts a server refused this session, by server, user and a hash
-    /// of the password; they are not tried again.
-    refused: Mutex<HashSet<(ServerKey, String, u64)>>,
+    /// Accounts a server refused this session; they are not tried again.
+    refused: Arc<Mutex<HashSet<AccountKey>>>,
+    /// One sign-in at a time per account, so lookups in two windows
+    /// cannot both send a password the server is about to refuse.
+    attempts: Mutex<HashMap<AccountKey, Arc<Mutex<()>>>>,
 }
+
+/// An account on a server: the server, the user and a hash of the
+/// password, kept in memory only.
+type AccountKey = (ServerKey, String, u64);
 
 impl std::fmt::Debug for SmbShadowCopies {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -99,12 +114,13 @@ impl SmbShadowCopies {
     pub fn new(store: Arc<CredentialStore>) -> Self {
         Self {
             store,
-            refused: Mutex::default(),
+            refused: Arc::default(),
+            attempts: Mutex::default(),
         }
     }
 
     /// What identifies `account` on `key` among the refused ones.
-    fn refusal_key(key: &ServerKey, account: &Account) -> (ServerKey, String, u64) {
+    fn refusal_key(key: &ServerKey, account: &Account) -> AccountKey {
         let mut hasher = DefaultHasher::new();
         account.password.as_str().hash(&mut hasher);
         (key.clone(), account.user.clone(), hasher.finish())
@@ -124,17 +140,62 @@ impl ShadowCopyLister for SmbShadowCopies {
         if locked(&self.refused).contains(&refusal) {
             return Err(ShadowCopyError::SignInRefused);
         }
-        if cancel.is_cancelled() {
-            return Err(ShadowCopyError::Cancelled);
+        check_cancelled(cancel)?;
+        let gate = Arc::clone(locked(&self.attempts).entry(refusal.clone()).or_default());
+        let refused = Arc::clone(&self.refused);
+        let (sender, receiver) = mpsc::channel();
+        let exchange_cancel = cancel.clone();
+        let exchange = move || {
+            let _one_at_a_time = locked(&gate);
+            if locked(&refused).contains(&refusal) {
+                let _ = sender.send(Err(ShadowCopyError::SignInRefused));
+                return;
+            }
+            // The SMB client is young; a panic in it must not take the
+            // window down. The answer is sent before the client is dropped,
+            // as dropping it logs off over the network.
+            let report = |outcome: &Result<ShadowCopies, ShadowCopyError>| {
+                if matches!(outcome, Err(ShadowCopyError::SignInRefused)) {
+                    locked(&refused).insert(refusal.clone());
+                }
+                let _ = sender.send(outcome.clone());
+            };
+            let finished = catch_unwind(AssertUnwindSafe(|| {
+                enumerate(&target, &account, &exchange_cancel, report);
+            }));
+            if finished.is_err() {
+                let _ = sender.send(Err(failed("the SMB client panicked".to_owned())));
+            }
+        };
+        std::thread::Builder::new()
+            .name("ox-shadow-copies".to_owned())
+            .spawn(exchange)
+            .map_err(|error| failed(format!("no thread for the SMB client: {error}")))?;
+        wait_for(&receiver, cancel)
+    }
+}
+
+/// The answer of the exchange on `receiver`, unless `cancel` is cancelled
+/// or [`LOOKUP_DEADLINE`] passes first; the exchange is then left to end
+/// on its own thread.
+fn wait_for(
+    receiver: &mpsc::Receiver<Result<ShadowCopies, ShadowCopyError>>,
+    cancel: &Cancellation,
+) -> Result<ShadowCopies, ShadowCopyError> {
+    let deadline = Instant::now() + LOOKUP_DEADLINE;
+    loop {
+        check_cancelled(cancel)?;
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(failed("the server did not answer in time".to_owned()));
         }
-        // The SMB client is young; a panic in it must not take the window
-        // down with the lookup's worker thread.
-        let outcome = catch_unwind(AssertUnwindSafe(|| enumerate(&target, &account, cancel)))
-            .unwrap_or_else(|_| Err(failed("the SMB client panicked".to_owned())));
-        if matches!(outcome, Err(ShadowCopyError::SignInRefused)) {
-            locked(&self.refused).insert(refusal);
+        match receiver.recv_timeout(left.min(CANCEL_POLL)) {
+            Ok(outcome) => return outcome,
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return Err(failed("the SMB client stopped without an answer".to_owned()));
+            }
         }
-        outcome
     }
 }
 
@@ -212,8 +273,8 @@ fn saved_account(store: &CredentialStore, target: &SmbTarget) -> Result<Option<A
     Ok(account.filter(|_| store.generation_of(key) == generation))
 }
 
-/// True when the `GVfs` password with `attributes` was saved for the host
-/// and port of `target`, with a user.
+/// True when the `GVfs` password with `attributes` was saved for the host,
+/// port and share (or whole server) of `target`, with a user.
 fn gvfs_item_fits(attributes: &SecretAttributes, target: &SmbTarget) -> bool {
     // GVfs leaves `port` out for the default port.
     let same_port = match attributes.get("port") {
@@ -223,8 +284,13 @@ fn gvfs_item_fits(attributes: &SecretAttributes, target: &SmbTarget) -> bool {
     let same_host = attributes
         .get("server")
         .is_some_and(|server| server.eq_ignore_ascii_case(target.key.host()));
+    // A password saved for another share of the server is not this one's.
+    let same_share = attributes
+        .get("object")
+        .is_none_or(|object| object.is_empty() || object.eq_ignore_ascii_case(&target.share));
     same_host
         && same_port
+        && same_share
         && attributes.get(SCHEMA_ATTRIBUTE) != Some(OWN_SCHEMA)
         && attributes.get("user").is_some_and(|user| !user.is_empty())
 }
@@ -273,7 +339,8 @@ fn enumerate(
     target: &SmbTarget,
     account: &Account,
     cancel: &Cancellation,
-) -> Result<ShadowCopies, ShadowCopyError> {
+    report: impl FnOnce(&Result<ShadowCopies, ShadowCopyError>),
+) {
     let config = ClientConfig {
         // A DFS referral would send the account to another server (NET-014).
         dfs: false,
@@ -289,11 +356,11 @@ fn enumerate(
     };
     let client = Client::new(config);
     let outcome = enumerate_with(&client, target, account, cancel);
+    report(&outcome);
     if outcome.is_ok() {
         // Closing only ends the session; it cannot change the answer.
         let _ = client.close();
     }
-    outcome
 }
 
 fn enumerate_with(
@@ -330,27 +397,19 @@ fn enumerate_with(
     Ok(copies)
 }
 
-/// The address of `host`, looked up on a thread of its own so a resolver
-/// that does not answer stops the lookup after [`REQUEST_TIMEOUT`] too.
-/// An IP address is returned as it is.
+/// The address of `host`; an IP address is returned as it is. A resolver
+/// that does not answer is bounded by [`LOOKUP_DEADLINE`].
 fn resolve(host: &str, port: u16) -> Result<String, ShadowCopyError> {
     if host.parse::<IpAddr>().is_ok() {
         return Ok(host.to_owned());
     }
-    let (sender, receiver) = mpsc::channel();
-    let name = host.to_owned();
-    // The thread ends by itself once the resolver answers.
-    std::thread::spawn(move || {
-        let address = (name.as_str(), port)
-            .to_socket_addrs()
-            .map(|mut addresses| addresses.next());
-        let _ = sender.send(address);
-    });
-    match receiver.recv_timeout(REQUEST_TIMEOUT) {
-        Ok(Ok(Some(address))) => Ok(address.ip().to_string()),
-        Ok(Ok(None)) => Err(failed(format!("{host} has no address"))),
-        Ok(Err(error)) => Err(failed(format!("{host}: {error}"))),
-        Err(_) => Err(failed(format!("looking up {host} timed out"))),
+    match (host, port)
+        .to_socket_addrs()
+        .map(|mut addresses| addresses.next())
+    {
+        Ok(Some(address)) => Ok(address.ip().to_string()),
+        Ok(None) => Err(failed(format!("{host} has no address"))),
+        Err(error) => Err(failed(format!("{host}: {error}"))),
     }
 }
 

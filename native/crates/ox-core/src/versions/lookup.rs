@@ -11,7 +11,7 @@
 use std::cmp::Reverse;
 use std::sync::Arc;
 
-use super::paths::{child_uri, is_conventional_snapshot, relative_uri, SNAPPER_FILES_FOLDER};
+use super::paths::{child_uri, relative_uri, SNAPPER_FILES_FOLDER};
 use super::provider::{CollectionListing, GioSnapshotProvider, SnapshotProvider};
 use super::shadow_copies::{is_shadow_copy_token, ShadowCopyError, ShadowCopyLister};
 use super::{PreviousVersions, SnapshotDate, SnapshotLayout, SnapshotSource, VersionsError};
@@ -156,7 +156,7 @@ impl PreviousVersions {
         // root, which would make the live share read-only: each `@GMT-`
         // folder is read-only by its name (PROP-024).
         // An item already inside a snapshot has no shadow copies of its own.
-        let asks_server = covering.is_empty() && !is_conventional_snapshot(&uri);
+        let asks_server = covering.is_empty() && !self.protected_locations().is_protected(&uri);
         if let (Some(lister), Some(share_root), true) =
             (self.shadow_copy_lister(), smb_share_root(&uri), asks_server)
         {
