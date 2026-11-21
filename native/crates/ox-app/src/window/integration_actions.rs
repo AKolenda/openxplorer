@@ -532,6 +532,11 @@ impl BrowserWindow {
         self.show_command_bar_update();
         self.status_bar().show_update_notice(&state);
         self.imp().update_notice.show_update(updates.notice());
+        // The update notice takes the star prompt's place; the prompt
+        // asks again next session.
+        if self.imp().update_notice.is_visible() {
+            self.star_prompt().set_visible(false);
+        }
         // Nothing in any window works while the package manager runs;
         // the Software updates dialog stays usable.
         self.set_sensitive(!state.is_installing());

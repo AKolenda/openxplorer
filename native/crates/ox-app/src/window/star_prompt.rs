@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The GitHub star prompt (UPD-023): a card at the top right of the window,
-//! like the update notice, asking "Enjoying OpenXplorer?" From the sixth
+//! like the update notice, asking for a star. From the sixth
 //! start of the app it pops up once per session in the first window left
 //! alone for [`IDLE_SECONDS`] while it has the focus, until it is dismissed.
 //!
 //! "Star on GitHub" opens the project's page in the default browser; it,
 //! Dismiss and the close button each close the card and keep it from
-//! popping up again. While the update notice shows, the prompt waits for
-//! the next session. The app never asks GitHub anything by itself
+//! popping up again. While the update notice shows, or once it pops up,
+//! the prompt waits for the next session. The app never asks GitHub anything by itself
 //! (SAFE-002): the browser goes there only when the button is pressed.
 //!
 //! [`StarPrompt`] is a widget subclass the window's overlay holds; the
@@ -86,7 +86,7 @@ glib::wrapper! {
 }
 
 impl StarPrompt {
-    /// The card: a star, "Enjoying OpenXplorer?", Star on GitHub and
+    /// The card: a star, the question, Star on GitHub and
     /// Dismiss, and the close button.
     fn build(&self) {
         let card = notice_card::build(self, Icon::Star, &ox_core::i18n::gettext("Enjoying OpenXplorer?"));
