@@ -23,18 +23,18 @@ use ox_core::entry::{thumbnail_path, THUMBNAIL_ATTRIBUTES};
 use super::content::MediaPreview;
 use super::DetailsPane;
 use crate::folder_view::cells::CUSTOM_ICON;
-use crate::icons::{Art, ArtImage};
+use crate::icons::Art;
 use crate::picture_guard::{self, Limits, Refusal};
 
 /// Images larger than this are not decoded for the pane.
 const MAX_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
 /// The art above the controls of an audio file.
-const AUDIO_ART_SIZE: i32 = 64;
+pub(super) const AUDIO_ART_SIZE: i32 = 64;
 /// The largest picture or player the preview area holds: the width of
 /// the widest pane inside its padding, and a height that leaves room for
 /// the Details rows, as Windows' pane does.
-const PREVIEW_WIDTH: i32 = 216;
-const PREVIEW_HEIGHT: i32 = 180;
+pub(super) const PREVIEW_WIDTH: i32 = 216;
+pub(super) const PREVIEW_HEIGHT: i32 = 180;
 
 impl DetailsPane {
     /// Shows `media` in the preview area, or the item's art without one.
@@ -55,6 +55,9 @@ impl DetailsPane {
         }
         let generation = imp.media_generation.get().wrapping_add(1);
         imp.media_generation.set(generation);
+        // The selection changed: the player of the last recording is
+        // stopped and dropped before anything else is shown.
+        self.stop_player();
         self.set_preview_widget(None);
         let Some(media) = media else {
             return;
@@ -234,6 +237,7 @@ impl DetailsPane {
     fn load_player(&self, generation: u64, uri: String, local_only: bool, is_video: bool, art: Art) {
         let pane = self.downgrade();
         glib::spawn_future_local(async move {
+            let source = uri.clone();
             let path = gio::spawn_blocking(move || {
                 ox_core::network::local_path(&uri).filter(|path| super::contents::allowed(path, local_only))
             })
@@ -244,41 +248,7 @@ impl DetailsPane {
                 return;
             };
             if let Some(path) = path.filter(|_| pane.imp().media_generation.get() == generation) {
-                pane.show_player(&path, is_video, art);
-            }
-        });
-    }
-
-    /// An inline player for the audio or video file at `path`; its length
-    /// joins the Properties once the stream knows it.
-    fn show_player(&self, path: &std::path::Path, is_video: bool, art: Art) {
-        let stream = gtk::MediaFile::for_filename(path);
-        let player: gtk::Widget = if is_video {
-            let video = gtk::Video::builder().media_stream(&stream).build();
-            video.set_hexpand(true);
-            video.set_size_request(-1, PREVIEW_HEIGHT);
-            video.upcast()
-        } else {
-            let column = gtk::Box::new(gtk::Orientation::Vertical, 6);
-            column.append(&ArtImage::new(art, AUDIO_ART_SIZE));
-            column.append(&gtk::MediaControls::new(Some(&stream)));
-            column.set_hexpand(true);
-            column.upcast()
-        };
-        self.set_preview_widget(Some(&player));
-        // Dolphin's "auto-play": off unless the user turned it on.
-        if self.imp().options.borrow().auto_play {
-            stream.play();
-        }
-        let generation = self.imp().media_generation.get();
-        let pane = self.downgrade();
-        stream.connect_prepared_notify(move |stream| {
-            let Some(pane) = pane.upgrade() else {
-                return;
-            };
-            let micros = stream.duration();
-            if pane.imp().media_generation.get() == generation && stream.is_prepared() && micros > 0 {
-                pane.add_media_property("Length", length_text(micros));
+                pane.show_player(&path, source, is_video, art);
             }
         });
     }
@@ -287,7 +257,7 @@ impl DetailsPane {
 impl DetailsPane {
     /// Adds the row `name` that the media shown says, unless the reader
     /// gave it already, and keeps it for when the rows are drawn again.
-    fn add_media_property(&self, name: &'static str, value: String) {
+    pub(super) fn add_media_property(&self, name: &'static str, value: String) {
         self.imp().media_rows.borrow_mut().push((name, value));
         self.redraw_properties();
     }
@@ -349,7 +319,7 @@ fn preview_height(width: i32, height: i32) -> i32 {
 }
 
 /// A length in microseconds as `1:02:03` or `2:03`.
-fn length_text(micros: i64) -> String {
+pub(super) fn length_text(micros: i64) -> String {
     let seconds = micros / 1_000_000;
     let (hours, minutes, seconds) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
     if hours > 0 {

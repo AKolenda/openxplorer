@@ -41,6 +41,14 @@ const RESTORING: &str = crate::i18n::message_id("Restoring items…");
 /// an item is asked about as a failure.
 const TAKEN_ROUNDS: usize = 4;
 
+/// The files a restore `scan` may replace: those of its conflicts.
+fn replaceable(scan: &ConflictScan) -> Vec<String> {
+    scan.conflicts
+        .iter()
+        .map(|conflict| conflict.existing_uri.clone())
+        .collect()
+}
+
 impl BrowserWindow {
     /// Restore: puts the selected items back where they were deleted from,
     /// recreating missing folders (OPS-041); a taken name asks Windows'
@@ -106,6 +114,9 @@ impl BrowserWindow {
         context: &OperationContext,
     ) -> Result<TransferOutcome, OpsError> {
         let mut scan = Self::restore_scan(uris, into, &context.cancel).await?;
+        // The files each plan may replace are held, their players stopped,
+        // from before the question about them until the restore ends.
+        let mut players = vec![crate::media_player::hold_players_within(&replaceable(&scan)).await];
         let destination = restores_into_one_folder(&scan).then(|| scan.destination_folder.clone());
         let action = Action {
             verb: Verb::Restoring,
@@ -135,6 +146,7 @@ impl BrowserWindow {
                 Err(error) if error.is_cancelled() => return Ok(so_far.into_outcome()),
                 Err(error) => return Err(error),
             };
+            players.push(crate::media_player::hold_players_within(&replaceable(&scan)).await);
             so_far = restore_free_items(&scan, so_far, context).await?;
         }
         // Another program keeps taking the names: each item still waiting

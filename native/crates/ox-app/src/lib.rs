@@ -33,6 +33,7 @@ mod integration;
 mod launcher_progress;
 mod locations;
 mod media_details;
+mod media_player;
 mod modal;
 mod network;
 mod operation_session;

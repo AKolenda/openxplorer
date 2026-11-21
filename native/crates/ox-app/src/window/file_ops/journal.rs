@@ -96,6 +96,9 @@ impl BrowserWindow {
             return;
         };
         let progress = self.progress_reporter(&context.cancel);
+        // A player of a file the reversal renames, moves back or deletes
+        // stops before it starts.
+        let _players = crate::media_player::hold_players_within(&step.record.locations()).await;
         let outcome = reverse_deleting(&step.record, &delete_permanently, &context, progress).await;
         self.end_operation();
         match outcome {

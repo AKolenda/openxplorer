@@ -7,7 +7,7 @@ use gtk::gio;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::ops::OperationContext;
-use ox_core::transfer::Cancellation;
+use ox_core::transfer::{Cancellation, TransferMode};
 
 pub(in crate::window) const MAX_JOBS: usize = 4;
 
@@ -22,6 +22,38 @@ fn overlaps(left: &str, right: &str) -> bool {
     let left = gio::File::for_uri(left);
     let right = gio::File::for_uri(right);
     left == right || left.has_prefix(&right) || right.has_prefix(&left)
+}
+
+/// The files a transfer of `uris` into `destination` in `mode` may change:
+/// the sources unless they are copied, and the namesakes in the
+/// destination that a Replace overwrites. An item already in the
+/// destination changes nothing: copied, it is kept as "name - Copy";
+/// moved, it stays where it is.
+pub(super) fn changed_locations(
+    mode: TransferMode,
+    uris: &[String],
+    destination: Option<&str>,
+) -> Vec<String> {
+    let elsewhere = |uri: &&String| {
+        destination.is_none_or(|destination| {
+            ox_core::location::parent_location(uri)
+                .is_none_or(|parent| !ox_core::location::same_location(&parent, destination))
+        })
+    };
+    let sources = uris
+        .iter()
+        .filter(elsewhere)
+        .filter(|_| mode != TransferMode::Copy)
+        .cloned();
+    let namesakes = destination.into_iter().flat_map(move |destination| {
+        let folder = gio::File::for_uri(destination);
+        uris.iter().filter(elsewhere).filter_map(move |uri| {
+            gio::File::for_uri(uri)
+                .basename()
+                .map(|name| folder.child(name).uri().to_string())
+        })
+    });
+    sources.chain(namesakes).collect()
 }
 
 impl BrowserWindow {
@@ -157,7 +189,32 @@ impl BrowserWindow {
 
 #[cfg(test)]
 mod tests {
+    use super::changed_locations;
     use crate::test_support::harness::TestWindow;
+    use ox_core::transfer::TransferMode;
+
+    #[test]
+    fn a_transfer_changes_its_moved_sources_and_their_namesakes_only() {
+        let uris = [
+            "file:///work/Clip.ogv".to_owned(),
+            "file:///other/Song.ogg".to_owned(),
+        ];
+        assert_eq!(
+            changed_locations(TransferMode::Copy, &uris, Some("file:///work")),
+            ["file:///work/Song.ogg"],
+            "a copy into its own folder makes a new name and changes nothing"
+        );
+        assert_eq!(
+            changed_locations(TransferMode::Move, &uris, Some("file:///work")),
+            ["file:///other/Song.ogg", "file:///work/Song.ogg"],
+            "an item moved into its own folder stays as it is"
+        );
+        assert_eq!(
+            changed_locations(TransferMode::Trash, &uris, None),
+            ["file:///work/Clip.ogv", "file:///other/Song.ogg"]
+        );
+    }
+
     /// parity: OPS-025, OPS-033
     #[gtk::test]
     fn separate_jobs_have_independent_cancel_and_release_their_slots() {
