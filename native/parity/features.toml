@@ -17162,6 +17162,21 @@ native = "n-a"
 native_note = "Retired by the owner's decision of 2026-09-28 to retire desktop/ and demo the native app instead: a GTK 4 app cannot run in a browser, and the HTML preview built from v2.0.0:desktop/ui went with the Python app. The website's /tour/ viewer (apps/web/public/tour/) replaces /app-preview.html in the same sandboxed iframe; it is a click-through of pictures of the real native app, captured by tools/capture-native-tour.py in an isolated session with a fictional /home/demo and no network, using the test-only snapshot hook (OPENXPLORER_SNAPSHOT with OPENXPLORER_SCENE and OPENXPLORER_HOTSPOTS, native/crates/ox-app/src/snapshot/). It runs no app code and makes no network requests."
 
 [[feature]]
+id = "UPD-023"
+area = "UPD"
+title = "Ask once for a GitHub star"
+behaviour = "Each start of the app is counted (starPromptLaunches) until the star prompt is dismissed. From the sixth start on, once per session, the first window left with the focus for 30 seconds without a key, click, scroll or touch pops up a card at the top right, as the update notice does: a star, 'Enjoying OpenXplorer?', 'Give us a star on GitHub to let us know!', 'Star on GitHub' and 'Dismiss', and a close button. 'Star on GitHub' opens the project's GitHub page in the default browser; it, Dismiss and the close button each close the card and save starPromptDismissed, after which it never pops up again and starts are no longer counted. While the update notice shows, the prompt waits for the next session. Nothing is sent to GitHub unless the button is pressed (SAFE-002)."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "https://github.com/pingdotgg/t3code/blob/main/apps/web/src/components/GitHubStarPrompt.tsx",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/star_prompt.rs (the card, the idle wait); native/crates/ox-app/src/app_context/star_prompt.rs (the count and the dismissal); native/crates/ox-app/src/window/notice_card.rs (the card it shares with the update notice). Owner decision 2026-11-21: ask for a star as T3 Code does. T3 Code counts prompts sent and stars through the server's GitHub account, checking first whether it already has; this app counts starts and only opens the page, since it never contacts GitHub by itself (SAFE-002). Test: star_prompt.rs (the_star_prompt_pops_up_from_the_sixth_start_until_dismissed)."
+[[feature]]
 id = "ACC-001"
 area = "ACC"
 title = "Semantic roles and labels"

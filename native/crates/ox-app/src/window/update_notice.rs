@@ -17,17 +17,9 @@ use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
-use crate::icons::{self, Icon};
+use super::notice_card;
+use crate::icons::Icon;
 use crate::update::AvailableUpdate;
-
-/// The glyph beside the title.
-const NOTICE_GLYPH: i32 = 20;
-
-/// The glyph of the close button.
-const CLOSE_GLYPH: i32 = 16;
-
-/// The widest the text gets before it wraps, in characters.
-const MAX_WIDTH_CHARS: i32 = 34;
 
 mod imp {
     use std::cell::{OnceCell, RefCell};
@@ -89,73 +81,23 @@ glib::wrapper! {
 }
 
 impl UpdateNotice {
-    /// The card: the glyph, the title and text, the two buttons, and the
-    /// close button at the top right.
+    /// The card: the glyph, the title and text, "Install update…" or
+    /// "Details…" and Later, and the close button at the top right.
     fn build(&self) {
-        self.set_halign(gtk::Align::End);
-        self.set_valign(gtk::Align::Start);
-        self.set_visible(false);
-        let title_text = ox_core::i18n::gettext("Update available");
-        self.update_property(&[gtk::accessible::Property::Label(&title_text)]);
-
-        let glyph = icons::image(Icon::ArrowDownload, NOTICE_GLYPH);
-        glyph.set_valign(gtk::Align::Start);
-        glyph.add_css_class("update-notice-glyph");
-
-        let title = gtk::Label::builder()
-            .label(&title_text)
-            .xalign(0.0)
-            .css_classes(["update-notice-title"])
-            .build();
-        let text = gtk::Label::builder()
-            .xalign(0.0)
-            .wrap(true)
-            .max_width_chars(MAX_WIDTH_CHARS)
-            .accessible_role(gtk::AccessibleRole::Status)
-            .css_classes(["update-notice-text"])
-            .build();
-        let open_button = gtk::Button::builder().css_classes(["accent"]).build();
-        let later_button = gtk::Button::builder()
-            .label(ox_core::i18n::gettext("Later"))
-            .css_classes(["bordered"])
-            .build();
-        let buttons = gtk::Box::new(gtk::Orientation::Horizontal, 8);
-        buttons.add_css_class("update-notice-buttons");
-        buttons.append(&open_button);
-        buttons.append(&later_button);
-
-        let column = gtk::Box::new(gtk::Orientation::Vertical, 4);
-        column.set_hexpand(true);
-        column.append(&title);
-        column.append(&text);
-        column.append(&buttons);
-
-        let close_button = gtk::Button::builder()
-            .child(&icons::image(Icon::Dismiss, CLOSE_GLYPH))
-            .valign(gtk::Align::Start)
-            .tooltip_text(ox_core::i18n::gettext("Dismiss"))
-            .css_classes(["update-notice-close"])
-            .build();
-        close_button.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
-            "Dismiss",
-        ))]);
-
-        let surface = gtk::Box::builder()
-            .orientation(gtk::Orientation::Horizontal)
-            .spacing(14)
-            .css_classes(["update-notice"])
-            .build();
-        surface.append(&glyph);
-        surface.append(&column);
-        surface.append(&close_button);
-        surface.set_parent(self);
-
+        let card = notice_card::build(
+            self,
+            Icon::ArrowDownload,
+            &ox_core::i18n::gettext("Update available"),
+        );
+        card.secondary.set_label(&ox_core::i18n::gettext("Later"));
         let imp = self.imp();
-        imp.surface.set(surface).expect("constructed runs once");
-        imp.text.set(text).expect("constructed runs once");
-        imp.open_button.set(open_button).expect("constructed runs once");
-        imp.later_button.set(later_button).expect("constructed runs once");
-        imp.close_button.set(close_button).expect("constructed runs once");
+        imp.surface.set(card.surface).expect("constructed runs once");
+        imp.text.set(card.text).expect("constructed runs once");
+        imp.open_button.set(card.primary).expect("constructed runs once");
+        imp.later_button
+            .set(card.secondary)
+            .expect("constructed runs once");
+        imp.close_button.set(card.close).expect("constructed runs once");
     }
 
     /// Calls `open` when the notice's "Install update…" or "Details…" is

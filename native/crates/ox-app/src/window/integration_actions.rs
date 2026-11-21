@@ -100,6 +100,7 @@ impl BrowserWindow {
         ]);
         self.follow_selection_for_integration();
         self.follow_updates();
+        self.follow_star_prompt();
         self.load_editor_shortcuts();
     }
 
@@ -577,6 +578,11 @@ impl BrowserWindow {
     #[cfg(test)]
     pub(crate) fn update_notice(&self) -> &super::update_notice::UpdateNotice {
         &self.imp().update_notice
+    }
+
+    /// The GitHub star prompt.
+    pub(crate) fn star_prompt(&self) -> &super::star_prompt::StarPrompt {
+        &self.imp().star_prompt
     }
 
     /// The tooltip of the status bar's "Check for updates", for tests.
