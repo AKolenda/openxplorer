@@ -299,6 +299,14 @@ impl BrowserWindow {
             &request.uris,
             request.destination_folder.as_deref(),
         )?;
+        // A player of a file the job moves, deletes or may overwrite stops
+        // before the job starts.
+        let _players = crate::media_player::hold_players_within(&super::jobs::changed_locations(
+            request.mode,
+            &request.uris,
+            request.destination_folder.as_deref(),
+        ))
+        .await;
         let progress = self.progress_reporter(&context.cancel);
         let verb = crate::window::transfer_panel::Verb::of_mode(request.mode);
         let destination = request.destination_folder.as_deref();

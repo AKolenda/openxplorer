@@ -201,6 +201,12 @@ mod imp {
                 .hscrollbar_policy(gtk::PolicyType::Never)
                 .vscrollbar_policy(gtk::PolicyType::Automatic)
                 .propagate_natural_height(true)
+                // The menu is as wide as its longest row, as Windows 11's
+                // menus are, so a row such as Hide section "Recent files
+                // and Recycle Bin" reads in full; past MOST_MENU_WIDTH a
+                // row, such as a long file name, ends in an ellipsis.
+                .propagate_natural_width(true)
+                .max_content_width(super::MOST_MENU_WIDTH)
                 .max_content_height(super::height::UNKNOWN_MONITOR_LIMIT)
                 .child(&list)
                 // The keyboard goes to the rows, never to the scroller
@@ -345,6 +351,10 @@ fn strip_box() -> gtk::Box {
 }
 
 /// The list of rows of `popover`.
+/// The widest a menu's rows grow to fit their text, in pixels; a longer
+/// row ends in an ellipsis.
+const MOST_MENU_WIDTH: i32 = 560;
+
 fn item_list(popover: &MenuPopover) -> gtk::ListBox {
     let list = gtk::ListBox::builder()
         .selection_mode(gtk::SelectionMode::None)

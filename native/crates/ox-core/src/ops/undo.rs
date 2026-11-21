@@ -268,6 +268,47 @@ impl UndoRecord {
         }
     }
 
+    /// Every location (URI) reversing the record may rename, move, delete
+    /// or create, in the record's order: each item as it is now and where
+    /// it goes back to, and for a Replace, the files it put back and the
+    /// ones it could not. The app stops any player of these first.
+    pub fn locations(&self) -> Vec<String> {
+        match self {
+            UndoRecord::Rename {
+                original_uri,
+                renamed_uri,
+            } => vec![original_uri.clone(), renamed_uri.clone()],
+            UndoRecord::BatchRename { items } => items
+                .iter()
+                .flat_map(|pair| [pair.original_uri.clone(), pair.renamed_uri.clone()])
+                .collect(),
+            UndoRecord::Move { items } => items
+                .iter()
+                .flat_map(|item| [item.original_uri.clone(), item.moved_uri.clone()])
+                .collect(),
+            UndoRecord::Create { uri, .. } => vec![uri.clone()],
+            UndoRecord::Link { links } => links.clone(),
+            UndoRecord::Copy { copies } | UndoRecord::Duplicate { copies } => copies.clone(),
+            UndoRecord::Restore { restored } => restored.clone(),
+            UndoRecord::EmptiedFolders { folders } | UndoRecord::RemadeFolders { folders } => folders.clone(),
+            UndoRecord::Trash { original_paths, .. } => original_paths
+                .iter()
+                .map(|path| crate::location::file_uri(path))
+                .collect(),
+            UndoRecord::Replace {
+                steps,
+                replaced,
+                overwritten,
+                ..
+            } => steps
+                .iter()
+                .flat_map(UndoRecord::locations)
+                .chain(replaced.iter().map(|path| crate::location::file_uri(path)))
+                .chain(overwritten.iter().cloned())
+                .collect(),
+        }
+    }
+
     /// Whether undoing the record does anything beyond saying which files
     /// it cannot bring back ([`Self::overwritten`]).
     pub fn undoes_more_than_overwrites(&self) -> bool {
@@ -426,6 +467,50 @@ fn moved_forward_again(items: &[MovedItem], moved_back: &[String]) -> Vec<MovedI
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_reversal_names_every_file_it_may_change() {
+        let moved = MovedItem {
+            original_uri: "file:///work/Clip.ogv".to_owned(),
+            moved_uri: "file:///work/Done/Clip.ogv".to_owned(),
+        };
+        let record = UndoRecord::Replace {
+            operation: Operation::Move,
+            steps: vec![
+                UndoRecord::Move { items: vec![moved] },
+                UndoRecord::EmptiedFolders {
+                    folders: vec!["file:///work/Old".to_owned()],
+                },
+            ],
+            replaced: vec![PathBuf::from("/work/Done/Song.ogg")],
+            replaced_since: 0,
+            overwritten: vec!["file:///work/Done/Tone.mp3".to_owned()],
+        };
+        assert_eq!(
+            record.locations(),
+            [
+                "file:///work/Clip.ogv",
+                "file:///work/Done/Clip.ogv",
+                "file:///work/Old",
+                "file:///work/Done/Song.ogg",
+                "file:///work/Done/Tone.mp3",
+            ]
+        );
+        assert_eq!(
+            rename(1).locations(),
+            ["file:///tmp/1", "file:///tmp/1-renamed"],
+            "a rename back may land on its old name"
+        );
+        let trashed = UndoRecord::Trash {
+            original_paths: vec![PathBuf::from("/work/Clip.ogv")],
+            trashed_since: 0,
+        };
+        assert_eq!(trashed.locations(), ["file:///work/Clip.ogv"]);
+        let copied = UndoRecord::Copy {
+            copies: vec!["file:///work/Copy.ogv".to_owned()],
+        };
+        assert_eq!(copied.locations(), ["file:///work/Copy.ogv"]);
+    }
 
     fn rename(number: usize) -> UndoRecord {
         UndoRecord::Rename {

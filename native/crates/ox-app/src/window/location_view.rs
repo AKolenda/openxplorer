@@ -500,16 +500,20 @@ impl BrowserWindow {
         self.tab_strip().set_tabs(&views);
     }
 
-    /// Replaces the breadcrumbs with the editable address (Ctrl+L). The
-    /// Settings tab has no address to edit (`editAddress` in app.js). A
-    /// second Ctrl+L, before anything was typed, returns to the crumbs.
+    /// Replaces the breadcrumbs with the editable address (Ctrl+L, Alt+D),
+    /// with the whole address selected. The Settings tab has no address to
+    /// edit (`editAddress` in app.js). Pressing either again while editing
+    /// keeps editing and selects the whole text, typed or not, as
+    /// Explorer's "Alt+D: Select the address bar": editing ends only with
+    /// Enter, Esc or the keyboard moving elsewhere, never with these keys,
+    /// so the next keys never reach the file list.
     pub(super) fn edit_address(&self) {
         let Some(uri) = self.current_uri() else { return };
         if Page::from_uri(&uri) == Some(Page::Settings) {
             return;
         }
-        if self.address_bar().edits_whole_address() {
-            self.finish_address();
+        if self.address_bar().is_typing() {
+            self.address_bar().select_whole_text();
             return;
         }
         self.forget_address_completions();

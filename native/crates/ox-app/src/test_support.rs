@@ -2,7 +2,8 @@
 //! What the crate's tests share: listed entries built through ox-core's own
 //! conversion, so they carry every field a real listing does, rows of the
 //! Network list and of the volume monitor, [`desktop_setting`], which
-//! changes a GNOME setting only in memory, the GTK [`harness`] for tests
+//! changes a GNOME setting only in memory, [`gtk_log`], which records
+//! GTK's warnings, the GTK [`harness`] for tests
 //! that open windows, [`held`], locations that answer only when a test
 //! lets them, [`pointer`], a real pointer on the private display,
 //! [`portal`], which exports fake desktop portals,
@@ -11,6 +12,7 @@
 //! an application for the file types the window tests open.
 
 pub(crate) mod desktop_setting;
+pub(crate) mod gtk_log;
 pub(crate) mod harness;
 pub(crate) mod held;
 pub(crate) mod pictures;

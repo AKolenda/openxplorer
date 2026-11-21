@@ -30,9 +30,6 @@ use super::BrowserWindow;
 /// shortcuts window lists it beside Alt+Left.
 pub(super) const BACK_KEY: &str = "BackSpace";
 
-/// What screen readers call a folder view (`#main`'s `aria-label`).
-const FOLDER_VIEW_LABEL: &str = crate::i18n::message_id("Folder contents — type a filename prefix to select");
-
 /// Whether a press on blank space with `modifiers` held keeps the
 /// selection: Ctrl and Shift do, for the rubber band that may follow, which
 /// toggles its items with Ctrl and adds them with Shift (SEL-012).
@@ -330,9 +327,7 @@ impl BrowserWindow {
     /// middle-click to open a folder, the context menu, and file drag and
     /// drop.
     fn folder_input(&self, view: &gtk::Widget) {
-        view.update_property(&[gtk::accessible::Property::Label(ox_core::i18n::gettext_static(
-            FOLDER_VIEW_LABEL,
-        ))]);
+        crate::folder_view::cells::label_view(view);
         let input = self.typing_input(view);
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);

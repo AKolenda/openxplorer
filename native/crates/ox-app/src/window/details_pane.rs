@@ -23,6 +23,7 @@ mod contents;
 mod media;
 mod metadata;
 mod options_menu;
+mod player;
 mod preview_page;
 mod rich_text;
 
@@ -71,7 +72,7 @@ const SMALL_ART: i32 = 20;
 /// The glyphs in the pane's buttons.
 const SMALL_GLYPH: i32 = 16;
 
-/// The width of the names column, so every value starts at one line.
+/// The narrowest the names column is, so every value starts at one line.
 const PROPERTY_NAME_WIDTH: i32 = 88;
 /// The Details column of the names.
 const NAME_COLUMN: i32 = 0;
@@ -176,6 +177,12 @@ mod imp {
         /// The content preview shown, which a redraw for the same item
         /// keeps (PROP-011).
         pub(super) shown_media: RefCell<Option<super::content::MediaPreview>>,
+        /// The player of the recording shown, in its own process.
+        pub(super) player: RefCell<Option<crate::media_player::PlayerStream>>,
+        /// The app stopped the last player before changing its file: the
+        /// next one waits for Play, even with auto-play on, so a folder's
+        /// change never starts a recording again in mid-playback.
+        pub(super) holds_auto_play: Cell<bool>,
         /// The Preview pane shows the item's icon in place of its
         /// contents (Folder Options' "Show preview handlers in preview
         /// pane" off).
@@ -350,6 +357,10 @@ impl DetailsPane {
             PaneMode::Preview => ox_core::i18n::gettext("Preview pane"),
         };
         self.update_property(&[gtk::accessible::Property::Label(&title)]);
+        // The scroller is where Tab from the file list lands; a screen
+        // reader names it as the pane rather than saying nothing.
+        imp.scroller
+            .update_property(&[gtk::accessible::Property::Label(&title)]);
         imp.title.replace(title);
         if mode == PaneMode::Details {
             self.show_page(None);
@@ -399,6 +410,12 @@ impl DetailsPane {
     #[cfg(test)]
     pub(super) fn shows_preview(&self) -> bool {
         self.imp().preview_area.is_visible()
+    }
+
+    /// The scroller that holds the pane's contents, for tests.
+    #[cfg(test)]
+    pub(super) fn scroller(&self) -> gtk::ScrolledWindow {
+        self.imp().scroller.get()
     }
 
     /// The pane's accessible name, for tests.
@@ -624,9 +641,14 @@ fn property_label(text: &str, css_class: &str) -> gtk::Label {
         .build()
 }
 
-/// A property's name in the left column.
+/// A property's name in the left column, on one line: the column is as
+/// wide as its widest name, at least [`PROPERTY_NAME_WIDTH`], so larger
+/// text widens the column only as much as the names need and leaves the
+/// rest of the pane to the values.
 fn property_name(name: &str) -> gtk::Label {
     let label = property_label(name, "detail-key");
+    label.set_wrap(false);
+    label.set_max_width_chars(-1);
     label.set_width_request(PROPERTY_NAME_WIDTH);
     label.set_yalign(0.0);
     label

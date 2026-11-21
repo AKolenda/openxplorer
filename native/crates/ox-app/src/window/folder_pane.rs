@@ -704,7 +704,7 @@ impl FolderPane {
                 if super::home_page::focus_first(landing) {
                     return;
                 }
-                let focused = landing.child_focus(gtk::DirectionType::TabForward);
+                let focused = super::landing::focus_page(landing);
                 if !focused && landing.first_child().is_some() {
                     self.release_keyboard();
                 }

@@ -479,11 +479,12 @@ mod imp {
                 popover.present();
             }
             let minimum = self.obj().size_minimum();
-            if self.size_minimum.replace(minimum) != minimum {
+            let old = self.size_minimum.replace(minimum);
+            if old != minimum {
                 let view = self.obj().downgrade();
                 glib::idle_add_local_once(move || {
                     if let Some(view) = view.upgrade() {
-                        view.fit_size_to_its_font();
+                        view.follow_size_font(old);
                     }
                 });
             }
@@ -868,6 +869,29 @@ impl DetailsView {
         let narrowest = column_widths::fixed_width(SortColumn::Size, Some(self.size_minimum()));
         if size.fixed_width() >= 0 && size.fixed_width() < narrowest {
             size.set_fixed_width(narrowest);
+        }
+    }
+
+    /// The list's font changed while Size needed `old_minimum` pixels: a
+    /// Size still at its default for that font, which nobody resized,
+    /// takes its default for the new one, so it also narrows again when
+    /// the text gets smaller (ACC-012); any other width only widens to
+    /// fit ([`Self::fit_size_to_its_font`]). Not a resize by the user.
+    fn follow_size_font(&self, old_minimum: u32) {
+        let Some(size) = self.column(SortColumn::Size) else {
+            return;
+        };
+        let default_for = |minimum: u32| {
+            let width =
+                column_widths::start_width_at(SortColumn::Size, None, 1.0).map(|width| width.max(minimum));
+            column_widths::fixed_width(SortColumn::Size, width)
+        };
+        let at_old_default = size.fixed_width() >= 0 && size.fixed_width() == default_for(old_minimum);
+        if at_old_default {
+            size.set_fixed_width(default_for(self.size_minimum()));
+            self.cancel_resize_report();
+        } else {
+            self.fit_size_to_its_font();
         }
     }
 

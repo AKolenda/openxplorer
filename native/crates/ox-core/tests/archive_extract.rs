@@ -24,8 +24,8 @@ use std::sync::Arc;
 use ox_core::archive::{ArchiveError, ExtractionRequest};
 
 use archive_support::{
-    file_type, file_uri, mode_of, write_zip_with_python, CreatedMode, ExtractionFixture, LocalFileOutput,
-    TestMember,
+    file_type, file_uri, mode_of, process_umask, write_zip_with_python, CreatedMode, ExtractionFixture,
+    LocalFileOutput, TestMember,
 };
 use transfer_support::local::{LocalNode, Provider};
 use transfer_support::versions::{PreviousVersions, READ_ONLY};
@@ -262,9 +262,10 @@ fn archive_permissions_are_never_applied() {
 
     fixture.extract("Unpacked").expect("the archive extracts");
 
+    // A new file's and a new folder's modes, never the archive's.
     let folder = fixture.destination.join("Unpacked");
-    assert_eq!(mode_of(&folder.join("script.sh")), 0o600);
-    assert_eq!(mode_of(&folder), 0o700);
+    assert_eq!(mode_of(&folder.join("script.sh")), 0o666 & !process_umask());
+    assert_eq!(mode_of(&folder), 0o777 & !process_umask());
 }
 
 /// A destination that reports `mtp://` URIs for local folders, like

@@ -315,7 +315,7 @@ fn alt_enter_opens_a_files_properties_in_a_window_of_its_own() {
     assert!(button(&general, "Change...").is_visible());
     assert_eq!(
         value_after(&general, "Size:").as_deref(),
-        Some("20 bytes (20 bytes)")
+        Some("20\u{a0}bytes (20\u{a0}bytes)")
     );
     assert_eq!(
         value_after(&general, "Size on disk:"),
@@ -380,9 +380,9 @@ fn a_folders_size_and_contents_count_by_themselves() {
     assert_eq!(value_after(&general, "Type:").as_deref(), Some("File folder"));
     assert_eq!(
         value_after(&general, "Size:").as_deref(),
-        Some("15 bytes (15 bytes)")
+        Some("15\u{a0}bytes (15\u{a0}bytes)")
     );
-    assert!(value_after(&general, "Size on disk:").is_some_and(|text| text.ends_with(" bytes)")));
+    assert!(value_after(&general, "Size on disk:").is_some_and(|text| text.ends_with("\u{a0}bytes)")));
     assert!(value_after(&general, "Created:").is_some());
     assert_eq!(
         value_after(&general, "Modified:"),
@@ -424,7 +424,7 @@ fn a_partial_or_failed_folder_count_is_never_shown_as_exact() {
     });
     assert_eq!(
         value_after(&page, "Size:").as_deref(),
-        Some("≥ 10 bytes (10 bytes)")
+        Some("≥ 10\u{a0}bytes (10\u{a0}bytes)")
     );
     window.close();
 
@@ -1520,7 +1520,7 @@ fn properties_of_several_items_total_them_and_change_them_together() {
     });
     assert_eq!(
         value_after(&window, "Size:").as_deref(),
-        Some("60 bytes (60 bytes)")
+        Some("60\u{a0}bytes (60\u{a0}bytes)")
     );
     let files = ["Documents/inside.txt", "Notes 2.txt", "Notes 10.txt"].map(|name| fixture.path(name));
     assert_eq!(value_after(&window, "Size on disk:"), Some(on_disk_text(&files)));
@@ -1848,7 +1848,7 @@ fn properties_show_a_links_target_and_a_drives_space() {
     assert!(value_after(&general, "File system:").is_some_and(|name| !name.is_empty()));
     for row in ["Used space:", "Free space:", "Capacity:"] {
         assert!(
-            value_after(&general, row).is_some_and(|text| text.ends_with(" bytes")),
+            value_after(&general, row).is_some_and(|text| text.ends_with("\u{a0}bytes")),
             "{row} in bytes"
         );
     }
@@ -2263,7 +2263,7 @@ fn properties_of_a_location_open_for_menus_outside_the_folder_view() {
     let window = test.wait_for_properties("Documents Properties");
     let general = general(&window);
     wait_until("the count", || {
-        value_after(&general, "Size:").is_some_and(|text| text.ends_with(" bytes)"))
+        value_after(&general, "Size:").is_some_and(|text| text.ends_with("\u{a0}bytes)"))
     });
 }
 

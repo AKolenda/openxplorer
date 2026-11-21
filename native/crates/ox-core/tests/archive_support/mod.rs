@@ -121,6 +121,20 @@ pub fn make_fifo(path: &Path) {
     );
 }
 
+/// The process's file-creation mask, from `/proc/self/status`.
+///
+/// # Panics
+///
+/// When the process status has no mask.
+pub fn process_umask() -> u32 {
+    let status = fs::read_to_string("/proc/self/status").expect("the process status");
+    let line = status
+        .lines()
+        .find(|line| line.starts_with("Umask:"))
+        .expect("a Umask line");
+    u32::from_str_radix(line.trim_start_matches("Umask:").trim(), 8).expect("an octal mask")
+}
+
 /// The permission bits of `path`, without following a link.
 ///
 /// # Panics
@@ -148,7 +162,9 @@ pub enum WriteBehaviour {
 /// How an extraction double creates files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CreatedMode {
-    /// Owner-only (`0600`), like `writer_open`.
+    /// Owner-only (`0600`) while written, like `writer_open`, then the
+    /// mode any app's new file gets, 0666 less the umask, as
+    /// `GioExtractionOutput` gives a finished local file.
     OwnerOnly,
     /// Whatever the umask gives: a device without Unix modes, like
     /// `device_writer` in `test_zip_extract.py`.
@@ -194,6 +210,7 @@ impl ExtractionOutput for LocalFileOutput {
         Ok(Box::new(LocalOutputFile {
             file: created,
             behaviour: self.behaviour,
+            created_mode: self.created_mode,
         }))
     }
 }
@@ -202,6 +219,7 @@ impl ExtractionOutput for LocalFileOutput {
 struct LocalOutputFile {
     file: fs::File,
     behaviour: WriteBehaviour,
+    created_mode: CreatedMode,
 }
 
 impl OutputFile for LocalOutputFile {
@@ -222,8 +240,16 @@ impl OutputFile for LocalOutputFile {
         }
     }
 
-    fn close(self: Box<Self>) -> Result<(), TransferError> {
+    fn close(self: Box<Self>, modified: Option<u64>) -> Result<(), TransferError> {
         self.file.sync_all()?;
+        if self.created_mode == CreatedMode::OwnerOnly {
+            self.file
+                .set_permissions(fs::Permissions::from_mode(0o666 & !process_umask()))?;
+        }
+        if let Some(seconds) = modified {
+            self.file
+                .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(seconds))?;
+        }
         Ok(())
     }
 }

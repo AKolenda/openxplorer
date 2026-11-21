@@ -174,9 +174,9 @@ mod tests {
                 .find(|line| line.starts_with("Size:"))
                 .map(str::to_owned)
         };
-        assert_eq!(size_line(4_486).as_deref(), Some("Size: 4.38 KB"));
-        assert_eq!(size_line(1).as_deref(), Some("Size: 1 byte"));
-        assert_eq!(size_line(912).as_deref(), Some("Size: 912 bytes"));
+        assert_eq!(size_line(4_486).as_deref(), Some("Size: 4.38\u{a0}KB"));
+        assert_eq!(size_line(1).as_deref(), Some("Size: 1\u{a0}byte"));
+        assert_eq!(size_line(912).as_deref(), Some("Size: 912\u{a0}bytes"));
     }
 
     /// An item's tooltip is Explorer's infotip, with only what is known,

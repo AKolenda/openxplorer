@@ -127,6 +127,38 @@ pub(crate) fn secure_local_staging(
     }))
 }
 
+/// Gives a local staging folder this engine made private `mode` just
+/// before it is published, through a descriptor opened without following
+/// links. When `created` is known, the folder must still be the one made
+/// private, so a folder moved in under its name is never changed. Does
+/// nothing for `GVfs` backends, as [`secure_local_staging`].
+///
+/// # Errors
+///
+/// When the folder cannot be opened that way, is another folder now, or
+/// its mode cannot be changed.
+pub(crate) fn open_local_staging(
+    node: &(impl Node + ?Sized),
+    created: Option<ItemIdentity>,
+    mode: u32,
+) -> Result<(), TransferError> {
+    let Some(path) = path_for_unix_modes(node) else {
+        return Ok(());
+    };
+    let directory = open_directory_nofollow(&path)?;
+    if let Some(created) = created {
+        let metadata = directory.metadata()?;
+        if (metadata.dev(), metadata.ino()) != (created.device, created.inode) {
+            return Err(TransferError::failed(format!(
+                "{} was replaced while it was being extracted.",
+                path.display()
+            )));
+        }
+    }
+    set_mode(&directory, mode)?;
+    Ok(())
+}
+
 /// Sets `mode` on the folder at `path` and returns the folder, still open.
 fn apply_mode(path: &Path, mode: u32) -> Result<File, TransferError> {
     let directory = open_directory_nofollow(path)?;

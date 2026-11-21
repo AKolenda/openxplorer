@@ -489,6 +489,25 @@ fn renderer_for(arguments: &[String], is_chosen: bool) -> Option<&'static str> {
     (asks_software && !is_chosen).then_some(SOFTWARE_RENDERER)
 }
 
+/// Raises the soft limit on open files to the hard one, as many desktop
+/// apps do: the usual soft limit of 1024 is reached by a library that
+/// leaks descriptors (GTK 4.14's media backend leaked about ten for each
+/// player), and `GLib` aborts the app once it cannot make a pipe. Left as
+/// it is when the limit cannot be read or raised.
+fn raise_open_file_limit() {
+    let limit = rustix::process::getrlimit(rustix::process::Resource::Nofile);
+    if let Some(maximum) = limit
+        .maximum
+        .filter(|maximum| limit.current.is_some_and(|current| current < *maximum))
+    {
+        let raised = rustix::process::Rlimit {
+            current: Some(maximum),
+            maximum: Some(maximum),
+        };
+        let _ = rustix::process::setrlimit(rustix::process::Resource::Nofile, raised);
+    }
+}
+
 /// What to tell a user whose `--software-rendering` reached a running
 /// instance (`is_remote`) that draws with `renderer` rather than Cairo:
 /// the option applies from a restart, which `--restart` offers.
@@ -508,12 +527,17 @@ fn software_rendering_notice(asks: bool, is_remote: bool, renderer: Option<&str>
 /// (INT-031), from this build channel's catalogue (`I18N_DOMAIN`).
 /// Started with `--ox-read-media-details`, it is the Details tab's reader
 /// process instead, which shows nothing (see `media_details.rs`), with
-/// `--ox-decode-picture` a picture decoder (see `picture_guard`), and
+/// `--ox-play-media` the details pane's player process (`media_player.rs`),
+/// with `--ox-decode-picture` a picture decoder (see `picture_guard`), and
 /// with `--ox-draw-vector-picture` it draws one vector picture for the app
 /// (see `picture_guard/vector.rs`).
 pub fn run() -> glib::ExitCode {
+    raise_open_file_limit();
     let arguments: Vec<String> = std::env::args().collect();
     if let Some(status) = crate::media_details::run_as_reader(&arguments) {
+        return status;
+    }
+    if let Some(status) = crate::media_player::run_as_player(&arguments) {
         return status;
     }
     if let Some(status) = crate::picture_guard::run_as_decoder(&arguments) {

@@ -221,6 +221,8 @@ impl BrowserWindow {
                 }
                 let (admitted, _writing) = window.admit_write()?;
                 let context = OperationContext { cancel, ..admitted };
+                // Its player stops before the file is renamed.
+                let _players = crate::media_player::hold_players_within(std::slice::from_ref(&uri)).await;
                 rename_item(&uri, &name, &context)
                     .await
                     .map_err(|error| error.to_string())
@@ -253,6 +255,7 @@ impl BrowserWindow {
             return Ok(false);
         }
         let (context, _writing) = self.admit_write()?;
+        let _players = crate::media_player::hold_players_within(&[uri.to_owned()]).await;
         let renamed = rename_item(uri, name, &context)
             .await
             .map_err(|error| error.to_string())?;

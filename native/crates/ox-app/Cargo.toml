@@ -25,9 +25,10 @@ kamadak-exif.workspace = true
 # The Details tab's reader writes what it read as JSON to the app.
 serde.workspace = true
 serde_json.workspace = true
-# The Details tab's reader and the picture decoders limit their own
-# resources; the vector picture drawer reads its own processor time.
-rustix = { workspace = true, features = ["process", "time"] }
+# The Details tab's reader, the details pane's player and the picture
+# decoders limit their own resources; the player moves its events off
+# standard output, and the vector picture drawer reads its own processor time.
+rustix = { workspace = true, features = ["process", "stdio", "time"] }
 thiserror.workspace = true
 
 [lints]
