@@ -2,11 +2,11 @@
 
 ## Before a change
 
-Read [README.md](README.md), [AGENTS.md](AGENTS.md), [native/README.md](native/README.md), [the development guide](docs/development.md) and [SECURITY.md](SECURITY.md). Keep a change focused and explain the observable problem before changing implementation details. A visual improvement must preserve file-operation and desktop integration safeguards.
+Read [AGENTS.md](AGENTS.md), [native/README.md](native/README.md), [the development guide](docs/development.md) and [SECURITY.md](SECURITY.md). [native/BACKLOG.md](native/BACKLOG.md) lists the known gaps, and the [release checklist](docs/RELEASE-CHECKLIST.md) covers publishing a release. Keep a change focused and explain the observable problem before changing implementation details. A visual improvement must preserve file-operation and desktop integration safeguards.
 
 ## Local development
 
-The app is the Rust and GTK 4 program in `native/` (crates `ox-core` for the GIO services and `ox-app` for the interface). It needs Rust 1.92 or newer (`rust-version` in `native/Cargo.toml`), GTK 4.14 or newer, SQLite, libsoup 3 and GStreamer (core and base) development files, and Python 3.11+ for the check driver and parity tools. The distribution packages below are the ones CI installs in `native/packaging/ci/prepare-container.sh`, including the test tools:
+The app is the Rust and GTK 4 program in `native/` (crates `ox-core` for the GIO services and `ox-app` for the interface); the persistent SMB mount helper is Rust too, and no package ships Python. The Next.js website is a separate project in `apps/web/` ([its README](apps/web/README.md)). It needs Rust 1.92 or newer (`rust-version` in `native/Cargo.toml`), GTK 4.14 or newer, SQLite, libsoup 3 and GStreamer (core and base) development files, and Python 3.11+ for the check driver and parity tools. The distribution packages below are the ones CI installs in `native/packaging/ci/prepare-container.sh`, including the test tools:
 
 | Distribution | Packages |
 |---|---|
