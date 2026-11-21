@@ -107,13 +107,16 @@ impl Keyring for MemoryKeyring {
         Ok(found.map(|item| item.text.clone()))
     }
 
-    fn lookup_item(
+    fn find_unlocked(
         &self,
         query: &SecretAttributes,
-    ) -> Result<Option<(SecretAttributes, String)>, KeyringError> {
+    ) -> Result<Vec<(SecretAttributes, String)>, KeyringError> {
         let items = locked(&self.items);
-        let found = items.iter().find(|item| query.matches(&item.attributes));
-        Ok(found.map(|item| (item.attributes.clone(), item.text.clone())))
+        Ok(items
+            .iter()
+            .filter(|item| query.matches(&item.attributes))
+            .map(|item| (item.attributes.clone(), item.text.clone()))
+            .collect())
     }
 
     fn store(&self, secret: &NewSecret<'_>) -> Result<(), KeyringError> {

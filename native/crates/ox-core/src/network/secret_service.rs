@@ -44,31 +44,30 @@ impl Keyring for SecretService {
         })
     }
 
-    fn lookup_item(
+    fn find_unlocked(
         &self,
         query: &SecretAttributes,
-    ) -> Result<Option<(SecretAttributes, String)>, KeyringError> {
+    ) -> Result<Vec<(SecretAttributes, String)>, KeyringError> {
         block_on(async {
             let service = connect().await?;
-            let items = matching_items(&service, query).await?;
-            let Some(item) = first_unlocked_or_locked(items).await? else {
-                return Ok(None);
-            };
-            if item.is_locked().await? {
-                item.unlock(None).await?;
+            let mut found = Vec::new();
+            for item in matching_items(&service, query).await? {
+                if item.is_locked().await? {
+                    continue;
+                }
+                let attributes = item
+                    .attributes()
+                    .await?
+                    .iter()
+                    .fold(SecretAttributes::any_schema(), |found, (name, value)| {
+                        found.with(name, value)
+                    });
+                // A secret that is not text is not a password.
+                if let Ok(text) = String::from_utf8(item.secret().await?.as_bytes().to_vec()) {
+                    found.push((attributes, text));
+                }
             }
-            let attributes = item
-                .attributes()
-                .await?
-                .iter()
-                .fold(SecretAttributes::any_schema(), |found, (name, value)| {
-                    found.with(name, value)
-                });
-            let secret = item.secret().await?;
-            // A secret that is not text is not a password.
-            Ok(String::from_utf8(secret.as_bytes().to_vec())
-                .ok()
-                .map(|text| (attributes, text)))
+            Ok(found)
         })
     }
 

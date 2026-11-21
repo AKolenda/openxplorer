@@ -2374,6 +2374,7 @@ dependencies = [
 name = "ox-core"
 version = "2.0.21"
 dependencies = [
+ "binrw",
  "bzip2",
  "crc32fast",
  "flate2",

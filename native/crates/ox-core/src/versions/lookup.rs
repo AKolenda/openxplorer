@@ -11,9 +11,9 @@
 use std::cmp::Reverse;
 use std::sync::Arc;
 
-use super::paths::{child_uri, relative_uri, SNAPPER_FILES_FOLDER};
+use super::paths::{child_uri, is_conventional_snapshot, relative_uri, SNAPPER_FILES_FOLDER};
 use super::provider::{CollectionListing, GioSnapshotProvider, SnapshotProvider};
-use super::shadow_copies::{ShadowCopyError, ShadowCopyLister};
+use super::shadow_copies::{is_shadow_copy_token, ShadowCopyError, ShadowCopyLister};
 use super::{PreviousVersions, SnapshotDate, SnapshotLayout, SnapshotSource, VersionsError};
 use crate::entry::{Entry, EntryError};
 use crate::location::{normalise, split_location, ItemKind, LocationError, LocationKind};
@@ -155,11 +155,11 @@ impl PreviousVersions {
         // names none. The share root is not remembered as a snapshot
         // root, which would make the live share read-only: each `@GMT-`
         // folder is read-only by its name (PROP-024).
-        if let (Some(lister), Some(share_root), true) = (
-            self.shadow_copy_lister(),
-            smb_share_root(&uri),
-            covering.is_empty(),
-        ) {
+        // An item already inside a snapshot has no shadow copies of its own.
+        let asks_server = covering.is_empty() && !is_conventional_snapshot(&uri);
+        if let (Some(lister), Some(share_root), true) =
+            (self.shadow_copy_lister(), smb_share_root(&uri), asks_server)
+        {
             if search.check_shadow_copies(lister, &share_root)? {
                 return Ok(search.finish(covering));
             }
@@ -370,7 +370,7 @@ impl<'a> VersionSearch<'a> {
         let components = layout
             .into_iter()
             .chain(relative.split('/').filter(|part| !part.is_empty()));
-        let Some(entry) = self.walk(item_uri, Some(snapshot.clone()), components)? else {
+        let Some(entry) = self.walk(item_uri, snapshot.clone(), components)? else {
             return Ok(None);
         };
         Ok(Some(PreviousVersion {
@@ -382,15 +382,12 @@ impl<'a> VersionSearch<'a> {
         }))
     }
 
-    /// Follows `components` down from the folder at `start_uri` to the
-    /// item; `None` when the item is a link or lies below one. `start` is
-    /// that folder's entry, or `None` for a folder that is one by
-    /// definition, such as a shadow copy of a share, which is then only
-    /// queried when it is the item itself.
+    /// Follows `components` down from `start`, the folder at `start_uri`,
+    /// to the item; `None` when the item is a link or lies below one.
     fn walk<'c>(
         &self,
         start_uri: String,
-        start: Option<Entry>,
+        start: Entry,
         components: impl Iterator<Item = &'c str>,
     ) -> Result<Option<Entry>, SnapshotProblem> {
         let mut item_uri = start_uri;
@@ -401,22 +398,15 @@ impl<'a> VersionSearch<'a> {
         // file appear to be a previous version. These metadata checks do
         // not make traversal atomic against concurrent replacements.
         for component in components {
-            if entry
-                .as_ref()
-                .is_some_and(|folder| !folder.is_dir || folder.is_symlink)
-            {
+            if !entry.is_dir || entry.is_symlink {
                 return Ok(None);
             }
             item_uri.push('/');
             item_uri.push_str(component);
-            entry = Some(self.provider.inspect(&item_uri, self.cancel)?);
-        }
-        let mut entry = match entry {
-            Some(entry) => entry,
-            None => self.provider.inspect(&item_uri, self.cancel)?,
-        };
-        if entry.is_symlink {
-            return Ok(None);
+            entry = self.provider.inspect(&item_uri, self.cancel)?;
+            if entry.is_symlink {
+                return Ok(None);
+            }
         }
         entry.uri = item_uri;
         Ok(Some(entry))
@@ -439,8 +429,12 @@ impl<'a> VersionSearch<'a> {
                 return Ok(false);
             }
         };
-        self.is_truncated |= copies.is_truncated;
-        for token in &copies.tokens {
+        // At most as many shadow copies are checked as snapshot folders are
+        // read from a collection, so an item missing from most of them
+        // costs a bounded number of queries.
+        self.is_truncated |= copies.is_truncated || copies.tokens.len() > MAX_SNAPSHOTS_PER_COLLECTION;
+        let tokens = copies.tokens.iter().take(MAX_SNAPSHOTS_PER_COLLECTION);
+        for token in tokens.filter(|token| is_shadow_copy_token(token)) {
             check_cancelled(self.cancel)?;
             match self.version_in_shadow_copy(share_root, token) {
                 Ok(Some(version)) => self.versions.push(version),
@@ -464,8 +458,15 @@ impl<'a> VersionSearch<'a> {
     ) -> Result<Option<PreviousVersion>, SnapshotProblem> {
         let relative = relative_uri(self.uri, share_root).ok_or(SnapshotProblem::OutsideLiveFolder)?;
         let snapshot_root = child_uri(share_root, token)?;
+        // The shadow copy's own folder is checked too, as a snapshot folder
+        // in a collection is: NOFOLLOW_SYMLINKS checks only the last
+        // component of a query.
+        let root = self.provider.inspect(&snapshot_root, self.cancel)?;
+        if !root.is_dir || root.is_symlink {
+            return Ok(None);
+        }
         let components = relative.split('/').filter(|part| !part.is_empty());
-        let Some(entry) = self.walk(snapshot_root.clone(), None, components)? else {
+        let Some(entry) = self.walk(snapshot_root.clone(), root, components)? else {
             return Ok(None);
         };
         Ok(Some(PreviousVersion {

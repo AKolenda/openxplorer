@@ -72,13 +72,16 @@ impl Keyring for RecordedKeyring {
         Ok(found.map(|(_, text)| text.clone()))
     }
 
-    fn lookup_item(
+    fn find_unlocked(
         &self,
         query: &SecretAttributes,
-    ) -> Result<Option<(SecretAttributes, String)>, KeyringError> {
+    ) -> Result<Vec<(SecretAttributes, String)>, KeyringError> {
         let items = self.items.lock().unwrap_or_else(PoisonError::into_inner);
-        let found = items.iter().find(|(attributes, _)| query.matches(attributes));
-        Ok(found.cloned())
+        Ok(items
+            .iter()
+            .filter(|(attributes, _)| query.matches(attributes))
+            .cloned()
+            .collect())
     }
 
     fn store(&self, secret: &NewSecret<'_>) -> Result<(), KeyringError> {

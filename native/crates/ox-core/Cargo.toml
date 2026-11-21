@@ -51,6 +51,7 @@ oo7.workspace = true
 # Lists an SMB server's shadow copies for Previous Versions; see the workspace
 # manifest.
 smb.workspace = true
+binrw.workspace = true
 # ZIP decompression and CRC-32 checks for `archive`; see the workspace manifest.
 flate2.workspace = true
 bzip2.workspace = true

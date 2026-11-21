@@ -96,4 +96,9 @@ jobs:
           rustup toolchain install 1.92.0 --profile minimal
           cargo +1.92.0 install cargo-audit --version 0.22.2 --locked --no-default-features --root "$RUNNER_TEMP/cargo-audit"
       - name: Audit the native dependency graph
-        run: '"$RUNNER_TEMP/cargo-audit/bin/cargo-audit" audit --file native/Cargo.lock'
+        # RUSTSEC-2023-0071 (Marvin, a timing side channel in RSA private-key
+        # operations) is in rsa 0.10.0-rc.18, which smb's sspi and picky pin
+        # exactly. They use RSA only for Kerberos and certificate sign-in;
+        # the app signs in to list shadow copies with NTLM, which never runs
+        # an RSA private-key operation.
+        run: '"$RUNNER_TEMP/cargo-audit/bin/cargo-audit" audit --file native/Cargo.lock --ignore RUSTSEC-2023-0071'

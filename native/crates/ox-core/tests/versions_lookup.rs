@@ -333,9 +333,10 @@ impl ShadowCopyLister for FixedShadowCopies {
 }
 
 /// A share item is looked up in each shadow copy its server lists, newest
-/// first, as Windows' Previous Versions does: found in one, a link in
-/// another and missing from a third. The live share stays writable and
-/// the versions are read-only.
+/// first, as Windows' Previous Versions does: found in one, below a link
+/// in another, and not followed into a third whose own folder is a link.
+/// The share's snapshot folders are not read then, the live share stays
+/// writable and the versions are read-only.
 ///
 /// parity: PROP-032, PROP-024
 #[test]
@@ -351,6 +352,11 @@ fn a_share_item_is_found_in_the_shadow_copies_its_server_lists() {
     let provider = TreeProvider::new(json!({
         "collections": {"smb://nas/share/.zfs/snapshot": {"entries": [{"name": "auto-1", "isDir": true}]}},
         "items": {
+            "smb://nas/share/%40GMT-2026.11.21-00.30.00": {"name": "@GMT-2026.11.21-00.30.00", "isDir": true},
+            "smb://nas/share/%40GMT-2026.11.20-08.00.00": {"name": "@GMT-2026.11.20-08.00.00", "isDir": true},
+            "smb://nas/share/%40GMT-2026.11.19-08.00.00": {"name": "@GMT-2026.11.19-08.00.00", "symlink": true},
+            "smb://nas/share/%40GMT-2026.11.19-08.00.00/work": {"name": "work", "isDir": true},
+            "smb://nas/share/%40GMT-2026.11.19-08.00.00/work/a.txt": {"name": "a.txt"},
             "smb://nas/share/%40GMT-2026.11.21-00.30.00/work": {"name": "work", "isDir": true},
             "smb://nas/share/%40GMT-2026.11.21-00.30.00/work/a.txt": {"name": "a.txt"},
             "smb://nas/share/%40GMT-2026.11.20-08.00.00/work": {"name": "work", "symlink": true},
