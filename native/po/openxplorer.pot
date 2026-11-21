@@ -10769,6 +10769,10 @@ msgid "Preview build of OpenXplorer 2.0.2 under its own application ID."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Recordings in the Preview and Details panes play in a separate process, and pictures, thumbnails and icons are decoded in separate processes, so a damaged or unusual file can no longer close or freeze the window; such a file shows its icon instead. A damaged 7z archive or a share that stops answering no longer closes or freezes the app either. Alt+D, Ctrl+L and F4 always select the whole address, Extract all gives files your usual permissions and the times stored in the archive, the Details pane widens with the text size, This PC opens with nothing selected, sizes keep their number and unit on one line, a Settings search of several words shows the settings that name them all, menus are as wide as their longest row and stay on screen on Wayland, and screen readers name the file list Items View."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "Running copies, moves and deletes show in a Windows-style progress window, and Properties is redone as Windows 11's Properties windows. Several selected items can be renamed at once, a new text document is created at once and renamed in place, tabs drag as in Chrome, and the menus and defaults match Windows 11 Explorer. A slow location shows at once that it is opening, search is faster and more reliable, and Copy as path quotes each path. Deleting a folder permanently under Open as administrator is refused when other accounts can change it, and a share another app asks OpenXplorer to show is connected to only when you choose Try again."
 msgstr ""
 
