@@ -14,7 +14,8 @@
 //!
 //! A player is stopped and dropped (paused, its pipeline set to NULL,
 //! then let go) when the selection changes, and before the app renames,
-//! moves, deletes or overwrites its file ([`release_players_within`]).
+//! moves, deletes or overwrites its file, and no new one starts until the
+//! change is done ([`hold_players_within`]).
 
 mod child;
 mod protocol;
@@ -27,7 +28,7 @@ use std::ffi::OsString;
 
 use gtk::glib;
 
-pub(crate) use stream::{release_players_within, PlayerStream};
+pub(crate) use stream::{hold_players_within, PlayerStream};
 
 /// The first argument that starts the app as a player:
 /// `<app> --ox-play-media <audio|video> <max-width> <max-height> <uri>`.
@@ -35,6 +36,10 @@ pub(crate) const PLAYER_FLAG: &str = "--ox-play-media";
 /// Set, the tests' player process aborts when asked to play.
 #[cfg(test)]
 pub(crate) const TEST_ABORT_VARIABLE: &str = "OX_TEST_PLAYER_ABORT";
+/// Set, the tests' player process ignores Quit and its closed input, as a
+/// decoder that hangs does, until it is killed.
+#[cfg(test)]
+pub(crate) const TEST_STUBBORN_VARIABLE: &str = "OX_TEST_PLAYER_STUBBORN";
 
 /// What a recording has to show.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

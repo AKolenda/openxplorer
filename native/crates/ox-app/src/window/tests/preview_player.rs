@@ -380,3 +380,101 @@ fn arrowing_through_200_recordings_leaves_nothing_behind() {
         });
     }
 }
+
+/// A paste over a recording whose player is still waiting to start, the
+/// selection having just reached it, keeps the player from starting while
+/// the Replace question is open, and until the file is replaced.
+///
+/// parity: PROP-011
+#[gtk::test]
+fn a_paste_over_a_recording_whose_player_waits_to_start_keeps_it_from_starting() {
+    let fixture = Fixture::standard();
+    write_clip(&fixture.path("Dunes.ogv"), 20);
+    write_clip(&fixture.path("Documents/Dunes.ogv"), 30);
+    let test = window_with_player(&fixture, true);
+    let pane = test.window.details_pane();
+    select_names(&test, &["Dunes.ogv"]);
+    test.activate("copy", None);
+    test.activate("go-to", Some(&fixture.uri_of("Documents")));
+    wait_until("Documents", || {
+        test.names().iter().any(|name| name == "Dunes.ogv")
+    });
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+
+    // The pane waits before it starts Dunes.ogv's player; the paste starts
+    // at once, and its question stays open well past that wait.
+    select_names(&test, &["Dunes.ogv"]);
+    test.activate("paste", None);
+    let question = super::name_conflicts::question_window(&test);
+    wait_for(Duration::from_millis(1200));
+    assert!(
+        !shows_player(pane),
+        "no player starts for a file the paste may replace"
+    );
+
+    let replaced = fixture.path("Documents/Dunes.ogv");
+    let before = fs::metadata(&replaced).expect("the namesake").len();
+    super::name_conflicts::button(&question, "Replace the file in the destination").emit_clicked();
+    wait_until("the file to be replaced", || {
+        fs::metadata(&replaced).is_ok_and(|meta| meta.len() != before) && !test.window.is_writing_files()
+    });
+}
+
+/// Undo of a copy moves the copy to the Recycle Bin only once the player
+/// of that copy has stopped.
+///
+/// parity: PROP-011, OPS-029
+#[gtk::test]
+fn undoing_a_copy_stops_the_copys_player_first() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    write_clip(&fixture.path("Pier.ogv"), 20);
+    let test = window_with_player(&fixture, false);
+    select_names(&test, &["Pier.ogv"]);
+    test.activate("copy", None);
+    test.activate("paste-into", Some(&fixture.uri_of("Documents")));
+    let copy = fixture.path("Documents/Pier.ogv");
+    wait_until("the copy", || copy.exists() && !test.window.is_writing_files());
+    wait_until("Undo Copy", || is_enabled(&test, "undo"));
+    test.activate("go-to", Some(&fixture.uri_of("Documents")));
+    wait_until("Documents", || test.names().iter().any(|name| name == "Pier.ogv"));
+    let playing = play(&test, "Pier.ogv");
+
+    test.activate("undo", None);
+    let gone = copy.clone();
+    assert_stopped_before(
+        &playing,
+        "the copy to be undone",
+        move || !gone.exists(),
+        || !copy.exists() && !test.window.is_writing_files(),
+    );
+}
+
+/// Renaming several selected items at once (F2 with a numbered name)
+/// stops the player another window has of one of them first.
+///
+/// parity: PROP-011, OPS-050
+#[gtk::test]
+fn a_numbered_rename_stops_a_player_of_one_of_its_files_first() {
+    let fixture = Fixture::standard();
+    write_clip(&fixture.path("Pier.ogv"), 20);
+    write_song(&fixture.path("Song.ogg"));
+    let test = window_with_player(&fixture, false);
+    let playing = play(&test, "Pier.ogv");
+    // The second window shares the first's setting: extensions are shown.
+    let other = test.open_beside(&fixture.uri());
+
+    select_names(&other, &["Pier.ogv", "Song.ogg"]);
+    other.activate("rename", None);
+    let field = name_editor(&other);
+    field.set_text("Walk");
+    field.emit_activate();
+    let pier = fixture.path("Pier.ogv");
+    let gone = pier.clone();
+    assert_stopped_before(
+        &playing,
+        "the numbered rename",
+        move || !gone.exists(),
+        || !pier.exists() && !fixture.path("Song.ogg").exists() && !other.window.is_writing_files(),
+    );
+}

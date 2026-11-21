@@ -115,6 +115,9 @@ impl BrowserWindow {
         let Some(context) = self.begin_operation(ox_core::i18n::gettext_static(RENAMING)) else {
             return;
         };
+        // Their players stop before the files are renamed.
+        let uris: Vec<String> = batch.items.iter().map(|item| item.uri.clone()).collect();
+        let _players = crate::media_player::hold_players_within(&uris).await;
         let outcome = rename_numbered_items(batch, &context).await;
         self.end_operation();
         let finished = outcome.map(|outcome| FinishedOperation {

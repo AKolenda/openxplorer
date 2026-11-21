@@ -237,6 +237,7 @@ impl DetailsPane {
     fn load_player(&self, generation: u64, uri: String, local_only: bool, is_video: bool, art: Art) {
         let pane = self.downgrade();
         glib::spawn_future_local(async move {
+            let source = uri.clone();
             let path = gio::spawn_blocking(move || {
                 ox_core::network::local_path(&uri).filter(|path| super::contents::allowed(path, local_only))
             })
@@ -247,7 +248,7 @@ impl DetailsPane {
                 return;
             };
             if let Some(path) = path.filter(|_| pane.imp().media_generation.get() == generation) {
-                pane.show_player(&path, is_video, art);
+                pane.show_player(&path, source, is_video, art);
             }
         });
     }

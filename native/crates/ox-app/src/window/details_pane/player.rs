@@ -20,10 +20,11 @@ use crate::icons::{Art, ArtImage};
 const PLAYER_DELAY: Duration = Duration::from_millis(400);
 
 impl DetailsPane {
-    /// Shows the player of the audio or video file at `path` once the
-    /// selection has stayed on it for [`PLAYER_DELAY`]; the item keeps its
-    /// art until then.
-    pub(super) fn show_player(&self, path: &std::path::Path, is_video: bool, art: Art) {
+    /// Shows the player of the audio or video file at `path`, which the
+    /// app's file operations know as `source` (a share's own URI when
+    /// `path` is its local path), once the selection has stayed on it for
+    /// [`PLAYER_DELAY`]; the item keeps its art until then.
+    pub(super) fn show_player(&self, path: &std::path::Path, source: String, is_video: bool, art: Art) {
         let generation = self.imp().media_generation.get();
         let path = PathBuf::from(path);
         let pane = self.downgrade();
@@ -33,7 +34,7 @@ impl DetailsPane {
                 return;
             };
             if pane.imp().media_generation.get() == generation {
-                pane.start_player(&path, is_video, art);
+                pane.start_player(&path, &source, is_video, art);
             }
         });
     }
@@ -43,7 +44,7 @@ impl DetailsPane {
     /// Properties once the stream knows it. A player that fails or dies
     /// leaves the item's art, as does one the app stops before changing
     /// its file.
-    fn start_player(&self, path: &std::path::Path, is_video: bool, art: Art) {
+    fn start_player(&self, path: &std::path::Path, source: &str, is_video: bool, art: Art) {
         let imp = self.imp();
         let scale = u32::try_from(self.scale_factor().max(1)).unwrap_or(1);
         let kind = if is_video {
@@ -52,8 +53,13 @@ impl DetailsPane {
             crate::media_player::Kind::Audio
         };
         let size = |pixels: i32| u32::try_from(pixels).unwrap_or(1) * scale;
-        let stream =
-            crate::media_player::PlayerStream::new(path, kind, size(PREVIEW_WIDTH), size(PREVIEW_HEIGHT));
+        let stream = crate::media_player::PlayerStream::new(
+            path,
+            source,
+            kind,
+            size(PREVIEW_WIDTH),
+            size(PREVIEW_HEIGHT),
+        );
         let player: gtk::Widget = if is_video {
             let video = gtk::Video::builder().media_stream(&stream).build();
             video.set_hexpand(true);

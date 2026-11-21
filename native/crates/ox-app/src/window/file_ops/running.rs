@@ -301,7 +301,7 @@ impl BrowserWindow {
         )?;
         // A player of a file the job moves, deletes or may overwrite stops
         // before the job starts.
-        crate::media_player::release_players_within(&super::jobs::changed_locations(
+        let _players = crate::media_player::hold_players_within(&super::jobs::changed_locations(
             request.mode,
             &request.uris,
             request.destination_folder.as_deref(),

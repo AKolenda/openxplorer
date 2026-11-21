@@ -176,7 +176,15 @@ fn play(
                 playbin.set_property("volume", volume);
                 playbin.set_property("mute", muted);
             }
-            Ok(Command::Quit) | Err(mpsc::RecvTimeoutError::Disconnected) => return glib::ExitCode::SUCCESS,
+            Ok(Command::Quit) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                #[cfg(test)]
+                if std::env::var_os(super::TEST_STUBBORN_VARIABLE).is_some() {
+                    loop {
+                        thread::sleep(Duration::from_secs(60));
+                    }
+                }
+                return glib::ExitCode::SUCCESS;
+            }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
         while let Some(message) = bus.pop() {

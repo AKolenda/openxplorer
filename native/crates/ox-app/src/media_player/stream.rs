@@ -5,7 +5,7 @@
 //! A player that dies, hangs up or says something it should not puts the
 //! stream in error; the app stays as it was.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 use std::time::Duration;
@@ -45,7 +45,11 @@ mod imp {
 
     #[derive(Default)]
     pub(crate) struct PlayerStream {
+        /// The file played, as a local `file:` URI.
         pub(super) uri: RefCell<String>,
+        /// The file as the app knows it and changes it: a share's own
+        /// URI (`smb:`) when it plays through a local path.
+        pub(super) source: RefCell<String>,
         pub(super) process: RefCell<Option<gio::Subprocess>>,
         /// The player's standard input, which never blocks the app.
         pub(super) commands: RefCell<Option<std::io::PipeWriter>>,
@@ -144,19 +148,64 @@ glib::wrapper! {
 }
 
 thread_local! {
-    /// Every player stream of the app, to release before a write.
+    /// Every player stream of the app, to stop before a write.
     static PLAYERS: RefCell<Vec<glib::WeakRef<PlayerStream>>> = const { RefCell::new(Vec::new()) };
+    /// The locations the app is changing, each with its hold's number: no
+    /// player of a file at or inside one starts.
+    static HOLDS: RefCell<Vec<(u64, Vec<gio::File>)>> = const { RefCell::new(Vec::new()) };
+    static NEXT_HOLD: Cell<u64> = const { Cell::new(0) };
+}
+
+/// Keeps players from starting for the files at or inside some locations
+/// while the app changes them; dropped once the change is done.
+#[derive(Debug)]
+#[must_use = "players may start again as soon as the hold is dropped"]
+pub(crate) struct PlayerHold(u64);
+
+impl Drop for PlayerHold {
+    fn drop(&mut self) {
+        HOLDS.with(|holds| holds.borrow_mut().retain(|(number, _)| *number != self.0));
+    }
+}
+
+/// Whether `file` is at or inside `location`.
+fn is_at_or_inside(file: &gio::File, location: &gio::File) -> bool {
+    file.equal(location) || file.has_prefix(location)
+}
+
+/// Whether the app holds the file at `uri` or `source`.
+fn is_held(uri: &str, source: &str) -> bool {
+    let files = [gio::File::for_uri(uri), gio::File::for_uri(source)];
+    HOLDS.with(|holds| {
+        holds.borrow().iter().any(|(_, locations)| {
+            locations
+                .iter()
+                .any(|location| files.iter().any(|file| is_at_or_inside(file, location)))
+        })
+    })
 }
 
 impl PlayerStream {
-    /// Starts a player process for the recording at `path`, whose video,
-    /// if `kind` has one, is scaled to fit `max_width` by `max_height`
-    /// pixels. It prepares at once and plays when asked; a player that
-    /// could not start leaves the stream in error.
-    pub(crate) fn new(path: &Path, kind: Kind, max_width: u32, max_height: u32) -> Self {
+    /// Starts a player process for the recording at `path`, which the
+    /// app knows as `source` (the URI its file operations use: a share's
+    /// own URI when `path` is the share's local path). Its video, if
+    /// `kind` has one, is scaled to fit `max_width` by `max_height`
+    /// pixels. It prepares at once and plays when asked. A player that
+    /// could not start, or whose file the app holds while it changes it
+    /// ([`hold_players_within`]), leaves the stream in error.
+    pub(crate) fn new(path: &Path, source: &str, kind: Kind, max_width: u32, max_height: u32) -> Self {
         let stream: Self = glib::Object::new();
         let uri = gio::File::for_path(path).uri().to_string();
         stream.imp().uri.replace(uri.clone());
+        stream.imp().source.replace(source.to_owned());
+        if is_held(&uri, source) {
+            stream.imp().stopped.set(true);
+            stream.set_error(glib::Error::new(
+                gio::IOErrorEnum::Busy,
+                "The file is being changed",
+            ));
+            return stream;
+        }
         PLAYERS.with(|players| {
             let mut players = players.borrow_mut();
             players.retain(|player| player.upgrade().is_some());
@@ -307,10 +356,18 @@ impl PlayerStream {
         }
     }
 
+    /// The player process, while it runs, for tests.
+    #[cfg(test)]
+    pub(crate) fn process(&self) -> Option<gio::Subprocess> {
+        self.imp().process.borrow().clone()
+    }
+
     /// Whether the stream plays the file at `uri` or one inside it.
     fn is_within(&self, location: &gio::File) -> bool {
-        let file = gio::File::for_uri(&self.imp().uri.borrow());
-        file.equal(location) || file.has_prefix(location)
+        let imp = self.imp();
+        [&imp.uri, &imp.source]
+            .into_iter()
+            .any(|uri| is_at_or_inside(&gio::File::for_uri(&uri.borrow()), location))
     }
 }
 
@@ -326,11 +383,14 @@ fn kill_after_grace(process: gio::Subprocess) {
     });
 }
 
-/// Stops every player of a file at or inside `locations` (URIs) before
-/// the app renames, moves, deletes or overwrites it, and waits, at most
-/// [`QUIT_GRACE`], for each to exit; each one's stream says `released`.
-pub(crate) async fn release_players_within(locations: &[String]) {
+/// Holds the files at or inside `locations` (URIs) while the app renames,
+/// moves, deletes or overwrites them: stops every player of one (each
+/// stream says `released`), waits for each to exit, and keeps any new
+/// one from starting until the hold is dropped. A player that does not
+/// exit within [`QUIT_GRACE`] is killed, and waited for until it is gone.
+pub(crate) async fn hold_players_within(locations: &[String]) -> PlayerHold {
     let locations: Vec<gio::File> = locations.iter().map(|uri| gio::File::for_uri(uri)).collect();
+    let number = NEXT_HOLD.with(|next| next.replace(next.get().wrapping_add(1)));
     let players: Vec<PlayerStream> = PLAYERS.with(|players| {
         players
             .borrow()
@@ -340,6 +400,8 @@ pub(crate) async fn release_players_within(locations: &[String]) {
             .filter(|player| locations.iter().any(|location| player.is_within(location)))
             .collect()
     });
+    HOLDS.with(|holds| holds.borrow_mut().push((number, locations)));
+    let hold = PlayerHold(number);
     let mut exiting = Vec::new();
     for player in players {
         if let Some(process) = player.stop() {
@@ -352,9 +414,13 @@ pub(crate) async fn release_players_within(locations: &[String]) {
             .await
             .is_err()
         {
+            // Killed, it is gone once the kernel has taken it down, which
+            // the wait sees; the write starts only then.
             process.force_exit();
+            let _ = process.wait_future().await;
         }
     }
+    hold
 }
 
 /// Reads the player's events until it closes its end or breaks the
