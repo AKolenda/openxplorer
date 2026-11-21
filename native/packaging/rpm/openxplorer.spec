@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.21
+Version:        2.0.22
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -142,6 +142,11 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Sat Nov 21 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.22-1
+- OpenXplorer 2.0.22: previews play and pictures decode in separate
+  processes, so no file can close or freeze the window; fixes to the
+  address bar, Extract all, large text, This PC, menus and screen readers.
+
 * Thu Nov 19 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.21-1
 - OpenXplorer 2.0.21: choose the icon of folders, ZIP archives, each file
   type and file name endings in Settings > Appearance > File icons.

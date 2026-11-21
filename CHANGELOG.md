@@ -1,3 +1,27 @@
+# 2.0.22 — 2026-11-21
+
+Recordings play, and pictures are decoded, in separate processes, so no damaged or unusual file can close or freeze OpenXplorer any more. The address bar, Extract all, large text, This PC, menus and screen readers also work more like Windows 11.
+
+## What's Changed
+* fix(ui): Fix review 4 bugs in the address bar, Extract all, large text, This PC, menus and screen-reader names by @addition-official in https://github.com/AKolenda/openxplorer/pull/370
+* fix(details-pane): Play previews in a separate process so no media file can close the app by @addition-official in https://github.com/AKolenda/openxplorer/pull/368
+* fix(native): Keep the window running and responsive whatever a file holds by @addition-official in https://github.com/AKolenda/openxplorer/pull/369
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.22_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.22-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.22-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.22-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.22-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.21...v2.0.22
+
 # 2.0.21 — 2026-11-19
 
 You can choose the icon of folders, ZIP archives and each type of file, so a ZIP archive no longer has to look like a folder. Files whose names end a certain way, such as `.iso`, can have an icon of their own.
