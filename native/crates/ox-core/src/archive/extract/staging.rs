@@ -10,8 +10,11 @@
 //!
 //! - The staging folder gets an unpredictable name and is created
 //!   exclusively, so only a folder this extraction created is ever removed.
-//! - On local disks it is owner-only (`0700`) from the start; the
-//!   published folder keeps that mode.
+//! - On local disks it is owner-only (`0700`) while it is built. Just
+//!   before it is published it gets the mode any new folder gets, 0777
+//!   less the umask, as the folders inside it have, so the extracted
+//!   files are as readable as other new files where the archive is
+//!   unpacked. The archive's own modes are never applied.
 //! - It is published by a rename that never replaces an existing item.
 //! - Any failure removes it; a folder that cannot be removed is reported
 //!   with its location.
@@ -24,8 +27,12 @@ use std::ffi::OsStr;
 use crate::archive::ArchiveError;
 use crate::random::{random_hex, NAME_BYTES};
 use crate::transfer::{
-    already_removed, secure_local_staging, Cancellation, ItemIdentity, Node, StagedName, TransferError,
+    already_removed, open_local_staging, secure_local_staging, Cancellation, ItemIdentity, Node, StagedName,
+    TransferError,
 };
+
+/// The mode `mkdir(2)` asks for a new folder, before the umask.
+const NEW_FOLDER_MODE: u32 = 0o777;
 
 /// Staging folders are `.openxplorer-extract-<32 hex digits>.part`.
 const STAGING_PREFIX: &str = ".openxplorer-extract-";
@@ -109,7 +116,9 @@ impl ExtractionStaging {
 
     /// ARC-013: renames the finished staging folder to `target` in the same
     /// folder. The rename never replaces anything, so a folder another
-    /// program created under the name meanwhile is kept.
+    /// program created under the name meanwhile is kept. ARC-018: a local
+    /// staging folder first gets a new folder's mode, 0777 less the umask,
+    /// now that everything in it is complete.
     ///
     /// # Errors
     ///
@@ -117,6 +126,9 @@ impl ExtractionStaging {
     /// `target` exists, or the backend's error; the staging folder is then
     /// still there for [`Self::discard`].
     pub(super) fn publish(&self, target: &dyn Node, cancel: &Cancellation) -> Result<(), ArchiveError> {
+        cancel.check()?;
+        let mode = NEW_FOLDER_MODE & !crate::permissions::process_umask();
+        open_local_staging(self.folder.as_ref(), self.created, mode)?;
         self.folder.publish(target, Some(cancel))?;
         Ok(())
     }

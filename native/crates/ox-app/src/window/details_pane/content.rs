@@ -584,14 +584,14 @@ mod tests {
         let mut entry = file_entry("Notes.txt");
         entry.size = Some(4_486);
         let one = content_for(&[FileItem::new(entry.clone())], "file:///tmp/ox-test");
-        assert_eq!(property(&one, keys::SIZE), Some("4.38 KB"));
+        assert_eq!(property(&one, keys::SIZE), Some("4.38\u{a0}KB"));
         let mut other = file_entry("Plan.txt");
         other.size = Some(4_486);
         let both = content_for(
             &[FileItem::new(entry), FileItem::new(other)],
             "file:///tmp/ox-test",
         );
-        assert_eq!(property(&both, keys::SIZE), Some("8.76 KB"));
+        assert_eq!(property(&both, keys::SIZE), Some("8.76\u{a0}KB"));
     }
 
     /// One file shows Windows 11's rows, in its order and wording.

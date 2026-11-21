@@ -75,6 +75,65 @@ fn this_pc_lists_devices_and_drives_and_no_quick_access() {
     assert_eq!(landing::section_titles(landing), ["Devices and drives"]);
 }
 
+/// This PC opens with nothing selected, as Windows 11's does ("2 items"
+/// and no selection in the status bar), and the keyboard on its first
+/// tile, so the arrows and Space start there.
+///
+/// parity: HOME-001
+#[gtk::test]
+fn this_pc_opens_with_the_first_tile_focused_and_nothing_selected() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+
+    test.window.navigate("This PC").expect("a page");
+    let landing = test.window.folder_pane().landing();
+    wait_until("This PC's tiles", || !landing::tile_groups(landing).is_empty());
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+
+    let groups = landing::tile_groups(landing);
+    let first = groups[0].1[0].clone();
+    let focus = gtk::prelude::GtkWindowExt::focus(&test.window);
+    assert!(
+        focus.is_some_and(|focus| focus == first || focus.is_ancestor(&first)),
+        "the first tile has the keyboard"
+    );
+    let selected: usize = groups
+        .iter()
+        .map(|(flow, _)| flow.selected_children().len())
+        .sum();
+    assert_eq!(selected, 0, "nothing is selected");
+    let status = test.window.status_bar().texts();
+    assert_eq!(status.1, "", "no selection in the status bar: {status:?}");
+    assert!(!test.window.status_bar().shows_selection_divider());
+}
+
+/// Opening This PC, and switching the Details pane there, draws its
+/// drives' capacity bars without GTK warning that a bar has a negative
+/// size (`GtkGizmo (progress) reported min width -2`).
+#[gtk::test]
+fn this_pc_draws_its_capacity_bars_without_gtk_warnings() {
+    let recorder = crate::test_support::gtk_log::LogRecorder::start();
+    let test = TestWindow::open(Page::ThisPc.uri());
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    test.open_details_pane();
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    test.activate("details-pane", None);
+    crate::test_support::harness::wait_for_frames(&test.window, 3);
+    let warnings = recorder.warnings();
+    drop(recorder);
+
+    let landing = test.window.folder_pane().landing();
+    assert!(
+        !landing::tile_groups(landing).is_empty(),
+        "This PC shows its drives"
+    );
+    assert!(
+        !warnings.iter().any(|warning| warning.contains("reported min")),
+        "{warnings:?}"
+    );
+}
+
 /// The status bar reads as Windows 11 Explorer's: "4 items", then, past
 /// a divider shown only with a selection, "1 item selected  20 bytes",
 /// the size only while every selected item is a file. This PC counts its
@@ -112,7 +171,7 @@ fn the_status_bar_counts_this_pc_and_a_folder() {
     model.select_only(1);
     assert_eq!(
         status_bar.texts(),
-        ("4 items".to_owned(), "1 item selected  20 bytes".to_owned())
+        ("4 items".to_owned(), "1 item selected  20\u{a0}bytes".to_owned())
     );
     assert!(status_bar.shows_selection_divider());
     model.select_only(0);

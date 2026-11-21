@@ -40,8 +40,12 @@ impl BrowserWindow {
         for pane in self.folder_panes() {
             pane.set_text_size(size);
         }
-        // Larger text widens the navigation pane at its default width.
+        // Larger text widens the navigation pane at its default width,
+        // and the details pane.
         self.fit_sidebar_to_text(size.scale());
+        if self.width() > 0 {
+            self.fit_details_pane_width(self.width());
+        }
         // This PC's tiles are as large as the Tiles view's.
         self.render_landing();
     }

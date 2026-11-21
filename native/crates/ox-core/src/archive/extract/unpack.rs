@@ -100,6 +100,7 @@ impl<'a> Unpacking<'a> {
     ) -> Result<(), ArchiveError> {
         let member = &archive.members()[index];
         let (name, declared_size) = (member.name.clone(), member.size);
+        let modified = member.modified.to_unix_seconds();
         let mut source = archive.open_member(index, self.extractor.password.as_ref())?;
         let mut output = self.extractor.output.create(file, self.cancel)?;
         let mut block = vec![0u8; BLOCK_BYTES];
@@ -122,7 +123,7 @@ impl<'a> Unpacking<'a> {
             }
             self.report_file(&name, (self.written.member, declared_size));
         }
-        output.close()?;
+        output.close(modified)?;
         // ARC-017: a member that ends early is damaged or forged.
         if self.written.member != declared_size {
             return Err(ArchiveError::TruncatedMember);

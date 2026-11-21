@@ -646,6 +646,25 @@ fn focus_tile(child: &gtk::FlowBoxChild) {
     child.child_focus(gtk::DirectionType::TabForward);
 }
 
+/// Gives This PC's `page` the keyboard, on its first tile, as a folder
+/// view takes it when it opens: GTK's tile box selects the tile it moves
+/// to, so a page with nothing selected keeps nothing selected, as Windows
+/// 11's This PC opens ("2 items", no selection). The tile keeps the box's
+/// cursor, which the arrows and Space start from. `false` when nothing on
+/// the page could take the keyboard.
+pub(super) fn focus_page(page: &gtk::Box) -> bool {
+    let nothing_selected = tile_boxes(page).all(|flow| flow.selected_children().is_empty());
+    let focused = page.child_focus(gtk::DirectionType::TabForward);
+    if nothing_selected && page.has_css_class(THIS_PC_CLASS) {
+        across_groups(|| {
+            for flow in tile_boxes(page) {
+                flow.unselect_all();
+            }
+        });
+    }
+    focused
+}
+
 /// The first or last tile of `flow`.
 fn end_tile(flow: &gtk::FlowBox, last: bool) -> Option<gtk::FlowBoxChild> {
     let count = super::widget_tree::children(flow).count();
@@ -1351,7 +1370,7 @@ mod tests {
             size: 270_553_174_016,
             free: 29_600_000_000,
         };
-        assert_eq!(capacity.text(), "27.5 GB free of 251 GB");
+        assert_eq!(capacity.text(), "27.5\u{a0}GB free of 251\u{a0}GB");
         assert_eq!(
             capacity.text(),
             ox_core::format::short_size(29_600_000_000)

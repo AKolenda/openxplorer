@@ -29,7 +29,7 @@ use crate::text_size::TextSize;
 pub(super) const DEFAULT_SIDEBAR_WIDTH: i32 = 210;
 
 /// Room the folder pane keeps beside the sidebar (`sidebarLimit` in app.js).
-const FOLDER_PANE_ROOM: i32 = 300;
+pub(super) const FOLDER_PANE_ROOM: i32 = 300;
 
 /// How far from the pane handle a double-click still resets the sidebar.
 const HANDLE_REACH: f64 = 6.0;
