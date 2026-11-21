@@ -478,3 +478,86 @@ fn a_numbered_rename_stops_a_player_of_one_of_its_files_first() {
         || !pier.exists() && !fixture.path("Song.ogg").exists() && !other.window.is_writing_files(),
     );
 }
+
+/// A Recycle Bin item restored with Replace over a recording another
+/// window plays stops that player before the recording is replaced.
+///
+/// parity: PROP-011, OPS-040
+#[gtk::test]
+fn restoring_over_a_playing_recording_stops_its_player_first() {
+    super::file_ops_support::require_private_trash();
+    let fixture = Fixture::standard();
+    let path = fixture.path("Pier.ogv");
+    write_clip(&path, 30);
+    gtk::gio::File::for_path(&path)
+        .trash(None::<&gtk::gio::Cancellable>)
+        .expect("the private Trash takes the file");
+    write_clip(&path, 20);
+    let test = window_with_player(&fixture, false);
+    let playing = play(&test, "Pier.ogv");
+    let bin = test.open_beside(ox_core::location::TRASH_URI);
+    wait_until("the trashed recording", || {
+        bin.names().iter().any(|name| name == "Pier.ogv")
+    });
+
+    select_names(&bin, &["Pier.ogv"]);
+    let identity = |path: &Path| {
+        fs::metadata(path)
+            .ok()
+            .map(|meta| (meta.ino(), meta.ctime(), meta.ctime_nsec()))
+    };
+    let before = identity(&path);
+    bin.activate("restore", None);
+    answer_conflicts(&bin, ConflictAnswer::Replace);
+    let watched = path.clone();
+    assert_stopped_before(
+        &playing,
+        "the recording to be replaced",
+        move || identity(&watched) != before,
+        || identity(&path) != before && !bin.window.is_writing_files(),
+    );
+}
+
+/// Copying a playing recording into its own folder makes "name - Copy"
+/// and leaves the recording alone: its player plays on until the copy
+/// exists, and the copy, selected then, starts with auto-play.
+///
+/// parity: PROP-011
+#[gtk::test]
+fn copying_a_playing_recording_into_its_own_folder_leaves_it_playing() {
+    let fixture = Fixture::standard();
+    write_clip(&fixture.path("Pier.ogv"), 20);
+    let test = window_with_player(&fixture, true);
+    let pane = test.window.details_pane();
+    let playing = play(&test, "Pier.ogv");
+
+    test.activate("copy", None);
+    test.activate("paste", None);
+    let copy = fixture.path("Pier - Copy.ogv");
+    let watched = copy.clone();
+    let watcher = thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while Instant::now() < deadline {
+            if watched.exists() {
+                return Some(Instant::now());
+            }
+            thread::sleep(Duration::from_micros(500));
+        }
+        None
+    });
+    wait_until("the copy", || {
+        copy.exists() && !test.window.is_writing_files() && watcher.is_finished()
+    });
+    let copied_at = watcher.join().expect("the watcher").expect("the copy is made");
+    assert!(
+        playing
+            .stopped_at
+            .get()
+            .is_none_or(|stopped| stopped >= copied_at),
+        "the recording played on while it was copied"
+    );
+    wait_until("the copy to play", || {
+        test.selected_names() == ["Pier - Copy.ogv"]
+            && player_stream(pane).is_some_and(|stream| stream.is_playing())
+    });
+}
