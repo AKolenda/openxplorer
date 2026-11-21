@@ -376,7 +376,7 @@ fn enumerate_with(
         .map_err(classify)?;
     client
         .share_connect(&share, &account.user, account.password.as_str().to_owned())
-        .map_err(classify)?;
+        .map_err(classify_sign_in)?;
     check_cancelled(cancel)?;
     let item = share.with_path(&target.path);
     let access = FileAccessMask::new()
@@ -594,6 +594,15 @@ fn classify(error: smb::Error) -> ShadowCopyError {
             ShadowCopyError::Unsupported
         }
         _ => failed(error.to_string()),
+    }
+}
+
+/// An error while signing in, in the app's words: a server refusing the
+/// sign-in method is not one without previous versions.
+fn classify_sign_in(error: smb::Error) -> ShadowCopyError {
+    match classify(error) {
+        ShadowCopyError::Unsupported => failed("the server refused the sign-in method".to_owned()),
+        other => other,
     }
 }
 
