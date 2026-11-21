@@ -95,6 +95,7 @@ fn build(
         .property("uri", uri)
         .build()
         .ok()?;
+    playbin.set_property("audio-sink", audio_sink()?);
     match kind {
         Kind::Audio => playbin.set_property_from_str("flags", "audio+soft-volume"),
         Kind::Video => {
@@ -125,6 +126,27 @@ fn build(
         }
     }
     Some(playbin)
+}
+
+/// The sound output: the first of the usual outputs that opens, or, on a
+/// computer without one (no sound card, no sound server, or `GStreamer`
+/// without the plugin), a silent output that keeps time, so the recording
+/// still plays, as Windows plays one with no speakers.
+fn audio_sink() -> Option<gst::Element> {
+    for name in ["autoaudiosink", "pipewiresink", "pulsesink", "alsasink"] {
+        let Ok(sink) = gst::ElementFactory::make(name).build() else {
+            continue;
+        };
+        let opens = sink.set_state(gst::State::Ready).is_ok();
+        let _ = sink.set_state(gst::State::Null);
+        if opens {
+            return Some(sink);
+        }
+    }
+    gst::ElementFactory::make("fakesink")
+        .property("sync", true)
+        .build()
+        .ok()
 }
 
 /// Runs the player until the app says quit or goes away; the exit status.
