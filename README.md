@@ -22,16 +22,10 @@
 
 *The native GTK 4 app, shown with fictional sample files.*
 
-## Get it
+## Contribute
 
-Download the [latest release](https://github.com/AKolenda/openxplorer/releases/latest): the `.deb` for Zorin OS 18, Ubuntu 24.04+ and Debian 13, the `.rpm` or `.pkg.tar.zst` for Fedora, openSUSE and Arch, or the Flatpak for everything else. The [installation guide](docs/installation.md) walks through it, and the app tells you when an update is out.
-
-## Build it or contribute
-
-Building from source, working on the code or sending a pull request? Start with [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities through [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-**[AGPL-3.0-only](LICENSE)**, with documented file-level exceptions. Preserve the upstream Winspace [MIT notice](licenses/Winspace-MIT.txt), [NOTICE](NOTICE) and [third-party notices](THIRD_PARTY_NOTICES.md).
-
-Independent project; not affiliated with Microsoft, Zorin, Canonical, Debian or Vercel. No warranty.
+[AGPL-3.0-only](LICENSE). Independent project; not affiliated with Microsoft. No warranty.
