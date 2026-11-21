@@ -473,6 +473,11 @@ fn enumerate_with(
     let share = UncPath::new(server)
         .and_then(|server| server.with_share(&target.share))
         .map_err(classify)?;
+    // Connecting and negotiating can take a while, so the turn is checked
+    // only once the server is ready for the password; `share_connect` then
+    // reuses this connection.
+    client.connect(server).map_err(classify)?;
+    check_cancelled(cancel)?;
     turn.check()?;
     let signed_in = client
         .share_connect(&share, &account.user, account.password.as_str().to_owned())
