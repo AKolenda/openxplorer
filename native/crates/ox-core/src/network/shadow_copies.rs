@@ -61,6 +61,10 @@ const FIRST_REPLY_SIZE: u32 = 64 * 1024;
 /// The largest reply asked for once a server said the first was too small.
 const LARGE_REPLY_SIZE: u32 = 1024 * 1024;
 
+/// The bytes one shadow-copy name takes in a reply: 24 UTF-16 units and
+/// their terminator.
+const TOKEN_BYTES: u32 = 50;
+
 /// The size of the reply's counts: `NumberOfSnapShots`,
 /// `NumberOfSnapShotsReturned` and `SnapShotArraySize`.
 const REPLY_HEADER_SIZE: usize = 12;
@@ -513,46 +517,49 @@ fn resolve(host: &str, port: u16) -> Result<String, ShadowCopyError> {
 }
 
 /// Sends `FSCTL_SRV_ENUMERATE_SNAPSHOTS` on the open item and reads the
-/// names, asking once more, with the largest reply, when the first was
-/// too small for the whole list.
+/// names, asking once more, for as much as the list needs, when the first
+/// reply was too small for all of them.
 fn ask_for_snapshots(
     handle: &smb::resource::ResourceHandle,
     cancel: &Cancellation,
 ) -> Result<ShadowCopies, ShadowCopyError> {
-    let mut size = FIRST_REPLY_SIZE;
-    // At most one more request, however the server answers.
-    let mut retried = false;
-    loop {
-        let reply = match handle.fsctl_with_options(EnumerateSnapshots, size) {
-            Ok(reply) => {
-                SnapshotReply::parse(&reply.0).ok_or_else(|| failed("a malformed snapshot list".into()))?
-            }
-            Err(error)
-                if !retried
-                    && matches!(
-                        status_of(&error),
-                        Some(status::BUFFER_OVERFLOW | status::BUFFER_TOO_SMALL)
-                    ) =>
-            {
-                size = LARGE_REPLY_SIZE;
-                retried = true;
-                check_cancelled(cancel)?;
-                continue;
-            }
-            Err(error) => return Err(classify(error)),
-        };
-        // A reply too small for the whole list names some or none of the
-        // shadow copies; ask once more with the largest reply.
-        if reply.is_cut_short() && !retried {
-            size = LARGE_REPLY_SIZE;
-            retried = true;
+    let first = match handle.fsctl_with_options(EnumerateSnapshots, FIRST_REPLY_SIZE) {
+        Ok(reply) => SnapshotReply::read(&reply.0)?,
+        // Too small, and the server says no more: only the largest reply
+        // can hold the list.
+        Err(error)
+            if matches!(
+                status_of(&error),
+                Some(status::BUFFER_OVERFLOW | status::BUFFER_TOO_SMALL)
+            ) =>
+        {
             check_cancelled(cancel)?;
-            continue;
+            let reply = handle
+                .fsctl_with_options(EnumerateSnapshots, LARGE_REPLY_SIZE)
+                .map_err(classify)?;
+            return Ok(SnapshotReply::read(&reply.0)?.into_copies());
         }
-        return Ok(ShadowCopies::from_names(
-            reply.names.iter().map(String::as_str),
-            reply.is_cut_short(),
-        ));
+        Err(error) => return Err(classify(error)),
+    };
+    if !first.is_cut_short() {
+        return Ok(first.into_copies());
+    }
+    // A reply too small for the whole list names some or none of the
+    // shadow copies; ask once more for as much as the list needs (each name
+    // takes 50 bytes), which costs fewer credits than the largest reply.
+    check_cancelled(cancel)?;
+    let needed = u32::try_from(REPLY_HEADER_SIZE)
+        .unwrap_or(u32::MAX)
+        .saturating_add(first.total.saturating_mul(TOKEN_BYTES))
+        .saturating_add(2);
+    let size = needed.clamp(FIRST_REPLY_SIZE, LARGE_REPLY_SIZE);
+    match handle.fsctl_with_options(EnumerateSnapshots, size) {
+        Ok(reply) => Ok(SnapshotReply::read(&reply.0)?.into_copies()),
+        // The names already read are kept, marked as not all of them.
+        Err(error) => {
+            glib::g_debug!(LOG_DOMAIN, "Asking again for shadow copies failed: {error}");
+            Ok(first.into_copies())
+        }
     }
 }
 
@@ -617,6 +624,16 @@ struct SnapshotReply {
 }
 
 impl SnapshotReply {
+    /// [`parse`](Self::parse), or why the reply cannot be read.
+    fn read(bytes: &[u8]) -> Result<Self, ShadowCopyError> {
+        Self::parse(bytes).ok_or_else(|| failed("a malformed snapshot list".to_owned()))
+    }
+
+    /// The names, newest first, and whether the server keeps more.
+    fn into_copies(self) -> ShadowCopies {
+        ShadowCopies::from_names(self.names.iter().map(String::as_str), self.is_cut_short())
+    }
+
     /// The reply in `bytes`, or `None` when it is shorter than its counts
     /// or holds text that is not UTF-16.
     fn parse(bytes: &[u8]) -> Option<Self> {
