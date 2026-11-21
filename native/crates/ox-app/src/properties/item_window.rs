@@ -320,9 +320,16 @@ fn local_folder(target: &PropertiesTarget) -> Option<std::path::PathBuf> {
     }
     // A link to a folder is a shortcut, which is neither shared nor
     // customized, as in Windows.
-    gtk::gio::File::for_uri(&target.uri)
-        .path()
-        .filter(|path| !std::fs::symlink_metadata(path).is_ok_and(|facts| facts.file_type().is_symlink()))
+    // Looked at on a worker thread, for at most a moment: a folder on a
+    // mount that stopped answering is taken as a link, and the window
+    // opens without the Sharing and Customize tabs.
+    let path = gtk::gio::File::for_uri(&target.uri).path()?;
+    let looked = path.clone();
+    let is_link = crate::bounded_io::wait_for(&target.uri, crate::bounded_io::MAIN_THREAD_WAIT, move || {
+        std::fs::symlink_metadata(looked).is_ok_and(|facts| facts.file_type().is_symlink())
+    })
+    .unwrap_or(true);
+    (!is_link).then_some(path)
 }
 
 impl ItemPages {

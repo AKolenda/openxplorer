@@ -109,12 +109,18 @@ fn replace_file(path: &Path, bytes: &[u8]) -> Result<(), RotateError> {
 
 /// The PNG at `path` with its pixels turned a quarter.
 fn turn_png(path: &Path, clockwise: bool) -> Result<Vec<u8>, RotateError> {
-    use gtk::gdk_pixbuf::{Pixbuf, PixbufRotation};
-    let (_, width, height) = Pixbuf::file_info(path).ok_or(RotateError::Unsupported)?;
-    if i64::from(width) * i64::from(height) > PNG_PIXEL_LIMIT {
-        return Err(RotateError::Unsupported);
-    }
-    let picture = Pixbuf::from_file(path).map_err(|_| RotateError::Unsupported)?;
+    use gtk::gdk_pixbuf::PixbufRotation;
+    // Decoded whole, by the picture decoder process: a PNG may be damaged,
+    // and no C loader reads it in the app.
+    let limits = crate::picture_guard::Limits {
+        max_pixels: u64::try_from(PNG_PIXEL_LIMIT).unwrap_or(0),
+        max_jpeg_pixels: 0,
+        time: crate::picture_guard::TIME_LIMIT,
+    };
+    let file = gtk::gio::File::for_path(path);
+    let picture = crate::picture_guard::decode_to_fit(&file, i32::MAX, i32::MAX, limits, None)
+        .map_err(|_| RotateError::Unsupported)?
+        .pixbuf;
     let rotation = if clockwise {
         PixbufRotation::Clockwise
     } else {

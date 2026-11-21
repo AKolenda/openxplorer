@@ -304,7 +304,9 @@ impl DetailsPane {
                         return;
                     };
                     match read {
-                        Ok(Some(text)) => pane.show_text(&text),
+                        Ok(Some(text)) => {
+                            crate::crash_guard::guarded("the Preview pane", || pane.show_text(&text));
+                        }
                         _ => pane.contents().show_message(NO_PREVIEW),
                     }
                 }
@@ -320,7 +322,9 @@ impl DetailsPane {
                         return;
                     };
                     match decoded {
-                        Ok(Some(texture)) => pane.show_picture(&texture),
+                        Ok(Some(texture)) => {
+                            crate::crash_guard::guarded("the Preview pane", || pane.show_picture(&texture));
+                        }
                         _ => pane.contents().show_message(NO_PREVIEW),
                     }
                 }
@@ -482,7 +486,7 @@ async fn pdf_pages(
             return;
         };
         for page in &pages {
-            pane.add_pdf_page(page);
+            crate::crash_guard::guarded("the Preview pane", || pane.add_pdf_page(page));
             let size = |side: i32| u64::try_from(side).unwrap_or_default();
             pixels += size(page.width()) * size(page.height());
         }
@@ -553,10 +557,9 @@ fn read_text(path: &Path, rich: bool, cancellation: &gio::Cancellable) -> Option
 /// file ([`open_plain_file`]) or a picture gdk-pixbuf reads, or was
 /// refused. Blocks.
 fn decode_picture(path: &Path, edge: i32, cancellation: &gio::Cancellable) -> Option<gdk::Texture> {
-    let mut file = open_plain_file(path)?;
+    let file = open_plain_file(path)?;
     let decoded =
-        picture_guard::decode_reader_to_fit(&mut file, edge, edge, Limits::DISPLAY, Some(cancellation))
-            .ok()?;
+        picture_guard::decode_file_to_fit(file, edge, edge, Limits::DISPLAY, Some(cancellation)).ok()?;
     Some(gdk::Texture::for_pixbuf(&decoded.pixbuf))
 }
 

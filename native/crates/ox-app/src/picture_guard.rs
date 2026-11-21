@@ -27,9 +27,18 @@
 //! drawn at the size shown whatever size they declare. An animated GIF
 //! is fed only up to the end of its first frame, as Windows shows a GIF's
 //! first frame, so thousands of frames are never held. Reading stops
-//! once the time limit has passed, looked at between reads ([`TIME_LIMIT`]). Every failure is a [`Refusal`], and
+//! once the time limit has passed, looked at between reads ([`TIME_LIMIT`]).
+//! A vector picture is drawn with limits of its own ([`vector`]), as
+//! drawing one can take any time and memory and cannot be stopped once
+//! started: in a picture decoder, which lowers its own limits to them
+//! before it draws and then ends, or, where pictures are decoded in the
+//! app, in a drawing process of its own. Every failure is a [`Refusal`], and
 //! callers show the file's type icon instead, as Windows Explorer does
 //! for a picture it cannot preview.
+//!
+//! The decoding itself runs in a child process ([`decoder`]), sandboxed
+//! where bubblewrap works, so a picture that makes a C loader abort,
+//! crash or loop takes only that child down.
 //!
 //! Decoding blocks: run it off the main thread.
 
@@ -41,6 +50,12 @@ use std::time::{Duration, Instant};
 use gtk::gdk_pixbuf::{Pixbuf, PixbufFormat, PixbufLoader};
 use gtk::gio;
 use gtk::prelude::*;
+
+mod decoder;
+mod vector;
+
+pub(crate) use decoder::run_as_decoder;
+pub(crate) use vector::run_as_drawer;
 
 /// The most pixels a raster picture may have to be decoded for display:
 /// 64 megapixels (8192 × 8192), more than any camera's photo, 256 MB
@@ -151,8 +166,66 @@ struct Header {
 }
 
 /// The picture in `file`, decoded to fit `width` × `height`, or at its own
-/// size when smaller, within `limits`. Blocks.
+/// size when smaller, within `limits`, in a child process
+/// ([`decoder`]): a picture that crashes or hangs its decoder leaves the
+/// app running, and is refused. Blocks.
 pub(crate) fn decode_to_fit(
+    file: &gio::File,
+    width: i32,
+    height: i32,
+    limits: Limits,
+    cancellable: Option<&gio::Cancellable>,
+) -> Result<Decoded, Refusal> {
+    decoder::decode(
+        decoder::Source::File(file.clone()),
+        width,
+        height,
+        limits,
+        cancellable,
+    )
+}
+
+/// The picture in `file`, decoded as [`decode_to_fit`] decodes a file's:
+/// for a file the caller opened itself, and checked is a plain file, so
+/// no link or pipe is opened after the check. Blocks.
+pub(crate) fn decode_file_to_fit(
+    file: std::fs::File,
+    width: i32,
+    height: i32,
+    limits: Limits,
+    cancellable: Option<&gio::Cancellable>,
+) -> Result<Decoded, Refusal> {
+    decoder::decode(
+        decoder::Source::Reader(Box::new(file)),
+        width,
+        height,
+        limits,
+        cancellable,
+    )
+}
+
+/// The picture in `bytes`, decoded as [`decode_to_fit`] decodes a file's:
+/// for a picture already read into memory. Blocks.
+pub(crate) fn decode_bytes_to_fit(
+    bytes: Vec<u8>,
+    width: i32,
+    height: i32,
+    limits: Limits,
+    cancellable: Option<&gio::Cancellable>,
+) -> Result<Decoded, Refusal> {
+    let reader = std::io::Cursor::new(bytes);
+    decoder::decode(
+        decoder::Source::Reader(Box::new(reader)),
+        width,
+        height,
+        limits,
+        cancellable,
+    )
+}
+
+/// The picture in `file`, decoded in this process: what the decoder
+/// process runs. Blocks.
+fn decode_here_to_fit(
     file: &gio::File,
     width: i32,
     height: i32,
@@ -165,10 +238,9 @@ pub(crate) fn decode_to_fit(
     decode_read_to_fit(read, started, width, height, limits, cancellable)
 }
 
-/// The picture `reader` reads, decoded as [`decode_to_fit`] decodes a
-/// file's: for a file the caller opened itself, and checked is a plain
-/// file, so no link or pipe is opened after the check. Blocks.
-pub(crate) fn decode_reader_to_fit(
+/// The picture `reader` reads, decoded in this process as
+/// [`decode_here_to_fit`] decodes a file's. Blocks.
+fn decode_reader_here_to_fit(
     reader: &mut impl std::io::Read,
     width: i32,
     height: i32,
@@ -179,9 +251,108 @@ pub(crate) fn decode_reader_to_fit(
     decode_read_to_fit(read, Instant::now(), width, height, limits, cancellable)
 }
 
+/// An image of the picture at `uri`, `pixels` square, which shows nothing
+/// until the picture is decoded off the main thread by
+/// [`decode_to_fit`], and stays empty when it is refused: a picture the
+/// user chose as an icon may be damaged or slow, and GTK's own icon loading would
+/// decode it on the main thread, in the app.
+pub(crate) fn guarded_image(uri: &str, pixels: i32) -> gtk::Image {
+    let image = gtk::Image::new();
+    image.set_pixel_size(pixels);
+    let weak = image.downgrade();
+    let uri = uri.to_owned();
+    gtk::glib::spawn_future_local(async move {
+        let decoded = gio::spawn_blocking(move || {
+            let file = gio::File::for_uri(&uri);
+            decode_to_fit(
+                &file,
+                pixels.saturating_mul(2),
+                pixels.saturating_mul(2),
+                Limits::DISPLAY,
+                None,
+            )
+            .ok()
+            .map(|decoded| gtk::gdk::Texture::for_pixbuf(&decoded.pixbuf))
+        })
+        .await
+        .ok()
+        .flatten();
+        if let (Some(image), Some(texture)) = (weak.upgrade(), decoded) {
+            image.set_paintable(Some(&texture));
+        }
+    });
+    image
+}
+
 /// The picture `next_chunk` hands over a chunk at a time, decoded within
-/// `limits` from `started`.
+/// `limits` from `started`: a vector picture in a drawing process
+/// ([`vector`]), any other here.
 fn decode_read_to_fit(
+    mut next_chunk: impl FnMut(&mut [u8]) -> Result<usize, ()>,
+    started: Instant,
+    width: i32,
+    height: i32,
+    limits: Limits,
+    cancellable: Option<&gio::Cancellable>,
+) -> Result<Decoded, Refusal> {
+    // The first bytes tell a vector picture.
+    let mut first = Vec::new();
+    let mut buffer = vec![0; READ_CHUNK];
+    let mut ended = false;
+    while first.len() < vector::SNIFF_BYTES {
+        if cancellable.is_some_and(CancellableExt::is_cancelled) {
+            return Err(Refusal::Cancelled);
+        }
+        if started.elapsed() >= limits.time {
+            return Err(Refusal::TimedOut);
+        }
+        let read = next_chunk(&mut buffer).map_err(|()| refusal_for(cancellable))?;
+        if read == 0 {
+            ended = true;
+            break;
+        }
+        first.extend_from_slice(&buffer[..read]);
+    }
+    if vector::may_be_vector(&first) {
+        let rest = |buffer: &mut [u8]| if ended { Ok(0) } else { next_chunk(buffer) };
+        let document = vector::read_document(first, rest, started, limits, cancellable)?;
+        if decoder::in_child() {
+            // In a picture decoder: drawn here, within the drawing limits
+            // of a vector picture, and the decoder then ends, so those
+            // limits stay with this picture alone.
+            decoder::end_after_this_picture();
+            vector::limit_drawing_after_use();
+            let mut at = 0;
+            let replayed = move |buffer: &mut [u8]| {
+                let count = (document.len() - at).min(buffer.len());
+                buffer[..count].copy_from_slice(&document[at..at + count]);
+                at += count;
+                Ok(count)
+            };
+            return decode_loaded(replayed, started, width, height, limits, cancellable);
+        }
+        return vector::draw(&document, width, height, limits, started, cancellable);
+    }
+    // Any other picture is read here, from those first bytes on.
+    let mut at = 0;
+    let replayed = move |buffer: &mut [u8]| {
+        if at < first.len() {
+            let count = (first.len() - at).min(buffer.len());
+            buffer[..count].copy_from_slice(&first[at..at + count]);
+            at += count;
+            Ok(count)
+        } else if ended {
+            Ok(0)
+        } else {
+            next_chunk(buffer)
+        }
+    };
+    decode_loaded(replayed, started, width, height, limits, cancellable)
+}
+
+/// The picture `next_chunk` hands over a chunk at a time, decoded here by
+/// gdk-pixbuf within `limits` from `started`.
+fn decode_loaded(
     mut next_chunk: impl FnMut(&mut [u8]) -> Result<usize, ()>,
     started: Instant,
     width: i32,
@@ -333,14 +504,15 @@ fn watch_header(loader: &PixbufLoader, header: &Rc<Header>, fit: (i32, i32), lim
     });
 }
 
+/// A PNG of one transparent pixel.
+const ONE_PIXEL_PNG: &[u8] =
+    b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\x01\0\0\0\x01\x08\x06\0\0\0\x1f\x15\xc4\x89\
+    \0\0\0\nIDATx\x9cc\0\x01\0\0\x05\0\x01\r\n-\xb4\0\0\0\0IEND\xaeB`\x82";
+
 /// Whether this gdk-pixbuf reads a picture only once its loader is
 /// closed, as the loaders built on glycin do: they report no size while
 /// they are fed. Found once, by feeding a picture of one pixel.
 fn decodes_when_closed() -> bool {
-    /// A PNG of one transparent pixel.
-    const ONE_PIXEL: &[u8] =
-        b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\x01\0\0\0\x01\x08\x06\0\0\0\x1f\x15\xc4\x89\
-        \0\0\0\nIDATx\x9cc\0\x01\0\0\x05\0\x01\r\n-\xb4\0\0\0\0IEND\xaeB`\x82";
     static ANSWER: OnceLock<bool> = OnceLock::new();
     *ANSWER.get_or_init(|| {
         let Ok(loader) = PixbufLoader::with_type("png") else {
@@ -349,7 +521,7 @@ fn decodes_when_closed() -> bool {
         let sized = Rc::new(Cell::new(false));
         let reported = Rc::clone(&sized);
         loader.connect_size_prepared(move |_, _, _| reported.set(true));
-        let written = loader.write(ONE_PIXEL).is_ok();
+        let written = loader.write(ONE_PIXEL_PNG).is_ok();
         let while_fed = sized.get();
         let _ = loader.close();
         written && !while_fed
@@ -620,6 +792,17 @@ pub(crate) fn dimensions(file: &gio::File) -> Option<(i32, i32)> {
         Ok(decoded) => Some((decoded.width, decoded.height)),
         Err(Refusal::TooLarge { width, height }) if width > 0 && height > 0 => Some((width, height)),
         Err(_) => None,
+    }
+}
+
+/// The width and height a PNG, JPEG, GIF, WebP or BMP declares in its
+/// first `bytes`, read in pure Rust without decoding it: for a walk over
+/// many photos, which cannot start a decoder for each. `None` for another
+/// format, or a header that is not whole.
+pub(crate) fn declared_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    match declared_size(bytes) {
+        Declared::Size { width, height, .. } if width > 0 && height > 0 => Some((width, height)),
+        _ => None,
     }
 }
 
@@ -1297,6 +1480,49 @@ mod tests {
         assert_eq!((decoded.pixbuf.width(), decoded.pixbuf.height()), (256, 128));
     }
 
+    /// An SVG of `length` letters of text in one line, which costs far
+    /// more to draw than its file size suggests.
+    fn long_text_svg(folder: &Path, name: &str, length: usize) -> PathBuf {
+        let path = folder.join(name);
+        let text = "a".repeat(length);
+        let svg = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\">\
+             <text y=\"20\">{text}</text></svg>"
+        );
+        std::fs::write(&path, svg).expect("svg");
+        path
+    }
+
+    /// An SVG that needs more memory to draw whole than a picture may have
+    /// is drawn without what does not fit, or refused, in time, and the
+    /// app goes on running.
+    #[test]
+    fn an_svg_too_large_to_draw_whole_is_drawn_in_part_or_refused() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let path = long_text_svg(folder.path(), "Poster.svg", 1_000_000);
+        let started = Instant::now();
+        if let Ok(decoded) = decode(&path, Limits::DISPLAY) {
+            assert_eq!((decoded.width, decoded.height), (100, 100));
+            assert!(decoded.pixbuf.width() <= 256 && decoded.pixbuf.height() <= 256);
+        }
+        assert!(started.elapsed() < TIME_LIMIT + Duration::from_secs(5));
+    }
+
+    /// An SVG that takes longer to draw than the time limit is refused once
+    /// the limit has passed, not when drawing ends.
+    #[test]
+    fn an_svg_slow_to_draw_is_refused_at_the_time_limit() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let path = long_text_svg(folder.path(), "Leaflet.svg", 100_000);
+        let short = Limits {
+            time: Duration::from_secs(2),
+            ..Limits::DISPLAY
+        };
+        let started = Instant::now();
+        assert_eq!(decode(&path, short).map(|_| ()), Err(Refusal::TimedOut));
+        assert!(started.elapsed() < Duration::from_secs(6));
+    }
+
     /// Reading stops at the time limit, and when the caller cancels.
     #[test]
     fn decoding_stops_at_the_time_limit_and_when_cancelled() {
@@ -1456,5 +1682,250 @@ mod tests {
         assert_eq!(fit_within(600, 1200, (220, 146)), (73, 146));
         assert_eq!(fit_within(30_000, 1, (256, 256)), (256, 1), "at least a pixel");
         assert_eq!(fit_within(1, 1, (256, 256)), (256, 256));
+    }
+
+    /// One picture of each kind gdk-pixbuf reads, made here: PNG, JPEG,
+    /// BMP, ICO, TIFF, GIF and SVG.
+    fn sample_pictures(folder: &Path) -> Vec<(String, Vec<u8>)> {
+        let mut samples = Vec::new();
+        for (kind, extension) in [
+            ("png", "png"),
+            ("jpeg", "jpg"),
+            ("bmp", "bmp"),
+            ("ico", "ico"),
+            ("tiff", "tif"),
+        ] {
+            let path = saved_picture(folder, &format!("sample.{extension}"), kind, 32, 24);
+            samples.push((extension.to_owned(), std::fs::read(&path).expect("read back")));
+        }
+        samples.push(("gif".to_owned(), animated_gif(3, 16)));
+        samples.push((
+            "svg".to_owned(),
+            br##"<svg xmlns="http://www.w3.org/2000/svg" width="40" height="30"><rect width="40" height="30" fill="#369"/></svg>"##.to_vec(),
+        ));
+        samples
+    }
+
+    /// A corpus of broken pictures, written into `folder`: every sample
+    /// cut short at many points, headers declaring huge, zero and
+    /// negative sizes, SVGs made to expand without end or nest deeply,
+    /// pictures under the wrong name, and plain garbage. Made in the
+    /// test, never taken from anyone's files.
+    pub(super) fn broken_pictures(folder: &Path) -> Vec<PathBuf> {
+        let mut corpus: Vec<(String, Vec<u8>)> = Vec::new();
+        for (extension, bytes) in sample_pictures(folder) {
+            for cut in [
+                0,
+                1,
+                2,
+                7,
+                8,
+                12,
+                16,
+                24,
+                33,
+                50,
+                100,
+                bytes.len() / 2,
+                bytes.len().saturating_sub(1),
+            ] {
+                if cut < bytes.len() {
+                    corpus.push((extension.clone(), bytes[..cut].to_vec()));
+                }
+            }
+            // The right start with garbage after it, and the wrong name.
+            let mut tail = bytes[..bytes.len().min(20)].to_vec();
+            tail.extend(std::iter::repeat_n(0xA5, 4096));
+            corpus.push((extension.clone(), tail));
+            corpus.push(("png".to_owned(), bytes.clone()));
+        }
+        let mut huge_png = PNG_SIGNATURE.to_vec();
+        for (width, height) in [
+            (0_u32, 0_u32),
+            (u32::MAX, u32::MAX),
+            (1, 0x7fff_ffff),
+            (65_535, 65_535),
+        ] {
+            let mut png = huge_png.clone();
+            let mut ihdr = b"IHDR".to_vec();
+            ihdr.extend_from_slice(&width.to_be_bytes());
+            ihdr.extend_from_slice(&height.to_be_bytes());
+            ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
+            png.extend_from_slice(&13_u32.to_be_bytes());
+            png.extend_from_slice(&ihdr);
+            png.extend_from_slice(&crc32(&ihdr).to_be_bytes());
+            corpus.push(("png".to_owned(), png));
+        }
+        huge_png.extend_from_slice(&[0xFF; 64]);
+        corpus.push(("png".to_owned(), huge_png));
+        for (width, height) in [(0, 0), (-1, -1), (i32::MAX, 1), (1, i32::MIN), (70_000, 70_000)] {
+            corpus.push(("bmp".to_owned(), bmp_header(width, height)));
+        }
+        corpus.push(("webp".to_owned(), webp_extended(0x00FF_FFFF, 0x00FF_FFFF)));
+        corpus.push(("webp".to_owned(), b"RIFF\xff\xff\xff\xffWEBPVP8 ".to_vec()));
+        corpus.push((
+            "jpg".to_owned(),
+            b"\xFF\xD8\xFF\xC0\x00\x11\x08\xFF\xFF\xFF\xFF\x03".to_vec(),
+        ));
+        corpus.push((
+            "jpg".to_owned(),
+            b"\xFF\xD8".iter().copied().cycle().take(100_000).collect(),
+        ));
+        corpus.push(("gif".to_owned(), b"GIF89a\xff\xff\xff\xff\xf7\0\0".to_vec()));
+        corpus.push((
+            "ico".to_owned(),
+            b"\0\0\x01\0\xff\xff".iter().copied().chain([0xFF; 32]).collect(),
+        ));
+        corpus.push(("tif".to_owned(), b"II*\0\xff\xff\xff\x7f".to_vec()));
+        corpus.push(("tif".to_owned(), b"MM\0*\0\0\0\x08\xff\xff".to_vec()));
+        corpus.push((
+            "xpm".to_owned(),
+            b"/* XPM */\nstatic char *x[] = {\n\"99999 99999 999 9\",\n".to_vec(),
+        ));
+        corpus.push(("pnm".to_owned(), b"P6\n999999 999999\n255\n".to_vec()));
+        corpus.push((
+            "tga".to_owned(),
+            [
+                0_u8, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 32, 0,
+            ]
+            .to_vec(),
+        ));
+        let laughs = r#"<?xml version="1.0"?><!DOCTYPE svg [<!ENTITY a "aaaaaaaaaa"><!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;"><!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;"><!ENTITY d "&c;&c;&c;&c;&c;&c;&c;&c;&c;&c;"><!ENTITY e "&d;&d;&d;&d;&d;&d;&d;&d;&d;&d;"><!ENTITY f "&e;&e;&e;&e;&e;&e;&e;&e;&e;&e;">]><svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><text>&f;&f;&f;&f;</text></svg>"#;
+        corpus.push(("svg".to_owned(), laughs.as_bytes().to_vec()));
+        let mut nested = String::from(r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">"#);
+        nested.push_str(&"<g>".repeat(50_000));
+        nested.push_str(&"</g>".repeat(50_000));
+        nested.push_str("</svg>");
+        corpus.push(("svg".to_owned(), nested.into_bytes()));
+        corpus.push((
+            "svg".to_owned(),
+            br#"<svg xmlns="http://www.w3.org/2000/svg" width="1e30" height="1e30"><rect width="1e30" height="1e30"/></svg>"#.to_vec(),
+        ));
+        corpus.push((
+            "svg".to_owned(),
+            br##"<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="9" height="9"><use id="u" xlink:href="#u"/></svg>"##.to_vec(),
+        ));
+        corpus.push(("png".to_owned(), Vec::new()));
+        corpus.push(("png".to_owned(), (0..=255).cycle().take(70_000).collect()));
+        write_corpus(folder, "broken", corpus)
+    }
+
+    /// `rounds` seeded mutations of each sample picture, written into
+    /// `folder`: bytes flipped, inserted and removed, as a fuzzer makes
+    /// them, the same every run.
+    pub(super) fn mutated_pictures(folder: &Path, rounds: usize) -> Vec<PathBuf> {
+        let mut corpus = Vec::new();
+        let mut seed = 0x9E37_79B9_u32;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            usize::try_from(seed).unwrap_or(0)
+        };
+        for (extension, bytes) in sample_pictures(folder) {
+            for _ in 0..rounds {
+                let mut mutated = bytes.clone();
+                for _ in 0..=(next() % 8) {
+                    if mutated.is_empty() {
+                        break;
+                    }
+                    let at = next() % mutated.len();
+                    match next() % 4 {
+                        0 => mutated[at] ^= 1 << (next() % 8),
+                        1 => mutated[at] = [0, 0xFF, 0x7F, 0x80][next() % 4],
+                        2 => mutated.insert(at, u8::try_from(next() % 256).unwrap_or(0)),
+                        _ => {
+                            mutated.remove(at);
+                        }
+                    }
+                }
+                corpus.push((extension.clone(), mutated));
+            }
+        }
+        write_corpus(folder, "mutated", corpus)
+    }
+
+    fn write_corpus(folder: &Path, name: &str, corpus: Vec<(String, Vec<u8>)>) -> Vec<PathBuf> {
+        corpus
+            .into_iter()
+            .enumerate()
+            .map(|(index, (extension, bytes))| {
+                let path = folder.join(format!("{name}-{index}.{extension}"));
+                std::fs::write(&path, bytes).expect("written");
+                path
+            })
+            .collect()
+    }
+
+    /// The guarded decoding itself, in this process, survives the corpus
+    /// too: every picture is refused or drawn within its limits.
+    #[test]
+    fn the_guarded_decoding_refuses_the_broken_corpus_within_its_limits() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        for path in broken_pictures(folder.path()).iter().filter(|path| {
+            // The pictures only a C loader's own checks stop are left to
+            // the child (see decoder/tests.rs).
+            path.extension().is_none_or(|extension| extension != "svg")
+        }) {
+            let started = Instant::now();
+            if let Ok(decoded) = decode(path, Limits::DISPLAY) {
+                assert!(decoded.pixbuf.width() <= 256 && decoded.pixbuf.height() <= 256);
+            }
+            assert!(
+                started.elapsed() < TIME_LIMIT + Duration::from_secs(1),
+                "{}",
+                path.display()
+            );
+        }
+    }
+
+    /// The header readers the app runs in its own process
+    /// ([`declared_dimensions`], for the gallery) read seeded mutations of
+    /// every sample's first bytes without a panic.
+    #[test]
+    fn mutated_headers_are_read_without_a_panic() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let mut samples: Vec<Vec<u8>> = sample_pictures(folder.path())
+            .into_iter()
+            .map(|(_, bytes)| bytes)
+            .collect();
+        samples.push(webp_extended(4000, 3000));
+        samples.push(bmp_header(64, -64));
+        let mut seed = 0x0BAD_F00D_u32;
+        let mut next = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            usize::try_from(seed).unwrap_or(0)
+        };
+        for sample in &samples {
+            for cut in 0..sample.len().min(400) {
+                let _ = declared_dimensions(&sample[..cut]);
+            }
+            // `OX_FUZZ_ROUNDS` raises the rounds for a longer local run.
+            let rounds = std::env::var("OX_FUZZ_ROUNDS")
+                .ok()
+                .and_then(|rounds| rounds.parse().ok());
+            for _ in 0..rounds.unwrap_or(5000) {
+                let mut bytes = sample.clone();
+                for _ in 0..=(next() % 6) {
+                    let at = next() % bytes.len();
+                    match next() % 3 {
+                        0 => bytes[at] = u8::try_from(next() % 256).unwrap_or(0),
+                        1 => bytes.insert(at, 0xFF),
+                        _ => {
+                            bytes.remove(at);
+                        }
+                    }
+                }
+                let _ = declared_dimensions(&bytes);
+                let mut ending = Ending::default();
+                let mut frame = FirstFrame::default();
+                for chunk in bytes.chunks(1 + next() % 64) {
+                    let _ = ending.take(chunk);
+                    let _ = frame.take(chunk);
+                }
+            }
+        }
     }
 }

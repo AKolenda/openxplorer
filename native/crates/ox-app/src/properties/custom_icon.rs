@@ -55,8 +55,7 @@ impl IconChoice {
         }
         match icon {
             Some(icon) => {
-                let picture = gtk::Image::from_gicon(&gio::FileIcon::new(&gio::File::for_uri(icon)));
-                picture.set_pixel_size(PREVIEW_SIZE);
+                let picture = crate::picture_guard::guarded_image(icon, PREVIEW_SIZE);
                 self.preview.append(&picture);
             }
             None => self.preview.append(&ArtImage::new(Art::Folder, PREVIEW_SIZE)),

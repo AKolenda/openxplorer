@@ -146,7 +146,12 @@ pub(super) fn desktop_link(entry: &Entry) -> Option<Result<LinkTarget, String>> 
         return None;
     }
     let path = gio::File::for_uri(&entry.uri).path()?;
-    let target = link_target_of_file(&path)?;
+    // Read on a worker thread for at most a moment: a link on a share that
+    // stopped answering is opened as the file it is.
+    let target = crate::bounded_io::wait_for(&entry.uri, crate::bounded_io::MAIN_THREAD_WAIT, move || {
+        link_target_of_file(&path)
+    })
+    .flatten()?;
     Some(target.map_err(str::to_owned))
 }
 
@@ -892,5 +897,21 @@ mod tests {
             activation_for(&share),
             Activation::Folder("smb://nas/media".into())
         );
+    }
+
+    /// A `.desktop` link on a mount that stopped answering is not read on
+    /// the main thread: it is taken as no link, at once.
+    #[test]
+    fn a_link_on_a_stalled_mount_is_given_up_at_once() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let path = folder.path().join("Site.desktop");
+        std::fs::write(&path, "[Desktop Entry]\nType=Link\nURL=https://example.com/\n").expect("written");
+        let mut entry = file_entry("Site.desktop");
+        entry.uri = gio::File::for_path(&path).uri().to_string();
+        assert!(matches!(desktop_link(&entry), Some(Ok(LinkTarget::Web(_)))));
+        let _stalled = crate::bounded_io::stall::stall(folder.path());
+        let started = std::time::Instant::now();
+        assert_eq!(desktop_link(&entry), None);
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
     }
 }

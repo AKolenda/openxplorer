@@ -106,10 +106,12 @@ impl DetailsPane {
             let Some(media) = media else {
                 return;
             };
-            state
-                .rows
-                .replace(crate::properties::pane_media_rows(request.kind, &media));
-            pane.redraw_properties();
+            crate::crash_guard::guarded("a file's details", || {
+                state
+                    .rows
+                    .replace(crate::properties::pane_media_rows(request.kind, &media));
+                pane.redraw_properties();
+            });
         });
     }
 

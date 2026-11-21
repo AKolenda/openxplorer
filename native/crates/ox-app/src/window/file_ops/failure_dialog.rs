@@ -297,11 +297,25 @@ async fn can_write(uri: &str) -> bool {
 /// bytes, when known.
 async fn drive_of(uri: &str) -> (String, Option<(u64, u64)>) {
     let file = gio::File::for_uri(uri);
-    // Local and GVfs mounts answer from their mount tables, at once.
-    let name = match file.find_enclosing_mount(gio::Cancellable::NONE) {
-        Ok(mount) => mount.name().to_string(),
-        Err(_) if uri.starts_with("file://") => gettext("Local Disk"),
-        Err(_) => location_name(uri),
+    // Local and GVfs mounts answer from their mount tables, but a kernel
+    // mount of a share may be asked too: the question waits for it at most
+    // a moment, off the main thread.
+    let looked = file.clone();
+    let asked = gio::spawn_blocking(move || {
+        looked
+            .find_enclosing_mount(gio::Cancellable::NONE)
+            .map(|mount| mount.name().to_string())
+            .ok()
+    });
+    let mount = glib::future_with_timeout(crate::bounded_io::MAIN_THREAD_WAIT, asked)
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .flatten();
+    let name = match mount {
+        Some(mount) => mount,
+        None if uri.starts_with("file://") => gettext("Local Disk"),
+        None => location_name(uri),
     };
     let space = file
         .query_filesystem_info_future(

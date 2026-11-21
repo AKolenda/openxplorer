@@ -28,11 +28,27 @@ pub(super) const UNSUPPORTED_LINK: &str =
 /// `Type=Link` entry with a URL. An address of another kind is
 /// `Err(UNSUPPORTED_LINK)`.
 pub(super) fn link_target_of_file(path: &std::path::Path) -> Option<Result<LinkTarget, &'static str>> {
-    let metadata = std::fs::metadata(path).ok()?;
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+
+    // Opened without waiting, and refused by the opened file's own type:
+    // a pipe named `.desktop` never blocks the window.
+    // A device is never opened (opening some does something, as a tape
+    // rewinds), and one swapped in after this look is refused below.
+    if !std::fs::metadata(path).ok()?.is_file() {
+        return None;
+    }
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(rustix::fs::OFlags::NONBLOCK.bits().cast_signed())
+        .open(path)
+        .ok()?;
+    let metadata = file.metadata().ok()?;
     if !metadata.is_file() || metadata.len() > LINK_SIZE_LIMIT {
         return None;
     }
-    let text = std::fs::read_to_string(path).ok()?;
+    let mut text = String::new();
+    file.take(LINK_SIZE_LIMIT).read_to_string(&mut text).ok()?;
     link_target(&text)
 }
 

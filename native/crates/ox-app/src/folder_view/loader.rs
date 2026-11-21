@@ -141,21 +141,32 @@ pub(crate) fn list_archive_folder(
         let guard = CancelOnDrop(Cancellation::new());
         match archive_listing(&browser, &location, &guard.0).await {
             Ok(listing) => {
-                let notice = listing_notice(&listing);
-                let rows = listing
-                    .entries
-                    .into_iter()
-                    .map(|member| {
-                        let (is_dir, size) = match member.kind {
-                            ArchiveEntryKind::Folder => (true, None),
-                            ArchiveEntryKind::File { size, .. } => (false, Some(size)),
-                        };
-                        let uri = location.member(&member.member).uri();
-                        Entry::archive_member(uri, member.name, is_dir, size, member.modified)
-                    })
-                    .collect();
-                on_batch(rows);
-                on_done(Ok(notice));
+                // Names and sizes from the archive: a panic while they are
+                // turned into rows is logged, and the archive is reported
+                // damaged instead of aborting the app (crash_guard).
+                let rows = crate::crash_guard::guarded("an archive's listing", || {
+                    let notice = listing_notice(&listing);
+                    let rows: Vec<Entry> = listing
+                        .entries
+                        .into_iter()
+                        .map(|member| {
+                            let (is_dir, size) = match member.kind {
+                                ArchiveEntryKind::Folder => (true, None),
+                                ArchiveEntryKind::File { size, .. } => (false, Some(size)),
+                            };
+                            let uri = location.member(&member.member).uri();
+                            Entry::archive_member(uri, member.name, is_dir, size, member.modified)
+                        })
+                        .collect();
+                    (rows, notice)
+                });
+                match rows {
+                    Some((rows, notice)) => {
+                        on_batch(rows);
+                        on_done(Ok(notice));
+                    }
+                    None => on_done(Err(EntryError::Failed(ArchiveError::DamagedArchive.to_string()))),
+                }
             }
             Err(error) => on_done(Err(error)),
         }

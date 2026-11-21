@@ -192,3 +192,54 @@ fn a_launchers_shortcut_tab_edits_its_command_folder_and_comment() {
 fn page_of(window: &PropertiesWindow) -> gtk::Widget {
     tab(window, "shortcut")
 }
+
+/// A launcher, and a folder, on a mount that stopped answering (sshfs or
+/// a NAS gone away, stood in for by [`crate::bounded_io::stall`]) and a
+/// pipe named `.desktop`: Properties opens at once, without the tabs that
+/// would need the file read, and the window stays responsive.
+#[gtk::test]
+fn properties_on_a_stalled_mount_or_of_a_pipe_open_at_once() {
+    let fixture = Fixture::standard();
+    fs::write(
+        fixture.path("Launcher.desktop"),
+        "[Desktop Entry]\nType=Application\nName=Example\nExec=true\n",
+    )
+    .expect("a launcher");
+    fs::create_dir(fixture.path("Projects")).expect("a folder");
+    let pipe = fixture.path("Pipe.desktop");
+    let made = std::process::Command::new("mkfifo")
+        .arg(&pipe)
+        .status()
+        .expect("mkfifo runs");
+    assert!(made.success());
+    let test = TestWindow::open(&fixture.uri());
+
+    let started = std::time::Instant::now();
+    test.select_named("Pipe.desktop");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Pipe Properties");
+    assert!(started.elapsed() < std::time::Duration::from_secs(3));
+    assert!(!window.tab_labels().contains(&"Shortcut".to_owned()));
+    window.close();
+
+    let stalled = crate::bounded_io::stall::stall(&fixture.path(""));
+    for (name, title) in [
+        ("Launcher.desktop", "Launcher Properties"),
+        ("Projects", "Projects Properties"),
+    ] {
+        let started = std::time::Instant::now();
+        test.select_named(name);
+        test.activate("properties", None);
+        let window = test.wait_for_properties(title);
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(3),
+            "{name}: {:?}",
+            started.elapsed()
+        );
+        let labels = window.tab_labels();
+        assert!(!labels.contains(&"Shortcut".to_owned()), "{labels:?}");
+        assert!(!labels.contains(&"Customize".to_owned()), "{labels:?}");
+        window.close();
+    }
+    drop(stalled);
+}

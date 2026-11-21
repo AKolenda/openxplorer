@@ -175,8 +175,17 @@ mod imp {
             // is about to end (`query-end`), when the open tabs are saved
             // for the next start (TAB-053). GTK registers during startup.
             if let Launch::Interactive = app.launch() {
+                crate::crash_guard::start_run();
                 app.set_register_session(true);
-                app.connect_query_end(|app| crate::window::save_front_session(app.upcast_ref()));
+                app.connect_query_end(|app| {
+                    crate::window::save_front_session(app.upcast_ref());
+                    crate::crash_guard::end_run();
+                });
+                // A run that lasts a minute has not crashed while it
+                // started, so it no longer counts towards a crash loop.
+                glib::timeout_add_seconds_local_once(crate::crash_guard::START_SECONDS, || {
+                    crate::crash_guard::survived_start();
+                });
             }
             self.parent_startup();
             app.name_for_the_desktop();
@@ -226,6 +235,7 @@ mod imp {
             }
             if let Launch::Interactive = self.obj().launch() {
                 super::sweep_archive_copies();
+                crate::crash_guard::end_run();
             }
             self.parent_shutdown();
         }
@@ -516,9 +526,11 @@ fn software_rendering_notice(asks: bool, is_remote: bool, renderer: Option<&str>
 /// The interface's translations are loaded before any text is made
 /// (INT-031), from this build channel's catalogue (`I18N_DOMAIN`).
 /// Started with `--ox-read-media-details`, it is the Details tab's reader
-/// process instead, which shows nothing (see `media_details.rs`), and
-/// with `--ox-play-media` the details pane's player process
-/// (`media_player.rs`).
+/// process instead, which shows nothing (see `media_details.rs`), with
+/// `--ox-play-media` the details pane's player process (`media_player.rs`),
+/// with `--ox-decode-picture` a picture decoder (see `picture_guard`), and
+/// with `--ox-draw-vector-picture` it draws one vector picture for the app
+/// (see `picture_guard/vector.rs`).
 pub fn run() -> glib::ExitCode {
     raise_open_file_limit();
     let arguments: Vec<String> = std::env::args().collect();
@@ -528,6 +540,13 @@ pub fn run() -> glib::ExitCode {
     if let Some(status) = crate::media_player::run_as_player(&arguments) {
         return status;
     }
+    if let Some(status) = crate::picture_guard::run_as_decoder(&arguments) {
+        return status;
+    }
+    if let Some(status) = crate::picture_guard::run_as_drawer(&arguments) {
+        return status;
+    }
+    crate::crash_guard::install_panic_hook();
     ox_core::i18n::install(crate::config::I18N_DOMAIN);
     let launch = match SnapshotRequest::from_environment() {
         Ok(Some(request)) => Launch::Snapshot(Box::new(request)),

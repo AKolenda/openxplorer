@@ -609,7 +609,11 @@ impl<'a> Reader<'a> {
     fn bits(&mut self, count: usize) -> Result<Vec<bool>, ArchiveError> {
         let bytes = self.take(count.div_ceil(8))?;
         Ok((0..count)
-            .map(|index| bytes[index / 8] & (0x80 >> (index % 8)) != 0)
+            .map(|index| {
+                bytes
+                    .get(index / 8)
+                    .is_some_and(|byte| byte & (0x80 >> (index % 8)) != 0)
+            })
             .collect())
     }
 
@@ -880,6 +884,9 @@ impl<'a> Reader<'a> {
             }
             let size = self.size()?;
             match property {
+                // The empty-file and anti bits count the empty streams,
+                // so the empty streams are named once, before them.
+                K_EMPTY_STREAM if empty_stream.is_some() => return Err(ArchiveError::DamagedSevenZip),
                 K_EMPTY_STREAM => empty_stream = Some(self.bits(count)?),
                 K_EMPTY_FILE | K_ANTI => {
                     let empty_count = empty_stream
@@ -941,18 +948,40 @@ impl<'a> Reader<'a> {
         if count > 0 && !has_names {
             return Err(ArchiveError::DamagedSevenZip);
         }
-        let mut empty_index = 0;
-        for (index, file) in files.iter_mut().enumerate() {
-            file.has_stream = !empty_stream.as_ref().is_some_and(|bits| bits[index]);
-            if file.has_stream {
-                continue;
-            }
-            file.is_directory = !empty_file.as_ref().is_some_and(|bits| bits[empty_index]);
-            file.is_anti = anti.as_ref().is_some_and(|bits| bits[empty_index]);
-            empty_index += 1;
-        }
+        mark_empty_streams(
+            &mut files,
+            empty_stream.as_ref(),
+            empty_file.as_ref(),
+            anti.as_ref(),
+        )?;
         Ok(files)
     }
+}
+
+/// Marks the `files` without a stream of their own: folders, unless the
+/// empty-file bits say they are empty files, and anti items. The bits
+/// come from the file, so each is read with `get`, never indexed.
+fn mark_empty_streams(
+    files: &mut [FileRecord],
+    empty_stream: Option<&Vec<bool>>,
+    empty_file: Option<&Vec<bool>>,
+    anti: Option<&Vec<bool>>,
+) -> Result<(), ArchiveError> {
+    let bit = |bits: Option<&Vec<bool>>, at: usize| {
+        bits.map_or(Some(false), |bits| bits.get(at).copied())
+            .ok_or(ArchiveError::DamagedSevenZip)
+    };
+    let mut empty_index = 0;
+    for (index, file) in files.iter_mut().enumerate() {
+        file.has_stream = !bit(empty_stream, index)?;
+        if file.has_stream {
+            continue;
+        }
+        file.is_directory = !bit(empty_file, empty_index)?;
+        file.is_anti = bit(anti, empty_index)?;
+        empty_index += 1;
+    }
+    Ok(())
 }
 
 /// The names of a `kName` record: UTF-16 little-endian, each ending with
@@ -1015,5 +1044,45 @@ mod tests {
             reader.count(MAX_FILES),
             Err(ArchiveError::TooManyMembers)
         ));
+    }
+
+    /// A damaged files record that names its empty streams again after
+    /// their empty-file bits, so the bits no longer cover them, is
+    /// refused instead of read past the end; so are the records of a
+    /// seeded fuzz, each refused or read without a panic.
+    #[test]
+    fn a_files_record_that_repeats_its_empty_streams_is_refused() {
+        let names = [0x11, 9, 0, b'a', 0, 0, 0, b'b', 0, 0, 0];
+        let mut damaged = vec![2, K_EMPTY_STREAM, 1, 0b0100_0000, K_EMPTY_FILE, 1, 0x80];
+        damaged.extend_from_slice(&[K_EMPTY_STREAM, 1, 0b1100_0000]);
+        damaged.extend_from_slice(&names);
+        damaged.push(K_END);
+        assert!(matches!(
+            Reader::new(&damaged).files_info(),
+            Err(ArchiveError::DamagedSevenZip)
+        ));
+        let mut anti = vec![2, K_EMPTY_STREAM, 1, 0b0100_0000, K_ANTI, 1, 0x80];
+        anti.extend_from_slice(&[K_EMPTY_STREAM, 1, 0b1100_0000]);
+        anti.extend_from_slice(&names);
+        anti.push(K_END);
+        assert!(Reader::new(&anti).files_info().is_err());
+        let mut good = vec![2, K_EMPTY_STREAM, 1, 0b0100_0000, K_EMPTY_FILE, 1, 0x80];
+        good.extend_from_slice(&names);
+        good.push(K_END);
+        let files = Reader::new(&good).files_info().expect("a good record");
+        assert!(files[0].has_stream && !files[1].has_stream && !files[1].is_directory);
+        let mut seed = 0x1234_5678_u32;
+        for _ in 0..20_000 {
+            let mut bytes = good.clone();
+            seed ^= seed << 13;
+            seed ^= seed >> 17;
+            seed ^= seed << 5;
+            for step in 0..(seed % 6) {
+                let at = usize::try_from(seed.rotate_left(step * 5)).unwrap_or(0) % bytes.len();
+                bytes[at] = seed.to_le_bytes()[usize::try_from(step % 4).unwrap_or(0)] & 0x1f;
+            }
+            let _ = Reader::new(&bytes).files_info();
+            let _ = Reader::new(&bytes).streams_info();
+        }
     }
 }
