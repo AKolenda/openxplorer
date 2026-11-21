@@ -8064,7 +8064,7 @@ msgstr ""
 msgid "Items in an archive are read-only. Use Copy, then Paste where you want them."
 msgstr ""
 
-#: crates/ox-app/src/window/zip_copies.rs crates/ox-core/src/archive/error.rs crates/ox-core/src/entry/error.rs crates/ox-core/src/integration/terminal/error.rs crates/ox-core/src/network/error.rs crates/ox-core/src/ops/error.rs crates/ox-core/src/search/error.rs crates/ox-core/src/transfer/error.rs crates/ox-core/src/versions/error.rs
+#: crates/ox-app/src/window/zip_copies.rs crates/ox-core/src/archive/error.rs crates/ox-core/src/entry/error.rs crates/ox-core/src/integration/terminal/error.rs crates/ox-core/src/network/error.rs crates/ox-core/src/ops/error.rs crates/ox-core/src/search/error.rs crates/ox-core/src/transfer/error.rs crates/ox-core/src/versions/error.rs crates/ox-core/src/versions/shadow_copies.rs
 msgid "Operation cancelled."
 msgstr ""
 
@@ -10642,6 +10642,22 @@ msgstr ""
 
 #: crates/ox-core/src/versions/lookup.rs
 msgid "This item is outside the live folder."
+msgstr ""
+
+#: crates/ox-core/src/versions/shadow_copies.rs
+msgid "No saved password was found for this server, so its previous versions could not be listed. Sign in with \"Remember my credentials\" checked to list them."
+msgstr ""
+
+#: crates/ox-core/src/versions/shadow_copies.rs
+msgid "The server did not list its previous versions."
+msgstr ""
+
+#: crates/ox-core/src/versions/shadow_copies.rs
+msgid "The server does not offer previous versions of this share."
+msgstr ""
+
+#: crates/ox-core/src/versions/shadow_copies.rs
+msgid "The server refused the saved password, so its previous versions could not be listed."
 msgstr ""
 
 #: crates/ox-core/src/versions/snapshot_date.rs

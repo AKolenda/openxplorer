@@ -76,6 +76,18 @@ gstreamer-pbutils = "0.25"
 # A picture's EXIF for the same tab: pure Rust, reading only bytes already
 # in memory, so no C library parses the picture.
 kamadak-exif = "0.6.1"
+# The SMB client that asks a server for the shadow copies of a share, as
+# Windows' Previous Versions tab does (FSCTL_SRV_ENUMERATE_SNAPSHOTS): GIO,
+# GVfs and libsmbclient cannot send that request. MIT. On Linux it builds as
+# Rust only, and "single_threaded" runs it on the calling thread without an
+# async runtime; Cargo.lock also lists tokio, reqwest and rustls, which its
+# sign-in crate (sspi) uses only on other platforms or for Kerberos, which is
+# not enabled. Signing and encryption let it reach shares that require them.
+# Pinned, as its sub-crates are pinned to the same version.
+smb = { version = "=0.12.1", default-features = false, features = ["single_threaded", "sign", "encrypt"] }
+# Reads the shadow-copy list as raw bytes: smb's own reply type cannot read
+# an empty list and unwraps what it cannot read. The version smb uses.
+binrw = "0.15"
 ox-core = { path = "crates/ox-core" }
 
 # Every crate inherits these lints with `[lints] workspace = true`, so editors,

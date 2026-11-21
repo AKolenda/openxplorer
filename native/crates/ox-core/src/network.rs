@@ -38,11 +38,13 @@
 //! | `mount_table`, `local_path` | Local paths of SMB locations | `mount_support.py`, `native_opening.py` |
 //! | `mount_plan` | The persistent mount assistant's plan | `mount_support.py` |
 //! | `mount_helper` | The administrator helper, `openxplorer-mount-share` | `mount_share.py` |
+//! | `shadow_copies` | The shadow copies an SMB server lists, for Previous Versions | Windows' Previous Versions tab |
 //!
 //! The privacy rules of the Python modules hold here too, each enforced
 //! and documented where it applies:
 //!
-//! - Passwords go only to the mount operation and the keyring. They never
+//! - Passwords go only to the mount operation, the keyring and, to list
+//!   a share's previous versions, the server they were saved for. They never
 //!   reach a [`Challenge`], a log message or the settings, and there is no
 //!   plaintext fallback without a keyring (SAFE-011).
 //! - A window's in-memory credentials are its own and are wiped when it
@@ -68,6 +70,7 @@ mod recent_servers;
 mod secret_service;
 mod server;
 mod session_credentials;
+mod shadow_copies;
 mod sign_out;
 #[cfg(test)]
 mod test_support;
@@ -99,6 +102,7 @@ pub use recent_servers::RecentServers;
 pub use secret_service::SecretService;
 pub use server::{ServerKey, DEFAULT_SMB_PORT};
 pub use session_credentials::SessionCredentials;
+pub use shadow_copies::SmbShadowCopies;
 pub use sign_out::{
     begin_sign_out, finish_sign_out, SignOutRegistry, SignOutReport, SignOutRequest, SigningOut,
 };

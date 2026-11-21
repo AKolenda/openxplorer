@@ -107,6 +107,19 @@ impl Keyring for MemoryKeyring {
         Ok(found.map(|item| item.text.clone()))
     }
 
+    fn find_unlocked(
+        &self,
+        query: &SecretAttributes,
+        keep: &dyn Fn(&SecretAttributes) -> bool,
+    ) -> Result<Vec<(SecretAttributes, String)>, KeyringError> {
+        let items = locked(&self.items);
+        Ok(items
+            .iter()
+            .filter(|item| query.matches(&item.attributes) && keep(&item.attributes))
+            .map(|item| (item.attributes.clone(), item.text.clone()))
+            .collect())
+    }
+
     fn store(&self, secret: &NewSecret<'_>) -> Result<(), KeyringError> {
         if let Some(hook) = locked(&self.store_hook).as_ref() {
             hook();

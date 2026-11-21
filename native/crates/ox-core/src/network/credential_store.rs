@@ -220,7 +220,7 @@ impl fmt::Debug for CredentialStore {
 
 /// The keyring attributes of the credentials of `key`: those of one scope,
 /// or of every scope for `None`.
-fn credential_attributes(key: &ServerKey, scope: Option<CredentialScope>) -> SecretAttributes {
+pub(super) fn credential_attributes(key: &ServerKey, scope: Option<CredentialScope>) -> SecretAttributes {
     let attributes = host_attributes(key.host()).with("port", &key.port().to_string());
     match scope {
         Some(scope) => attributes.with("scope", scope.as_str()),

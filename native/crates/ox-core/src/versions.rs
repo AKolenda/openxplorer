@@ -5,11 +5,12 @@
 //! Ports `v2.0.0:desktop/previous_versions.py`, its GIO provider
 //! (`SnapshotProvider` in `v2.0.0:desktop/file_services.py`) and the snapshot
 //! name rules of `v2.0.0:desktop/ui/snapshot-meta.js`. Snapshots are found
-//! only where a server or filesystem already exposes them as readable
-//! folders: `.snapshot`, `#snapshot` and `.zfs/snapshot` collections,
-//! Snapper's `.snapshots/<id>/snapshot` on Btrfs, and backup folders the
-//! user maps to a live folder. Nothing here creates snapshots or asks an
-//! SMB server for its shadow copies.
+//! where a server or filesystem already exposes them as readable folders:
+//! `.snapshot`, `#snapshot` and `.zfs/snapshot` collections, Snapper's
+//! `.snapshots/<id>/snapshot` on Btrfs, and backup folders the user maps to
+//! a live folder. An SMB share's item is also looked up in the shadow
+//! copies the server lists for it, as Windows does
+//! ([`ShadowCopyLister`]). Nothing here creates snapshots.
 //!
 //! The rules this module keeps:
 //!
@@ -36,6 +37,7 @@
 //! | `service` | [`PreviousVersions`]: sources, snapshot roots and the read-only rule |
 //! | `lookup` | Finding the versions of an item |
 //! | `provider` | [`SnapshotProvider`] and its GIO implementation |
+//! | `shadow_copies` | [`ShadowCopyLister`]: the shadow copies an SMB server lists |
 //! | `snapshot_date` | [`SnapshotDate`]: the date in a snapshot's name |
 //! | `snapshot_location` | [`snapshot_location()`]: which snapshot a location is in |
 //! | `error` | [`VersionsError`] |
@@ -45,6 +47,7 @@ mod lookup;
 mod paths;
 mod provider;
 mod service;
+mod shadow_copies;
 mod snapshot_date;
 mod snapshot_location;
 mod source;
@@ -56,6 +59,7 @@ pub use paths::is_conventional_snapshot;
 pub(crate) use paths::{is_snapshot_folder_name, ZFS_SNAPSHOT_FOLDER};
 pub use provider::{CollectionListing, GioSnapshotProvider, SnapshotProvider};
 pub use service::{PreviousVersions, ProtectedLocations};
+pub use shadow_copies::{is_shadow_copy_token, ShadowCopies, ShadowCopyError, ShadowCopyLister};
 pub use snapshot_date::{
     SnapshotDate, SnapshotTime, DATE_FROM_NAME, DATE_UNAVAILABLE, NO_DATE_EXPLANATION, NO_DATE_IN_NAME,
 };

@@ -45,6 +45,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
 use ox_core::folder_locations::FolderRelocation;
+use ox_core::network::SmbShadowCopies;
 use ox_core::places::FolderLocations;
 use ox_core::settings::{
     FolderTemplate, PreferencesUpdate, RecentEntry, Settings, SettingsData, SettingsError, ViewProperties,
@@ -220,7 +221,9 @@ impl AppContext {
         let context: Self = glib::Object::new();
         let imp = context.imp();
         imp.skin.set(skin).expect("a new AppContext has no skin yet");
-        let versions = PreviousVersions::new(settings.directory());
+        let shadow_copies = SmbShadowCopies::new(imp.network.credential_store());
+        let versions =
+            PreviousVersions::new(settings.directory()).with_shadow_copies(Arc::new(shadow_copies));
         imp.previous_versions
             .set(Arc::new(versions))
             .expect("a new AppContext has no previous-versions service yet");
