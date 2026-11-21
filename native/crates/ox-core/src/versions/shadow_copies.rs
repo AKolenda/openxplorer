@@ -57,6 +57,9 @@ pub enum ShadowCopyError {
         )
     )]
     NoCredential,
+    /// The keyring holding the saved password could not be read.
+    #[error(transparent)]
+    Keyring(crate::network::KeyringError),
     /// The server refused the saved password.
     #[error(
         "{}",

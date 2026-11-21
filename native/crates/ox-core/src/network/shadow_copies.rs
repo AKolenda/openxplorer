@@ -21,7 +21,9 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::io::{Read, Seek};
+use std::net::{IpAddr, ToSocketAddrs};
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -116,7 +118,7 @@ impl ShadowCopyLister for SmbShadowCopies {
         }
         let target = SmbTarget::of(uri).ok_or_else(|| failed(format!("not a share location: {uri}")))?;
         let account = saved_account(&self.store, &target)
-            .map_err(|error| failed(format!("keyring: {error}")))?
+            .map_err(ShadowCopyError::Keyring)?
             .ok_or(ShadowCopyError::NoCredential)?;
         let refusal = Self::refusal_key(&target.key, &account);
         if locked(&self.refused).contains(&refusal) {
@@ -192,7 +194,7 @@ fn saved_account(store: &CredentialStore, target: &SmbTarget) -> Result<Option<A
     let key = &target.key;
     let generation = store.generation_of(key);
     for scope in [CredentialScope::Session, CredentialScope::Permanent] {
-        for (_, text) in keyring.find_unlocked(&credential_attributes(key, Some(scope)))? {
+        for (_, text) in keyring.find_unlocked(&credential_attributes(key, Some(scope)), &|_| true)? {
             if let Some(credential) = Credential::from_keyring_text(&text, scope) {
                 return Ok((store.generation_of(key) == generation).then(|| Account {
                     user: qualified_user(&credential.domain, &credential.username),
@@ -201,35 +203,43 @@ fn saved_account(store: &CredentialStore, target: &SmbTarget) -> Result<Option<A
             }
         }
     }
-    let query = SecretAttributes::any_schema()
-        .with("server", key.host())
-        .with("protocol", GVFS_SMB_PROTOCOL);
-    let items = keyring.find_unlocked(&query)?;
+    // GVfs saves the host as the user typed it, so it is compared without
+    // regard to case here, as `ServerKey` compares hosts; the secret of an
+    // item for another server or port is never read.
+    let query = SecretAttributes::any_schema().with("protocol", GVFS_SMB_PROTOCOL);
+    let items = keyring.find_unlocked(&query, &|attributes| gvfs_item_fits(attributes, target))?;
     let account = gvfs_account(&items, target);
     Ok(account.filter(|_| store.generation_of(key) == generation))
 }
 
-/// The `GVfs` password among `items` that fits `target`: saved for its
-/// port, with a user, and for its share or for the whole server, in that
-/// order of preference.
-fn gvfs_account(items: &[(SecretAttributes, String)], target: &SmbTarget) -> Option<Account> {
-    let port = target.key.port().to_string();
-    let fits = |attributes: &SecretAttributes| {
-        // GVfs leaves `port` out for the default port.
-        let same_port = match attributes.get("port") {
-            Some(saved) => saved == port,
-            None => target.key.port() == DEFAULT_SMB_PORT,
-        };
-        same_port
-            && attributes.get(SCHEMA_ATTRIBUTE) != Some(OWN_SCHEMA)
-            && attributes.get("user").is_some_and(|user| !user.is_empty())
+/// True when the `GVfs` password with `attributes` was saved for the host
+/// and port of `target`, with a user.
+fn gvfs_item_fits(attributes: &SecretAttributes, target: &SmbTarget) -> bool {
+    // GVfs leaves `port` out for the default port.
+    let same_port = match attributes.get("port") {
+        Some(saved) => saved == target.key.port().to_string(),
+        None => target.key.port() == DEFAULT_SMB_PORT,
     };
+    let same_host = attributes
+        .get("server")
+        .is_some_and(|server| server.eq_ignore_ascii_case(target.key.host()));
+    same_host
+        && same_port
+        && attributes.get(SCHEMA_ATTRIBUTE) != Some(OWN_SCHEMA)
+        && attributes.get("user").is_some_and(|user| !user.is_empty())
+}
+
+/// The `GVfs` password among `items` that fits `target`
+/// ([`gvfs_item_fits`]), for its share or else for the whole server.
+fn gvfs_account(items: &[(SecretAttributes, String)], target: &SmbTarget) -> Option<Account> {
     let for_share = |attributes: &SecretAttributes| {
         attributes
             .get("object")
             .is_some_and(|object| object.eq_ignore_ascii_case(&target.share))
     };
-    let candidates = items.iter().filter(|(attributes, _)| fits(attributes));
+    let candidates = items
+        .iter()
+        .filter(|(attributes, _)| gvfs_item_fits(attributes, target));
     let (attributes, password) = candidates
         .clone()
         .find(|(attributes, _)| for_share(attributes))
@@ -292,7 +302,9 @@ fn enumerate_with(
     account: &Account,
     cancel: &Cancellation,
 ) -> Result<ShadowCopies, ShadowCopyError> {
-    let share = UncPath::new(target.key.host())
+    let server = resolve(target.key.host(), target.key.port())?;
+    check_cancelled(cancel)?;
+    let share = UncPath::new(&server)
         .and_then(|server| server.with_share(&target.share))
         .map_err(classify)?;
     client
@@ -316,6 +328,30 @@ fn enumerate_with(
     // Closing the item only releases it; it cannot change the answer.
     let _ = handle.close();
     Ok(copies)
+}
+
+/// The address of `host`, looked up on a thread of its own so a resolver
+/// that does not answer stops the lookup after [`REQUEST_TIMEOUT`] too.
+/// An IP address is returned as it is.
+fn resolve(host: &str, port: u16) -> Result<String, ShadowCopyError> {
+    if host.parse::<IpAddr>().is_ok() {
+        return Ok(host.to_owned());
+    }
+    let (sender, receiver) = mpsc::channel();
+    let name = host.to_owned();
+    // The thread ends by itself once the resolver answers.
+    std::thread::spawn(move || {
+        let address = (name.as_str(), port)
+            .to_socket_addrs()
+            .map(|mut addresses| addresses.next());
+        let _ = sender.send(address);
+    });
+    match receiver.recv_timeout(REQUEST_TIMEOUT) {
+        Ok(Ok(Some(address))) => Ok(address.ip().to_string()),
+        Ok(Ok(None)) => Err(failed(format!("{host} has no address"))),
+        Ok(Err(error)) => Err(failed(format!("{host}: {error}"))),
+        Err(_) => Err(failed(format!("looking up {host} timed out"))),
+    }
 }
 
 /// Sends `FSCTL_SRV_ENUMERATE_SNAPSHOTS` on the open item and reads the
@@ -612,7 +648,7 @@ mod tests {
         gvfs_password(
             &keyring,
             &[
-                ("server", "nas"),
+                ("server", "NAS"),
                 ("protocol", "smb"),
                 ("user", "ann"),
                 ("domain", "WORKGROUP"),

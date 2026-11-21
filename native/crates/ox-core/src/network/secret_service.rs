@@ -47,6 +47,7 @@ impl Keyring for SecretService {
     fn find_unlocked(
         &self,
         query: &SecretAttributes,
+        keep: &dyn Fn(&SecretAttributes) -> bool,
     ) -> Result<Vec<(SecretAttributes, String)>, KeyringError> {
         block_on(async {
             let service = connect().await?;
@@ -62,6 +63,9 @@ impl Keyring for SecretService {
                     .fold(SecretAttributes::any_schema(), |found, (name, value)| {
                         found.with(name, value)
                     });
+                if !keep(&attributes) {
+                    continue;
+                }
                 // A secret that is not text is not a password.
                 if let Ok(text) = String::from_utf8(item.secret().await?.as_bytes().to_vec()) {
                     found.push((attributes, text));

@@ -145,9 +145,10 @@ pub trait Keyring: Send + Sync {
     /// A [`KeyringError`] when the keyring cannot be searched or read.
     fn lookup(&self, query: &SecretAttributes) -> Result<Option<String>, KeyringError>;
 
-    /// The attributes and text of every unlocked item matching `query`,
-    /// without unlocking anything, so a background lookup never shows the
-    /// keyring's unlock prompt.
+    /// The attributes and text of every unlocked item matching `query`
+    /// whose attributes `keep` accepts, without unlocking anything, so a
+    /// background lookup never shows the keyring's unlock prompt. The
+    /// secret of an item `keep` refuses is not read.
     ///
     /// # Errors
     ///
@@ -155,6 +156,7 @@ pub trait Keyring: Send + Sync {
     fn find_unlocked(
         &self,
         query: &SecretAttributes,
+        keep: &dyn Fn(&SecretAttributes) -> bool,
     ) -> Result<Vec<(SecretAttributes, String)>, KeyringError>;
 
     /// Stores `secret`, replacing an item with the same attributes.

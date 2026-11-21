@@ -75,11 +75,12 @@ impl Keyring for RecordedKeyring {
     fn find_unlocked(
         &self,
         query: &SecretAttributes,
+        keep: &dyn Fn(&SecretAttributes) -> bool,
     ) -> Result<Vec<(SecretAttributes, String)>, KeyringError> {
         let items = self.items.lock().unwrap_or_else(PoisonError::into_inner);
         Ok(items
             .iter()
-            .filter(|(attributes, _)| query.matches(attributes))
+            .filter(|(attributes, _)| query.matches(attributes) && keep(attributes))
             .cloned()
             .collect())
     }

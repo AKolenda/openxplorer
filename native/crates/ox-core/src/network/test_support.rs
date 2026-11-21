@@ -110,11 +110,12 @@ impl Keyring for MemoryKeyring {
     fn find_unlocked(
         &self,
         query: &SecretAttributes,
+        keep: &dyn Fn(&SecretAttributes) -> bool,
     ) -> Result<Vec<(SecretAttributes, String)>, KeyringError> {
         let items = locked(&self.items);
         Ok(items
             .iter()
-            .filter(|item| query.matches(&item.attributes))
+            .filter(|item| query.matches(&item.attributes) && keep(&item.attributes))
             .map(|item| (item.attributes.clone(), item.text.clone()))
             .collect())
     }
