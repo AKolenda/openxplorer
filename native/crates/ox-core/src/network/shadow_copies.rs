@@ -65,9 +65,6 @@ const LARGE_REPLY_SIZE: u32 = 1024 * 1024;
 /// `NumberOfSnapShotsReturned` and `SnapShotArraySize`.
 const REPLY_HEADER_SIZE: usize = 12;
 
-/// [`REPLY_HEADER_SIZE`] as a reply size.
-const REPLY_HEADER_BYTES: u32 = 12;
-
 /// The `protocol` attribute of the passwords `GVfs` remembers for SMB.
 const GVFS_SMB_PROTOCOL: &str = "smb";
 
@@ -148,22 +145,34 @@ impl ShadowCopyLister for SmbShadowCopies {
         let (sender, receiver) = mpsc::channel();
         let exchange_cancel = cancel.clone();
         let exchange = move || {
-            let _one_at_a_time = locked(&gate);
+            // The name is looked up before the account's turn is taken, so
+            // a resolver that never answers holds up no other lookup.
+            let server = match resolve(target.key.host(), target.key.port()) {
+                Ok(server) => server,
+                Err(error) => {
+                    let _ = sender.send(Err(error));
+                    return;
+                }
+            };
+            let one_at_a_time = locked(&gate);
             if locked(&refused).contains(&refusal) {
                 let _ = sender.send(Err(ShadowCopyError::SignInRefused));
                 return;
             }
-            // The SMB client is young; a panic in it must not take the
-            // window down. The answer is sent before the client is dropped,
-            // as dropping it logs off over the network.
-            let report = |outcome: &Result<ShadowCopies, ShadowCopyError>| {
+            // The answer is sent, and the account's turn given back, before
+            // the client is dropped: dropping it logs off over the network
+            // and can wait without a timeout. The SMB client is young; a
+            // panic in it must not take the window down.
+            let answer = sender.clone();
+            let report = move |outcome: &Result<ShadowCopies, ShadowCopyError>| {
                 if matches!(outcome, Err(ShadowCopyError::SignInRefused)) {
-                    locked(&refused).insert(refusal.clone());
+                    locked(&refused).insert(refusal);
                 }
-                let _ = sender.send(outcome.clone());
+                let _ = answer.send(outcome.clone());
+                drop(one_at_a_time);
             };
             let finished = catch_unwind(AssertUnwindSafe(|| {
-                enumerate(&target, &account, &exchange_cancel, report);
+                enumerate(&target, &server, &account, &exchange_cancel, report);
             }));
             if finished.is_err() {
                 let _ = sender.send(Err(failed("the SMB client panicked".to_owned())));
@@ -334,11 +343,15 @@ fn qualified_user(domain: &str, user: &str) -> String {
     }
 }
 
-/// Signs in to the share of `target` and asks for the shadow copies of its
-/// item. A connection that failed or was cancelled is dropped without the
-/// polite close, which could wait for an unresponsive server again.
+/// Signs in to the share of `target` at the address `server` and asks for
+/// the shadow copies of its item, giving the answer to `report` before the
+/// client is dropped. After a failure the connection is stopped first, so
+/// the client's log-off on drop does not wait for the server again; it
+/// can still wait for request credits, which is why this runs on a thread
+/// of its own.
 fn enumerate(
     target: &SmbTarget,
+    server: &str,
     account: &Account,
     cancel: &Cancellation,
     report: impl FnOnce(&Result<ShadowCopies, ShadowCopyError>),
@@ -357,7 +370,13 @@ fn enumerate(
         ..ClientConfig::default()
     };
     let client = Client::new(config);
-    let outcome = enumerate_with(&client, target, account, cancel);
+    let outcome = enumerate_with(&client, server, target, account, cancel);
+    if outcome.is_err() {
+        if let Ok(connection) = client.get_connection(server) {
+            // Stopping only drops the socket; it cannot change the answer.
+            let _ = connection.close();
+        }
+    }
     report(&outcome);
     if outcome.is_ok() {
         // Closing only ends the session; it cannot change the answer.
@@ -367,13 +386,13 @@ fn enumerate(
 
 fn enumerate_with(
     client: &Client,
+    server: &str,
     target: &SmbTarget,
     account: &Account,
     cancel: &Cancellation,
 ) -> Result<ShadowCopies, ShadowCopyError> {
-    let server = resolve(target.key.host(), target.key.port())?;
     check_cancelled(cancel)?;
-    let share = UncPath::new(&server)
+    let share = UncPath::new(server)
         .and_then(|server| server.with_share(&target.share))
         .map_err(classify)?;
     client
@@ -400,7 +419,8 @@ fn enumerate_with(
 }
 
 /// The address of `host`; an IP address is returned as it is. A resolver
-/// that does not answer is bounded by [`LOOKUP_DEADLINE`].
+/// that does not answer leaves only the exchange's own thread waiting: the
+/// lookup stops waiting after [`LOOKUP_DEADLINE`].
 fn resolve(host: &str, port: u16) -> Result<String, ShadowCopyError> {
     if host.parse::<IpAddr>().is_ok() {
         return Ok(host.to_owned());
@@ -416,8 +436,8 @@ fn resolve(host: &str, port: u16) -> Result<String, ShadowCopyError> {
 }
 
 /// Sends `FSCTL_SRV_ENUMERATE_SNAPSHOTS` on the open item and reads the
-/// names, asking once more with a reply as large as the server says it
-/// needs.
+/// names, asking once more, with the largest reply, when the first was
+/// too small for the whole list.
 fn ask_for_snapshots(
     handle: &smb::resource::ResourceHandle,
     cancel: &Cancellation,
@@ -444,11 +464,10 @@ fn ask_for_snapshots(
             }
             Err(error) => return Err(classify(error)),
         };
-        // A reply too small for the list says how large it must be, and
-        // names none.
-        let needed = reply.needed_size();
-        if reply.is_cut_short() && !retried && needed > size {
-            size = needed.min(LARGE_REPLY_SIZE);
+        // A reply too small for the whole list names some or none of the
+        // shadow copies; ask once more with the largest reply.
+        if reply.is_cut_short() && !retried {
+            size = LARGE_REPLY_SIZE;
             retried = true;
             check_cancelled(cancel)?;
             continue;
@@ -517,7 +536,6 @@ impl FsctlResponseContent for RawReply {
 struct SnapshotReply {
     total: u32,
     returned: u32,
-    array_size: u32,
     names: Vec<String>,
 }
 
@@ -549,7 +567,6 @@ impl SnapshotReply {
         Some(Self {
             total,
             returned,
-            array_size,
             names,
         })
     }
@@ -558,11 +575,6 @@ impl SnapshotReply {
     fn is_cut_short(&self) -> bool {
         self.returned < self.total
             || usize::try_from(self.returned).is_ok_and(|returned| returned > self.names.len())
-    }
-
-    /// The reply size the whole list needs.
-    fn needed_size(&self) -> u32 {
-        self.array_size.saturating_add(REPLY_HEADER_BYTES)
     }
 }
 
@@ -692,7 +704,6 @@ mod tests {
         assert!(!full.is_cut_short());
         assert!(empty.names.is_empty() && !empty.is_cut_short());
         assert!(cut_short.names.is_empty() && cut_short.is_cut_short());
-        assert_eq!(cut_short.needed_size(), 116);
         assert_eq!(SnapshotReply::parse(&[0, 0, 0]), None);
     }
 
