@@ -251,6 +251,11 @@
                    command bar. -->
               <object class="OxUpdateNotice" id="update_notice"/>
             </child>
+            <child type="overlay">
+              <!-- The GitHub star prompt lies there too; it stays away
+                   while the update notice shows. -->
+              <object class="OxStarPrompt" id="star_prompt"/>
+            </child>
           </object>
         </child>
         <child>

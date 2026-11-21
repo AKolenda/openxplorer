@@ -117,10 +117,10 @@ popover.ox-menu list.address-suggestions > row:active { background-color: @ox_pr
   box-shadow: 0 0 2px @ox_shadow_ambient, 0 8px 16px @ox_shadow_key;
 }
 
-/* ---- Update notice (UPD-001) ---- */
-/* The card the daily update check pops up at the top right, under the
-   command bar: a flyout surface with the toast's shadow. */
-.update-notice {
+/* ---- Notices: updates (UPD-001) and the GitHub star (UPD-023) ---- */
+/* The card a notice pops up at the top right, under the command bar: a
+   flyout surface with the toast's shadow. */
+.notice-card {
   background-color: @ox_flyout;
   color: @ox_text;
   border: 1px solid @ox_flyout_stroke;
@@ -130,12 +130,12 @@ popover.ox-menu list.address-suggestions > row:active { background-color: @ox_pr
   min-width: 330px;
   box-shadow: 0 0 2px @ox_shadow_ambient, 0 8px 16px @ox_shadow_key;
 }
-.update-notice .update-notice-glyph { color: @ox_accent; margin-top: 1px; }
-.update-notice .update-notice-title { font-weight: 600; }
-.update-notice .update-notice-text { color: @ox_muted; }
-.update-notice .update-notice-buttons { margin-top: 10px; }
-.update-notice .update-notice-buttons button { min-height: 30px; padding: 0 14px; }
-window.ox .update-notice button.update-notice-close {
+.notice-card .notice-card-glyph { color: @ox_accent; margin-top: 1px; }
+.notice-card .notice-card-title { font-weight: 600; }
+.notice-card .notice-card-text { color: @ox_muted; }
+.notice-card .notice-card-buttons { margin-top: 10px; }
+.notice-card .notice-card-buttons button { min-height: 30px; padding: 0 14px; }
+window.ox .notice-card button.notice-card-close {
   min-width: 28px;
   min-height: 28px;
   padding: 0;

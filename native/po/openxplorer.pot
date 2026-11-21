@@ -2634,7 +2634,7 @@ msgstr ""
 msgid "Cancelling… "
 msgstr ""
 
-#: crates/ox-app/src/properties/size_scan_strip.rs crates/ox-app/src/window/update_notice.rs
+#: crates/ox-app/src/properties/size_scan_strip.rs crates/ox-app/src/window/notice_card.rs crates/ox-app/src/window/star_prompt.rs
 msgid "Dismiss"
 msgstr ""
 
@@ -7638,6 +7638,18 @@ msgstr ""
 
 #: crates/ox-app/src/window/software_search.rs
 msgid "Find an app in Software"
+msgstr ""
+
+#: crates/ox-app/src/window/star_prompt.rs
+msgid "Enjoying OpenXplorer?"
+msgstr ""
+
+#: crates/ox-app/src/window/star_prompt.rs
+msgid "Give us a star on GitHub to let us know!"
+msgstr ""
+
+#: crates/ox-app/src/window/star_prompt.rs
+msgid "Star on GitHub"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

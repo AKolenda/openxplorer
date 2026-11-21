@@ -579,6 +579,14 @@ pub struct Preferences {
     /// not pop up again. Stored once one was dismissed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update_notice_dismissed: Option<String>,
+    /// How many times the app has started, counted for the GitHub star
+    /// prompt until it is dismissed. Stored once the app has started.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub star_prompt_launches: u32,
+    /// The GitHub star prompt was dismissed or its Star on GitHub pressed,
+    /// so it never pops up again. Stored only once it was.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub star_prompt_dismissed: bool,
 }
 
 /// The longest release version a dismissed update notice may name.
@@ -692,6 +700,8 @@ impl Default for Preferences {
             show_update_button: true,
             update_checked_at: None,
             update_notice_dismissed: None,
+            star_prompt_launches: 0,
+            star_prompt_dismissed: false,
         }
     }
 }
@@ -820,6 +830,15 @@ impl Preferences {
         }
     }
 
+    /// The GitHub star prompt's launch count, and its dismissal, which
+    /// nothing takes back.
+    fn apply_star_prompt(&mut self, update: &PreferencesUpdate) {
+        replace_if_some(&mut self.star_prompt_launches, update.star_prompt_launches);
+        if update.star_prompt_dismissed == Some(true) {
+            self.star_prompt_dismissed = true;
+        }
+    }
+
     /// Applies every valid value in `update` and silently ignores the rest,
     /// exactly like `update_preferences` in the Python app. A present
     /// `column_widths` replaces all saved column widths.
@@ -922,6 +941,7 @@ impl Preferences {
         }
         self.downloads_group_by = update.downloads_group_by.or(self.downloads_group_by);
         self.apply_update_checks(update);
+        self.apply_star_prompt(update);
         self.sync_style_defaults(update, columns_changed);
     }
 
@@ -1156,6 +1176,10 @@ pub struct PreferencesUpdate {
     /// The release whose update notice was dismissed; a value that is not
     /// a release version is ignored.
     pub update_notice_dismissed: Option<String>,
+    /// How many times the app has started, for the GitHub star prompt.
+    pub star_prompt_launches: Option<u32>,
+    /// The GitHub star prompt was dismissed; `false` is ignored.
+    pub star_prompt_dismissed: Option<bool>,
 }
 
 impl PreferencesUpdate {
@@ -1257,6 +1281,11 @@ impl PreferencesUpdate {
             show_update_button: flag("showUpdateButton"),
             update_checked_at: values.get("updateCheckedAt").and_then(Value::as_u64),
             update_notice_dismissed: text("updateNoticeDismissed").map(str::to_owned),
+            star_prompt_launches: values
+                .get("starPromptLaunches")
+                .and_then(Value::as_u64)
+                .map(|launches| u32::try_from(launches).unwrap_or(u32::MAX)),
+            star_prompt_dismissed: flag("starPromptDismissed"),
         })
     }
 }
@@ -1386,6 +1415,15 @@ fn bounded_width(value: f64, range: RangeInclusive<u32>) -> Option<u32> {
 )]
 fn is_true(value: &bool) -> bool {
     *value
+}
+
+/// Whether `value` is zero, for counts saved only once they start.
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde passes the field by reference"
+)]
+fn is_zero(value: &u32) -> bool {
+    *value == 0
 }
 
 /// Stores `value` in `slot` if there is one.
