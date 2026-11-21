@@ -28,4 +28,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-[AGPL-3.0-only](LICENSE). Independent project.
+[AGPL-3.0-only](LICENSE). Independent project; not affiliated with Microsoft. No warranty.
