@@ -554,8 +554,9 @@ fn ask_for_snapshots(
         .saturating_add(2);
     let size = needed.clamp(FIRST_REPLY_SIZE, LARGE_REPLY_SIZE);
     match handle.fsctl_with_options(EnumerateSnapshots, size) {
-        Ok(reply) => Ok(SnapshotReply::read(&reply.0)?.into_copies()),
-        // The names already read are kept, marked as not all of them.
+        // The names already read are kept, marked as not all of them, when
+        // the larger reply cannot be read either.
+        Ok(reply) => Ok(SnapshotReply::parse(&reply.0).unwrap_or(first).into_copies()),
         Err(error) => {
             glib::g_debug!(LOG_DOMAIN, "Asking again for shadow copies failed: {error}");
             Ok(first.into_copies())
