@@ -873,12 +873,17 @@ fn serve(input: &mut impl Read, output: &mut impl Write) -> bool {
 
 /// Limits the decoder process's own resources: a picture that keeps it
 /// busy, or makes it allocate without end, is stopped by the kernel too;
-/// it writes no files and leaves no core.
+/// it writes no file larger than a picture's pixels and leaves no core.
+///
+/// The file size limit is not 0: glycin's loaders, which gdk-pixbuf runs
+/// on Fedora, Arch and openSUSE, inherit it, and size the shared memory
+/// they hand the pixels back in with `ftruncate`, which the kernel holds
+/// to that limit; at 0 every picture failed there.
 fn limit_resources() {
     for (resource, limit) in [
         (rustix::process::Resource::Cpu, DECODER_CPU_SECONDS),
         (rustix::process::Resource::Data, MEMORY_LIMIT),
-        (rustix::process::Resource::Fsize, 0),
+        (rustix::process::Resource::Fsize, MEMORY_LIMIT),
         (rustix::process::Resource::Core, 0),
         (rustix::process::Resource::Nofile, OPEN_FILES),
     ] {
