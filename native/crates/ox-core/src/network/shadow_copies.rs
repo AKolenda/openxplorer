@@ -493,10 +493,10 @@ fn enumerate_with(
         smb::Resource::Pipe(pipe) => pipe,
     };
     check_cancelled(cancel)?;
-    let copies = ask_for_snapshots(handle, cancel)?;
-    // Closing the item only releases it; it cannot change the answer.
-    let _ = handle.close();
-    Ok(copies)
+    // The item is not closed here: a server slow to answer that would
+    // delay an answer already read. Logging off after the answer is sent
+    // closes it.
+    ask_for_snapshots(handle, cancel)
 }
 
 /// The address of `host`; an IP address is returned as it is. A resolver
@@ -781,6 +781,30 @@ mod tests {
         assert_eq!(SmbTarget::of("smb://nas/share/a%2Fb"), None);
         assert_eq!(SmbTarget::of("smb://nas/share/a%5Cb"), None);
         assert_eq!(SmbTarget::of("file:///srv/share"), None);
+    }
+
+    #[test]
+    fn the_servers_answers_are_told_apart() {
+        let refused = [
+            status::WRONG_PASSWORD,
+            status::LOGON_FAILURE,
+            status::PASSWORD_MUST_CHANGE,
+            status::ACCOUNT_LOCKED_OUT,
+        ];
+        for code in refused {
+            let error = classify(smb::Error::UnexpectedMessageStatus(code));
+            assert!(
+                matches!(error, ShadowCopyError::SignInRefused),
+                "{code:#x}: {error:?}"
+            );
+        }
+        let unsupported = smb::Error::UnexpectedMessageStatus(status::NOT_SUPPORTED);
+        assert!(matches!(classify(unsupported), ShadowCopyError::Unsupported));
+        let at_sign_in = smb::Error::UnexpectedMessageStatus(status::NOT_SUPPORTED);
+        assert!(matches!(
+            classify_sign_in(at_sign_in),
+            ShadowCopyError::Failed { .. }
+        ));
     }
 
     /// parity: PROP-032
