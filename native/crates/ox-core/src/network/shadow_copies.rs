@@ -86,6 +86,8 @@ mod status {
     pub(super) const ACCOUNT_RESTRICTION: u32 = 0xC000_006E;
     pub(super) const PASSWORD_EXPIRED: u32 = 0xC000_0071;
     pub(super) const ACCOUNT_DISABLED: u32 = 0xC000_0072;
+    pub(super) const PASSWORD_MUST_CHANGE: u32 = 0xC000_0224;
+    pub(super) const ACCOUNT_LOCKED_OUT: u32 = 0xC000_0234;
 }
 
 /// The [`ShadowCopyLister`] of the app: the `smb` client, signed in with
@@ -421,19 +423,22 @@ fn ask_for_snapshots(
     cancel: &Cancellation,
 ) -> Result<ShadowCopies, ShadowCopyError> {
     let mut size = FIRST_REPLY_SIZE;
+    // At most one more request, however the server answers.
+    let mut retried = false;
     loop {
         let reply = match handle.fsctl_with_options(EnumerateSnapshots, size) {
             Ok(reply) => {
                 SnapshotReply::parse(&reply.0).ok_or_else(|| failed("a malformed snapshot list".into()))?
             }
             Err(error)
-                if size < LARGE_REPLY_SIZE
+                if !retried
                     && matches!(
                         status_of(&error),
                         Some(status::BUFFER_OVERFLOW | status::BUFFER_TOO_SMALL)
                     ) =>
             {
                 size = LARGE_REPLY_SIZE;
+                retried = true;
                 check_cancelled(cancel)?;
                 continue;
             }
@@ -442,8 +447,9 @@ fn ask_for_snapshots(
         // A reply too small for the list says how large it must be, and
         // names none.
         let needed = reply.needed_size();
-        if reply.is_cut_short() && size < LARGE_REPLY_SIZE && needed > size {
+        if reply.is_cut_short() && !retried && needed > size {
             size = needed.min(LARGE_REPLY_SIZE);
+            retried = true;
             check_cancelled(cancel)?;
             continue;
         }
@@ -588,7 +594,9 @@ fn classify(error: smb::Error) -> ShadowCopyError {
             | status::LOGON_FAILURE
             | status::ACCOUNT_RESTRICTION
             | status::PASSWORD_EXPIRED
-            | status::ACCOUNT_DISABLED,
+            | status::ACCOUNT_DISABLED
+            | status::PASSWORD_MUST_CHANGE
+            | status::ACCOUNT_LOCKED_OUT,
         ) => ShadowCopyError::SignInRefused,
         Some(status::INVALID_DEVICE_REQUEST | status::NOT_SUPPORTED | status::INVALID_DEVICE_STATE) => {
             ShadowCopyError::Unsupported
