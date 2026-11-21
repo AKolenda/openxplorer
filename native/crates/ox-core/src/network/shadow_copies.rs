@@ -24,7 +24,7 @@ use std::io::{Read, Seek};
 use std::net::{IpAddr, ToSocketAddrs};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::time::{Duration, Instant};
 
 use smb::{
@@ -33,7 +33,7 @@ use smb::{
 };
 
 use super::credential::{Credential, CredentialScope, Password};
-use super::credential_store::{credential_attributes, locked, CredentialStore};
+use super::credential_store::{credential_attributes, locked, CredentialGeneration, CredentialStore};
 use super::keyring::{KeyringError, SecretAttributes, SCHEMA_ATTRIBUTE};
 use super::server::{ServerKey, DEFAULT_SMB_PORT};
 use crate::location::{split_location, unquote_without_controls};
@@ -132,7 +132,7 @@ impl ShadowCopyLister for SmbShadowCopies {
             return Err(ShadowCopyError::Cancelled);
         }
         let target = SmbTarget::of(uri).ok_or_else(|| failed(format!("not a share location: {uri}")))?;
-        let account = saved_account(&self.store, &target)
+        let (account, generation) = saved_account(&self.store, &target)
             .map_err(ShadowCopyError::Keyring)?
             .ok_or(ShadowCopyError::NoCredential)?;
         let refusal = Self::refusal_key(&target.key, &account);
@@ -140,8 +140,10 @@ impl ShadowCopyLister for SmbShadowCopies {
             return Err(ShadowCopyError::SignInRefused);
         }
         check_cancelled(cancel)?;
+        let deadline = Instant::now() + LOOKUP_DEADLINE;
         let gate = Arc::clone(locked(&self.attempts).entry(refusal.clone()).or_default());
         let refused = Arc::clone(&self.refused);
+        let store = Arc::clone(&self.store);
         let (sender, receiver) = mpsc::channel();
         let exchange_cancel = cancel.clone();
         let exchange = move || {
@@ -154,25 +156,29 @@ impl ShadowCopyLister for SmbShadowCopies {
                     return;
                 }
             };
-            let one_at_a_time = locked(&gate);
-            if locked(&refused).contains(&refusal) {
-                let _ = sender.send(Err(ShadowCopyError::SignInRefused));
+            let Some(guard) = take_turn(&gate, deadline) else {
+                let _ = sender.send(Err(failed("another lookup is still signing in".to_owned())));
                 return;
-            }
-            // The answer is sent, and the account's turn given back, before
-            // the client is dropped: dropping it logs off over the network
-            // and can wait without a timeout. The SMB client is young; a
-            // panic in it must not take the window down.
+            };
+            let mut turn = SignInTurn {
+                guard: Some(guard),
+                refused,
+                refusal,
+                store,
+                key: target.key.clone(),
+                generation,
+                deadline,
+            };
+            // The answer is sent before the client is dropped: dropping it
+            // logs off over the network and can wait without a timeout. The
+            // SMB client is young; a panic in it must not take the window
+            // down.
             let answer = sender.clone();
             let report = move |outcome: &Result<ShadowCopies, ShadowCopyError>| {
-                if matches!(outcome, Err(ShadowCopyError::SignInRefused)) {
-                    locked(&refused).insert(refusal);
-                }
                 let _ = answer.send(outcome.clone());
-                drop(one_at_a_time);
             };
             let finished = catch_unwind(AssertUnwindSafe(|| {
-                enumerate(&target, &server, &account, &exchange_cancel, report);
+                enumerate(&target, &server, &account, &mut turn, &exchange_cancel, report);
             }));
             if finished.is_err() {
                 let _ = sender.send(Err(failed("the SMB client panicked".to_owned())));
@@ -182,7 +188,63 @@ impl ShadowCopyLister for SmbShadowCopies {
             .name("ox-shadow-copies".to_owned())
             .spawn(exchange)
             .map_err(|error| failed(format!("no thread for the SMB client: {error}")))?;
-        wait_for(&receiver, cancel)
+        wait_for(&receiver, cancel, deadline)
+    }
+}
+
+/// How long a lookup waiting for the account's turn sleeps between tries.
+const TURN_POLL: Duration = Duration::from_millis(50);
+
+/// The account's turn to sign in, once `gate` is free, or `None` when
+/// `deadline` passes first, so lookups never pile up behind a stalled one.
+fn take_turn(gate: &Mutex<()>, deadline: Instant) -> Option<MutexGuard<'_, ()>> {
+    loop {
+        match gate.try_lock() {
+            Ok(guard) => return Some(guard),
+            Err(TryLockError::Poisoned(poisoned)) => return Some(poisoned.into_inner()),
+            Err(TryLockError::WouldBlock) if Instant::now() >= deadline => return None,
+            Err(TryLockError::WouldBlock) => std::thread::sleep(TURN_POLL),
+        }
+    }
+}
+
+/// An account's turn to sign in: held only until the server accepted or
+/// refused the password, and checked just before the password is sent.
+struct SignInTurn<'gate> {
+    guard: Option<MutexGuard<'gate, ()>>,
+    refused: Arc<Mutex<HashSet<AccountKey>>>,
+    refusal: AccountKey,
+    store: Arc<CredentialStore>,
+    key: ServerKey,
+    /// The server's sign-out generation when the password was read.
+    generation: CredentialGeneration,
+    /// When the lookup stops waiting for this exchange.
+    deadline: Instant,
+}
+
+impl SignInTurn<'_> {
+    /// Refuses to send the password once the lookup gave up on this
+    /// exchange, the server was signed out since the password was read
+    /// (NET-021), or the server refused it meanwhile.
+    fn check(&self) -> Result<(), ShadowCopyError> {
+        if Instant::now() >= self.deadline {
+            return Err(failed("the lookup stopped waiting before sign-in".to_owned()));
+        }
+        if self.store.generation_of(&self.key) != self.generation {
+            return Err(ShadowCopyError::NoCredential);
+        }
+        if locked(&self.refused).contains(&self.refusal) {
+            return Err(ShadowCopyError::SignInRefused);
+        }
+        Ok(())
+    }
+
+    /// Records how the sign-in went and gives the turn back.
+    fn finish(&mut self, outcome: &Result<(), ShadowCopyError>) {
+        if matches!(outcome, Err(ShadowCopyError::SignInRefused)) {
+            locked(&self.refused).insert(self.refusal.clone());
+        }
+        self.guard = None;
     }
 }
 
@@ -192,8 +254,8 @@ impl ShadowCopyLister for SmbShadowCopies {
 fn wait_for(
     receiver: &mpsc::Receiver<Result<ShadowCopies, ShadowCopyError>>,
     cancel: &Cancellation,
+    deadline: Instant,
 ) -> Result<ShadowCopies, ShadowCopyError> {
-    let deadline = Instant::now() + LOOKUP_DEADLINE;
     loop {
         check_cancelled(cancel)?;
         let left = deadline.saturating_duration_since(Instant::now());
@@ -259,7 +321,11 @@ struct Account {
 /// The account saved for the server of `target` in unlocked keyring items:
 /// `OpenXplorer`'s, else the one `GVfs` remembered; `None` when neither
 /// saved one, or the server was signed out meanwhile (NET-021).
-fn saved_account(store: &CredentialStore, target: &SmbTarget) -> Result<Option<Account>, KeyringError> {
+/// The server's sign-out generation when it was read comes with it.
+fn saved_account(
+    store: &CredentialStore,
+    target: &SmbTarget,
+) -> Result<Option<(Account, CredentialGeneration)>, KeyringError> {
     let Some(keyring) = store.keyring() else {
         return Ok(None);
     };
@@ -268,10 +334,11 @@ fn saved_account(store: &CredentialStore, target: &SmbTarget) -> Result<Option<A
     for scope in [CredentialScope::Session, CredentialScope::Permanent] {
         for (_, text) in keyring.find_unlocked(&credential_attributes(key, Some(scope)), &|_| true)? {
             if let Some(credential) = Credential::from_keyring_text(&text, scope) {
-                return Ok((store.generation_of(key) == generation).then(|| Account {
+                let account = Account {
                     user: qualified_user(&credential.domain, &credential.username),
                     password: credential.password,
-                }));
+                };
+                return Ok((store.generation_of(key) == generation).then_some((account, generation)));
             }
         }
     }
@@ -281,7 +348,9 @@ fn saved_account(store: &CredentialStore, target: &SmbTarget) -> Result<Option<A
     let query = SecretAttributes::any_schema().with("protocol", GVFS_SMB_PROTOCOL);
     let items = keyring.find_unlocked(&query, &|attributes| gvfs_item_fits(attributes, target))?;
     let account = gvfs_account(&items, target);
-    Ok(account.filter(|_| store.generation_of(key) == generation))
+    Ok(account
+        .filter(|_| store.generation_of(key) == generation)
+        .map(|account| (account, generation)))
 }
 
 /// True when the `GVfs` password with `attributes` was saved for the host,
@@ -353,6 +422,7 @@ fn enumerate(
     target: &SmbTarget,
     server: &str,
     account: &Account,
+    turn: &mut SignInTurn<'_>,
     cancel: &Cancellation,
     report: impl FnOnce(&Result<ShadowCopies, ShadowCopyError>),
 ) {
@@ -370,7 +440,10 @@ fn enumerate(
         ..ClientConfig::default()
     };
     let client = Client::new(config);
-    let outcome = enumerate_with(&client, server, target, account, cancel);
+    let outcome = enumerate_with(&client, server, target, account, turn, cancel);
+    // A turn not given back at sign-in (a failure before it) is given back
+    // now, before anything that could wait.
+    turn.guard = None;
     if outcome.is_err() {
         if let Ok(connection) = client.get_connection(server) {
             // Stopping only drops the socket; it cannot change the answer.
@@ -389,15 +462,19 @@ fn enumerate_with(
     server: &str,
     target: &SmbTarget,
     account: &Account,
+    turn: &mut SignInTurn<'_>,
     cancel: &Cancellation,
 ) -> Result<ShadowCopies, ShadowCopyError> {
     check_cancelled(cancel)?;
     let share = UncPath::new(server)
         .and_then(|server| server.with_share(&target.share))
         .map_err(classify)?;
-    client
+    turn.check()?;
+    let signed_in = client
         .share_connect(&share, &account.user, account.password.as_str().to_owned())
-        .map_err(classify_sign_in)?;
+        .map_err(classify_sign_in);
+    turn.finish(&signed_in);
+    signed_in?;
     check_cancelled(cancel)?;
     let item = share.with_path(&target.path);
     let access = FileAccessMask::new()
@@ -658,7 +735,7 @@ mod tests {
         let target = SmbTarget::of(uri).unwrap();
         saved_account(store, &target)
             .unwrap()
-            .map(|account| (account.user, account.password.as_str().to_owned()))
+            .map(|(account, _)| (account.user, account.password.as_str().to_owned()))
     }
 
     fn utf16(text: &str) -> Vec<u8> {
@@ -808,7 +885,7 @@ mod tests {
             "stale-secret",
         );
         let target = SmbTarget::of("smb://nas/share/a.txt").unwrap();
-        let account = saved_account(&lister.store, &target).unwrap().unwrap();
+        let (account, _) = saved_account(&lister.store, &target).unwrap().unwrap();
         locked(&lister.refused).insert(SmbShadowCopies::refusal_key(&target.key, &account));
 
         let outcome = lister.list("smb://nas/share/a.txt", &Cancellation::new());
