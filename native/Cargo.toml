@@ -59,7 +59,7 @@ lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "o
 # decodes BZip2 7z archives with the bzip2 crate above, adding nothing to the
 # build. Not enabled: encryption (Windows 11 refuses encrypted archives too),
 # PPMd, and "deflate", which would turn on flate2's zlib-rs backend.
-sevenz-rust2 = { version = "=0.20.2", default-features = false, features = ["compress", "bzip2"] }
+sevenz-rust2 = { version = "=0.25.0", default-features = false, features = ["compress", "bzip2"] }
 # Zstandard decompression for .tar.zst archives (ARC-024), pure Rust like the
 # decoders above.
 ruzstd = { version = "0.9", default-features = false, features = ["std"] }
