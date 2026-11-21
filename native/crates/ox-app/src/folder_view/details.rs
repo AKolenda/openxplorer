@@ -306,9 +306,8 @@ mod imp {
         /// width change. A `RefCell`, as a `Cell` of a type that is not
         /// `Copy` cannot be debug-printed.
         pub(super) resize_timer: RefCell<Option<glib::SourceId>>,
-        /// The column titles' sort arrows, in column order; set by
-        /// [`super::DetailsView::new`].
-        pub(super) carets: OnceCell<Vec<gtk::Widget>>,
+        /// Each column's title; set by [`super::DetailsView::new`].
+        pub(super) titles: OnceCell<super::column_titles::ColumnTitles>,
         /// The check box before the Name title that selects every item
         /// or none (SEL-014).
         pub(super) select_all: OnceCell<gtk::CheckButton>,
@@ -522,6 +521,10 @@ impl DetailsView {
         for column in SortColumn::ALL {
             column_view.append_column(&new_view_column(column, &cells));
         }
+        view.imp()
+            .titles
+            .set(column_titles::ColumnTitles::new(column_view))
+            .expect("DetailsView::new reads the titles once");
         view.imp().chosen.replace(column_choice::default_chosen());
         // The listings' own columns follow Name from the start, before the
         // first change of the chosen columns arranges them.
@@ -1018,14 +1021,9 @@ impl DetailsView {
         Some(SortOrder { column, direction })
     }
 
-    /// Gives the titles Windows' sort chevrons, which follow the view's
+    /// Gives the titles their sort chevrons, which follow the view's
     /// sorter from now on.
     fn add_sort_carets(&self) {
-        let carets = column_titles::style_titles(self.column_view());
-        self.imp()
-            .carets
-            .set(carets)
-            .expect("DetailsView::new adds the carets once");
         self.show_sort_caret();
         let Some(sorter) = self.column_view().sorter() else {
             return;
@@ -1040,9 +1038,15 @@ impl DetailsView {
     /// Shows the sorted column's chevron, pointing its way, and clears
     /// the others.
     fn show_sort_caret(&self) {
-        if let Some(carets) = self.imp().carets.get() {
-            column_titles::show_sort_caret(carets, self.primary_sort());
-        }
+        self.titles_by_column().show_sort(self.primary_sort());
+    }
+
+    /// Each column's title.
+    pub(crate) fn titles_by_column(&self) -> &column_titles::ColumnTitles {
+        self.imp()
+            .titles
+            .get()
+            .expect("DetailsView::new reads the titles")
     }
 }
 

@@ -50,12 +50,15 @@ columnview.files > header:hover > button:last-child {
   background-image: linear-gradient(to left, transparent 14px, @ox_border 14px, @ox_border 15px, transparent 15px);
 }
 columnview.files > header > button:last-child:hover { background-color: @ox_hover; }
-/* Only the sorted column shows an arrow: as in Windows 11 File Explorer, a
-   small chevron centred on the top edge of its title, up while ascending
-   and down while descending (src/folder_view/column_titles.rs). It is the
-   title's background, centred on the content box, whose padding is even
-   once the 14px ends are left out, so it stands over the column's middle.
-   GTK's own filled triangle is hidden and takes no room. */
+/* Only the sorted column shows an arrow: a 12px chevron right after its
+   title, up while ascending and down while descending, drawn as GTK's sort
+   indicator from the class src/folder_view/column_titles.rs gives the
+   sorted title, as every title holds an indicator but only the primary
+   sort column's has a class GTK draws. The sorted title's text is bright;
+   once the view sorts any other way than Name ascending, a new window's
+   order, the title, its chevron and a 2px line under it turn the accent,
+   so a list out of its usual order shows from across the window (owner
+   decision 2026-11-21). */
 columnview.files > header > button sort-indicator {
   -gtk-icon-source: none;
   -gtk-icon-size: 0;
@@ -64,30 +67,19 @@ columnview.files > header > button sort-indicator {
   margin: 0;
 }
 columnview.files > header > button.sort-ascending,
-columnview.files > header > button.sort-descending {
-  background-repeat: no-repeat;
-  background-origin: content-box;
-  background-position: center -2px;
-  background-size: 10px 10px;
+columnview.files > header > button.sort-descending { color: @ox_text; }
+columnview.files > header > button.sort-ascending sort-indicator,
+columnview.files > header > button.sort-descending sort-indicator {
+  -gtk-icon-size: 12px;
+  min-width: 12px;
+  min-height: 12px;
+  margin-left: 6px;
 }
-columnview.files > header > button.sort-ascending { background-image: -gtk-icontheme("ox-chevron-up-16-symbolic"); }
-columnview.files > header > button.sort-descending { background-image: -gtk-icontheme("ox-chevron-down-16-symbolic"); }
-/* A sorted Size title under the pointer draws both its chevron and its
-   divider. */
-columnview.files > header:hover > button:last-child.sort-ascending,
-columnview.files > header:hover > button:last-child.sort-descending {
-  background-repeat: no-repeat, no-repeat;
-  background-origin: content-box, padding-box;
-  background-position: center -2px, left top;
-  background-size: 10px 10px, auto;
-}
-columnview.files > header:hover > button:last-child.sort-ascending {
-  background-image: -gtk-icontheme("ox-chevron-up-16-symbolic"),
-    linear-gradient(to left, transparent 14px, @ox_border 14px, @ox_border 15px, transparent 15px);
-}
-columnview.files > header:hover > button:last-child.sort-descending {
-  background-image: -gtk-icontheme("ox-chevron-down-16-symbolic"),
-    linear-gradient(to left, transparent 14px, @ox_border 14px, @ox_border 15px, transparent 15px);
+columnview.files > header > button.sort-ascending sort-indicator { -gtk-icon-source: -gtk-icontheme("ox-chevron-up-16-symbolic"); }
+columnview.files > header > button.sort-descending sort-indicator { -gtk-icon-source: -gtk-icontheme("ox-chevron-down-16-symbolic"); }
+columnview.files > header > button.custom-sort {
+  color: @ox_accent;
+  box-shadow: inset 0 -2px @ox_accent;
 }
 
 /* ---- Details view: rows ---- */
