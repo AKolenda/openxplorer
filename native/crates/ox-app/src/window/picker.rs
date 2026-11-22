@@ -154,7 +154,7 @@ pub(crate) struct Picker {
     /// not its position: files another application creates or removes
     /// move it in the list.
     single: RefCell<Option<glib::Object>>,
-    /// Set once the dialog is a modal child of the caller's window
+    /// Set once the dialog is a child of the caller's window
     /// ([`super::caller_window`]).
     attached_to_caller: Rc<Cell<bool>>,
     /// The calling application, whose last folder the dialog remembers;
@@ -3354,7 +3354,9 @@ mod tests {
 
     /// On Wayland a dialog becomes a modal child of the window the caller
     /// exported, as KDE's own dialog does: the compositor keeps it above
-    /// that window and sends clicks on the window to it. The other
+    /// that window and sends clicks on the window to it. Where Mutter
+    /// would glue a modal dialog to that window, so that dragging the
+    /// dialog moved the window too, it is a child that is not modal. The other
     /// `OpenXplorer` windows are in other window groups, so stay usable.
     /// Under X11, as check.py runs the tests, there is no exported window
     /// to attach to; the test then only checks the window group.
@@ -3407,7 +3409,11 @@ mod tests {
         );
         if !parent.is_empty() {
             assert!(picker.attached_to_caller.get(), "a child of the caller's window");
-            assert!(window.is_modal(), "modal while the caller waits");
+            assert_eq!(
+                window.is_modal(),
+                !crate::window::caller_window::desktop_attaches_modal_dialogs(),
+                "modal while the caller waits, unless Mutter would glue it to the caller's window"
+            );
         }
         caller.destroy();
     }

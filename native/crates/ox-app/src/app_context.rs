@@ -30,6 +30,7 @@ mod previous_versions;
 mod recent_privacy;
 mod saved_searches;
 mod search_cache;
+mod star_prompt;
 mod write_holds;
 
 pub(crate) use default_open::add_to_desktop_history;
@@ -139,6 +140,9 @@ mod imp {
         pub(super) folder_relocation: RefCell<Option<Arc<FolderRelocation>>>,
         /// The application's updates, made on first use.
         pub(super) updates: OnceCell<Updates>,
+        /// The GitHub star prompt is due this session and no window has
+        /// shown it yet.
+        pub(super) star_prompt_due: Cell<bool>,
         /// "Install updates without asking for a password", where this
         /// build has it, found on first use.
         pub(super) passwordless_updates: OnceCell<Option<ox_core::update::PasswordlessUpdates>>,

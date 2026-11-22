@@ -2350,7 +2350,7 @@ checksum = "13c45bb4a6ae1280ec0803b1ef9d3455eb50f01efbbe1447ab020f1d54fba9d8"
 
 [[package]]
 name = "ox-app"
-version = "2.0.22"
+version = "2.0.23"
 dependencies = [
  "async-channel",
  "gdk4-wayland",
@@ -2372,7 +2372,7 @@ dependencies = [
 
 [[package]]
 name = "ox-core"
-version = "2.0.22"
+version = "2.0.23"
 dependencies = [
  "binrw",
  "bzip2",
@@ -3015,9 +3015,9 @@ dependencies = [
 
 [[package]]
 name = "rusqlite"
-version = "0.42.0"
+version = "0.43.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4edff0039f148731aee2fd80f76dbfeb12d204ab3d1c544838d34e02151049b"
+checksum = "f172c4812a19b26d1c23cdb0070e69db335503dfa378b910eb857386e5b8beba"
 dependencies = [
  "bitflags 2.13.2",
  "fallible-iterator",

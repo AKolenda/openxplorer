@@ -1,3 +1,30 @@
+# 2.0.23 — 2026-11-21
+
+Previous Versions lists the snapshots an SMB server keeps, as Windows does, and Details view marks the sorted column more clearly. On GNOME and Zorin OS, an app's Open or Save dialog now moves without dragging that app's window along.
+
+## What's Changed
+* fix(dialogs): Let an app's Open or Save dialog move without its window on GNOME by @AKolenda in https://github.com/AKolenda/openxplorer/pull/382
+* docs(readme): Drop Get it and shorten Contribute and License by @AKolenda in https://github.com/AKolenda/openxplorer/pull/381
+* docs(readme): Pitch the app and leave build details to CONTRIBUTING by @AKolenda in https://github.com/AKolenda/openxplorer/pull/380
+* fix(details): Show the sort arrow on every sorted column and color non-default sorts by @AKolenda in https://github.com/AKolenda/openxplorer/pull/374
+* feat(versions): List the previous versions an SMB server keeps, as Windows does by @AKolenda in https://github.com/AKolenda/openxplorer/pull/373
+* feat(updates): Ask once for a GitHub star, as T3 Code does by @AKolenda in https://github.com/AKolenda/openxplorer/pull/372
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.23_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.23-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.23-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.23-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.23-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.22...v2.0.23
+
 # 2.0.22 — 2026-11-21
 
 Recordings play, and pictures are decoded, in separate processes, so no damaged or unusual file can close or freeze OpenXplorer any more. The address bar, Extract all, large text, This PC, menus and screen readers also work more like Windows 11.

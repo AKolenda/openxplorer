@@ -92,6 +92,11 @@ impl AppState {
         });
     }
 
+    /// Counts this start of the app for the GitHub star prompt (UPD-023).
+    pub(super) fn count_launch_for_star_prompt(&self) {
+        self.context.count_launch_for_star_prompt();
+    }
+
     /// Shortly after startup, tidies up Super+E after an uninstalled
     /// package of `OpenXplorer` or app (INT-033).
     pub(super) fn forget_removed_shortcut_apps_soon(&self) {

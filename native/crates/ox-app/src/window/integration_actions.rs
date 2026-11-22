@@ -100,6 +100,7 @@ impl BrowserWindow {
         ]);
         self.follow_selection_for_integration();
         self.follow_updates();
+        self.follow_star_prompt();
         self.load_editor_shortcuts();
     }
 
@@ -531,6 +532,11 @@ impl BrowserWindow {
         self.show_command_bar_update();
         self.status_bar().show_update_notice(&state);
         self.imp().update_notice.show_update(updates.notice());
+        // The update notice takes the star prompt's place; the prompt
+        // asks again next session.
+        if self.imp().update_notice.is_visible() {
+            self.star_prompt().set_visible(false);
+        }
         // Nothing in any window works while the package manager runs;
         // the Software updates dialog stays usable.
         self.set_sensitive(!state.is_installing());
@@ -577,6 +583,11 @@ impl BrowserWindow {
     #[cfg(test)]
     pub(crate) fn update_notice(&self) -> &super::update_notice::UpdateNotice {
         &self.imp().update_notice
+    }
+
+    /// The GitHub star prompt.
+    pub(crate) fn star_prompt(&self) -> &super::star_prompt::StarPrompt {
+        &self.imp().star_prompt
     }
 
     /// The tooltip of the status bar's "Check for updates", for tests.
