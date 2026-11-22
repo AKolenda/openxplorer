@@ -17,7 +17,7 @@ import unittest
 
 import build_deb
 import package_data
-from package_data import Channel, InstallRequest, Layout
+from package_data import HOST_CHANNELS, Channel, InstallRequest, Layout
 import source_archive
 
 PACKAGING = package_data.NATIVE / 'packaging'
@@ -104,7 +104,7 @@ class CatalogueDomainTests(unittest.TestCase):
         domains = dict(re.findall(r'const (PREVIEW|STABLE)_DOMAIN: &str = "([^"]+)";',
                                   CONFIG.read_text(encoding='utf-8')))
 
-        expected = {channel.name: channel.package for channel in Channel}
+        expected = {channel.name: channel.package for channel in HOST_CHANNELS}
         self.assertEqual(domains, expected)
 
 
@@ -132,7 +132,7 @@ class RpmFileListTests(unittest.TestCase):
                       for path in staging.rglob('*') if path.is_file() or path.is_symlink())
 
     def test_every_installed_file_is_in_the_file_list(self) -> None:
-        for channel in Channel:
+        for channel in HOST_CHANNELS:
             with self.subTest(channel=channel.name):
                 entries = rpm_file_entries(channel)
 
@@ -142,7 +142,7 @@ class RpmFileListTests(unittest.TestCase):
                 self.assertEqual(unlisted, [])
 
     def test_every_file_list_entry_is_installed(self) -> None:
-        for channel in Channel:
+        for channel in HOST_CHANNELS:
             with self.subTest(channel=channel.name):
                 installed = self.installed_files(channel)
 

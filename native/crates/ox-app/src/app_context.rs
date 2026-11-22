@@ -301,10 +301,12 @@ impl AppContext {
     /// Looks for a newer release once a day, from the launch, unless
     /// Settings › About turned that off (UPD-001). `now` is the time in
     /// seconds since the Unix epoch; a last check in the future, after
-    /// the clock was set back, does not hold the next one off.
+    /// the clock was set back, does not hold the next one off. The Flathub
+    /// build never checks on its own: Flathub updates it, and publishes a
+    /// release some time after GitHub does.
     pub(crate) fn check_for_updates_if_due(&self, now: u64) {
         let preferences = self.settings_data().preferences;
-        if !preferences.update_checks {
+        if crate::config::IS_FLATHUB || !preferences.update_checks {
             return;
         }
         let checked_recently = preferences

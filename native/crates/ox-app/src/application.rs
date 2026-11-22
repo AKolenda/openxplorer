@@ -568,7 +568,10 @@ pub fn run() -> glib::ExitCode {
             None => arguments,
         },
         Launch::Interactive => match LaunchCheck::run(arguments) {
-            LaunchCheck::Continue(arguments) => arguments,
+            LaunchCheck::Continue(arguments) => {
+                crate::flathub_settings::adopt_bundle_settings();
+                arguments
+            }
             LaunchCheck::Exit(status) => return status,
         },
     };

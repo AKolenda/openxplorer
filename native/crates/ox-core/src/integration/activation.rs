@@ -11,11 +11,13 @@ use super::mime_type::MimeType;
 use crate::entry::{Entry, EntryError, EntryKind};
 use crate::location::LocationError;
 
-/// The app's own desktop IDs: the current one and the one packages
-/// used before, both registered for `x-scheme-handler/smb`.
-const OWN_DESKTOP_IDS: [&str; 2] = [
+/// The app's own desktop IDs: the current one, the one packages used
+/// before and the Flathub build's, all registered for
+/// `x-scheme-handler/smb`.
+const OWN_DESKTOP_IDS: [&str; 3] = [
     "io.winspace.Development.desktop",
     "io.winspace.OpenXplorer.desktop",
+    "app.openxplorer.OpenXplorer.desktop",
 ];
 
 /// Why an item could not be opened. `Display` is the message the window

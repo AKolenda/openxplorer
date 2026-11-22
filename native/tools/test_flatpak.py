@@ -13,6 +13,7 @@ from flatpak_cargo_sources import LockedCrate, LockFileError
 FLATPAK_FOLDER = flatpak_cargo_sources.NATIVE / 'packaging' / 'flatpak'
 PREVIEW_MANIFEST = FLATPAK_FOLDER / 'io.winspace.Development.Native.yml'
 STABLE_MANIFEST = FLATPAK_FOLDER / 'io.winspace.Development.yml'
+FLATHUB_MANIFEST = FLATPAK_FOLDER / 'app.openxplorer.OpenXplorer.yml'
 PACKAGING_README = flatpak_cargo_sources.NATIVE / 'packaging' / 'README.md'
 PERMISSIONS_HEADING = '### Flatpak permissions'
 
@@ -107,6 +108,12 @@ class ManifestTests(unittest.TestCase):
         expected = expected.replace('command: openxplorer-native', 'command: openxplorer')
 
         self.assertEqual(manifest_body(STABLE_MANIFEST), expected)
+
+    def test_the_flathub_manifest_is_the_stable_one_under_the_flathub_id(self) -> None:
+        stable = manifest_body(STABLE_MANIFEST)
+        expected = stable.replace('io.winspace.Development', 'app.openxplorer.OpenXplorer')
+
+        self.assertEqual(manifest_body(FLATHUB_MANIFEST), expected)
 
     def test_the_build_uses_the_vendored_crates_offline(self) -> None:
         manifest = PREVIEW_MANIFEST.read_text(encoding='utf-8')

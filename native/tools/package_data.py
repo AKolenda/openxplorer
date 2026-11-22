@@ -114,6 +114,10 @@ class Channel(enum.Enum):
 
     PREVIEW = 'io.winspace.Development.Native'
     STABLE = 'io.winspace.Development'
+    # The stable app as Flathub publishes it, under an ID of a domain the
+    # project controls (README.md, "Publishing on Flathub"). Only the
+    # Flatpak layout installs it.
+    FLATHUB = 'app.openxplorer.OpenXplorer'
 
     @property
     def app_id(self) -> str:
@@ -121,13 +125,23 @@ class Channel(enum.Enum):
         return self.value
 
     @property
+    def data_app_id(self) -> str:
+        """The ID whose desktop entry and metainfo in packaging/data this channel installs.
+
+        The Flathub build installs the stable app's, with its own ID put in
+        (flathub_metadata), so the release notes are written once.
+        """
+        return Channel.STABLE.value if self is Channel.FLATHUB else self.value
+
+    @property
     def package(self) -> str:
         """The package name, which is also the command.
 
         The stable package takes over the Python package's name, so upgrading
         replaces it; the preview's own name installs it beside that package.
+        The Flathub build is the stable app, so it has the stable command.
         """
-        return 'openxplorer' if self is Channel.STABLE else 'openxplorer-native'
+        return 'openxplorer-native' if self is Channel.PREVIEW else 'openxplorer'
 
     @property
     def is_python_replacement(self) -> bool:
@@ -144,6 +158,10 @@ class Channel(enum.Enum):
         `I18N_DOMAIN` in crates/ox-app/src/config.rs).
         """
         return self.package
+
+
+# The channels built as distribution packages; Flathub builds the third.
+HOST_CHANNELS = (Channel.PREVIEW, Channel.STABLE)
 
 
 class Layout(enum.Enum):
@@ -189,7 +207,13 @@ class InstalledPaths:
 
 
 def installed_paths(channel: Channel, layout: Layout) -> InstalledPaths:
-    """Return where a package of this channel and layout installs its files."""
+    """Return where a package of this channel and layout installs its files.
+
+    Raises ValueError for the Flathub channel in a host layout: only Flathub
+    builds it.
+    """
+    if channel is Channel.FLATHUB and layout is not Layout.FLATPAK:
+        raise ValueError(f'{channel.app_id} is only built as a Flatpak')
     package = channel.package
     if layout is Layout.FLATPAK:
         return InstalledPaths(
@@ -394,7 +418,10 @@ def install_desktop_data(staging: Staging, channel: Channel, paths: InstalledPat
     catalogues = {po.stem: dict(i18n.parse_po(po.read_text(encoding='utf-8')))
                   for po in sorted(i18n.PO_FOLDER.glob('*.po'))}
     for suffix, folder in (('.desktop', 'applications'), ('.metainfo.xml', 'metainfo')):
-        metadata = package_i18n.translate(PACKAGING_DATA / f'{app_id}{suffix}', catalogues)
+        metadata = package_i18n.translate(PACKAGING_DATA / f'{channel.data_app_id}{suffix}',
+                                          catalogues)
+        if channel.data_app_id != app_id:
+            metadata = flathub_metadata(metadata, channel.data_app_id, app_id)
         staging.write(metadata, share / folder / f'{app_id}{suffix}', DATA_MODE)
     staging.copy(APP_ICON, share / 'icons/hicolor/scalable/apps' / f'{app_id}.svg', DATA_MODE)
     service = build_service_file(app_id, paths.command)
@@ -402,6 +429,16 @@ def install_desktop_data(staging: Staging, channel: Channel, paths: InstalledPat
     portal = portal_file_path(paths, app_id)
     if portal is not None:
         staging.write(build_portal_file(app_id), portal, DATA_MODE)
+
+
+def flathub_metadata(text: str, data_app_id: str, app_id: str) -> str:
+    """Return the stable desktop entry or metainfo text under the Flathub ID.
+
+    Every mention of the stable ID becomes app_id: the metainfo's <id>,
+    launchable and icon, and the desktop entry's Icon and StartupWMClass,
+    which the Flathub binary sets from its own ID (ox-app's config.rs).
+    """
+    return text.replace(data_app_id, app_id)
 
 
 def portal_file_path(paths: InstalledPaths, app_id: str) -> PurePosixPath | None:

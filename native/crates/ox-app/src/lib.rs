@@ -27,6 +27,7 @@ mod crash_guard;
 mod devices;
 mod dialog;
 mod dialogs;
+mod flathub_settings;
 mod folder_view;
 mod history;
 mod i18n;

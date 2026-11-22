@@ -140,7 +140,11 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let about = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     about.append_card(&build_card());
     let (updates, updates_row) = action_group(&UPDATES);
-    updates.add_row(&automatic_checks_row(page));
+    // Flathub updates its build, which never checks on its own
+    // (`IS_FLATHUB`), so it has no automatic check to turn off.
+    if !crate::config::IS_FLATHUB {
+        updates.add_row(&automatic_checks_row(page));
+    }
     if let Some(setting) = page.context().passwordless_updates() {
         updates.add_row(&passwordless_row(page, setting.clone()));
     }

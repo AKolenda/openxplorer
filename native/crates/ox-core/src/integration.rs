@@ -104,7 +104,7 @@ pub use brave::{
 };
 pub use default_apps::{
     DefaultApps, DefaultAppsError, DefaultsStatus, DesktopId, MimeDefaults, RestoreScope, XdgMime,
-    ZipAssociation, APP_ID, RESTORE_NOTE,
+    ZipAssociation, APP_ID, IS_FLATHUB, RESTORE_NOTE,
 };
 pub use dialog_folders::{
     caller_bus_name, caller_key, folder_uri, program_of, remembered_location, start_folders, AppFolders,

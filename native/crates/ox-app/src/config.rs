@@ -9,12 +9,20 @@
 /// the Python app's `io.winspace.Development`: the preview differs from it
 /// so both can run side by side, and the native app takes that ID over (a
 /// compatibility contract) when it replaces the Python app
-/// (native/packaging/README.md, "Application ID").
+/// (native/packaging/README.md, "Application ID"). The Flathub build is
+/// `app.openxplorer.OpenXplorer`, since Flathub takes only an ID under a
+/// domain the project controls.
 pub(crate) const APP_ID: &str = env!("OX_APP_ID");
 
 /// Whether this is the native preview, built with its own application ID
 /// so it runs beside the stable app (`openxplorer-native`).
 pub(crate) const IS_PREVIEW: bool = ends_with(APP_ID, ".Native");
+
+/// Whether this is the Flathub build, which Flathub updates: it never
+/// checks GitHub for a release on its own, because Flathub publishes each
+/// release some time after GitHub does, and until then the check would
+/// offer an update that `flatpak update` cannot install.
+pub(crate) const IS_FLATHUB: bool = ox_core::integration::IS_FLATHUB;
 
 /// The gettext domain of this build's catalogues (`ox_core::i18n`): each
 /// channel is its own domain, named after its package, so a machine with
@@ -67,5 +75,6 @@ mod tests {
         assert!(!ends_with("io.winspace.Development", ".Native"));
         assert_eq!(IS_PREVIEW, APP_ID == "io.winspace.Development.Native");
         assert_eq!(BUILD_NAME.ends_with(" native preview"), IS_PREVIEW);
+        assert_eq!(IS_FLATHUB, APP_ID == "app.openxplorer.OpenXplorer");
     }
 }

@@ -35,8 +35,39 @@ use super::sandbox::Sandbox;
 use super::worker::on_worker;
 
 /// The app's desktop ID. A compatibility contract (AGENTS.md): it is
-/// the ID in every user's `mimeapps.list` that chose the app.
-pub const APP_ID: &str = "io.winspace.Development.desktop";
+/// the ID in every user's `mimeapps.list` that chose the app. The Flathub
+/// build installs its own, `app.openxplorer.OpenXplorer.desktop`
+/// ([`IS_FLATHUB`]).
+pub const APP_ID: &str = if IS_FLATHUB {
+    "app.openxplorer.OpenXplorer.desktop"
+} else {
+    "io.winspace.Development.desktop"
+};
+
+/// Whether this is the Flathub build: the package build sets `OX_APP_ID`
+/// to `app.openxplorer.OpenXplorer` (native/packaging/README.md, "Publishing
+/// on Flathub"), the ID ox-app's `build.rs` registers. Every other build
+/// keeps the stable desktop ID above.
+pub const IS_FLATHUB: bool = match option_env!("OX_APP_ID") {
+    Some(id) => str_eq(id, "app.openxplorer.OpenXplorer"),
+    None => false,
+};
+
+/// Whether `left` and `right` are the same text, at compile time.
+const fn str_eq(left: &str, right: &str) -> bool {
+    let (left, right) = (left.as_bytes(), right.as_bytes());
+    if left.len() != right.len() {
+        return false;
+    }
+    let mut index = 0;
+    while index < left.len() {
+        if left[index] != right[index] {
+            return false;
+        }
+        index += 1;
+    }
+    true
+}
 
 /// The note Restore previous returns, word for word from the Python app.
 pub const RESTORE_NOTE: &str =

@@ -21,6 +21,13 @@ const PREVIEW_APP_ID: &str = "io.winspace.Development.Native";
 /// it (a compatibility contract, see AGENTS.md).
 const STABLE_APP_ID: &str = "io.winspace.Development";
 
+/// The Flathub build's ID. Flathub only takes an ID under a domain the
+/// project controls, and `winspace.io` is not one, so the app published there
+/// is `app.openxplorer.OpenXplorer` (native/packaging/README.md, "Publishing
+/// on Flathub"). The packages and the release's Flatpak bundle keep
+/// `io.winspace.Development`.
+const FLATHUB_APP_ID: &str = "app.openxplorer.OpenXplorer";
+
 fn main() {
     glib_build_tools::compile_resources(
         &["resources/icons/hicolor"],
@@ -33,7 +40,8 @@ fn main() {
 /// Passes the application ID to the crate as the compile-time variable
 /// `OX_APP_ID` (read by `src/config.rs`): the preview's, unless the build
 /// sets `OX_APP_ID` to the stable ID, as the packages of the release that
-/// replaces the Python app do (native/packaging/README.md).
+/// replaces the Python app do, or to the Flathub ID, as the Flathub
+/// manifest does (native/packaging/README.md).
 ///
 /// # Panics
 ///
@@ -43,8 +51,8 @@ fn export_app_id() {
     println!("cargo::rerun-if-env-changed={APP_ID_VARIABLE}");
     let app_id = env::var(APP_ID_VARIABLE).unwrap_or_else(|_| PREVIEW_APP_ID.to_owned());
     assert!(
-        [PREVIEW_APP_ID, STABLE_APP_ID].contains(&app_id.as_str()),
-        "{APP_ID_VARIABLE} must be {PREVIEW_APP_ID} or {STABLE_APP_ID}, not {app_id:?}"
+        [PREVIEW_APP_ID, STABLE_APP_ID, FLATHUB_APP_ID].contains(&app_id.as_str()),
+        "{APP_ID_VARIABLE} must be {PREVIEW_APP_ID}, {STABLE_APP_ID} or {FLATHUB_APP_ID}, not {app_id:?}"
     );
     println!("cargo::rustc-env={APP_ID_VARIABLE}={app_id}");
 }

@@ -30,18 +30,30 @@ Until the native app has every behaviour of the Python app
 installs beside the Python app. The release that replaces the Python app builds
 the **stable** channel instead.
 
-| | Preview | Stable |
-|---|---|---|
-| Application ID | `io.winspace.Development.Native` | `io.winspace.Development` (the Python app's) |
-| Package and command | `openxplorer-native` | `openxplorer`, plus the Python package's `winspace`, `openxplorer-mount-share` and `winspace-mount-share` |
-| Desktop entry | no MIME types, one quick action | the Python package's, key for key |
-| Beside the Python app | yes | replaces it |
+| | Preview | Stable | Flathub |
+|---|---|---|---|
+| Application ID | `io.winspace.Development.Native` | `io.winspace.Development` (the Python app's) | `app.openxplorer.OpenXplorer` |
+| Package and command | `openxplorer-native` | `openxplorer`, plus the Python package's `winspace`, `openxplorer-mount-share` and `winspace-mount-share` | `openxplorer`, in the Flatpak only |
+| Desktop entry | no MIME types, one quick action | the Python package's, key for key | the stable one, with its own ID as icon and window class |
+| Beside the Python app | yes | replaces it | beside every package |
 
 The application ID is a compatibility contract (AGENTS.md): the desktop entry,
 the AppStream ID, the Flatpak ID and the D-Bus name the program registers must
 agree. `build.rs` in `crates/ox-app` reads `OX_APP_ID` at build time, accepts
-only these two IDs, and defaults to the preview's, so a plain `cargo build`
+only these three IDs, and defaults to the preview's, so a plain `cargo build`
 never takes over the Python app's name. Every package build sets it.
+
+The Flathub ID exists because Flathub accepts only an ID under a domain the
+project controls, and `winspace.io` is not one (see "Publishing on Flathub").
+Only [`flatpak/app.openxplorer.OpenXplorer.yml`](flatpak/app.openxplorer.OpenXplorer.yml)
+builds it; the packages and the release's Flatpak bundle keep
+`io.winspace.Development`. It installs the stable desktop entry and metainfo
+with its own ID put in (`flathub_metadata` in `package_data.py`), so release
+notes are written once. The Flathub build never checks GitHub for a release on
+its own (`IS_FLATHUB` in `crates/ox-app/src/config.rs`), since Flathub updates
+it and publishes a release after GitHub does, and on its first launch it copies
+the settings folder of the bundle, `~/.var/app/io.winspace.Development/config/winspace`,
+when it can read it (`crates/ox-app/src/flathub_settings.rs`).
 
 ## Installed files
 
@@ -417,56 +429,60 @@ style, so none of them needs a permission. A test
 
 ### Publishing on Flathub
 
-The Flatpak is published as a bundle with each release. Flathub publication is
-prepared as far as the repository allows; the rest needs the owner.
+Flathub publishes `app.openxplorer.OpenXplorer`, built by
+[`flatpak/app.openxplorer.OpenXplorer.yml`](flatpak/app.openxplorer.OpenXplorer.yml),
+which differs from the stable manifest only in the ID (`test_flatpak.py`).
 
 Already in place:
 
-- The stable metainfo
-  ([`data/io.winspace.Development.metainfo.xml`](data/io.winspace.Development.metainfo.xml))
-  passes `appstreamcli validate`: licences, developer, launchable, stock icon,
+- The application ID is under `openxplorer.app`, which the project controls.
+  `io.winspace.Development` could not be published: Flathub requires the
+  developer to control the ID's domain, `winspace.io` does not resolve, and
+  Flathub renames an app only by resubmission.
+- The metainfo the Flathub build installs passes `appstreamcli validate`
+  (`test_package_data.py`): licences, developer, launchable, stock icon,
   categories, keywords, homepage, help, source and bug tracker links, branding
-  colours, a release entry with notes for every version, and an OARS 1.1
-  content rating of social-info mild (the update check contacts GitHub's API
-  for the latest release); no other attribute applies (no violence, drugs,
-  sex, language, social chat, purchases or ads).
+  colours, screenshots of the native app on `openxplorer.app`, a release entry
+  with notes for every version, and an OARS 1.1 content rating of social-info
+  mild (the update check contacts GitHub's API for the latest release); no
+  other attribute applies (no violence, drugs, sex, language, social chat,
+  purchases or ads).
 - The icon is scalable SVG, and the build is offline: every crate comes from
   [`flatpak/cargo-sources.json`](flatpak/cargo-sources.json).
-- Every permission is explained above ("Flatpak permissions") and below.
+- The build does not check for updates on its own, since Flathub updates it.
+- Every permission is explained above ("Flatpak permissions") and below. Of
+  them, `flatpak-builder-lint` warns only about `--talk-name=org.freedesktop.Flatpak`
+  (`finish-args-flatpak-spawn-access`); the submission asks for an exception
+  with the reasons below.
 
-Still to do:
+The `flathub/app.openxplorer.OpenXplorer` repository holds a copy of the
+manifest and `cargo-sources.json` whose sources are the release's tag instead
+of the checkout's folders, since Flathub builds from a fixed revision. Replace
+the manifest's `sources` with:
 
-- **Screenshots** (TODO in both metainfo files). Flathub requires at least one
-  `<screenshot>` served over HTTPS. The website's screenshots
-  (`apps/web/public/assets/screenshots/`) show the 1.x web interface with a
-  "1.1.4 preview" label, so they are not used. Capture the native window on
-  fictional files with the snapshot hook (`OPENXPLORER_SNAPSHOT`, following
-  `docs/PRIVACY.md`), publish the images on the website, and add them with
-  their captions.
-- **Sources of the Flathub manifest.** Flathub builds the manifest from its
-  `flathub/<app-id>` repository, where the `dir` source above must be the
-  release's source archive (`openxplorer-<version>.tar.gz` from
-  `native/tools/source_archive.py`) or a git tag, with its checksum.
-- **Linter exceptions.** Run `flatpak run --command=flatpak-builder-lint
-  org.flatpak.Builder manifest native/packaging/flatpak/io.winspace.Development.yml`
-  and `... repo repo`, and ask for an exception for each finding in the
-  submission, with the reasons below.
+```yaml
+    sources:
+      - type: git
+        url: https://github.com/AKolenda/openxplorer.git
+        tag: v<version>
+        commit: <the tag's commit>
+      - cargo-sources.json
+```
+
+The tag's checkout has `native/`, `licenses/`, `LICENSE` and
+`THIRD_PARTY_NOTICES.md` where the `dir` and `file` sources put them, so the
+build commands stay the same. Flathub builds for x86_64 and aarch64; until the
+aarch64 build is known to work, add a `flathub.json` with
+`{"only-arches": ["x86_64"]}` beside the manifest. Each release then updates
+the tag, the commit and `cargo-sources.json` there.
 
 Only the owner can:
 
-- **Verify the application ID.** Flathub accepts `io.winspace.Development` only
-  from whoever controls `winspace.io`, which does not resolve, by serving a
-  token at `https://winspace.io/.well-known/org.flathub.VerifiedApps.txt`.
-  The alternative is an ID under a domain the project controls, such as
-  `app.openxplorer.OpenXplorer` for `openxplorer.app`; the ID is a
-  compatibility contract (AGENTS.md: the desktop entry, AppStream ID, D-Bus
-  name and Flatpak ID), so a new ID needs `build.rs`, the packaging data and
-  the migration of existing Flatpak users (`~/.var/app/<id>/`) changed
-  together, and an `<id>` rename entry (`<provides>`/`<replaces>`) in the
-  metainfo.
-- Open the submission pull request on `flathub/flathub`, accept Flathub's
-  terms, and maintain the `flathub/<app-id>` repository it creates.
-- Publish the screenshots on `openxplorer.app` (the website deploy).
+- **Verify the application ID**: serve the token Flathub gives at
+  `https://openxplorer.app/.well-known/org.flathub.VerifiedApps.txt`.
+- Open the submission pull request on `flathub/flathub` (its `new-pr`
+  branch), accept Flathub's terms, and maintain the
+  `flathub/app.openxplorer.OpenXplorer` repository it creates.
 
 #### Why each permission is needed (for the Flathub review)
 
@@ -499,7 +515,8 @@ Only the owner can:
   Disks does; UDisks checks every request with polkit, which may ask for the
   user's password.
 - `--share=network`: "Check for updates" reads GitHub's public release list to
-  say whether a newer version exists; Flatpak installs it. SMB and phones
+  say whether a newer version exists; Flatpak installs it. The Flathub build
+  checks only when the user asks, in Settings › About. SMB and phones
   go through the host's GVfs, not this permission. If Flathub asks to drop
   it, the Flatpak build must hide the update check first.
 

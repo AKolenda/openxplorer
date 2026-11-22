@@ -21,7 +21,7 @@ from verify_layout import InstalledTree, Report, VerificationError
 
 # The version at the top of each channel's metainfo, which a verified tree
 # must carry.
-METAINFO_VERSIONS = {Channel.PREVIEW: '2.0.23', Channel.STABLE: '2.0.23'}
+METAINFO_VERSIONS = {Channel.PREVIEW: '2.0.23', Channel.STABLE: '2.0.23', Channel.FLATHUB: '2.0.23'}
 
 
 @dataclass(frozen=True)
@@ -410,7 +410,8 @@ class VerifierTests(StagingTestCase):
     def test_the_desktop_validators_accept_both_channels(self) -> None:
         for channel in Channel:
             with self.subTest(channel=channel.name):
-                tree = self.install(channel, Layout.FHS)
+                layout = Layout.FLATPAK if channel is Channel.FLATHUB else Layout.FHS
+                tree = self.install(channel, layout)
                 report = Report()
 
                 verify_layout.check_with_desktop_validators(report, tree)
@@ -426,7 +427,7 @@ class ContentRatingTests(unittest.TestCase):
         # names "checking for the latest application version" social-info mild.
         for channel in Channel:
             with self.subTest(channel=channel.name):
-                metainfo = package_data.PACKAGING_DATA / f'{channel.app_id}.metainfo.xml'
+                metainfo = package_data.PACKAGING_DATA / f'{channel.data_app_id}.metainfo.xml'
                 rating = ElementTree.parse(metainfo).getroot().find('content_rating')
 
                 self.assertIsNotNone(rating)

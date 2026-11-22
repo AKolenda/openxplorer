@@ -56,10 +56,10 @@ class MetadataTests(unittest.TestCase):
     def test_all_channels_extract_their_visible_package_text(self) -> None:
         for channel in package_data.Channel:
             for suffix in ('.desktop', '.metainfo.xml'):
-                source = package_data.PACKAGING_DATA / f'{channel.app_id}{suffix}'
+                source = package_data.PACKAGING_DATA / f'{channel.data_app_id}{suffix}'
                 messages = list(package_i18n.messages(source))
                 self.assertTrue(messages)
-                self.assertNotIn(channel.app_id, messages)
+                self.assertNotIn(channel.data_app_id, messages)
                 self.assertNotIn('AGPL-3.0-only', messages)
                 self.assertEqual(package_i18n.translate(source, {}), source.read_text())
 
@@ -103,7 +103,7 @@ class MetadataTests(unittest.TestCase):
         (po / 'fr.po').write_text('msgid ""\nmsgstr "Content-Type: text/plain; charset=UTF-8\\n"\n\n'
                                   'msgid "Settings"\nmsgstr "Test settings"\n')
         with patch.object(i18n, 'PO_FOLDER', po):
-            for channel in package_data.Channel:
+            for channel in package_data.HOST_CHANNELS:
                 with self.subTest(channel=channel.name):
                     paths = package_data.installed_paths(channel, package_data.Layout.FHS)
                     staging = package_data.Staging(self.root / channel.name)

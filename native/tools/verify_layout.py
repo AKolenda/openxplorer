@@ -200,9 +200,10 @@ def check_desktop_entry(report: Report, tree: InstalledTree) -> None:
                  keys.get('Exec') == f'{command} %U' and keys.get('TryExec') == command)
     report.check('The launcher icon and window class are the application ID',
                  keys.get('Icon') == app_id and keys.get('StartupWMClass') == app_id)
-    if tree.channel is Channel.STABLE:
+    if tree.channel is not Channel.PREVIEW:
         report.check("The launcher keeps the Python app's keys, MIME types and actions",
-                     all(keys.get(name) == value for name, value in STABLE_DESKTOP_KEYS.items()))
+                     all(keys.get(name) == value for name, value in
+                         {**STABLE_DESKTOP_KEYS, 'Icon': app_id, 'StartupWMClass': app_id}.items()))
     else:
         report.check('The preview claims no MIME type', 'MimeType' not in keys)
 

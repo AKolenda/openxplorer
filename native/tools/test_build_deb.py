@@ -17,6 +17,7 @@ import unittest
 
 import build_deb
 from build_deb import BuildError, Channel
+from package_data import HOST_CHANNELS
 import updater_compatibility
 import verify_deb
 from verify_layout import Report
@@ -127,7 +128,7 @@ class ControlFieldTests(unittest.TestCase):
     def test_both_channels_recommend_pkexec(self) -> None:
         # In-app updates ask for it, and so does the permanent-delete
         # helper of admin:// locations, which both channels install.
-        for channel in Channel:
+        for channel in HOST_CHANNELS:
             with self.subTest(channel=channel.name):
                 self.assertIn('pkexec', control_of(channel)['Recommends'])
 
@@ -162,7 +163,7 @@ class MaintainerScriptTests(TemporaryFolderTestCase):
 
     # parity: UPD-018
     def test_both_channels_pass_the_script_checks(self) -> None:
-        for channel in Channel:
+        for channel in HOST_CHANNELS:
             with self.subTest(channel=channel.name):
                 control = self.write_scripts(channel)
                 report = Report()
@@ -338,7 +339,7 @@ class MaintainerScriptTests(TemporaryFolderTestCase):
         folder, which the package that remains tidies up: neither package's
         scripts touch a home folder or KDE's shortcuts, and removing or
         purging, again and again, succeeds on a system without KDE."""
-        for channel in Channel:
+        for channel in HOST_CHANNELS:
             control = self.write_scripts(channel)
             for script in sorted(control.iterdir()):
                 text = script.read_text(encoding='utf-8')

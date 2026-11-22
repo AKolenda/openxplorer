@@ -448,7 +448,7 @@ def parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     """Read the command-line options."""
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     parser.add_argument('--app-id', default=Channel.PREVIEW.value,
-                        choices=[channel.value for channel in Channel],
+                        choices=[channel.value for channel in (Channel.PREVIEW, Channel.STABLE)],
                         help='the application ID to build (default: the preview)')
     parser.add_argument('--program', type=Path,
                         help='package this executable instead of building one; it must have '
