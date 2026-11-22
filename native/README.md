@@ -74,6 +74,17 @@ Interface text goes through gettext. After changing a translatable string,
 run `python3 native/tools/i18n.py extract` to update `po/openxplorer.pot`;
 the check driver fails while the template is out of date.
 
+### Window decorations
+
+Settings > Appearance > Layout > **Use system window decorations** opts in to
+the desktop's standard title bar, with tabs below it and no duplicate app
+caption buttons. The default remains the integrated Explorer-style title bar.
+The saved `systemWindowDecorations` preference applies to newly opened browsing
+windows (including file-picker windows); existing windows keep their frame until
+closed, so changing it never recreates a live surface or interrupts an operation.
+On Wayland compositors without server-side decorations GTK supplies its standard
+header instead. No process-wide `GTK_CSD` override or window-manager rule is used.
+
 ## Checks
 
 Run the check driver from the repository root:

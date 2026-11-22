@@ -140,6 +140,12 @@ Ctrl + (or Ctrl =) on the main keyboard increases text, Ctrl − decreases it, a
 
 Only the application text and needed row spacing change; desktop scaling and file data remain unchanged. Sidebar and column widths remain resizable.
 
+## Use your desktop's window frame
+
+Settings → Appearance → Layout → Use system window decorations uses your desktop's title bar and window buttons, with the tabs in a separate row below. It is off by default, preserving the integrated Explorer-style title bar. On desktops without system decorations, GTK provides a standard title bar instead.
+
+The choice is saved across restarts and applies to new windows. Existing windows keep their frame: after any file operations finish, close and reopen them to use the new choice. Changing this setting does not restart the app or interrupt file operations.
+
 ## Open in Terminal
 
 Right-click a folder, sidebar pin or the file-list background and choose Open in Terminal. Right-click a regular file to open its containing folder. Both context-menu styles include the command.

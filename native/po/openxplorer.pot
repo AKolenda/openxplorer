@@ -4629,6 +4629,18 @@ msgstr ""
 msgid "Zorin + Brave setup and troubleshooting"
 msgstr ""
 
+#: crates/ox-app/src/settings_page/window_decorations.rs
+msgid "Use system window decorations"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/window_decorations.rs
+msgid "Use your desktop's title bar and window buttons, with tabs below. Applies to new windows; close and reopen existing windows after file operations finish. On desktops without system decorations, GTK provides a standard title bar."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/window_decorations.rs
+msgid "appearance layout frame border titlebar title bar desktop native system decorations KDE KWin GNOME Wayland X11 CSD SSD minimize maximize close"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/theme/appearance_button.rs
 msgid "Appearance: {shown}. Click to change."

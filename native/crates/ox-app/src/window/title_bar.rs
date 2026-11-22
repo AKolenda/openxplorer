@@ -30,6 +30,32 @@ use super::BrowserWindow;
 const NEW_TAB_GLYPH: i32 = 14;
 
 impl BrowserWindow {
+    /// Chooses the frame before the window is realized. GTK may need a new
+    /// native surface to change decoration modes, so existing windows keep
+    /// their frame until closed; changing the preference never interrupts
+    /// a transfer, a tab drag, a file dialog or keyboard focus.
+    pub(super) fn configure_window_decorations(&self) {
+        if !self
+            .context()
+            .settings_data()
+            .preferences
+            .system_window_decorations
+        {
+            return;
+        }
+        let imp = self.imp();
+        // Keep the same handle and strip (and their drag controllers) in
+        // either layout. With no custom titlebar GTK negotiates the desktop
+        // frame, or supplies its standard header on CSD-only compositors.
+        let bar = imp.tab_bar.get();
+        self.set_titlebar(None::<&gtk::Widget>);
+        bar.remove_css_class("titlebar");
+        imp.content_box.prepend(&bar);
+        imp.start_caption_buttons.set_visible(false);
+        imp.end_caption_buttons.set_visible(false);
+        self.add_css_class("system-window-decorations");
+    }
+
     /// Gives the template's "+" its glyph and the new-tab action.
     pub(super) fn finish_title_bar(&self) {
         let new_tab = &*self.imp().new_tab_button;

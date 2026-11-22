@@ -36,14 +36,14 @@
       tab first, so a tab drag never moves the window.
     -->
     <property name="titlebar">
-      <object class="GtkWindowHandle">
+      <object class="GtkWindowHandle" id="tab_bar">
         <property name="child">
           <object class="GtkBox">
             <style>
               <class name="ox-titlebar"/>
             </style>
             <child>
-              <object class="OxCaptionButtons">
+              <object class="OxCaptionButtons" id="start_caption_buttons">
                 <property name="side">start</property>
               </object>
             </child>
@@ -73,7 +73,7 @@
               </object>
             </child>
             <child>
-              <object class="OxCaptionButtons">
+              <object class="OxCaptionButtons" id="end_caption_buttons">
                 <property name="side">end</property>
               </object>
             </child>
@@ -82,7 +82,7 @@
       </object>
     </property>
     <property name="child">
-      <object class="GtkBox">
+      <object class="GtkBox" id="content_box">
         <property name="orientation">vertical</property>
         <child>
           <!-- section.navigation: the history buttons, the address and the

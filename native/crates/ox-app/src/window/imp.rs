@@ -51,6 +51,18 @@ use crate::volumes::VolumeRow;
 #[derive(Debug, Default, gtk::CompositeTemplate)]
 #[template(file = "../../resources/ui/window.ui")]
 pub(crate) struct BrowserWindow {
+    /// The tab row, either the custom title bar or the first content row.
+    #[template_child]
+    pub(super) tab_bar: TemplateChild<gtk::WindowHandle>,
+    /// The content below the title bar, including tabs in system mode.
+    #[template_child]
+    pub(super) content_box: TemplateChild<gtk::Box>,
+    /// Custom caption controls, hidden when the desktop supplies them.
+    #[template_child]
+    pub(super) start_caption_buttons: TemplateChild<CaptionButtons>,
+    /// Custom caption controls at the end of the tab row.
+    #[template_child]
+    pub(super) end_caption_buttons: TemplateChild<CaptionButtons>,
     /// The tabs in the title bar.
     #[template_child]
     pub(super) tab_strip: TemplateChild<TabStrip>,

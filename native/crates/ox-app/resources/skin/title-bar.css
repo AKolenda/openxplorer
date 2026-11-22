@@ -7,7 +7,8 @@
    these: it is 42px of @ox_title (Windows 11's Mica Alt, as a flat tint:
    GTK cannot sample the wallpaper) from edge to edge, and the tab in front
    runs straight into the navigation row. */
-window.ox > .titlebar, window.ox > .titlebar:backdrop {
+window.ox:not(.system-window-decorations) > .titlebar,
+window.ox:not(.system-window-decorations) > .titlebar:backdrop {
   min-height: 0;
   padding: 0;
   margin: 0;

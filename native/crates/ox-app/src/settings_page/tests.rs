@@ -29,6 +29,7 @@ mod indexing;
 mod moved_from_more;
 mod passwordless;
 mod redesign;
+mod window_decorations;
 
 /// A window on the standard fixture with Settings open in front.
 struct SettingsTest {
