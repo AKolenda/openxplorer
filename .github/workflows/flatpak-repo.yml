@@ -131,6 +131,7 @@ jobs:
           TAG: ${{ needs.plan.outputs.tag }}
         run: |
           repo=site/repo
+          mkdir -p "$repo"
           ostree init --mode=archive-z2 --repo="$repo"
           flatpak build-import-bundle --gpg-sign="$FINGERPRINT" --gpg-homedir="$GNUPGHOME" \
             "$repo" "$RUNNER_TEMP/io.winspace.Development.flatpak"
