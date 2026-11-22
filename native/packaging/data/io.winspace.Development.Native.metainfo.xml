@@ -45,15 +45,33 @@
     <content_attribute id="social-info">mild</content_attribute>
   </content_rating>
   <!--
-    TODO(Flathub): add <screenshots> of the native app. Flathub requires at
-    least one, served over HTTPS from a stable URL such as
-    https://openxplorer.app/assets/screenshots/. The public screenshots in
-    apps/web/public/assets/screenshots/ show the 1.x web interface with a
-    "1.1.4 preview" label, so they do not describe this app; capture new ones
-    of the native window on fictional files (OPENXPLORER_SNAPSHOT, see
-    docs/PRIVACY.md) and publish them first. native/packaging/README.md,
-    "Publishing on Flathub", lists the remaining steps.
+    Pictures of the native app on fictional files, taken by
+    tools/capture-screenshots.py and published with the website
+    (apps/web/public/assets/screenshots/). Software centres show
+    them; recapture them when the window changes.
   -->
+  <screenshots>
+    <screenshot type="default">
+      <caption>Folders in a tabbed window with the navigation and details panes</caption>
+      <image type="source" width="1440" height="900">https://openxplorer.app/assets/screenshots/explorer-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The dark appearance</caption>
+      <image type="source" width="1440" height="900">https://openxplorer.app/assets/screenshots/explorer-dark.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Two folders side by side in split panes</caption>
+      <image type="source" width="1440" height="900">https://openxplorer.app/assets/screenshots/split-view.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>A previous version of a folder, opened read-only from its snapshots</caption>
+      <image type="source" width="1440" height="900">https://openxplorer.app/assets/screenshots/snapshot-tab.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Search results with the searched word highlighted</caption>
+      <image type="source" width="1440" height="900">https://openxplorer.app/assets/screenshots/cached-search.png</image>
+    </screenshot>
+  </screenshots>
   <releases>
     <release version="2.0.23" date="2026-11-21" type="stable"><description><p>Previous Versions lists the snapshots an SMB server keeps of an item, as Windows 11 does, by asking the server with the account or password already saved for it. In Details view the sorted column shows a clear arrow after its title, and a sort other than Name ascending colours the title, so a list out of its usual order stands out. On GNOME and Zorin OS an app's Open or Save dialog, such as a browser's download dialog, now moves on its own instead of dragging the app's window with it. After a few sessions the app asks once whether you would like to star it on GitHub.</p></description></release>
     <release version="2.0.22" date="2026-11-21" type="stable"><description><p>Recordings in the Preview and Details panes play in a separate process, and pictures, thumbnails and icons are decoded in separate processes, so a damaged or unusual file can no longer close or freeze the window; such a file shows its icon instead. A damaged 7z archive or a share that stops answering no longer closes or freezes the app either. Alt+D, Ctrl+L and F4 always select the whole address, Extract all gives files your usual permissions and the times stored in the archive, the Details pane widens with the text size, This PC opens with nothing selected, sizes keep their number and unit on one line, a Settings search of several words shows the settings that name them all, menus are as wide as their longest row and stay on screen on Wayland, and screen readers name the file list Items View.</p></description></release>

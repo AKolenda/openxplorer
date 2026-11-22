@@ -1,0 +1,173 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+name: Flatpak repository
+# Publishes the newest release's Flatpak as a signed Flatpak repository on
+# GitHub Pages, at https://flatpak.openxplorer.app/repo/, so
+# https://openxplorer.app/openxplorer.flatpakref installs it and
+# `flatpak update` (GNOME Software, KDE Discover) keeps it current.
+# native/packaging/README.md, "Flatpak repository", explains it.
+#
+# The repository is made afresh from the release's bundle each time: it holds
+# only the newest release, which is all `flatpak update` needs.
+on:
+  # After every run of the release workflow on main; the job checks whether
+  # that run published a new release and does nothing otherwise.
+  workflow_run:
+    workflows: ['Build, release and deploy']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the repository (only main can); off builds and checks it with a throwaway key
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: flatpak-repository
+  cancel-in-progress: false
+jobs:
+  plan:
+    name: Find the release to publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      due: ${{ steps.release.outputs.due }}
+      publish: ${{ steps.release.outputs.publish }}
+    steps:
+      - name: Compare the newest release with the run that triggered this one
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_STARTED: ${{ github.event.workflow_run.run_started_at }}
+          PUBLISH_INPUT: ${{ inputs.publish }}
+        run: |
+          read -r tag published < <(gh release view --repo "$GITHUB_REPOSITORY" \
+            --json tagName,publishedAt --jq '.tagName + " " + .publishedAt')
+          on_main=$([ "$GITHUB_REF" = refs/heads/main ] && echo true || echo false)
+          case "$GITHUB_EVENT_NAME" in
+            workflow_dispatch)
+              due=true
+              publish=$on_main
+              if [ "$PUBLISH_INPUT" = false ]; then publish=false; fi
+              ;;
+            workflow_run)
+              if [[ "$published" > "$RUN_STARTED" ]]; then
+                # The release workflow run published $tag.
+                due=true
+                publish=$on_main
+              else
+                echo "The release workflow run published no release; $tag is already in the repository."
+                due=false
+                publish=false
+              fi
+              ;;
+            *)
+              due=true
+              publish=false
+              ;;
+          esac
+          {
+            echo "tag=$tag"
+            echo "due=$due"
+            echo "publish=$publish"
+          } >> "$GITHUB_OUTPUT"
+
+  repository:
+    name: Build the signed repository
+    needs: plan
+    if: needs.plan.outputs.due == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # The signing key is a secret of the github-pages environment, which
+    # only main may use. A run that publishes nothing gets no environment
+    # and signs with a throwaway key instead.
+    environment: ${{ needs.plan.outputs.publish == 'true' && 'github-pages' || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Flatpak and OSTree
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak ostree
+      - name: Download the release's Flatpak bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern io.winspace.Development.flatpak --dir "$RUNNER_TEMP"
+      - name: Load the signing key
+        env:
+          SIGNING_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+          PUBLISH: ${{ needs.plan.outputs.publish }}
+        run: |
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          published_key=native/packaging/flatpak/openxplorer-repo.gpg
+          expected=$(gpg --show-keys --with-colons "$published_key" | awk -F: '/^fpr/ {print $10; exit}')
+          if [ "$PUBLISH" = true ]; then
+            test -n "$SIGNING_KEY"
+            printf '%s\n' "$SIGNING_KEY" | gpg --batch --quiet --import
+            fingerprint=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ {print $10; exit}')
+            # The secret must be the key users trust: the one in the
+            # .flatpakref and .flatpakrepo files.
+            test "$fingerprint" = "$expected"
+            cp "$published_key" "$RUNNER_TEMP/trusted.gpg"
+          else
+            gpg --batch --quiet --pinentry-mode loopback --passphrase '' \
+              --quick-gen-key 'OpenXplorer Flatpak repository test' rsa3072 sign 1d
+            fingerprint=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ {print $10; exit}')
+            gpg --export "$fingerprint" > "$RUNNER_TEMP/trusted.gpg"
+          fi
+          echo "FINGERPRINT=$fingerprint" >> "$GITHUB_ENV"
+      - name: Make the repository from the bundle
+        env:
+          TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          repo=site/repo
+          mkdir -p "$repo"
+          ostree init --mode=archive-z2 --repo="$repo"
+          flatpak build-import-bundle --gpg-sign="$FINGERPRINT" --gpg-homedir="$GNUPGHOME" \
+            "$repo" "$RUNNER_TEMP/io.winspace.Development.flatpak"
+          # Also writes the signed summary and the AppStream branch that
+          # software centres read the name, screenshots and release notes from.
+          flatpak build-update-repo --gpg-sign="$FINGERPRINT" --gpg-homedir="$GNUPGHOME" \
+            --title=OpenXplorer --prune "$repo"
+          cp apps/web/public/openxplorer.flatpakref apps/web/public/openxplorer.flatpakrepo site/
+          cat > site/index.html <<HTML
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>OpenXplorer Flatpak repository</title>
+          <p>The OpenXplorer Flatpak repository holds OpenXplorer $TAG.
+          <a href="https://openxplorer.app/docs/installation/">Install it</a> with
+          <a href="openxplorer.flatpakref">openxplorer.flatpakref</a>.
+          HTML
+      - name: Check that Flatpak installs from it with the trusted key
+        run: |
+          flatpak remote-add --user --gpg-import="$RUNNER_TEMP/trusted.gpg" check "file://$PWD/site/repo"
+          flatpak remote-ls --user check --columns=application,branch | tee "$RUNNER_TEMP/refs"
+          grep -q '^io\.winspace\.Development[[:space:]]*master$' "$RUNNER_TEMP/refs"
+          flatpak update --user --appstream check
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+          retention-days: 1
+
+  publish:
+    name: Publish on GitHub Pages
+    needs: [plan, repository]
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: https://flatpak.openxplorer.app/
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

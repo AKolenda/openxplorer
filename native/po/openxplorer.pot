@@ -10721,6 +10721,10 @@ msgid "A preview of the next OpenXplorer, drawn with native GTK 4 widgets instea
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "A previous version of a folder, opened read-only from its snapshots"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "Adds Windows Explorer's Group by, separate from the sort, and Folder Options' Apply to all folders and Reset folders. Copies ask about one unreadable file instead of failing the folder and about names Windows cannot use, TAR archives get the ZIP safety limits, read-only and disconnected drives say so, and the Open and Save dialogs no longer freeze or get stuck."
 msgstr ""
 
@@ -10754,6 +10758,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "Folder Options replaces Adjust view display style, with Windows' General and View tabs, and Windows Explorer's Ctrl+E, Ctrl+D, F11 and Alt+P work. The Share button emails the selected files through the desktop's email app. Delete moves items to the Recycle Bin wherever it works and asks only about items that cannot go there. As in Windows Explorer, a file operation that succeeds or is cancelled says nothing and sends no desktop notification, while failures, and failures not yet shown when you cancel, are still reported; read-only drives are not singled out, and New and Paste stay on in folders you cannot write to; Undo stays on Ctrl+Z and the folder menu. Keys meant for an open dialog no longer reach the files behind it, menus show in full when they fit on the monitor, submenus open in the same popup, a cut item pasted into its own folder stays put, and a failed copy names the real file."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Folders in a tabbed window with the navigation and details panes"
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
@@ -10817,6 +10825,10 @@ msgid "Search results no longer refresh every few seconds while folders are bein
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Search results with the searched word highlighted"
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "Settings › Appearance › File icons chooses the icon of folders, ZIP archives, each file type and files whose names end a certain way, such as .iso: one of the app's own pictures, including a document with a zipper so a ZIP archive no longer looks like a folder, or a picture of your own. Folder views and the details pane change at once, and screen readers name the chosen icon."
 msgstr ""
 
@@ -10824,8 +10836,16 @@ msgstr ""
 msgid "TAR archives open like folders, Compress to makes TAR files, and Additional options opens a Create archive window laid out like Windows 11's. Windows resize from just inside their edges and corners, and resize cursors show on Wayland when the desktop's cursor theme is missing. Renaming an extension and saving over a file ask in Windows 11's compact message boxes, the Save dialog hides known extensions, the column titles' menu offers Choose Details, Shift+F10 opens the right-click menu, and Ctrl+T, Ctrl+W and Esc work as in Windows 11. Settings can turn on Windows 11's Home page with Quick access, Recent and Favorites, switch to its tab menu and navigation pane, and hide the command bar's Update button. Typing Recycle Bin or Recent in the address bar opens it, the tab menu can close tabs to the right, Properties dates name the weekday, and Downloads stays grouped in a split tab's other pane."
 msgstr ""
 
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "The dark appearance"
+msgstr ""
+
 #: packaging/data/io.winspace.Development.Native.metainfo.xml
 msgid "The preview is incomplete and runs beside the current OpenXplorer without replacing it. It never changes file associations, browser preferences or network mounts."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Two folders side by side in split panes"
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml

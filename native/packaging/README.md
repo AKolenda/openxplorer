@@ -415,10 +415,47 @@ style, so none of them needs a permission. A test
   `gtk-theme`). Where the portal has neither, the Flatpak keeps GTK's own
   preference.
 
+### Flatpak repository
+
+Each release's Flatpak is published in a signed Flatpak repository,
+`https://flatpak.openxplorer.app/repo/`, so users install it once from
+[`openxplorer.flatpakref`](../../apps/web/public/openxplorer.flatpakref)
+(on the website, `https://openxplorer.app/openxplorer.flatpakref`) and get
+every later release through `flatpak update`, GNOME Software or KDE Discover.
+`docs/installation.md` ("Install the Flatpak") is the user's side.
+
+- [`.github/workflows/flatpak-repo.yml`](../../.github/workflows/flatpak-repo.yml)
+  runs after each run of the release workflow on main. When that run
+  published a release, it imports the release's
+  `io.winspace.Development.flatpak` into a new repository
+  (`flatpak build-import-bundle`), signs it and writes its summary and
+  AppStream branch (`flatpak build-update-repo`), checks that Flatpak lists
+  the app with the trusted key, and deploys it to GitHub Pages, whose custom
+  domain is `flatpak.openxplorer.app`. The repository holds only the newest
+  release, which is all `flatpak update` needs. Run it by hand
+  (workflow_dispatch) to publish again; on a branch, or with publish off, it
+  signs with a throwaway key and publishes nothing.
+- The signing key is the OpenXplorer Flatpak repository key, fingerprint
+  `4483F86DFCF321FDD1753FEFB6B1B6ABF57D00E2`. Its public half is
+  [`flatpak/openxplorer-repo.gpg`](flatpak/openxplorer-repo.gpg), embedded
+  (base64) as `GPGKey` in `openxplorer.flatpakref` and
+  `openxplorer.flatpakrepo`; the workflow refuses a secret key with another
+  fingerprint. The private key is the `FLATPAK_GPG_PRIVATE_KEY` secret of the
+  `github-pages` environment, which only main may use. A new key needs new
+  `GPGKey` lines and makes every user add the remote again.
+- The runtime, `org.gnome.Platform//51`, comes from Flathub: the
+  `.flatpakref` names Flathub as its `RuntimeRepo`.
+- A bundle installed from a GitHub release has no remote and never updates;
+  its users install from the `.flatpakref` once (same ID, so settings stay).
+
 ### Publishing on Flathub
 
-The Flatpak is published as a bundle with each release. Flathub publication is
-prepared as far as the repository allows; the rest needs the owner.
+The Flatpak is published as a bundle with each release and in the Flatpak
+repository above. Flathub is not pursued: its generative AI policy
+(https://docs.flathub.org/docs/for-app-authors/requirements#generative-ai-policy)
+bars AI-written manifests, AI-opened or AI-written submissions, and lets
+reviewers reject an app for the extent of AI-written code, which describes
+this project. The notes below stay for a hand-written submission.
 
 Already in place:
 
@@ -426,7 +463,8 @@ Already in place:
   ([`data/io.winspace.Development.metainfo.xml`](data/io.winspace.Development.metainfo.xml))
   passes `appstreamcli validate`: licences, developer, launchable, stock icon,
   categories, keywords, homepage, help, source and bug tracker links, branding
-  colours, a release entry with notes for every version, and an OARS 1.1
+  colours, screenshots of the native app on `openxplorer.app`, a release
+  entry with notes for every version, and an OARS 1.1
   content rating of social-info mild (the update check contacts GitHub's API
   for the latest release); no other attribute applies (no violence, drugs,
   sex, language, social chat, purchases or ads).
@@ -436,13 +474,6 @@ Already in place:
 
 Still to do:
 
-- **Screenshots** (TODO in both metainfo files). Flathub requires at least one
-  `<screenshot>` served over HTTPS. The website's screenshots
-  (`apps/web/public/assets/screenshots/`) show the 1.x web interface with a
-  "1.1.4 preview" label, so they are not used. Capture the native window on
-  fictional files with the snapshot hook (`OPENXPLORER_SNAPSHOT`, following
-  `docs/PRIVACY.md`), publish the images on the website, and add them with
-  their captions.
 - **Sources of the Flathub manifest.** Flathub builds the manifest from its
   `flathub/<app-id>` repository, where the `dir` source above must be the
   release's source archive (`openxplorer-<version>.tar.gz` from
@@ -466,7 +497,6 @@ Only the owner can:
   metainfo.
 - Open the submission pull request on `flathub/flathub`, accept Flathub's
   terms, and maintain the `flathub/<app-id>` repository it creates.
-- Publish the screenshots on `openxplorer.app` (the website deploy).
 
 #### Why each permission is needed (for the Flathub review)
 

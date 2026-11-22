@@ -63,7 +63,7 @@
         "id": "requirements",
         "title": "Requirements",
         "paragraphs": [
-          "For the .deb: Zorin OS 18, Ubuntu 24.04 or newer, or Debian 13 on x86-64, with GTK 4.14 or newer, GIO/GVfs and a graphical user session. The .deb declares its runtime dependencies; APT resolves them. Fedora, openSUSE and Arch users install the release's .rpm or Arch package when it lists one; every other distribution, including Debian 12, uses the Flatpak bundle.",
+          "For the .deb: Zorin OS 18, Ubuntu 24.04 or newer, or Debian 13 on x86-64, with GTK 4.14 or newer, GIO/GVfs and a graphical user session. The .deb declares its runtime dependencies; APT resolves them. Fedora, openSUSE and Arch users install the release's .rpm or Arch package when it lists one; every other distribution, including Debian 12, installs the Flatpak.",
           "There are no Node.js, pnpm or Python requirements for the application itself. The optional persistent mount helper, openxplorer-mount-share, is a Rust program in the .deb, .rpm and Arch packages (not the Flatpak); it needs cifs-utils."
         ]
       },
@@ -75,6 +75,23 @@
         ],
         "code": "sudo apt update\nsudo apt install ./openxplorer_2.0.23_all.deb\nopenxplorer --version\nopenxplorer",
         "callout": "This is a local unsigned package, not an APT repository. Installation does not change your default file manager, Downloads folder, browser preferences, or network mounts."
+      },
+      {
+        "id": "flatpak",
+        "title": "Install the Flatpak",
+        "paragraphs": [
+          "The Flatpak runs on any distribution with Flatpak, and Flatpak keeps it up to date. Open https://openxplorer.app/openxplorer.flatpakref to install it with GNOME Software or KDE Discover, or run these commands as your normal user.",
+          "This adds the OpenXplorer repository, https://flatpak.openxplorer.app/repo/, whose releases are signed with the OpenXplorer Flatpak repository key (fingerprint 4483 F86D FCF3 21FD D175 3FEF B6B1 B6AB F57D 00E2), and Flathub for the GNOME runtime it needs. Each new release then arrives with your other updates in GNOME Software, KDE Discover or flatpak update."
+        ],
+        "code": "flatpak install --user https://openxplorer.app/openxplorer.flatpakref\nflatpak run io.winspace.Development"
+      },
+      {
+        "id": "flatpak-file",
+        "title": "Moving from the Flatpak file",
+        "paragraphs": [
+          "The io.winspace.Development.flatpak file of a GitHub release does not update itself. If you installed it, replace it once with the Flatpak from the repository; your settings and saved passwords stay."
+        ],
+        "code": "flatpak uninstall io.winspace.Development\nflatpak install --user https://openxplorer.app/openxplorer.flatpakref"
       },
       {
         "id": "app-updates",
@@ -121,7 +138,7 @@
         "title": "The Software card before installation",
         "paragraphs": [
           "A downloaded .deb can have a generic card before installation even though its installed card shows the folder icon, application name and AGPL license. The embedded catalog is not necessarily available to Software until installed and indexed. Another icon or homepage URL cannot guarantee the local pre-install view.",
-          "A signed repository with a pre-indexed AppStream catalog can supply that information before installation. This project does not configure or deploy such a repository as part of installing the local package."
+          "The Flatpak repository is such a signed repository with an AppStream catalog: GNOME Software and KDE Discover show the Flatpak's name, screenshots and release notes before installation. The .deb is a local package and has no repository."
         ]
       }
     ]
