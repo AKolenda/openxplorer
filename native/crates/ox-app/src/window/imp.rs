@@ -30,6 +30,7 @@ use super::session::Session;
 use super::session::TabId;
 use super::settings_tab::SettingsTabState;
 use super::sidebar::Sidebar;
+use super::star_prompt::StarPrompt;
 use super::status_bar::StatusBar;
 use super::tab_commands::ClosedTab;
 use super::tab_moves::OutgoingTabDrag;
@@ -152,6 +153,9 @@ pub(crate) struct BrowserWindow {
     /// Pops up when the daily check finds a newer release.
     #[template_child]
     pub(super) update_notice: TemplateChild<UpdateNotice>,
+    /// Asks for a GitHub star once the app has started a few times.
+    #[template_child]
+    pub(super) star_prompt: TemplateChild<StarPrompt>,
     /// Counts, the type-to-select hint and the view buttons.
     #[template_child]
     pub(super) status_bar: TemplateChild<StatusBar>,
@@ -395,6 +399,7 @@ impl ObjectSubclass for BrowserWindow {
         TransferPanel::ensure_type();
         Toast::ensure_type();
         UpdateNotice::ensure_type();
+        StarPrompt::ensure_type();
         StatusBar::ensure_type();
         SettingsPage::ensure_type();
         klass.bind_template();

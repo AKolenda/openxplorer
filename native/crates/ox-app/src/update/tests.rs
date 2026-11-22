@@ -269,8 +269,8 @@ fn checking_offers_a_newer_release_and_the_status_bar_says_so() {
     dialog.close();
 }
 
-/// The daily check at launch pops up a notice for the release it finds;
-/// Later closes it and saves the release, whose notice then never pops up
+/// The daily check at launch pops up a notice for the release it finds,
+/// in place of a star prompt shown before it; Later closes it and saves the release, whose notice then never pops up
 /// again, while the command bar's Update and the status bar's Update
 /// available stay.
 ///
@@ -280,11 +280,16 @@ fn the_daily_check_pops_up_a_notice_that_later_dismisses() {
     let fixture = Fixture::standard();
     let simulated = SimulatedUpdates::new(Installation::DebianPackage);
     let test = simulated.window(&fixture);
+    test.window.star_prompt().set_visible(true);
     simulated.updates.check_automatically(None);
     wait_until("the check", || !simulated.updates.state().is_busy());
 
     let notice = test.window.update_notice();
     assert_eq!(notice.shown_update().map(|update| update.latest), Some(NEXT));
+    assert!(
+        !test.window.star_prompt().is_visible(),
+        "the notice takes the star prompt's place"
+    );
     assert_eq!(
         notice.text(),
         "OpenXplorer 1.0.1 is ready to install. You have 1.0.0."

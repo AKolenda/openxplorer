@@ -12,7 +12,19 @@
 //! with gtk-shell's `gtk_surface1.set_modal`, which Mutter 46 turns into a
 //! modal dialog (`META_WINDOW_MODAL_DIALOG`) of the window it is a child
 //! of. `KWin` keeps a modal child above its parent and sends a click on
-//! the parent to the child. GTK has no way to make an X11 window a child of another
+//! the parent to the child.
+//!
+//! Where Mutter's `attach-modal-dialogs` is on, as GNOME and Zorin OS
+//! turn it on, Mutter glues a modal dialog to its parent: it centres the
+//! dialog on the parent, and dragging the dialog moves the parent instead
+//! (`meta_window_drag_begin` moves the window an attached dialog is
+//! attached to). Windows' dialog moves on its own, so there the dialog
+//! stays a child of the caller's window, above it, but is not modal. The
+//! caller still waits for it: Chromium and GTK stop taking input in the
+//! window that asked while their dialog is open. A Qt app asking through
+//! the portal leaves that to the dialog, so there its window stays usable.
+//!
+//! GTK has no way to make an X11 window a child of another
 //! process's window, and a modal window without a parent could lock the
 //! other `OpenXplorer` windows instead, so such a dialog stays a window of
 //! its own, as before.
@@ -62,9 +74,27 @@ impl CallerWindow {
     }
 }
 
+/// Mutter's settings, and its key that glues a modal dialog to its
+/// parent window.
+const MUTTER_SCHEMA: &str = "org.gnome.mutter";
+const ATTACH_MODAL_DIALOGS: &str = "attach-modal-dialogs";
+
+/// Whether the compositor glues a modal dialog to its parent, so that
+/// dragging the dialog would move the caller's window with it. Read from
+/// Mutter's settings as the desktop sets them (`GSettings` takes the
+/// desktop's own defaults from `XDG_CURRENT_DESKTOP`: Zorin OS's
+/// `[org.gnome.mutter:zorin]` turns it on). The Flatpak serves no dialogs,
+/// so it never needs to know.
+pub(super) fn desktop_attaches_modal_dialogs() -> bool {
+    crate::theme::host_desktop_key(MUTTER_SCHEMA, ATTACH_MODAL_DIALOGS)
+        .is_some_and(|settings| settings.boolean(ATTACH_MODAL_DIALOGS))
+}
+
 /// Gives the dialog `window` a window group of its own and, when the
-/// caller named a Wayland window, makes it a modal child of that window
-/// once it is realized. The flag returned turns true then.
+/// caller named a Wayland window, makes it a child of that window once it
+/// is realized: a modal one, unless the desktop would then glue it to that
+/// window ([`desktop_attaches_modal_dialogs`]). The flag returned turns
+/// true then.
 pub(super) fn attach_to_caller(window: &gtk::Window, parent: &str) -> Rc<Cell<bool>> {
     gtk::WindowGroup::new().add_window(window);
     let attached: Rc<Cell<bool>> = Rc::default();
@@ -72,6 +102,7 @@ pub(super) fn attach_to_caller(window: &gtk::Window, parent: &str) -> Rc<Cell<bo
         return attached;
     };
     let done = Rc::clone(&attached);
+    let modal = !desktop_attaches_modal_dialogs();
     let attach = move |window: &gtk::Window| {
         let Some(toplevel) = window.surface().and_downcast::<gdk_wayland::WaylandToplevel>() else {
             // Not on Wayland after all (GDK_BACKEND=x11 under a Wayland
@@ -79,7 +110,7 @@ pub(super) fn attach_to_caller(window: &gtk::Window, parent: &str) -> Rc<Cell<bo
             return;
         };
         if toplevel.set_transient_for_exported(&handle) {
-            window.set_modal(true);
+            window.set_modal(modal);
             done.set(true);
         } else {
             glib::g_warning!(

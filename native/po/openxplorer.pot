@@ -2634,7 +2634,7 @@ msgstr ""
 msgid "Cancelling… "
 msgstr ""
 
-#: crates/ox-app/src/properties/size_scan_strip.rs crates/ox-app/src/window/update_notice.rs
+#: crates/ox-app/src/properties/size_scan_strip.rs crates/ox-app/src/window/notice_card.rs crates/ox-app/src/window/star_prompt.rs
 msgid "Dismiss"
 msgstr ""
 
@@ -7640,6 +7640,18 @@ msgstr ""
 msgid "Find an app in Software"
 msgstr ""
 
+#: crates/ox-app/src/window/star_prompt.rs
+msgid "Enjoying OpenXplorer?"
+msgstr ""
+
+#: crates/ox-app/src/window/star_prompt.rs
+msgid "Give us a star on GitHub to let us know!"
+msgstr ""
+
+#: crates/ox-app/src/window/star_prompt.rs
+msgid "Star on GitHub"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/status_bar.rs
 msgid "Changes made elsewhere are not shown as they happen. OpenXplorer lists this folder again every {interval}; press F5 to list it now."
@@ -10782,6 +10794,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml
 msgid "Preview build of OpenXplorer 2.0.2 under its own application ID."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Previous Versions lists the snapshots an SMB server keeps of an item, as Windows 11 does, by asking the server with the account or password already saved for it. In Details view the sorted column shows a clear arrow after its title, and a sort other than Name ascending colours the title, so a list out of its usual order stands out. On GNOME and Zorin OS an app's Open or Save dialog, such as a browser's download dialog, now moves on its own instead of dragging the app's window with it. After a few sessions the app asks once whether you would like to star it on GitHub."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml

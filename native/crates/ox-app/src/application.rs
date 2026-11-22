@@ -197,6 +197,7 @@ mod imp {
                 super::sweep_archive_copies_at_start();
                 if let Some(state) = self.state.get() {
                     state.check_for_updates_soon();
+                    state.count_launch_for_star_prompt();
                     state.forget_removed_shortcut_apps_soon();
                 }
             }
