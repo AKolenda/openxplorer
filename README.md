@@ -22,6 +22,16 @@
 
 *The native GTK 4 app, shown with fictional sample files.*
 
+## Star history
+
+<a href="https://www.star-history.com/#AKolenda/openxplorer&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=AKolenda/openxplorer&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=AKolenda/openxplorer&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=AKolenda/openxplorer&type=Date" />
+  </picture>
+</a>
+
 ## Contribute
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
