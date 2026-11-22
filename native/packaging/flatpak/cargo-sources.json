@@ -1640,14 +1640,14 @@
     {
         "type": "archive",
         "archive-type": "tar-gzip",
-        "url": "https://static.crates.io/crates/glib/glib-0.22.10.crate",
-        "sha256": "e4cf9e5bd8713f1990a92c422998826e0fb34824277b46bc59757373483c6694",
-        "dest": "cargo/vendor/glib-0.22.10"
+        "url": "https://static.crates.io/crates/glib/glib-0.22.11.crate",
+        "sha256": "c9c4cbf1972a07741ae5ce9b23a582a90efc69745fc713f8b037b8d962f604da",
+        "dest": "cargo/vendor/glib-0.22.11"
     },
     {
         "type": "inline",
-        "contents": "{\"package\": \"e4cf9e5bd8713f1990a92c422998826e0fb34824277b46bc59757373483c6694\", \"files\": {}}",
-        "dest": "cargo/vendor/glib-0.22.10",
+        "contents": "{\"package\": \"c9c4cbf1972a07741ae5ce9b23a582a90efc69745fc713f8b037b8d962f604da\", \"files\": {}}",
+        "dest": "cargo/vendor/glib-0.22.11",
         "dest-filename": ".cargo-checksum.json"
     },
     {
