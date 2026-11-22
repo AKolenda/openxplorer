@@ -3,25 +3,37 @@
 //!
 //! The bundle is `io.winspace.Development` and keeps its settings in
 //! `~/.var/app/io.winspace.Development/config/winspace`; the Flathub build is
-//! `app.openxplorer.OpenXplorer`, whose sandbox has its own
-//! `~/.var/app/app.openxplorer.OpenXplorer`. On the Flathub build's first
-//! launch, before anything reads its settings, the bundle's settings folder
-//! is copied over once, so a user who moves to Flathub keeps their pinned
-//! folders, views and preferences. Nothing is copied when the Flathub build
-//! already has settings, when the bundle has none, or when the sandbox
-//! cannot read them; the app then starts with the defaults, as any first
-//! launch does. Saved SMB passwords need no copy: both read the desktop's
-//! Secret Service under the same schema.
+//! `app.openxplorer.OpenXplorer`, whose settings folder is
+//! `~/.var/app/app.openxplorer.OpenXplorer/config/winspace`. Flatpak hides
+//! other apps' `~/.var/app` folders even from `--filesystem=host`, so the
+//! sandbox cannot read the bundle's folder itself. The host can, and the
+//! Flathub build's own data folder is the same path on the host as in the
+//! sandbox, so on the first launch, before anything reads the settings,
+//! `flatpak-spawn --host cp` copies the bundle's folder beside this build's
+//! settings folder, and the copy is renamed into place. The app already
+//! talks to `org.freedesktop.Flatpak` for Open in Terminal, so this needs
+//! no other permission.
+//!
+//! The settings folder is then made, copied or not, so later launches never
+//! try again. Nothing is copied when the Flathub build already has settings
+//! or the bundle has none; the app then starts with the defaults, as any
+//! first launch does. Saved SMB passwords need no copy: both read the
+//! desktop's Secret Service under the same schema.
 
 use std::fs;
 use std::io;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use ox_core::settings::Settings;
 
 /// The bundle's application ID, whose sandbox data folder holds its settings.
 const BUNDLE_APP_ID: &str = "io.winspace.Development";
+
+/// How long the copy on the host may take before it is given up.
+const COPY_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Copies the bundle's settings into this build's settings folder once, in
 /// the Flathub build only. A failure is reported and otherwise ignored.
@@ -44,11 +56,11 @@ fn bundle_settings_folder(home: &Path) -> PathBuf {
     home.join(".var/app").join(BUNDLE_APP_ID).join("config/winspace")
 }
 
-/// Copies `source` to `target` unless `target` exists or `source` is not a
-/// readable folder. The copy is made beside `target` and renamed into
-/// place, so an interrupted copy is never taken for settings.
+/// Copies `source` on the host to `target` unless `target` exists, then
+/// makes sure `target` exists. The copy is made beside `target` and renamed
+/// into place, so an interrupted copy is never taken for settings.
 fn adopt(source: &Path, target: &Path) -> io::Result<()> {
-    if target.exists() || !source.is_dir() {
+    if target.exists() {
         return Ok(());
     }
     let parent = target
@@ -59,28 +71,37 @@ fn adopt(source: &Path, target: &Path) -> io::Result<()> {
     if staging.exists() {
         fs::remove_dir_all(&staging)?;
     }
-    let copied = copy_folder(source, &staging).and_then(|()| fs::rename(&staging, target));
-    if copied.is_err() {
+    // A host that cannot run the copy counts as one without the bundle.
+    if copy_on_host(source, &staging).unwrap_or(false) && staging.is_dir() {
+        fs::rename(&staging, target)?;
+    } else {
         let _ = fs::remove_dir_all(&staging);
+        fs::create_dir(target)?;
     }
-    copied
+    fs::set_permissions(target, fs::Permissions::from_mode(0o700))
 }
 
-/// Copies the regular files and folders under `source` to a new private
-/// folder `target`, skipping links and special files.
-fn copy_folder(source: &Path, target: &Path) -> io::Result<()> {
-    fs::create_dir(target)?;
-    fs::set_permissions(target, fs::Permissions::from_mode(0o700))?;
-    for entry in fs::read_dir(source)? {
-        let entry = entry?;
-        let kind = entry.file_type()?;
-        let destination = target.join(entry.file_name());
-        if kind.is_dir() {
-            copy_folder(&entry.path(), &destination)?;
-        } else if kind.is_file() {
-            fs::copy(entry.path(), &destination)?;
-            fs::set_permissions(&destination, fs::Permissions::from_mode(0o600))?;
+/// Runs `cp -R source staging` on the host; false when `source` is missing
+/// or the copy failed or ran out of time.
+fn copy_on_host(source: &Path, staging: &Path) -> io::Result<bool> {
+    let mut child = Command::new("flatpak-spawn")
+        .args(["--host", "cp", "-R", "--"])
+        .arg(source)
+        .arg(staging)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    let deadline = Instant::now() + COPY_TIMEOUT;
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(status.success());
         }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Ok(false);
+        }
+        std::thread::sleep(Duration::from_millis(20));
     }
-    Ok(())
 }

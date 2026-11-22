@@ -53,7 +53,8 @@ notes are written once. The Flathub build never checks GitHub for a release on
 its own (`IS_FLATHUB` in `crates/ox-app/src/config.rs`), since Flathub updates
 it and publishes a release after GitHub does, and on its first launch it copies
 the settings folder of the bundle, `~/.var/app/io.winspace.Development/config/winspace`,
-when it can read it (`crates/ox-app/src/flathub_settings.rs`).
+through `flatpak-spawn --host cp`, since Flatpak hides other apps' `~/.var/app`
+folders even from `--filesystem=host` (`crates/ox-app/src/flathub_settings.rs`).
 
 ## Installed files
 
