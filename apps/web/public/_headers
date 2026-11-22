@@ -13,3 +13,10 @@
 
 /tour/*
   X-Robots-Tag: noindex
+
+# GNOME Software and KDE Discover open these when a browser hands them over.
+/openxplorer.flatpakref
+  Content-Type: application/vnd.flatpak.ref
+
+/openxplorer.flatpakrepo
+  Content-Type: application/vnd.flatpak.repo
