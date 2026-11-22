@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! [`FixedWidth`]: holds the Properties window's content at Windows 11's
 //! width, whatever an item's name, location or other values say, and at
-//! one height too when it is given one.
+//! one height too when it is given one. A window the user makes larger
+//! gives it the extra room.
 //!
 //! A window that cannot be resized takes its content's natural width, and
 //! a label's natural width is its whole text, even when it wraps or ends
