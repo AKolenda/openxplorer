@@ -15,8 +15,6 @@ on:
     workflows: ['Build, release and deploy']
     types: [completed]
     branches: [main]
-  push:
-    branches: [feat/flatpak-repo]
   workflow_dispatch:
     inputs:
       publish:
