@@ -555,6 +555,7 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Music icon",
             "Code icon",
             "File name endings",
+            "Use system window decorations",
             "Compact view",
             "Hide expand arrows in the sidebar",
             "Show more items in the navigation pane",
