@@ -10749,6 +10749,10 @@ msgid "Adds item check boxes as in Windows 11 and a redesigned Settings page wit
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "An item's Properties window can now be made larger from its edges and corners, and Previous Versions' list grows with it, so more versions show at once. Releases are also published in a signed Flatpak repository, so a Flatpak install updates through the software centre or flatpak update."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "Brave's downloads, its Save page as and Save as PDF, and its upload dialogs can open OpenXplorer's own Open and Save dialogs, also when the desktop portal reads its settings from a different folder, and the Brave sync can make Brave ask where to save each download. A Save dialog names the file for the type chosen in it. By default, an unselected item's check box shows on hover only while Ctrl is held, as in Windows Explorer, and an experimental, off-by-default option indexes frequently opened folders for instant search. Compressed archives, launcher previews during a drag and search results now have memory limits, and the share mount helper only rolls back what its own setup changed. Large cached folders, fast file operations and custom folder icons take less time."
 msgstr ""
 
