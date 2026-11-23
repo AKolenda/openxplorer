@@ -56,6 +56,12 @@ impl BrowserWindow {
         self.add_css_class("system-window-decorations");
     }
 
+    /// True when the desktop draws this window's frame and its tabs are
+    /// a row of the content ([`Self::configure_window_decorations`]).
+    pub(super) fn uses_system_decorations(&self) -> bool {
+        self.has_css_class("system-window-decorations")
+    }
+
     /// Gives the template's "+" its glyph and the new-tab action.
     pub(super) fn finish_title_bar(&self) {
         let new_tab = &*self.imp().new_tab_button;

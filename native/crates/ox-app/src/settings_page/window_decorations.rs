@@ -10,9 +10,9 @@ use super::SettingsPage;
 
 const SYSTEM_WINDOW_DECORATIONS: RowText = RowText {
     title: "Use system window decorations",
-    description: "Use your desktop's title bar and window buttons, with tabs below. Applies to new \
-                  windows; close and reopen existing windows after file operations finish. On desktops \
-                  without system decorations, GTK provides a standard title bar.",
+    description: "Use your desktop's title bar and window buttons, with the tabs below them. Applies \
+                  to windows opened after the change. Where the desktop draws no title bars, GTK draws \
+                  a standard one.",
     keywords: "appearance layout frame border titlebar title bar desktop native system decorations \
                KDE KWin GNOME Wayland X11 CSD SSD minimize maximize close",
 };

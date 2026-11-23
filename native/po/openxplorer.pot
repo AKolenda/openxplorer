@@ -4634,7 +4634,7 @@ msgid "Use system window decorations"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/window_decorations.rs
-msgid "Use your desktop's title bar and window buttons, with tabs below. Applies to new windows; close and reopen existing windows after file operations finish. On desktops without system decorations, GTK provides a standard title bar."
+msgid "Use your desktop's title bar and window buttons, with the tabs below them. Applies to windows opened after the change. Where the desktop draws no title bars, GTK draws a standard one."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/window_decorations.rs

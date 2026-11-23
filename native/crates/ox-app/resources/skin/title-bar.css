@@ -17,6 +17,21 @@ window.ox:not(.system-window-decorations) > .titlebar:backdrop {
   background: none;
   box-shadow: none;
 }
+/* With system window decorations on a desktop that draws none (GNOME on
+   Wayland), GTK puts its own title bar over the window. base.css resets
+   every button in the window to a flat, unpadded one; give that title
+   bar's window buttons back the size and round hover of GTK's theme. */
+window.ox.system-window-decorations > .titlebar windowcontrols > button {
+  min-width: 26px;
+  min-height: 26px;
+  margin: 0;
+  padding: 0;
+  border-radius: 9999px;
+}
+window.ox.system-window-decorations > .titlebar windowcontrols > button:hover,
+window.ox.system-window-decorations > .titlebar windowcontrols > button:active {
+  background: none;
+}
 .ox-titlebar { background-color: @ox_title; min-height: 42px; padding-left: 9px; }
 window.ox:backdrop .ox-titlebar { background-color: @ox_title_backdrop; }
 

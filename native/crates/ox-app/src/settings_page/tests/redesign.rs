@@ -659,13 +659,7 @@ fn the_search_finds_settings_by_the_words_people_use() {
                 "Tab key switches between split panes",
             ],
         ),
-        (
-            "reopen",
-            &[
-                "Reopen my tabs when OpenXplorer starts",
-                "Use system window decorations",
-            ],
-        ),
+        ("reopen", &["Reopen my tabs when OpenXplorer starts"]),
     ];
     for (typed, expected) in cases {
         settings.page.search(typed);

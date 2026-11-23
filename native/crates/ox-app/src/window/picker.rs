@@ -540,7 +540,11 @@ impl BrowserWindow {
         ));
         let imp = self.imp();
         // The caller's title takes the tabs' place, as a dialog's caption.
-        if let Some(bar) = imp.tab_strip.parent().and_downcast::<gtk::Box>() {
+        // The desktop's own title bar already shows it (`render_title`),
+        // so with system decorations the emptied tab row goes instead.
+        if self.uses_system_decorations() {
+            imp.tab_bar.set_visible(false);
+        } else if let Some(bar) = imp.tab_strip.parent().and_downcast::<gtk::Box>() {
             let title = gtk::Label::builder()
                 .label(picker.request.window_title())
                 .valign(gtk::Align::Center)
