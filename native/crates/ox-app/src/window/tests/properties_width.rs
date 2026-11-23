@@ -11,7 +11,7 @@ use gtk::prelude::*;
 use super::item_dialogs::general;
 use crate::properties::PropertiesWindow;
 use crate::test_support::harness::{
-    capture_dialog, descendants, wait_for_frames, Fixture, TestWindow, ThemeGuard,
+    capture_dialog, descendants, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 
 /// A fictional name far longer than the window is wide.
@@ -533,6 +533,39 @@ fn every_kind_of_properties_has_one_size() {
     let expected = (PropertiesWindow::WIDTH, PropertiesWindow::HEIGHT);
     let others: Vec<_> = sizes.iter().filter(|(_, size)| *size != expected).collect();
     assert!(others.is_empty(), "every window is {expected:?}: {others:?}");
+}
+
+/// An item's Properties opens at Windows' size, and the user can make it
+/// larger: Previous Versions' list grows with the window, so more versions
+/// show at once (owner request, 2026-11-22).
+///
+/// parity: PROP-001
+#[gtk::test]
+fn properties_can_be_made_larger_and_the_versions_list_grows_with_it() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Short")).expect("a folder");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Short");
+    let window = properties_of_selection(&test, "Short Properties");
+    assert!(window.is_resizable(), "an item's Properties can be resized");
+    window.select_tab("versions");
+    let page = window.tab_page("versions").expect("a Previous Versions tab");
+    let list = || {
+        descendants::<gtk::ScrolledWindow>(&page)
+            .into_iter()
+            .next()
+            .expect("the versions list scrolls")
+    };
+    wait_until("the versions list is shown", || list().height() > 0);
+    let (width, height, list_height) = (window.width(), window.height(), list().height());
+    window.set_default_size(width + 160, height + 240);
+    wait_until("the window is larger", || {
+        window.width() > width && window.height() > height
+    });
+    wait_until("the list grows with the window", || {
+        list().height() > list_height + 200
+    });
+    window.close();
 }
 
 /// The size of `label`'s font and the height of one line of its text,
