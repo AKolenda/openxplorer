@@ -36,11 +36,13 @@ use crate::window::BrowserWindow;
 /// window is 380 logical pixels wide, as Windows 11 draws Properties at
 /// 100 %.
 const WINDOW_WIDTH: i32 = 378;
-/// The height of every Properties window, its title bar and border
+/// The height every Properties window opens at, its title bar and border
 /// included, whatever it shows: Windows sizes a property sheet once and
 /// never changes it. Pages taller than the room under the tabs, as a
 /// folder's Customize under two rows of tabs or any page at a larger text
-/// size, scroll inside it; shorter pages leave room at the bottom.
+/// size, scroll inside it; shorter pages leave room at the bottom. Unlike
+/// Windows', the user can make the window larger from its edges, and a
+/// list that fills its tab, as Previous Versions', grows with it.
 const WINDOW_HEIGHT: i32 = 520;
 /// The space around the tabs and their page (`.properties-notebook`).
 const PAGE_MARGIN: i32 = 11;
@@ -170,6 +172,7 @@ mod imp {
         /// Tabs that outgrew the screen scroll from the next frame on.
         fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
             self.parent_size_allocate(width, height, baseline);
+            crate::resize_edges::allocate(&*self.obj(), width, height);
             let outgrown = self.tallest.get().is_some_and(|tallest| height > tallest);
             if outgrown && self.scroller.parent().is_none() {
                 let window = self.obj().downgrade();
@@ -256,12 +259,13 @@ impl PropertiesWindow {
         self.child().and_downcast()
     }
 
-    /// Holds the window at Windows' one size for an item's Properties,
-    /// whatever it shows, on every tab: Windows sizes a property sheet
-    /// once and never changes it. The pages scroll inside it when they
-    /// need more room, as at a larger text size. Other windows built on
-    /// this one, such as Folder Options and the Security tab's dialogs,
-    /// take their content's height, as Windows draws each at its own size.
+    /// Opens an item's Properties at Windows' one size, whatever it
+    /// shows, on every tab: Windows sizes a property sheet once and never
+    /// changes it. The pages scroll inside it when they need more room, as
+    /// at a larger text size. The user can make it larger, never smaller,
+    /// from its edges and corners. Other windows built on this one, such as
+    /// Folder Options and the Security tab's dialogs, take their content's
+    /// height and keep it, as Windows draws each at its own size.
     pub(crate) fn hold_sheet_size(&self) {
         let imp = self.imp();
         let Some(holder) = self.holder() else {
@@ -283,6 +287,8 @@ impl PropertiesWindow {
             .get()
             .map_or(WINDOW_HEIGHT, |tallest| WINDOW_HEIGHT.min(tallest - 2));
         holder.set_height(height - self.title_bar_height());
+        self.set_resizable(true);
+        crate::resize_edges::install(self);
     }
 
     /// The title bar's height.
