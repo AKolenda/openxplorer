@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.23
+Version:        2.0.24
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -142,6 +142,10 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Mon Nov 23 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.24-1
+- OpenXplorer 2.0.24: an item's Properties window can be made larger,
+  and releases are published in a signed Flatpak repository.
+
 * Sat Nov 21 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.23-1
 - OpenXplorer 2.0.23: Previous Versions lists an SMB server's snapshots,
   Details view marks the sorted column, and an app's Open or Save dialog

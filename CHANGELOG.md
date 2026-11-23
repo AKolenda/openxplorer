@@ -1,3 +1,31 @@
+# 2.0.24 — 2026-11-23
+
+An item's Properties window can now be made larger, and Previous Versions' list grows with it. Releases are also published in a signed Flatpak repository, so a Flatpak install updates like any other app.
+
+## What's Changed
+* fix(properties): Let an item's Properties window be made larger by @AKolenda in https://github.com/AKolenda/openxplorer/pull/387
+* docs(readme): Show the project's star history by @AKolenda in https://github.com/AKolenda/openxplorer/pull/390
+* feat(flatpak): Publish releases in a signed Flatpak repository by @AKolenda in https://github.com/AKolenda/openxplorer/pull/386
+* chore(deps): bump rusqlite from 0.42.0 to 0.43.0 in /native by @dependabot[bot] in https://github.com/AKolenda/openxplorer/pull/379
+* chore(deps): bump glib from 0.22.10 to 0.22.11 in /native by @dependabot[bot] in https://github.com/AKolenda/openxplorer/pull/378
+* chore(deps-dev): bump wrangler from 4.160.1 to 4.164.0 by @dependabot[bot] in https://github.com/AKolenda/openxplorer/pull/377
+* chore(deps): bump gio from 0.22.10 to 0.22.11 in /native by @dependabot[bot] in https://github.com/AKolenda/openxplorer/pull/376
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.24_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.24-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.24-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.24-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.24-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.23...v2.0.24
+
 # 2.0.23 — 2026-11-21
 
 Previous Versions lists the snapshots an SMB server keeps, as Windows does, and Details view marks the sorted column more clearly. On GNOME and Zorin OS, an app's Open or Save dialog now moves without dragging that app's window along.
