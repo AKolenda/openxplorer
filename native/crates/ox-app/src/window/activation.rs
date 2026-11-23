@@ -387,6 +387,11 @@ impl BrowserWindow {
             Activation::Archive => Ok(Resolved::Archive(Box::new(fresh))),
             Activation::Refused(message) => Err(message.to_owned()),
             Activation::File => {
+                // A Google Docs, Sheets or Slides file lives on the web
+                // only; the browser opens it, as GNOME Files does (DEV-013).
+                if let Some(url) = fresh.meta.web_target.clone() {
+                    return self.follow_link(LinkTarget::Web(url)).await;
+                }
                 if let Some(target) = desktop_link(&fresh) {
                     return self.follow_link(target?).await;
                 }

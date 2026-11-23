@@ -12,7 +12,7 @@ use super::attributes::{optional_boolean, path_attribute, string_attribute, time
 use super::classify::{classify_entry, Classification, FolderType, ItemMetadata};
 use super::type_label::{shortcut_label, type_label};
 use super::{Entry, EntryKind, EntryMeta};
-use crate::location::{is_virtual_location, normalise, scheme};
+use crate::location::{has_control_character, is_virtual_location, normalise, remember_cloud_name, scheme};
 
 #[cfg(test)]
 thread_local! {
@@ -30,7 +30,11 @@ pub fn entry_from_info(file: &gio::File, info: &gio::FileInfo) -> Entry {
     ROWS_BUILT_HERE.with(|built| built.set(built.get() + 1));
     let uri = file.uri();
     let base_name = || file.basename().map(|name| name.to_string_lossy().into_owned());
-    build_entry(&uri, info, base_name)
+    let entry = build_entry(&uri, info, base_name);
+    // Google Drive names items by ID in their addresses; titles and
+    // breadcrumbs show the names its listings gave (DEV-013).
+    remember_cloud_name(&entry.uri, &entry.name);
+    entry
 }
 
 /// The body of [`entry_from_info`], shared with the test fixtures' entries
@@ -83,6 +87,7 @@ pub(super) fn build_entry(
         serialized_icon: serialized_icon(info),
         meta: Box::new(EntryMeta {
             recent_target: recent_target(uri, info),
+            web_target: web_target(uri, info, kind),
             ..EntryMeta::from_info(info)
         }),
     }
@@ -100,7 +105,7 @@ fn network_file_type(uri: &str, info: &gio::FileInfo, kind: EntryKind, name: &st
 
     let on_network = matches!(
         location_kind(uri),
-        LocationKind::Smb | LocationKind::Remote | LocationKind::Device
+        LocationKind::Smb | LocationKind::Remote | LocationKind::Cloud | LocationKind::Device
     );
     if !on_network || kind != EntryKind::File {
         return None;
@@ -132,6 +137,19 @@ fn recent_target(uri: &str, info: &gio::FileInfo) -> Option<String> {
     }
     let target = normalise(&target).ok()?;
     (!is_virtual_location(&target)).then_some(target)
+}
+
+/// The web page a Google Drive document opens at: the `https:`
+/// `standard::target-uri` of a shortcut on an online-account drive, as
+/// `GVfs` lists Docs, Sheets and Slides files (DEV-013). Nothing else is
+/// sent to the browser.
+fn web_target(uri: &str, info: &gio::FileInfo, kind: EntryKind) -> Option<String> {
+    if kind != EntryKind::Shortcut || !crate::location::is_cloud_location(uri) {
+        return None;
+    }
+    let target = string_attribute(info, "standard::target-uri")?;
+    let is_web_page = scheme(&target).as_deref() == Some("https") && !has_control_character(&target);
+    is_web_page.then_some(target)
 }
 
 /// Whether `target` is a `file:` address with no host that GIO maps to a

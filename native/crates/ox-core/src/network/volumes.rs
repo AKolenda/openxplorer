@@ -56,11 +56,15 @@ pub fn volume_id_from<'a>(
 /// volume monitor's) and returns its root as GIO spells it. An already
 /// mounted volume just returns its root.
 ///
+/// A Google Drive or `OneDrive` account (DEV-013) returns the root its
+/// volume names when its mount is not shown on the volume yet: GIO shows the account's mount on the volume only once the volume
+/// monitor reports it, after mounting finished.
+///
 /// # Errors
 ///
 /// [`NetworkError::VolumeUnavailable`] when the volume is gone,
-/// [`NetworkError::NoMountReturned`] when mounting left no mount, or
-/// GIO's error.
+/// [`NetworkError::NoMountReturned`] when mounting left no mount (and,
+/// for an online account, its volume names no root), or GIO's error.
 pub async fn mount_volume(
     volumes: &[gio::Volume],
     id: &str,
@@ -74,8 +78,12 @@ pub async fn mount_volume(
         return Ok(mount.root().uri().into());
     }
     volume.mount_future(gio::MountMountFlags::NONE, operation).await?;
-    let mount = volume.get_mount().ok_or(NetworkError::NoMountReturned)?;
-    Ok(mount.root().uri().into())
+    if let Some(mount) = volume.get_mount() {
+        return Ok(mount.root().uri().into());
+    }
+    let root = volume.activation_root().map(|root| root.uri().to_string());
+    root.filter(|root| crate::location::is_cloud_location(root))
+        .ok_or(NetworkError::NoMountReturned)
 }
 
 /// Disconnect: unmounts the user mount among `mounts` (the volume

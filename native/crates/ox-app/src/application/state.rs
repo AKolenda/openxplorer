@@ -321,13 +321,13 @@ impl AppState {
     }
 }
 
-/// Whether a new window may start in `uri`: a folder on this computer or
-/// on a network server, rather than a landing page, a device or another
+/// Whether a new window may start in `uri`: a folder on this computer, on
+/// a network server or on an online-account drive, rather than a landing page, a device or another
 /// virtual place (`newWindow` in app.js).
 fn can_start_a_new_window_in(uri: &str) -> bool {
     matches!(
         location_kind(uri),
-        LocationKind::Local | LocationKind::Smb | LocationKind::Remote
+        LocationKind::Local | LocationKind::Smb | LocationKind::Remote | LocationKind::Cloud
     )
 }
 

@@ -29,6 +29,10 @@ pub struct EntryMeta {
     /// name is a hash of it. Kept only when it normalises to a real
     /// location, never a virtual one.
     pub recent_target: Option<String>,
+    /// For a Google Docs, Sheets or Slides file on Google Drive, which has
+    /// no file to download, the `https:` page `GVfs` names in
+    /// `standard::target-uri`, where the browser opens it (DEV-013).
+    pub web_target: Option<String>,
     /// For a photo listed in Gallery, when it was taken: its EXIF
     /// `DateTimeOriginal` in local time, seconds since the Unix epoch.
     /// `None` everywhere else, and for a photo without one.
@@ -58,6 +62,7 @@ impl EntryMeta {
                 .flatten()
                 .map(|target| target.display().to_string()),
             recent_target: None,
+            web_target: None,
             taken: None,
             pixel_size: None,
         }

@@ -5980,6 +5980,10 @@ msgid "Drives, shares and virtual items cannot be changed here."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
+msgid "Google Drive and OneDrive are read-only for now. Copy items to this PC to change them."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/availability.rs
 msgid "Items in Recent files can be opened and copied, not changed."
 msgstr ""
 
@@ -9249,6 +9253,10 @@ msgid "Only local paths, smb:// locations and connected devices are supported in
 msgstr ""
 
 #: crates/ox-core/src/location/normalise.rs
+msgid "Open a folder on the drive first, then select files or folders inside it. The drive itself cannot be renamed, moved, copied or trashed here."
+msgstr ""
+
+#: crates/ox-core/src/location/normalise.rs
 msgid "Open a folder on the server first, then select files or folders inside it. The server itself cannot be renamed, moved, copied or trashed here."
 msgstr ""
 
@@ -9270,6 +9278,10 @@ msgstr ""
 
 #: crates/ox-core/src/location/normalise.rs
 msgid "Windows drive letters are not Linux paths. Use /home/… or \\\\server\\share."
+msgstr ""
+
+#: crates/ox-core/src/location/normalise/cloud.rs
+msgid "Enter the account of the drive, for example google-drive://alice@example.com/."
 msgstr ""
 
 #: crates/ox-core/src/location/normalise.rs crates/ox-core/src/location/normalise/remote.rs

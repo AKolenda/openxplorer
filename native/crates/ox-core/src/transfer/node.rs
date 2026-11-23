@@ -106,7 +106,9 @@ pub trait Node: Send + Sync {
     fn uri(&self) -> String;
 
     /// The last path component, byte for byte. Linux file names need not be
-    /// UTF-8, and a copy must publish exactly the name it read.
+    /// UTF-8, and a copy must publish exactly the name it read. An item
+    /// whose address names it by ID (Google Drive) gives the name its
+    /// copy takes instead, as its backend reports it.
     fn name(&self) -> OsString;
 
     /// The name for labels and messages, with invalid UTF-8 replaced. Never

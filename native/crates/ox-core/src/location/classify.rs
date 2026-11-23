@@ -38,27 +38,29 @@ impl LocationContext {
     }
 
     /// True where New and Paste may create items: a real folder that is not
-    /// an SMB server listing, a virtual place, a snapshot or a ZIP. The web UI's
-    /// `writableLocation`.
+    /// an SMB server listing, a virtual place, a snapshot, a ZIP or an
+    /// online-account drive. The web UI's `writableLocation`.
     pub fn is_writable_location(&self, uri: &str) -> bool {
         // Safety rule (app.js `writableLocation`): New and Paste never
         // create items on a page, in a virtual folder, in a server's list
         // of shares or in a read-only snapshot. A ZIP browsed as a folder
-        // is read-only too.
+        // is read-only too, and so are Google Drive and OneDrive for now
+        // (DEV-013): their files are listed, opened and copied off.
         !uri.is_empty()
             && !super::is_archive_location(uri)
+            && !super::is_cloud_location(uri)
             && VirtualPlace::from_uri(uri).is_none()
             && !is_in_virtual_folder(uri)
             && !is_smb_server(uri)
             && !self.is_snapshot_location(uri)
     }
 
-    /// True for SMB locations and for local folders inside a mounted
+    /// True for server locations and for local folders inside a mounted
     /// CIFS/SMB3 share; such folders get the network icon. The web UI's
     /// `networkLocation`.
     pub fn is_network_location(&self, uri: &str) -> bool {
         match location_kind(uri) {
-            LocationKind::Smb | LocationKind::Remote => true,
+            LocationKind::Smb | LocationKind::Remote | LocationKind::Cloud => true,
             LocationKind::Local => self.is_on_network_mount(uri),
             LocationKind::Device | LocationKind::Other => false,
         }

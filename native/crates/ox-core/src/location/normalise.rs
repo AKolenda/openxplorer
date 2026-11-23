@@ -14,8 +14,10 @@ use std::path::{Path, PathBuf};
 use gio::prelude::FileExt;
 use percent_encoding::percent_encode;
 
+mod cloud;
 mod remote;
 
+use cloud::normalise_cloud_url;
 use remote::normalise_remote_url;
 pub use remote::without_user;
 
@@ -85,6 +87,7 @@ pub fn normalise_location(address: &str, base: Option<&str>, home: &Path) -> Res
     match LocationKind::from_scheme(&scheme) {
         LocationKind::Device => normalise_device_location(&address, &scheme),
         LocationKind::Remote => normalise_remote_url(&address),
+        LocationKind::Cloud => normalise_cloud_url(&address),
         LocationKind::Local | LocationKind::Smb | LocationKind::Other => normalise_url(&address),
     }
 }
@@ -122,7 +125,7 @@ pub fn require_share(address: &str) -> Result<String, LocationError> {
     let is_folder = match parts.kind() {
         LocationKind::Smb => parts.path_depth() > 0,
         LocationKind::Remote => parts.scheme != "nfs" || parts.path_depth() > 0,
-        LocationKind::Local | LocationKind::Device | LocationKind::Other => false,
+        LocationKind::Local | LocationKind::Device | LocationKind::Cloud | LocationKind::Other => false,
     };
     if !is_folder {
         return Err(LocationError::new(crate::i18n::gettext(
@@ -156,6 +159,13 @@ pub fn require_item_uri(uri: &str) -> Result<String, LocationError> {
     if parts.is_remote() && parts.path_depth() == 0 {
         return Err(LocationError::new(crate::i18n::gettext(
             "Open a folder on the server first, then select files or folders inside it. The server itself \
+             cannot be renamed, moved, copied or trashed here.",
+        )));
+    }
+    // A drive's root is the account, not an item on it.
+    if parts.is_cloud() && parts.path_depth() == 0 {
+        return Err(LocationError::new(crate::i18n::gettext(
+            "Open a folder on the drive first, then select files or folders inside it. The drive itself \
              cannot be renamed, moved, copied or trashed here.",
         )));
     }
@@ -308,7 +318,11 @@ pub fn typed_local_path(typed: &str) -> Option<PathBuf> {
 /// and connected-device folders.
 fn is_remote_base(base: &str) -> bool {
     split_location(base).is_ok_and(|parts| {
-        parts.is_smb() || parts.is_remote() || parts.is_device() || parts.scheme == "admin"
+        parts.is_smb()
+            || parts.is_remote()
+            || parts.is_cloud()
+            || parts.is_device()
+            || parts.scheme == "admin"
     })
 }
 

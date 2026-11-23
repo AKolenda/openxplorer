@@ -34,6 +34,7 @@ pub(crate) use local_delete::FolderDeletion;
 
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use gio::prelude::*;
 
@@ -47,6 +48,9 @@ use crate::transfer::{
 #[derive(Clone, Debug)]
 pub struct GioNode {
     file: gio::File,
+    /// The name a copy of a Google Drive item takes, read once
+    /// ([`Self::copy_name`]).
+    copy_name: OnceLock<Option<OsString>>,
 }
 
 impl GioNode {
@@ -69,7 +73,39 @@ impl GioNode {
 
     /// Wraps a file obtained from GIO enumeration or a local path.
     pub fn from_file(file: gio::File) -> Self {
-        Self { file }
+        Self {
+            file,
+            copy_name: OnceLock::new(),
+        }
+    }
+
+    /// The name `GVfs` gives a copy of an item whose address names it by
+    /// ID (DEV-013): Google Drive's `standard::copy-name`, the item's
+    /// title with any `/` made `-`, and its ID added when another item in
+    /// its folder has the same title. `None` for every other item, which
+    /// is named by its address, or when the backend does not say.
+    ///
+    /// Blocks on the first call for a Google Drive item, as every query
+    /// of this adapter does.
+    fn copy_name(&self) -> Option<&OsString> {
+        let read = || {
+            let uri = self.file.uri();
+            if !crate::location::names_items_by_id(&uri) {
+                return None;
+            }
+            let info = self
+                .file
+                .query_info(
+                    "standard::copy-name",
+                    gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+                    gio::Cancellable::NONE,
+                )
+                .ok()?;
+            let name = info.attribute_as_string("standard::copy-name")?;
+            let is_one_component = !name.is_empty() && !name.contains('/') && name != "." && name != "..";
+            is_one_component.then(|| OsString::from(name.as_str()))
+        };
+        self.copy_name.get_or_init(read).as_ref()
     }
 
     /// True for an item on a phone or another MTP device.
@@ -106,6 +142,10 @@ impl Node for GioNode {
     }
 
     fn name(&self) -> OsString {
+        // A Google Drive address ends in an ID; its copy takes the title.
+        if let Some(name) = self.copy_name() {
+            return name.clone();
+        }
         // Only a URI without a path has no base name; its URI is the only
         // name left to show.
         match self.file.basename() {

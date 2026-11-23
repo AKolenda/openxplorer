@@ -282,6 +282,7 @@ fn drive_tile(row: &VolumeRow, cell: CellSize) -> Tile {
     let glyph = match row.kind {
         VolumeKind::Device => Icon::Phone,
         VolumeKind::Drive => Icon::HardDrive,
+        VolumeKind::Cloud => Icon::Cloud,
     };
     let key = match &row.state {
         VolumeState::Mounted { uri, .. } => uri,

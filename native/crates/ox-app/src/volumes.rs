@@ -46,14 +46,20 @@ pub(crate) enum VolumeKind {
     Drive,
     /// A phone, camera or iOS device.
     Device,
+    /// A Google Drive or `OneDrive` account from GNOME Online Accounts
+    /// (DEV-013).
+    Cloud,
 }
 
 impl VolumeKind {
     /// The kind of a location at the canonical `root`: a device for the
-    /// `mtp:`, `gphoto2:` and `afc:` schemes, a drive otherwise.
+    /// `mtp:`, `gphoto2:` and `afc:` schemes, an online-account drive for
+    /// `google-drive:` and `onedrive:`, a drive otherwise.
     fn of_root(root: &str) -> Self {
         if location::is_device_location(root) {
             VolumeKind::Device
+        } else if location::is_cloud_location(root) {
+            VolumeKind::Cloud
         } else {
             VolumeKind::Drive
         }
@@ -166,9 +172,11 @@ impl VolumeRow {
 
     /// True for a mounted SMB share or other server (SFTP, FTP, WebDAV,
     /// NFS). It belongs under Network, never among
-    /// the drives (`!m.uri?.startsWith('smb:')` in app.js).
+    /// the drives (`!m.uri?.startsWith('smb:')` in app.js). A Google Drive
+    /// or `OneDrive` account stays among the drives, mounted or not, as
+    /// GNOME Files lists it with them.
     pub(crate) fn is_network(&self) -> bool {
-        self.uri().is_some_and(location::is_server_location)
+        self.kind != VolumeKind::Cloud && self.uri().is_some_and(location::is_server_location)
     }
 }
 
@@ -449,6 +457,47 @@ mod tests {
             ..VolumeFacts::default()
         };
         assert!(locations(&[], &[web]).is_empty());
+    }
+
+    /// A Google Drive or `OneDrive` account is a cloud drive among the
+    /// drives, waiting to connect or connected, named by its account, as
+    /// GNOME Online Accounts and `GVfs` offer it.
+    ///
+    /// parity: DEV-013
+    #[test]
+    fn online_account_drives_are_listed_among_the_drives() {
+        let google = VolumeFacts {
+            name: "alice@example.com".into(),
+            can_mount: true,
+            uuid: Some("google-drive://alice@example.com/".into()),
+            activation_uri: Some("google-drive://alice@example.com/".into()),
+            ..VolumeFacts::default()
+        };
+        let rows = locations(
+            &[mount("bob@example.com", "onedrive://bob@example.com/")],
+            std::slice::from_ref(&google),
+        );
+        assert_eq!(
+            rows,
+            [
+                VolumeRow {
+                    label: "bob@example.com".into(),
+                    kind: VolumeKind::Cloud,
+                    state: VolumeState::Mounted {
+                        uri: "onedrive://bob@example.com/".into(),
+                        controls: MountControls::UNMOUNTABLE,
+                    },
+                },
+                VolumeRow {
+                    label: "alice@example.com".into(),
+                    kind: VolumeKind::Cloud,
+                    state: VolumeState::Mountable {
+                        id: "google-drive://alice@example.com/".into()
+                    },
+                },
+            ]
+        );
+        assert!(rows.iter().all(|row| !row.is_network()));
     }
 
     /// parity: NET-018

@@ -301,7 +301,7 @@ impl BrowserWindow {
     pub(super) fn is_remote_folder(&self, uri: &str) -> bool {
         match location_kind(uri) {
             LocationKind::Local => self.imp().locations.borrow().is_network_location(uri),
-            LocationKind::Smb | LocationKind::Remote | LocationKind::Device => true,
+            LocationKind::Smb | LocationKind::Remote | LocationKind::Cloud | LocationKind::Device => true,
             LocationKind::Other => false,
         }
     }

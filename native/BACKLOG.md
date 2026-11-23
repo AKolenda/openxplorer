@@ -149,6 +149,9 @@ then X11), with disposable data:
 - **SMB** beyond the owner's own server: other NAS vendors and Samba
   versions, Windows shares, guest and domain sign-in, saved and session
   passwords, rejected credentials, disconnect and reconnect during a copy.
+- **Google Drive and OneDrive** through GNOME Online Accounts (DEV-013):
+  connecting from the navigation pane and This PC, folder names in titles
+  and breadcrumbs, copying files off, and Docs opening in the browser.
 - **Phones** (MTP and PTP, Android and iPhone): browsing, copy to and from the
   phone, replace, rename, delete, unplug during a transfer.
 - **USB drives and SD cards**: mount, eject, safely remove, copy across
@@ -283,7 +286,7 @@ baseline and GNOME integration. Priority is from the inventory.
 
 | ID | Status | Priority | Behaviour |
 |---|---|---|---|
-| DEV-013 | todo | could | Online-account drives (Google Drive, OneDrive, Nextcloud) |
+| DEV-013 | partial | could | Online-account drives (Google Drive, OneDrive, Nextcloud) |
 
 #### OPEN: Opening items and applications (1)
 

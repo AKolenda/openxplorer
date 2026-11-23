@@ -17,7 +17,7 @@ also awaiting the owner's review: `apps_list_detail_20_regular` (Tiles) and
 `content_view_20_regular` (Content). Added on 2026-11-08, also awaiting the
 owner's review: `search_settings_20_regular` (Search options while searching). Added on 2026-11-09, also awaiting the owner's review: `warning_32_color`
 (the warning icon of the Rename and Confirm Save As message boxes, which Windows 11
-draws in colour). Added on 2026-11-17, also awaiting the owner's review: `dismiss_circle_32_color` (the error icon of the message box that says a typed address was not found, the red circle Windows 11's File Explorer error box shows). Undo, Redo and Pin
+draws in colour). Added on 2026-11-17, also awaiting the owner's review: `dismiss_circle_32_color` (the error icon of the message box that says a typed address was not found, the red circle Windows 11's File Explorer error box shows). Added on 2026-11-23, also awaiting the owner's review: `cloud_20_regular` (Google Drive and OneDrive drives, as Windows 11 draws OneDrive). Undo, Redo and Pin
 are drawn in Windows' blue (#0078d4, or #60cdff in the dark theme) by the menu's CSS, and Redo shows
 `arrow_undo_20_regular` mirrored by it (`-gtk-icon-transform`), as Windows
 11 draws them; the files are not changed. Microsoft publishes no colour
@@ -146,6 +146,7 @@ it.
 | `actions/ox-window-multiple-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/window_multiple_20_regular.svg` | 6f885abfd54d205612317a62c5bd8cf9017783a817eca5e141fdc7ba5136968f |
 | `actions/ox-window-new-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/window_new_20_regular.svg` | c64f483ea659f4446541cbf77e6712ba8e28673cdc7594e11a56afa44d263273 |
 | `actions/ox-wrench-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/wrench_20_regular.svg` | 35032e75227053783c0a35d87fdd3e99a8287b57175876e4ea04304e305ce554 |
+| `devices/ox-cloud-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/cloud_20_regular.svg` | 0ae91870f8a328febd6a9ece3d87663b7fd3e9db39b652d9191e62e7a93e6812 |
 | `devices/ox-hard-drive-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/hard_drive_20_regular.svg` | 04551457489e67a9b568cc7d2f710a26776d3675ee4dd92b4535692085104b35 |
 | `devices/ox-laptop-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/laptop_20_regular.svg` | e0ff6f7f08ec6ed92b4264dab67f248627f5b12abbbec7eb231b1029f7469085 |
 | `devices/ox-phone-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/phone_20_regular.svg` | 3ee7532f1327fcd58e57b51fd523ef4bc781780bd9cd59b60fc67e02f10554f0 |
