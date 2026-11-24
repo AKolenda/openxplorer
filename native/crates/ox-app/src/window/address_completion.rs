@@ -20,6 +20,7 @@ use std::rc::Rc;
 use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::entry::enumerate_folder;
+use ox_core::location::typed_address;
 
 use crate::folder_view::sorting::SortKey;
 
@@ -102,8 +103,13 @@ impl BrowserWindow {
     /// Offers completions of `typed`, the text being typed in the address.
     pub(super) fn complete_address(&self, typed: &str) {
         let bar = self.address_bar();
-        let split = split_typed(typed);
-        let folder = split.and_then(|(base, _)| self.resolve_address(base).ok());
+        // A path being typed after an opening quote, as Copy as path
+        // quotes it, is completed without the quote.
+        let split = split_typed(typed.strip_prefix('"').unwrap_or(typed));
+        let folder = split.and_then(|(base, _)| {
+            let expanded = typed_address(base, |name| std::env::var(name).ok());
+            self.resolve_address(&expanded).ok()
+        });
         let (Some((base, prefix)), Some(folder)) = (split, folder) else {
             self.forget_address_completions();
             bar.hide_suggestions();

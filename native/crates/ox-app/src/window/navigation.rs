@@ -17,6 +17,8 @@ use ox_core::location::{
     self, normalise_navigation, parent_location, ArchiveLocation, LocationError, VirtualPlace,
 };
 
+use ox_core::places::KnownFolder;
+
 use crate::history::{LeftView, SearchStep};
 use crate::locations::{self, Page};
 
@@ -134,6 +136,36 @@ impl BrowserWindow {
         Page::from_title(typed)
             .map(|page| page.uri().to_owned())
             .or_else(|| listed_place(VirtualPlace::from_title(typed)))
+    }
+
+    /// The standard folder (Desktop, Documents, Downloads, Music, Pictures
+    /// or Videos) that `typed` names, in English or as the navigation pane
+    /// names it, ignoring case and surrounding spaces, as Windows 11 File
+    /// Explorer opens the user's Documents when "Documents" is typed in any
+    /// folder; `None` for other text, and for a standard folder that is
+    /// the home folder itself.
+    pub(super) fn standard_folder_titled(&self, typed: &str) -> Option<String> {
+        let wanted = typed.trim().to_lowercase();
+        if wanted.is_empty() {
+            return None;
+        }
+        let home = self.home_location();
+        self.context()
+            .known_folders()
+            .into_iter()
+            .filter(|place| !location::same_location(&place.uri, &home))
+            .find(|place| {
+                let Some(folder) = place
+                    .known_folder
+                    .filter(|folder| KnownFolder::QUICK_ACCESS.contains(folder))
+                else {
+                    return false;
+                };
+                [folder.english_name(), folder.label(), place.label.as_str()]
+                    .iter()
+                    .any(|name| name.to_lowercase() == wanted)
+            })
+            .map(|place| place.uri)
     }
 
     /// `address` as a location, relative to the current folder, or to the

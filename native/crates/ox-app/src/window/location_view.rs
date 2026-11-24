@@ -106,17 +106,38 @@ pub(super) fn step_icon(uri: &str, home_uri: &str, is_search: bool) -> Icon {
 /// `renderNavigation` divides them. Inside the home folder they start at
 /// it, as "Home › Documents" in Dolphin and Explorer, unless `full_path`
 /// asks for the path from `/` (NAV-024).
-pub(super) fn crumb_buttons(locations: &LocationContext, uri: &str, full_path: bool) -> Vec<CrumbButton> {
+pub(super) fn crumb_buttons(
+    locations: &LocationContext,
+    uri: &str,
+    full_path: bool,
+    known_folders: &[Place],
+) -> Vec<CrumbButton> {
     let mut breadcrumbs = locations.breadcrumbs(uri);
     let home = locations.home_uri();
+    // A standard folder and what is inside it start at the standard
+    // folder, as Windows 11 File Explorer shows "Documents > Letters"
+    // (NAV-024); other folders below the home folder start at Home.
+    let standard_at = breadcrumbs.iter().enumerate().rev().find_map(|(index, crumb)| {
+        let place = known_folders.iter().find(|place| {
+            place
+                .known_folder
+                .is_some_and(|folder| KnownFolder::QUICK_ACCESS.contains(&folder))
+                && !location::same_location(&place.uri, &home)
+                && location::same_location(&place.uri, &crumb.uri)
+        })?;
+        Some((index, place.label.clone()))
+    });
     let home_at = breadcrumbs
         .iter()
         .position(|crumb| location::same_location(&crumb.uri, &home))
-        .filter(|&index| !full_path && index > 0);
-    let skipped = home_at.unwrap_or(0);
-    if let Some(index) = home_at {
+        .map(|index| (index, locations.title_for(&home)));
+    let start = standard_at
+        .or(home_at)
+        .filter(|&(index, _)| !full_path && index > 0);
+    let skipped = start.as_ref().map_or(0, |(index, _)| *index);
+    if let Some((index, label)) = start {
         breadcrumbs.drain(..index);
-        breadcrumbs[0].label = locations.title_for(&home);
+        breadcrumbs[0].label = label;
     }
     breadcrumbs
         .into_iter()
@@ -464,7 +485,8 @@ impl BrowserWindow {
         let full_path = self.shows_full_path();
         let is_search = self.current_uri().as_deref() == Some(uri) && self.shows_search_step();
         let locations = self.imp().locations.borrow();
-        let mut crumbs = crumb_buttons(&locations, uri, full_path);
+        let known_folders = self.context().known_folders();
+        let mut crumbs = crumb_buttons(&locations, uri, full_path, &known_folders);
         if is_search {
             crumbs.push(search_crumb(&locations, uri));
         }
@@ -548,7 +570,7 @@ mod tests {
     fn crumbs_start_at_home_unless_the_full_path_is_asked_for() {
         let locations = crate::locations::location_context("/home/demo".into(), &[]);
         let shown = |uri: &str, full_path: bool| -> Vec<(String, Option<&str>)> {
-            let crumbs = crumb_buttons(&locations, uri, full_path);
+            let crumbs = crumb_buttons(&locations, uri, full_path, &[]);
             crumbs
                 .into_iter()
                 .map(|button| (button.crumb.label, button.divider_before))

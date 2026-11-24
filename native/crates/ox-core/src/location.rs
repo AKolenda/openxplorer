@@ -47,6 +47,7 @@
 //! | `display` | Titles, address bar text, breadcrumbs and Up |
 //! | `classify` | Writable, snapshot and network folders, SMB share roots |
 //! | `cloud_names` | The names of Google Drive folders, whose addresses hold IDs |
+//! | `typed` | Quotes and environment variables in typed addresses |
 
 mod archive_location;
 mod classify;
@@ -57,6 +58,7 @@ mod names;
 mod normalise;
 mod parts;
 mod text;
+mod typed;
 mod virtual_place;
 
 pub(crate) use text::{
@@ -81,6 +83,7 @@ pub use parts::{
     canonical_remote_scheme, split_location, LocationKind, LocationParts, CLOUD_SCHEMES, REMOTE_SCHEMES,
 };
 pub use text::{breaks_a_line, without_line_breaks};
+pub use typed::typed_address;
 pub use virtual_place::{
     is_virtual_location, normalise_navigation, VirtualPlace, GALLERY_URI, HOME_URI, NETWORK_URI, PC_URI,
     RECENT_LOCATIONS_URI, RECENT_URI, SETTINGS_URI, TRASH_URI,

@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The address bar's context menu and middle-click, which app.js lacked:
-//! Dolphin's location bar has both, and Explorer's address bar the copy
-//! and edit items.
+//! The address bar's context menu and middle-click, which app.js lacked.
 //!
-//! A right-click on the crumbs offers Copy address (the location as the
-//! address bar shows it), Paste and go (the clipboard's text, opened as a
-//! typed address), Open "<crumb>" in new tab and in new window for the
-//! crumb under the pointer, Edit address, and the toggles Keep address
-//! editable and Show full path (NAV-031). A middle-click on
-//! the crumbs' blank space opens the primary selection's text the same way
-//! (NAV-032); a middle-click on a crumb still opens that crumb in a tab.
-//! While the address is edited, the entry keeps GTK's own menu.
+//! A right-click on a crumb or on blank space of the address bar shows
+//! Windows 11 File Explorer's menu, exactly its four commands (checked on
+//! Windows 11 build 26200): Copy Address, Copy Address as Text, Edit
+//! Address and Delete History (NAV-031). On a crumb the copies are of that
+//! crumb's folder, elsewhere of the location shown. Copy Address puts the
+//! folder itself on the clipboard, as Copy does, so a paste into another
+//! folder copies it; Copy Address as Text puts its address as text; Delete
+//! History forgets the typed addresses (NAV-043). Keep address editable
+//! and Show full path stay in the entry's own menu and in Settings. A
+//! middle-click on the crumbs' blank space opens the primary selection's
+//! text as a pasted address (NAV-032); a middle-click on a crumb still
+//! opens that crumb in a tab. While the address is edited, the entry keeps
+//! GTK's own menu.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -24,66 +27,37 @@ use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
-/// A crumb under the pointer: its label and its location.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct PointedCrumb {
-    pub label: String,
-    pub uri: String,
-}
-
-/// The address bar's menu, with the items for `crumb` when the pointer
-/// is over one.
-pub(super) fn location_menu(crumb: Option<&PointedCrumb>) -> Vec<MenuEntry> {
-    let mut entries: Vec<MenuEntry> = vec![
-        MenuItem::new(
-            &ox_core::i18n::gettext("Copy address"),
+/// The address bar's menu, whose copies are of `uri`: the crumb under
+/// the pointer, or the location shown.
+pub(super) fn location_menu(uri: &str) -> Vec<MenuEntry> {
+    vec![
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Copy Address"),
             Icon::Copy,
-            WindowAction::CopyAddress,
+            WindowAction::CopyAddressOf,
+            uri,
+        )
+        .into(),
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Copy Address as Text"),
+            Icon::Copy,
+            WindowAction::CopyAddressAsText,
+            uri,
         )
         .into(),
         MenuItem::new(
-            &ox_core::i18n::gettext("Paste and go"),
-            Icon::ClipboardPaste,
-            WindowAction::PasteAddress,
-        )
-        .into(),
-    ];
-    if let Some(crumb) = crumb {
-        let label = &crumb.label;
-        let uri = crumb.uri.as_str();
-        entries.push(MenuEntry::Divider);
-        let tab = ox_core::i18n::format_message("Open “{label}” in new tab", &[("label", label)]);
-        entries.push(MenuItem::with_text_target(&tab, Icon::Add, WindowAction::OpenTab, uri).into());
-        let window = ox_core::i18n::format_message("Open “{label}” in new window", &[("label", label)]);
-        entries
-            .push(MenuItem::with_text_target(&window, Icon::WindowNew, WindowAction::OpenWindow, uri).into());
-    }
-    entries.push(MenuEntry::Divider);
-    entries.push(
-        MenuItem::new(
-            &ox_core::i18n::gettext("Edit address"),
+            &ox_core::i18n::gettext("Edit Address"),
             Icon::Rename,
             WindowAction::Location,
         )
         .into(),
-    );
-    entries.push(
-        MenuItem::toggle(
-            &ox_core::i18n::gettext("Keep address editable"),
-            Icon::Code,
-            WindowAction::EditableLocation,
+        MenuItem::new(
+            &ox_core::i18n::gettext("Delete History"),
+            Icon::Delete,
+            WindowAction::DeleteAddressHistory,
         )
         .into(),
-    );
-    entries.push(
-        MenuItem::toggle(
-            &ox_core::i18n::gettext("Show full path"),
-            Icon::FileFolder,
-            WindowAction::ShowFullPath,
-        )
-        .into(),
-    );
-    entries
+    ]
 }
 
 impl AddressBar {
@@ -116,12 +90,13 @@ impl AddressBar {
 
     /// Opens the address bar's menu at `x`, `y`.
     pub(super) fn popup_location_menu(&self, x: f64, y: f64) -> MenuPopover {
-        let crumb = self.crumb_at(x, y).and_then(|crumb| {
-            let uri = crumb.action_target_value()?.str()?.to_owned();
-            let label = crumb.label()?.to_string();
-            Some(PointedCrumb { label, uri })
-        });
-        let popover = MenuPopover::new(location_menu(crumb.as_ref()));
+        let shown = self
+            .root()
+            .and_downcast::<BrowserWindow>()
+            .and_then(|window| window.current_uri())
+            .unwrap_or_default();
+        let uri = self.crumb_location_at(x, y).unwrap_or(shown);
+        let popover = MenuPopover::new(location_menu(&uri));
         popover.set_parent(self);
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let point = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
@@ -163,6 +138,32 @@ impl BrowserWindow {
         self.show_message(&ox_core::i18n::gettext("Address copied."));
     }
 
+    /// Copy Address: puts the folder at `uri` on the clipboard as Copy
+    /// does, so a paste into another folder copies it. A page, such as
+    /// This PC, has no folder to copy and its address is copied as text.
+    pub(super) fn copy_address_of(&self, uri: &str) {
+        if crate::window::file_drag::is_draggable_location(uri) {
+            self.copy_items(ox_core::clipboard::ClipboardMode::Copy, &[uri.to_owned()]);
+        } else {
+            self.copy_address_as_text(uri);
+        }
+    }
+
+    /// Copy Address as Text: puts the address of `uri`, as the address
+    /// bar shows it, on the clipboard as text.
+    pub(super) fn copy_address_as_text(&self, uri: &str) {
+        let address = self.imp().locations.borrow().copied_location(uri);
+        self.clipboard().set_text(&address);
+        self.show_message(&ox_core::i18n::gettext("Address copied."));
+    }
+
+    /// Delete History: forgets the typed addresses of every window, as
+    /// Windows' address bar menu does.
+    pub(super) fn delete_address_history(&self) {
+        self.context().forget_typed_addresses();
+        self.address_bar().hide_suggestions();
+    }
+
     /// Opens the clipboard's text as a typed address.
     pub(super) fn paste_address(&self) {
         let clipboard = self.clipboard();
@@ -193,36 +194,25 @@ mod tests {
 
     /// parity: NAV-031
     #[test]
-    fn the_address_menu_copies_pastes_opens_the_crumb_elsewhere_and_edits() {
-        let crumb = PointedCrumb {
-            label: "Documents".into(),
-            uri: "file:///home/demo/Documents".into(),
-        };
+    fn the_address_menu_has_windows_four_commands_copying_the_given_folder() {
+        let uri = "file:///home/demo/Documents";
 
-        let over_crumb = location_menu(Some(&crumb));
-        let elsewhere = location_menu(None);
+        let menu = location_menu(uri);
 
         assert_eq!(
-            labels(&over_crumb),
+            labels(&menu),
             [
-                "Copy address",
-                "Paste and go",
-                "-",
-                "Open “Documents” in new tab",
-                "Open “Documents” in new window",
-                "-",
-                "Edit address",
-                "Keep address editable",
-                "Show full path"
+                "Copy Address",
+                "Copy Address as Text",
+                "Edit Address",
+                "Delete History"
             ]
         );
-        assert_eq!(
-            labels(&elsewhere)[..4],
-            ["Copy address", "Paste and go", "-", "Edit address"]
-        );
-        let MenuEntry::Item(new_tab) = &over_crumb[3] else {
-            panic!("an item");
-        };
-        assert_eq!(new_tab.target, Some(crumb.uri.to_variant()));
+        for entry in &menu[..2] {
+            let MenuEntry::Item(copy) = entry else {
+                panic!("an item");
+            };
+            assert_eq!(copy.target, Some(uri.to_variant()));
+        }
     }
 }

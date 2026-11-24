@@ -72,20 +72,28 @@ fn modified_click_action(modifiers: gdk::ModifierType) -> Option<WindowAction> {
 }
 
 /// Opens `uri` in a tab or a window on a Ctrl+click or a Shift+click on
-/// `button` (NAV-019), before the button takes the click as its own.
+/// `button` (NAV-019), before the button takes the click as its own. It
+/// acts on the release, so a Ctrl or Shift drag of the crumb, which the
+/// address bar's drag source takes over, copies or moves its folder and
+/// opens nothing.
 pub(super) fn open_elsewhere_on_modified_click(button: &gtk::Button, uri: &str) {
     let click = gtk::GestureClick::new();
     click.set_button(gdk::BUTTON_PRIMARY);
     click.set_propagation_phase(gtk::PropagationPhase::Capture);
     let uri = uri.to_owned();
-    click.connect_pressed(move |gesture, _, _, _| {
+    click.connect_released(move |gesture, _, x, y| {
         let Some(action) = modified_click_action(gesture.current_event_state()) else {
             return;
         };
-        gesture.set_state(gtk::EventSequenceState::Claimed);
-        if let Some(button) = gesture.widget() {
-            action.activate_from(&button, Some(&uri.to_variant()));
+        let Some(button) = gesture.widget() else {
+            return;
+        };
+        // Released elsewhere, as after a drag: no click.
+        if !button.contains(x, y) {
+            return;
         }
+        gesture.set_state(gtk::EventSequenceState::Claimed);
+        action.activate_from(&button, Some(&uri.to_variant()));
     });
     button.add_controller(click);
 }

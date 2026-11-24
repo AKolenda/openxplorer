@@ -322,6 +322,7 @@ impl BrowserWindow {
         self.attach_file_drop_zone(self.address_bar(), DropZone::Breadcrumbs);
         self.attach_file_drop_zone(self.tab_strip(), DropZone::Tabs);
         self.attach_sidebar_file_drag();
+        self.attach_crumb_file_drag();
     }
 
     /// Runs `action` on the dropped `uris` in the folder at `position` of

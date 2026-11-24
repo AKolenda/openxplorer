@@ -117,8 +117,6 @@ mod imp {
         pub(super) suggestion_popover: OnceCell<gtk::Popover>,
         /// The rows of the list.
         pub(super) suggestion_list: OnceCell<gtk::ListBox>,
-        /// Addresses applied with Enter, most recent first (NAV-043).
-        pub(super) typed_history: RefCell<Vec<String>>,
         /// The entry's text is being set from the list, not typed.
         pub(super) quiet_change: Cell<bool>,
         /// The entry's text as last typed or set, not taken from the

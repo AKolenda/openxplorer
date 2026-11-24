@@ -96,7 +96,6 @@ it.
 | `actions/ox-chevron-right-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_right_16_regular.svg` | 44acaeb0e0f9c84a14c7ad635e9d11424e524a4f1b140893281e2329e94767ab |
 | `actions/ox-chevron-up-16-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/chevron_up_16_regular.svg` | 540041d671dfb1c7815bde83212ad161f64100007296adb1246bafe109048fb9 |
 | `actions/ox-clipboard-paste-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/clipboard_paste_20_regular.svg` | ec9306a57faababc7c2ea24526b65109d68337b71ef2b3af8edf5eb54e04f386 |
-| `actions/ox-code-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/code_20_regular.svg` | 856f7cf4747d46ede53514aac276388bbfd2a09c08dea33e64781ca381f2b152 |
 | `actions/ox-content-view-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/content_view_20_regular.svg` | 9aeafda6180a243f57fcfdaad1b6b3bf9121a9103243a401e8a11869f5a7f2f9 |
 | `actions/ox-copy-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/copy_20_regular.svg` | 069105eaa258ab181db8e66234677d149d26d3e8caed4e034ed6cfdf0c9511f9 |
 | `actions/ox-cut-20-symbolic.svg` | Fluent UI System Icons 1.1.343 | `icons/cut_20_regular.svg` | 22e7e4781d227d384403a319309f10bfb5c73776bd1eb2804a4692689f44e753 |

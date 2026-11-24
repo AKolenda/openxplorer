@@ -383,7 +383,7 @@ impl BrowserWindow {
     }
 
     /// Puts `uris` on the desktop's clipboard and says so.
-    fn copy_items(&self, mode: ClipboardMode, uris: &[String]) {
+    pub(in crate::window) fn copy_items(&self, mode: ClipboardMode, uris: &[String]) {
         let validated = ClipboardFiles::new(mode, uris, &self.imp().locations.borrow());
         let files = match validated {
             Ok(files) => files,

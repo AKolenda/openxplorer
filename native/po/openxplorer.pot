@@ -4887,33 +4887,19 @@ msgid "Address copied."
 msgstr ""
 
 #: crates/ox-app/src/window/address_menu.rs
-msgid "Copy address"
+msgid "Copy Address"
 msgstr ""
 
 #: crates/ox-app/src/window/address_menu.rs
-msgid "Edit address"
+msgid "Copy Address as Text"
 msgstr ""
 
 #: crates/ox-app/src/window/address_menu.rs
-msgid "Keep address editable"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/address_menu.rs
-msgid "Open “{label}” in new tab"
-msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/address_menu.rs
-msgid "Open “{label}” in new window"
+msgid "Delete History"
 msgstr ""
 
 #: crates/ox-app/src/window/address_menu.rs
-msgid "Paste and go"
-msgstr ""
-
-#: crates/ox-app/src/window/address_menu.rs
-msgid "Show full path"
+msgid "Edit Address"
 msgstr ""
 
 #: crates/ox-app/src/window/address_menu.rs

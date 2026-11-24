@@ -5,14 +5,17 @@
 //! offer them.
 //!
 //! Every typed address applied with Enter goes to the top of a most-recent-first
-//! history of the window, moving up if it was there, and the oldest drop
-//! off past [`HISTORY_LENGTH`]. F4 or the chevron edits the address with
+//! history shared by every window and kept in the settings folder, as
+//! Windows keeps it for the user (`ox_core::typed_addresses`, read through
+//! the window's `AppContext`). F4 or the chevron edits the address with
 //! the history listed below; Alt+Down lists it while editing. The window
 //! hears typed text through [`AddressBar::connect_typed`] and answers with
 //! [`AddressBar::show_completions`]. Up and Down move through the list and
 //! put the row into the entry, Enter goes there, a click on a row goes
 //! there at once, and Escape puts back the typed text and closes the list
-//! before it cancels editing.
+//! before it cancels editing. Tab and Shift+Tab move through the list as
+//! Down and Up do, as Tab completes a path in Windows' address bar; with
+//! no list shown Tab moves focus as usual.
 //!
 //! The keys follow Windows' autocomplete list (the shell's `IAutoComplete`
 //! drop-down, as `ReactOS`'s `CAutoComplete::OnListUpDown` reimplements it):
@@ -29,27 +32,8 @@ use gtk::{gdk, glib};
 
 use super::{AddressBar, AddressMode};
 
-/// The most typed addresses the history keeps.
-pub(crate) const HISTORY_LENGTH: usize = 20;
-
 /// The most rows the list shows.
 const LIST_LENGTH: usize = 12;
-
-/// Puts `address` at the top of `history`, once, keeping
-/// [`HISTORY_LENGTH`] entries. An address with a user name or password is
-/// never kept (NAV-035 refuses it anyway).
-pub(super) fn remember(history: &mut Vec<String>, address: &str) {
-    let address = address.trim();
-    let authority = address
-        .split_once("://")
-        .map(|(_, rest)| rest.split('/').next().unwrap_or(rest));
-    if address.is_empty() || authority.is_some_and(|authority| authority.contains('@')) {
-        return;
-    }
-    history.retain(|kept| kept != address);
-    history.insert(0, address.to_owned());
-    history.truncate(HISTORY_LENGTH);
-}
 
 impl AddressBar {
     /// Builds the list and connects the entry's keys, Enter and focus.
@@ -139,6 +123,13 @@ impl AddressBar {
             self.show_history();
             return glib::Propagation::Stop;
         }
+        let tab = matches!(key, gdk::Key::Tab | gdk::Key::KP_Tab | gdk::Key::ISO_Left_Tab);
+        let only_shift = (modifiers - gdk::ModifierType::SHIFT_MASK).is_empty();
+        if tab && only_shift && self.suggestions_shown() {
+            let back = key == gdk::Key::ISO_Left_Tab || modifiers.contains(gdk::ModifierType::SHIFT_MASK);
+            self.move_suggestion(if back { -1 } else { 1 });
+            return glib::Propagation::Stop;
+        }
         if !self.suggestions_shown() || !modifiers.is_empty() {
             return glib::Propagation::Proceed;
         }
@@ -202,9 +193,25 @@ impl AddressBar {
         ));
     }
 
-    /// Adds `address`, just applied, to the typed history.
+    /// Adds `address`, just applied, to the typed history every window
+    /// shares.
     pub(in crate::window) fn remember_typed(&self, address: &str) {
-        remember(&mut self.imp().typed_history.borrow_mut(), address);
+        if let Some(context) = self.context() {
+            context.remember_typed_address(address);
+        }
+    }
+
+    /// The application state of the window the bar is in.
+    fn context(&self) -> Option<crate::app_context::AppContext> {
+        let window = self.root().and_downcast::<super::super::BrowserWindow>()?;
+        Some(window.context().clone())
+    }
+
+    /// The typed history, newest first.
+    fn typed_addresses(&self) -> Vec<String> {
+        self.context()
+            .map(|context| context.typed_addresses())
+            .unwrap_or_default()
     }
 
     /// The entry's text.
@@ -226,22 +233,16 @@ impl AddressBar {
         self.show_suggestions(completions);
     }
 
-    /// Forgets the typed history (Folder Options' Clear File Explorer
-    /// history).
-    pub(in crate::window) fn forget_typed_history(&self) {
-        self.imp().typed_history.borrow_mut().clear();
-    }
-
     /// The typed history, newest first, for tests.
     #[cfg(test)]
     pub(in crate::window) fn typed_history(&self) -> Vec<String> {
-        self.imp().typed_history.borrow().clone()
+        self.typed_addresses()
     }
 
     /// Edits the address with the typed history listed below it (F4 and
     /// the chevron).
     pub(in crate::window) fn show_history(&self) {
-        let history = self.imp().typed_history.borrow().clone();
+        let history = self.typed_addresses();
         self.show_suggestions(&history);
     }
 
@@ -439,33 +440,5 @@ mod tests {
         assert_eq!(next_index(Some(1), -1, 3), Some(0));
         assert_eq!(next_index(Some(0), -1, 3), None);
         assert_eq!(next_index(None, 1, 0), None);
-    }
-
-    /// parity: NAV-043
-    #[test]
-    fn typed_addresses_go_to_the_top_once_and_the_oldest_drop_off() {
-        let mut history = Vec::new();
-        for number in 0..25 {
-            remember(&mut history, &format!("/srv/folder {number}"));
-        }
-        remember(&mut history, " /srv/folder 10 ");
-        remember(&mut history, "smb://demo:secret@nas/share");
-        remember(&mut history, "");
-
-        assert_eq!(history.len(), HISTORY_LENGTH);
-        assert_eq!(history[0], "/srv/folder 10");
-        assert_eq!(history[1], "/srv/folder 24");
-        assert_eq!(
-            history
-                .iter()
-                .filter(|kept| kept.as_str() == "/srv/folder 10")
-                .count(),
-            1
-        );
-        assert!(!history.iter().any(|kept| kept.contains('@')));
-        assert!(
-            !history.contains(&"/srv/folder 4".to_owned()),
-            "the oldest dropped off"
-        );
     }
 }
