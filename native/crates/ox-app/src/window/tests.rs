@@ -22,6 +22,7 @@ mod clipboard_shares;
 mod clipboard_switches;
 mod closing;
 mod column_fitting;
+mod column_header_style;
 mod command_bar;
 mod command_bar_switch;
 mod compact_density;

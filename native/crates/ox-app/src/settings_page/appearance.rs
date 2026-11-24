@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Appearance: the theme, the text size and font, the compact view, the
-//! navigation pane's arrows, the app's extra navigation pane rows and tab
-//! menu items, the right-click menu, the pane widths and the icons of
-//! kinds of item ([`super::file_icons`], LOOK-029).
+//! Details view's column header style, the navigation pane's arrows, the
+//! app's extra navigation pane rows and tab menu items, the right-click
+//! menu, the pane widths and the icons of kinds of item
+//! ([`super::file_icons`], LOOK-029).
 //!
 //! Ports the "Appearance & layout" section of `renderSettingsPage`,
 //! `textSizeControls` and `menuPreferenceControls` in
@@ -15,7 +16,7 @@
 
 use gtk::glib;
 use gtk::prelude::*;
-use ox_core::settings::{ContextMenu, PreferencesUpdate, StripPosition, Theme};
+use ox_core::settings::{ColumnHeaderStyle, ContextMenu, PreferencesUpdate, StripPosition, Theme};
 
 use super::bindings::{position_u32, Choice, PreferenceBinding};
 use super::choice_list::ChoiceButton;
@@ -115,6 +116,15 @@ const MORE_TAB_MENU_ITEMS: RowText = RowText {
     keywords: "tab menu right-click move tab new window open windows extra more items windows",
 };
 
+const COLUMN_HEADER_STYLE: RowText = RowText {
+    title: "Column header style",
+    description: "How the Details view marks the sorted column. OpenXplorer puts an arrow after its \
+                  title and colors a sort other than Name ascending; Windows shows only a small gray \
+                  arrow above the title, as Windows 11 does.",
+    keywords: "column header title sort sorted arrow chevron caret accent underline details view \
+               windows 11 style look",
+};
+
 const PANE_WIDTHS: RowText = RowText {
     title: "Sidebar and column widths",
     description: "Restore the default widths in every window.",
@@ -130,6 +140,18 @@ const MENU_STYLES: [Choice<ContextMenu>; 2] = [
     Choice {
         value: ContextMenu::Win11,
         label: crate::i18n::message_id("Windows 11 · Compact actions (default)"),
+    },
+];
+
+/// The column header styles, the app's own first, as the default.
+const HEADER_STYLES: [Choice<ColumnHeaderStyle>; 2] = [
+    Choice {
+        value: ColumnHeaderStyle::OpenXplorer,
+        label: crate::i18n::message_id("OpenXplorer (default)"),
+    },
+    Choice {
+        value: ColumnHeaderStyle::Windows,
+        label: crate::i18n::message_id("Windows"),
     },
 ];
 
@@ -383,6 +405,25 @@ fn menu_buttons_row(page: &SettingsPage) -> SettingRow {
     row
 }
 
+/// "Column header style": how the Details view draws its sorted column's
+/// title, which every window follows at once
+/// (`src/window/column_header_style.rs`).
+fn column_header_style_row(page: &SettingsPage) -> SettingRow {
+    let row = SettingRow::new(COLUMN_HEADER_STYLE);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.column_header_style,
+        write: |style| PreferencesUpdate {
+            column_header_style: Some(style),
+            ..PreferencesUpdate::default()
+        },
+    };
+    row.add_control(
+        &page.preference_choice(&HEADER_STYLES, binding),
+        ControlName::RowTitle,
+    );
+    row
+}
+
 /// "Shift+F10 opens the classic menu": the switch saves the choice, which
 /// the keyboard menus read when Shift+F10 opens one
 /// (`src/window/context_menu.rs`).
@@ -489,13 +530,14 @@ fn choose_text_size(page: &SettingsPage, size: TextSize) {
     });
 }
 
-/// The compact view, the navigation pane's arrows, the app's extra
-/// navigation pane rows and tab menu items, the right-click menu,
-/// Shift+F10's menu and the pane widths.
+/// The compact view, the column header style, the navigation pane's
+/// arrows, the app's extra navigation pane rows and tab menu items, the
+/// right-click menu, Shift+F10's menu and the pane widths.
 fn layout_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Layout"));
     group.add_row(&super::window_decorations::row(page));
     group.add_row(&super::files_folders::compact_view_row(page));
+    group.add_row(&column_header_style_row(page));
     let arrows = SettingRow::new(HIDE_EXPAND_ARROWS);
     let binding = PreferenceBinding {
         read: |preferences| preferences.hide_expand_arrows,

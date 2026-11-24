@@ -3114,6 +3114,10 @@ msgid "Buttons in the right-click menu"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Column header style"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Ctrl + and Ctrl − change it anywhere; Ctrl 0 resets. Desktop scaling is unchanged."
 msgstr ""
 
@@ -3139,6 +3143,10 @@ msgid "Hide expand arrows in the sidebar"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "How the Details view marks the sorted column. OpenXplorer puts an arrow after its title and colors a sort other than Name ascending; Windows shows only a small gray arrow above the title, as Windows 11 does."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Language"
 msgstr ""
 
@@ -3152,6 +3160,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "Near the pointer (default)"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "OpenXplorer (default)"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -3223,6 +3235,10 @@ msgid "Where the Cut, Copy, Rename and Delete buttons appear in the right-click 
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Windows"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Windows 10 is compact and shows familiar text commands."
 msgstr ""
 
@@ -3241,6 +3257,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "appearance dark light system colour color mode"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "column header title sort sorted arrow chevron caret accent underline details view windows 11 style look"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs

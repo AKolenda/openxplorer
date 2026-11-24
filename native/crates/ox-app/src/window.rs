@@ -62,6 +62,7 @@ mod caller_window;
 mod caption_buttons;
 mod choose_details;
 mod closing;
+mod column_header_style;
 mod command_bar;
 mod compact_density;
 mod compress_dialog;
