@@ -378,7 +378,7 @@ impl<'a> VersionSearch<'a> {
             label: snapshot.name.clone(),
             snapshot_root,
             collection: source.collection().to_owned(),
-            snapshot_modified: snapshot.modified,
+            snapshot_modified: snapshot.modified.and_then(|seconds| u64::try_from(seconds).ok()),
         }))
     }
 

@@ -3,7 +3,8 @@
    window classes (src/window/breakpoints.rs). Last, so they win over the
    rules for wide windows. */
 
-window.ox.max-1190 .details-inner { padding: 18px; }
+window.ox.max-1190 .details-inner { padding: 0 0 18px 0; }
+window.ox.max-1190 .details-inner > :not(.detail-preview) { margin-left: 18px; margin-right: 18px; }
 window.ox.max-1190 .search-wrap { min-width: 193px; }
 window.ox.max-1190 .navigation { border-spacing: 10px; }
 window.ox.max-1190 .commandbar { padding: 0 10px; }

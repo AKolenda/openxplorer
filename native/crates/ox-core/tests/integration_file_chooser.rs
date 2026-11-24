@@ -70,7 +70,7 @@ fn open_file_reads_its_options() {
         }
     );
     assert_eq!(request.accept_label(), "Upload");
-    assert_eq!(request.window_title(), "Open files");
+    assert_eq!(request.window_title(), "Open");
     assert_eq!(request.filters.len(), 1);
     assert_eq!(request.current_filter, Some(0));
     assert_eq!(
@@ -110,37 +110,48 @@ fn an_unlisted_current_filter_is_added() {
     assert_eq!(request.current_filter, Some(1));
 }
 
-/// Chromium titles a Save dialog it has no title for with the name of
-/// its "All Files" filter (`*.*`), in the user's language; that title
-/// gives way to the method's own words. A title that names another
-/// filter, an Open dialog's, or one with no such filter is kept.
+/// The caller's title is the window's, except one that is the name of
+/// a filter of the request, or Chromium's English "All Files", which
+/// Chromium sends for a Save dialog it has no title for (Chrome's Save
+/// page as lists only web-page filters and is still titled "All
+/// Files"): those, and an empty title, give way to Windows' own, "Save
+/// As", "Open" or "Select Folder".
 ///
 /// parity: INT-032
 #[test]
-fn a_save_dialog_titled_with_its_all_files_filter_is_titled_save_as() {
-    let titled = |method: &str, title: &str, all_files: &str| {
-        let pdf = filter("PDF", &[(0, "*.[pP][dD][fF]")]);
-        let all = filter(all_files, &[(0, "*.*")]);
-        let filters = glib::Variant::array_from_iter_with_type(pdf.type_(), [pdf.clone(), all]);
-        ChooserRequest::from_call(method, title, &options_from_entries(&[("filters", filters)]))
+fn a_dialog_is_never_titled_with_a_filter_name() {
+    let titled = |method: &str, title: &str, extra: &[(&str, glib::Variant)]| {
+        let page = filter("Webpage, Complete", &[(0, "*.htm"), (0, "*.html")]);
+        let single = filter("Webpage, Single File", &[(0, "*.mhtml")]);
+        let filters = glib::Variant::array_from_iter_with_type(page.type_(), [page.clone(), single]);
+        let mut entries = vec![("filters", filters)];
+        entries.extend(extra.iter().cloned());
+        ChooserRequest::from_call(method, title, &options_from_entries(&entries))
             .expect("a valid call")
             .window_title()
     };
-    assert_eq!(titled("SaveFile", "All Files", "All Files"), "Save as");
-    assert_eq!(
-        titled("SaveFile", "Tous les fichiers", "Tous les fichiers"),
-        "Save as"
-    );
-    assert_eq!(
-        titled("SaveFile", "PDF", "All Files"),
-        "PDF",
-        "not an All Files filter"
-    );
-    assert_eq!(titled("SaveFile", "Save page", "All Files"), "Save page");
-    assert_eq!(titled("OpenFile", "All Files", "All Files"), "All Files");
-    let unfiltered =
-        ChooserRequest::from_call("SaveFile", "All Files", &options_from_entries(&[])).expect("a valid call");
-    assert_eq!(unfiltered.window_title(), "All Files", "no filter to tell it by");
+    let folder = [("directory", true.to_variant())];
+    // Chrome's Save page as: "All Files" though no filter has that name.
+    assert_eq!(titled("SaveFile", "All Files", &[]), "Save As");
+    assert_eq!(titled("SaveFile", "", &[]), "Save As");
+    assert_eq!(titled("SaveFile", "Webpage, Complete", &[]), "Save As");
+    assert_eq!(titled("SaveFile", "Save Page", &[]), "Save Page");
+    assert_eq!(titled("OpenFile", "All Files", &[]), "Open");
+    assert_eq!(titled("OpenFile", "  ", &[]), "Open");
+    assert_eq!(titled("OpenFile", "Upload a page", &[]), "Upload a page");
+    assert_eq!(titled("OpenFile", "", &folder), "Select Folder");
+    assert_eq!(titled("OpenFile", "All Files", &folder), "Select Folder");
+    assert_eq!(titled("OpenFile", "Choose a folder", &folder), "Choose a folder");
+    // In another language, Chromium's label gives way as a filter's name.
+    let all = filter("Tous les fichiers", &[(0, "*")]);
+    let filters = glib::Variant::array_from_iter_with_type(all.type_(), [all.clone()]);
+    let french = ChooserRequest::from_call(
+        "SaveFile",
+        "Tous les fichiers",
+        &options_from_entries(&[("filters", filters)]),
+    )
+    .expect("a valid call");
+    assert_eq!(french.window_title(), "Save As");
 
     let everything = filter("Everything", &[(0, "*")]);
     let narrowed = filter("Text", &[(0, "*.txt"), (0, "*")]);

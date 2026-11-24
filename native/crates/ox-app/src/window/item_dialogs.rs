@@ -546,6 +546,42 @@ impl BrowserWindow {
         self.details_pane().reread_picture_of(uri);
     }
 
+    /// Lists `folder` again in every browser window.
+    fn relist_everywhere(&self, folder: &str) {
+        let windows = self.application().map(|app| app.windows()).unwrap_or_default();
+        let mut reached_self = false;
+        for window in windows
+            .iter()
+            .filter_map(|window| window.downcast_ref::<BrowserWindow>())
+        {
+            reached_self |= window == self;
+            window.reload_tabs_showing(folder);
+        }
+        if !reached_self {
+            self.reload_tabs_showing(folder);
+        }
+    }
+
+    /// Lists `folder` again in every browser window after Properties
+    /// changed what its `.hidden` list hides (PROP-002, PROP-005): at once,
+    /// and again once `GLib` has dropped the list it read, which it keeps
+    /// for some seconds per folder ([`HIDDEN_CACHE_SECONDS`]), so the change shows also where the
+    /// folder was listed just before.
+    pub(crate) fn announce_hidden_changed(&self, folder: &str) {
+        self.relist_everywhere(folder);
+        for seconds in HIDDEN_CACHE_SECONDS {
+            let folder = folder.to_owned();
+            glib::timeout_add_seconds_local_once(
+                seconds,
+                glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    move || window.relist_everywhere(&folder)
+                ),
+            );
+        }
+    }
+
     /// Lists again every tab and split pane showing `folder`, keeping their selection,
     /// after something was written there; the search cache reads it
     /// again too (SRCH-033).
@@ -562,6 +598,11 @@ impl BrowserWindow {
         }
     }
 }
+
+/// When to list a folder again after its `.hidden` list changed: `GLib`
+/// keeps the list it read for five seconds by its source, measured at 7 to
+/// 8 seconds on `GLib` 2.80 as its timer runs on its worker thread.
+const HIDDEN_CACHE_SECONDS: [u32; 2] = [6, 11];
 
 /// A folder or a file, as `info` says without following a link.
 fn item_kind(info: &gio::FileInfo) -> ItemKind {

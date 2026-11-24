@@ -41,7 +41,7 @@ const ZIP_LABEL: &str = message_id("Compressed (zipped) Folder");
 const PDF_LABEL: &str = message_id("PDF Document");
 
 /// GIO's content type of every empty file.
-const EMPTY_FILE_TYPE: &str = "application/x-zerosize";
+pub(super) const EMPTY_FILE_TYPE: &str = "application/x-zerosize";
 
 /// What decides a type's name besides the item itself.
 #[derive(Debug, Clone, Copy)]

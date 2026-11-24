@@ -583,7 +583,7 @@ impl SettingsPage {
         } else {
             PinIndexing::Off
         };
-        let pins = self.context().settings_data().pins;
+        let pins = ox_core::places::pinned_folders(&self.context().settings_data());
         let cache = self.context().search_cache().clone();
         let page = self.downgrade();
         glib::spawn_future_local(async move {

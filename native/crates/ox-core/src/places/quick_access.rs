@@ -39,6 +39,14 @@ impl Place {
         }
     }
 
+    /// The row as a pin: its location and label.
+    fn as_bookmark(&self) -> Bookmark {
+        Bookmark {
+            uri: self.uri.clone(),
+            label: self.label.clone(),
+        }
+    }
+
     /// The row's glyph name; `None` draws the ordinary folder artwork.
     pub fn glyph(&self) -> Option<&'static str> {
         self.known_folder.map(KnownFolder::glyph)
@@ -57,6 +65,23 @@ impl Place {
 /// network mount paths.
 pub fn quick_access(settings: &SettingsData) -> Vec<Place> {
     compose_quick_access(settings, &quick_access_folders(), &[])
+}
+
+/// The folders Quick access shows pinned, standard folders and the user's
+/// pins alike, as the pins "Index pinned folders automatically" indexes
+/// (SRCH-040): a standard folder the user unpinned is not among them.
+pub fn pinned_folders(settings: &SettingsData) -> Vec<Bookmark> {
+    quick_access(settings).iter().map(Place::as_bookmark).collect()
+}
+
+/// The standard folders Quick access shows pinned, which the settings
+/// file does not list as pins.
+pub fn pinned_standard_folders(settings: &SettingsData) -> Vec<Bookmark> {
+    quick_access(settings)
+        .iter()
+        .filter(|place| place.known_folder.is_some())
+        .map(Place::as_bookmark)
+        .collect()
 }
 
 /// The Quick access rows of the six standard folders

@@ -238,7 +238,7 @@ fn the_recycle_bin_shows_and_sorts_by_original_location_and_date_deleted() {
         ),
         alpha
     );
-    let unknown = ox_core::format::date_short_time_text(None);
+    let unknown = ox_core::format::date_short_time_text(None::<i64>);
     assert_ne!(
         shown_cell_text(
             SortColumn::Deleted,

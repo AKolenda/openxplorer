@@ -26,6 +26,7 @@ use std::sync::Arc;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::Entry;
+use ox_core::permissions::hidden_list::{hidden_list_for, is_listed, set_listed};
 use ox_core::permissions::{apply_outside_in_background, ModeChange, PermissionRequest};
 use ox_core::transfer::Cancellation;
 use ox_core::versions::PreviousVersions;
@@ -126,6 +127,20 @@ struct Item {
     /// Renaming asks about a changed extension, except for a link to a
     /// folder, whose name has none (OPS-049).
     links_to_folder: bool,
+    /// Whether the folder's `.hidden` list names it.
+    listed: bool,
+}
+
+impl Item {
+    /// Hidden by its name's leading dot or by the folder's `.hidden` list.
+    fn is_hidden(&self) -> bool {
+        self.name.starts_with('.') || self.listed
+    }
+}
+
+/// Whether the folder's `.hidden` list names the item `entry`.
+fn listed(entry: &Entry) -> bool {
+    hidden_list_for(&entry.uri).is_some_and(|list| is_listed(&list, &entry.name))
 }
 
 /// Whether a file with permissions `mode` is read-only: its owner may
@@ -173,7 +188,11 @@ impl SelectionAttributes {
         } else {
             ox_core::i18n::gettext("Read-only")
         };
-        let hidden = shared(entries.iter().map(|entry| entry.name.starts_with('.')));
+        let hidden = shared(
+            entries
+                .iter()
+                .map(|entry| entry.name.starts_with('.') || listed(entry)),
+        );
         let attributes = Rc::new(Self {
             window: window.downgrade(),
             items: RefCell::new(Vec::new()),
@@ -224,13 +243,14 @@ impl SelectionAttributes {
                     name: item.entry.name.clone(),
                     is_folder: item.entry.is_dir,
                     links_to_folder: item.links_to_folder,
+                    listed: listed(&item.entry),
                 })
                 .collect(),
         );
         let read_only = shared(items.iter().map(|item| is_read_only(item.mode)));
         self.read_only.reset(read_only.filter(|_| !self.has_folder));
         self.hidden
-            .reset(shared(items.iter().map(|item| item.entry.name.starts_with('.'))));
+            .reset(shared(self.items.borrow().iter().map(Item::is_hidden)));
         self.read_only.check.set_sensitive(can_change_permissions);
         self.hidden.check.set_sensitive(can_rename);
     }
@@ -287,7 +307,7 @@ impl SelectionAttributes {
             if renaming.is_err() {
                 // The items renamed before the refusal keep their names: the
                 // box compares the choice with what they have now.
-                let now = shared(self.items.borrow().iter().map(|item| item.name.starts_with('.')));
+                let now = shared(self.items.borrow().iter().map(Item::is_hidden));
                 self.hidden.now.set(now);
             }
             renaming?;
@@ -358,9 +378,12 @@ impl SelectionAttributes {
         Ok(())
     }
 
-    /// Adds a leading dot to every name that has none, for `hide`, or
-    /// removes it from every name that has one, stopping at the first
-    /// refusal; the items renamed before it keep their new names.
+    /// Hides every item, for `hide`, by listing its name in its folder's
+    /// `.hidden` list, as Windows sets the Hidden attribute without
+    /// renaming; only an item off this computer gets a leading dot. Not
+    /// `hide` takes every item off the list and removes a leading dot
+    /// from a name that has one. Stops at the first refusal; the items
+    /// changed before it keep their change.
     async fn rename_all(
         &self,
         opener: &BrowserWindow,
@@ -370,8 +393,29 @@ impl SelectionAttributes {
         let count = self.items.borrow().len();
         for index in 0..count {
             let item = self.items.borrow()[index].clone();
-            if item.name.starts_with('.') == hide {
+            if item.is_hidden() == hide {
                 continue;
+            }
+            let list = hidden_list_for(&item.uri);
+            if let Some(list) = &list {
+                if hide || item.listed {
+                    self.versions
+                        .check_writable(&item.uri)
+                        .map_err(|refusal| refusal.to_string())?;
+                    set_listed(list, &item.name, hide).map_err(|error| {
+                        ox_core::i18n::format_message(
+                            "The item could not be hidden or shown. {error}",
+                            &[("error", &error.to_string())],
+                        )
+                    })?;
+                    self.items.borrow_mut()[index].listed = hide;
+                    if let Some(folder) = gio::File::for_uri(&item.uri).parent() {
+                        opener.announce_hidden_changed(&folder.uri());
+                    }
+                }
+                if hide || !item.name.starts_with('.') {
+                    continue;
+                }
             }
             let wanted = if hide {
                 format!(".{}", item.name)

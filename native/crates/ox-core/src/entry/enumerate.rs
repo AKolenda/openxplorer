@@ -218,12 +218,8 @@ fn list_shortcuts_own_facts(row: &mut Entry, child: &gio::File) {
         return;
     };
     row.size = Some(metadata.len());
-    let seconds = metadata
-        .modified()
-        .ok()
-        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|since| since.as_secs());
-    row.modified = seconds.filter(|&seconds| seconds > 0).or(row.modified);
+    // Signed, so a link dated 1970 or earlier keeps its date.
+    row.modified = Some(std::os::unix::fs::MetadataExt::mtime(&metadata));
 }
 
 /// Reads the folder at `uri` into `mailbox`, the first

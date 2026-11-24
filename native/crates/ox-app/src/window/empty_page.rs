@@ -39,6 +39,9 @@ pub(super) enum EmptyState {
         message: String,
         /// The system's error, kept under Details for diagnosis.
         details: Option<String>,
+        /// A folder on this computer, shown with a folder rather than the
+        /// network.
+        local: bool,
     },
     /// An archive opened like a folder could not be read (damaged,
     /// encrypted, a method the reader lacks): what to tell the user. It
@@ -91,12 +94,19 @@ impl EmptyState {
                         &[("location", &location)],
                     ),
                     details: (!raw.trim().is_empty()).then(|| code_details(raw, false)),
+                    local: false,
                 };
+            }
+            // A share mounted at a local path that went away keeps saying
+            // it was disconnected, below.
+            _ if is_local_location(uri) && error.to_string() != super::loading::disconnected_message() => {
+                return local_unavailable(uri, error)
             }
             _ => {
                 return EmptyState::Unavailable {
                     message: error.to_string(),
                     details: None,
+                    local: false,
                 }
             }
         };
@@ -104,6 +114,7 @@ impl EmptyState {
             return EmptyState::Unavailable {
                 message: raw.clone(),
                 details: None,
+                local: false,
             };
         }
         let location = if is_smb_location(uri) {
@@ -118,6 +129,7 @@ impl EmptyState {
                 &[("location", &location)],
             ),
             details: (!raw.trim().is_empty()).then(|| network_details(raw)),
+            local: false,
         }
     }
 
@@ -179,6 +191,67 @@ pub(super) struct EmptyPage {
     /// The system's error, folded under Details.
     details: gtk::Expander,
     retry: gtk::Button,
+}
+
+/// Whether `uri` is a folder on this computer.
+fn is_local_location(uri: &str) -> bool {
+    uri.starts_with("file:")
+}
+
+/// What the page says about the folder on this computer at `uri`, which
+/// `error` kept from being listed: a short sentence, as Windows says
+/// "Location is not available", with the system's own text, which can
+/// hold the whole path, under Details. A path past what Linux opens says
+/// so in Windows' words for a name that is too long.
+fn local_unavailable(uri: &str, error: &EntryError) -> EmptyState {
+    let path = gtk::gio::File::for_uri(uri).path();
+    let too_long = path.as_deref().is_some_and(|path| {
+        use std::os::unix::ffi::OsStrExt;
+        path.as_os_str().len() >= PATH_MAX_BYTES
+            || path.iter().any(|part| part.as_bytes().len() > NAME_MAX_BYTES)
+    });
+    let message = if too_long {
+        ox_core::i18n::gettext("The file name or path is too long.")
+    } else {
+        match error {
+            EntryError::NotFound(_) | EntryError::NotDirectory(_) => {
+                ox_core::i18n::gettext("This folder can't be found. It may have been moved or deleted.")
+            }
+            EntryError::PermissionDenied(_) => ox_core::i18n::gettext("Access is denied."),
+            _ => ox_core::i18n::gettext("This folder can't be opened."),
+        }
+    };
+    let raw = error.to_string();
+    EmptyState::Unavailable {
+        message,
+        details: (!raw.trim().is_empty()).then_some(raw),
+        local: true,
+    }
+}
+
+/// Linux's longest path (`PATH_MAX`, with its closing zero) and name
+/// (`NAME_MAX`), in bytes.
+const PATH_MAX_BYTES: usize = 4096;
+const NAME_MAX_BYTES: usize = 255;
+
+/// Clears `label`'s selection after its next frames, unless the pointer
+/// selected it: GTK selects a focused selectable label's text whole when
+/// the window becomes active or the label is mapped.
+fn unselect_when_drawn(label: &gtk::Label) {
+    for delay in [0_u64, 100, 400] {
+        glib::timeout_add_local_once(
+            std::time::Duration::from_millis(delay),
+            glib::clone!(
+                #[weak]
+                label,
+                move || {
+                    if !label.has_css_class(SELECTED_BY_POINTER) {
+                        label.select_region(0, 0);
+                    }
+                }
+            ),
+        );
+    }
 }
 
 /// Keeps `label`'s text unselected when it takes the keyboard: GTK
@@ -299,6 +372,9 @@ impl EmptyPage {
     /// Shows `state`, with the app.js wording (`renderRows`).
     pub(super) fn show(&self, state: &EmptyState) {
         let glyph = match state {
+            // A folder on this computer gets a folder, as Windows' "Location
+            // is not available"; only shares and servers get the network.
+            EmptyState::Unavailable { local: true, .. } => Icon::Folder,
             EmptyState::Unavailable { .. } => Icon::Organization,
             EmptyState::ArchiveUnavailable(_) => Icon::FolderZip,
             EmptyState::NoPhotos => Icon::Image,
@@ -343,6 +419,11 @@ impl EmptyPage {
             EmptyState::NoPhotos | EmptyState::ArchiveUnavailable(_)
         ));
         self.message.set_visible(!message.is_empty());
+        // A label that already had the keyboard selects its new text whole
+        // once it is drawn again, which the focus guard does not see; the
+        // new text starts unselected, as a page that just opened.
+        self.message.remove_css_class(SELECTED_BY_POINTER);
+        unselect_when_drawn(&self.message);
         let details = match state {
             EmptyState::Unavailable {
                 details: Some(details),

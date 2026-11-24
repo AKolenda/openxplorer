@@ -128,6 +128,7 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
             "Open with…",
             "-",
             "Copy as path",
+            "Share",
             "Restore previous versions",
             "-",
             "Send to",

@@ -161,6 +161,12 @@ impl Choice {
     }
 }
 
+/// Whether `title` is Chromium's English "All Files" label, which it
+/// sends as the title of a Save dialog it has no title for.
+fn is_all_files_label(title: &str) -> bool {
+    title.eq_ignore_ascii_case("All Files")
+}
+
 /// One checked call: everything the window needs to show the dialog.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChooserRequest {
@@ -265,34 +271,35 @@ impl ChooserRequest {
         })
     }
 
-    /// The window title: the caller's, or the method's own words.
+    /// The window title: the caller's, or Windows' own for the dialog:
+    /// "Save As", "Open", or "Select Folder" for a folder.
     ///
-    /// Chromium gives a Save dialog it has no title for the name of its
-    /// "All Files" filter (`IDS_SAVEAS_ALL_FILES`, in the user's language),
-    /// so every download's Save as would be titled "All Files". A Save
-    /// dialog's title that is the name of one of its filters that lets
-    /// every file through therefore gets the method's own words too.
+    /// A title that is the name of one of the request's filters is never
+    /// shown: Chromium gives a Save dialog it has no title for (Save page
+    /// as, a download) the name of its "All Files" filter
+    /// (`IDS_SAVEAS_ALL_FILES`, in the user's language), and sends that
+    /// name even when the dialog lists only other filters, so every such
+    /// dialog was titled "All Files". English "All Files" is therefore
+    /// never a title either; in another language it gives way when it is
+    /// a filter's name.
     pub fn window_title(&self) -> String {
-        if !self.title.trim().is_empty() && !self.title_names_all_files() {
+        let title = self.title.trim();
+        if !title.is_empty() && !self.title_names_a_filter() && !is_all_files_label(title) {
             return self.title.clone();
         }
         match &self.mode {
-            ChooserMode::Open { directory: true, .. } => "Select folder".to_owned(),
-            ChooserMode::Open { multiple: true, .. } => "Open files".to_owned(),
+            ChooserMode::Open { directory: true, .. } | ChooserMode::SaveFiles { .. } => {
+                "Select Folder".to_owned()
+            }
             ChooserMode::Open { .. } => "Open".to_owned(),
-            ChooserMode::Save { .. } => "Save as".to_owned(),
-            ChooserMode::SaveFiles { .. } => "Save files to".to_owned(),
+            ChooserMode::Save { .. } => "Save As".to_owned(),
         }
     }
 
-    /// Whether this is a Save dialog titled with the name of an "All
-    /// Files" filter of its own ([`FileFilter::is_all_files`]).
-    fn title_names_all_files(&self) -> bool {
-        matches!(self.mode, ChooserMode::Save { .. })
-            && self
-                .filters
-                .iter()
-                .any(|filter| filter.name == self.title && filter.is_all_files())
+    /// Whether the title is the name of one of the request's filters.
+    fn title_names_a_filter(&self) -> bool {
+        let title = self.title.trim();
+        self.filters.iter().any(|filter| filter.name.trim() == title)
     }
 
     /// The accept button's label: the caller's, or "Open", "Select folder"

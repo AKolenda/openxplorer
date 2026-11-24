@@ -68,6 +68,9 @@ pub(super) struct ShareState {
     /// The portal's bus name and whether it can share, once the latest
     /// check answered.
     service: RefCell<Option<(String, bool)>>,
+    /// The portal's bus name when it can set the desktop background, as
+    /// the latest check found.
+    wallpaper: RefCell<Option<String>>,
 }
 
 /// Whether the item at `uri` of kind `kind` can be attached to an email:
@@ -149,24 +152,39 @@ impl BrowserWindow {
         state.check.set(check);
         let (window, portal) = (self.downgrade(), portal.to_owned());
         glib::spawn_future_local(async move {
-            let available = match gio::bus_get_future(gio::BusType::Session).await {
+            let (available, wallpaper) = match gio::bus_get_future(gio::BusType::Session).await {
                 Ok(connection) => {
                     crate::theme::system::portal_ready(&connection).await;
-                    email_portal_version(&connection, &portal)
+                    let email = email_portal_version(&connection, &portal)
                         .await
-                        .is_some_and(|version| version >= ATTACHMENTS_VERSION)
+                        .is_some_and(|version| version >= ATTACHMENTS_VERSION);
+                    let wallpaper = ox_core::integration::wallpaper_portal_version(&connection, &portal)
+                        .await
+                        .is_some();
+                    (email, wallpaper)
                 }
-                Err(_) => false,
+                Err(_) => (false, false),
             };
             let Some(window) = window.upgrade() else {
                 return;
             };
             let state = &window.imp().share;
             if state.check.get() == check {
+                state.wallpaper.replace(wallpaper.then(|| portal.clone()));
                 state.service.replace(Some((portal, available)));
                 window.update_share_command();
+                window.show_gallery_commands();
             }
         });
+    }
+
+    /// The bus name of the portal that can set the desktop background;
+    /// `None` where none can, and in an Open or Save dialog.
+    pub(super) fn wallpaper_portal(&self) -> Option<String> {
+        if self.is_picking() {
+            return None;
+        }
+        self.imp().share.wallpaper.borrow().clone()
     }
 
     /// Whether the latest check asked `portal` and has its answer.
@@ -193,12 +211,20 @@ impl BrowserWindow {
     /// selection of files it can attach. It reads only addresses, never
     /// the disk, as it follows every selection change.
     pub(super) fn update_share_command(&self) {
-        let offered = self.share_portal().is_some();
+        // Offered wherever Windows 11 offers it, also where the desktop
+        // cannot share by email: a click then says why ([`Self::share`]).
+        // Only an Open or Save dialog has no Share.
+        let offered = self.share_offered();
         self.command_bar().offer_share(offered);
         let enabled = offered && self.selected_sources().is_some();
         self.set_action_enabled(WindowAction::Share, enabled);
         // The pane shows Share only for what it can share.
         self.details_pane().offer_share(enabled);
+    }
+
+    /// Whether Share is offered: everywhere but in an Open or Save dialog.
+    pub(super) fn share_offered(&self) -> bool {
+        !self.is_picking()
     }
 
     /// The addresses of the files Share attaches for the selection
@@ -226,10 +252,18 @@ impl BrowserWindow {
     /// Opens a new email in the desktop's email app with the selected
     /// files attached; a failure shows in the toast.
     pub(super) fn share(&self) {
-        let Some(portal) = self.share_portal() else {
+        let Some(sources) = self.selected_sources() else {
             return;
         };
-        let Some(sources) = self.selected_sources() else {
+        let Some(portal) = self.share_portal() else {
+            // Offered all the same, as in Windows: the click says why
+            // nothing opens.
+            self.show_result_dialog(
+                &ox_core::i18n::gettext("Share"),
+                &ox_core::i18n::gettext(
+                    "This desktop has no way to send files by email: no email app is set up, or its desktop portal has no email service. Set up an email app, then share again.",
+                ),
+            );
             return;
         };
         if sources.len() > MAX_ATTACHMENTS {
@@ -240,10 +274,19 @@ impl BrowserWindow {
             return;
         }
         let window = self.downgrade();
+        let opening = self.downgrade();
         glib::spawn_future_local(async move {
-            let result = email_files(&portal, sources).await;
+            // Said once the files are open, so the click is seen to do
+            // something while the desktop starts the email app.
+            let said = move || {
+                if let Some(window) = opening.upgrade() {
+                    window.show_message(&ox_core::i18n::gettext("Opening your email app…"));
+                }
+            };
+            let result = email_files(&portal, sources, said).await;
+            // A failure is a message to read, not a passing toast.
             if let (Err(error), Some(window)) = (result, window.upgrade()) {
-                window.show_message(&error.to_string());
+                window.show_result_dialog(&ox_core::i18n::gettext("Share"), &error.to_string());
             }
         });
     }
@@ -251,8 +294,9 @@ impl BrowserWindow {
 
 /// Finds and opens the files at `sources` on a worker thread, within
 /// [`OPEN_TIMEOUT`], and asks `portal` to email them. A file with no local
-/// path, gone or not a regular file fails as unreadable.
-async fn email_files(portal: &str, sources: Vec<String>) -> Result<(), EmailError> {
+/// path, gone or not a regular file fails as unreadable. `opened` runs once
+/// the files are open, before the portal is asked.
+async fn email_files(portal: &str, sources: Vec<String>, opened: impl FnOnce()) -> Result<(), EmailError> {
     let opening = gio::spawn_blocking(move || {
         let paths = sources
             .iter()
@@ -268,6 +312,7 @@ async fn email_files(portal: &str, sources: Vec<String>) -> Result<(), EmailErro
         Ok(Ok(opened)) => opened?,
         Ok(Err(_)) | Err(_) => return Err(timed_out()),
     };
+    opened();
     let connection = gio::bus_get_future(gio::BusType::Session)
         .await
         .map_err(EmailError::Unavailable)?;

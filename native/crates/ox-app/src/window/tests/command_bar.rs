@@ -85,9 +85,9 @@ pub(super) fn command_bar_names(test: &TestWindow) -> Vec<String> {
         .collect()
 }
 
-/// Share, between Rename and Delete, shows only where the desktop
-/// can share (`tests::share`); here no Email portal answers, whatever the
-/// machine has.
+/// Share stands between Rename and Delete, as in Windows 11, also where
+/// no Email portal answers, as here whatever the machine has: a click
+/// then says why (`tests::share`).
 #[gtk::test]
 fn the_command_bar_has_the_current_controls_in_order() {
     let fixture = Fixture::standard();
@@ -107,6 +107,7 @@ fn the_command_bar_has_the_current_controls_in_order() {
             "Copy (Ctrl+C)",
             "Paste files (Ctrl+V)",
             "Rename (F2)",
+            "Share",
             "Delete (Delete)",
             "|",
             "Sort",

@@ -258,9 +258,10 @@ fn a_folders_arrow_sits_inside_its_rows_highlight() {
     }
 }
 
-/// The pane stacks Windows 11's parts: the preview at the top, with no
-/// heading or close button above it, then the small icon and name, the Details rows and the
-/// Properties button, each in the pane's width.
+/// The pane stacks Windows 11's parts: the preview's box at the top,
+/// 220 pixels tall across the pane's whole width (inside its border),
+/// with no heading or close button above it, then 26 pixels below it the
+/// small icon and name, the Details rows and the Properties button.
 ///
 /// parity: PROP-009
 #[gtk::test]
@@ -277,20 +278,19 @@ fn the_details_pane_stacks_its_parts_as_windows_does() {
     let preview_place = bounds(&test, preview);
     assert_eq!(
         (preview_place.x, preview_place.width, preview_place.height),
-        (pane_place.x + 23, 217, 148)
+        (pane_place.x + 1, 261, 220)
     );
     assert_eq!(
-        preview_place.y,
-        pane_place.y + 22,
-        "the pane's padding, with no close button above"
+        preview_place.y, pane_place.y,
+        "at the top, with no close button above"
     );
     let title = descendants::<gtk::Box>(pane)
         .into_iter()
         .find(|row| row.has_css_class("detail-title"))
         .expect("the icon and name");
     let title_place = bounds(&test, &title);
-    assert_eq!(title_place.y, preview_place.bottom() + 14);
-    assert_eq!(title_place.x, preview_place.x);
+    assert_eq!(title_place.y, preview_place.bottom() + 26);
+    assert_eq!(title_place.x, preview_place.x + 22);
     let properties = descendants::<gtk::Button>(pane)
         .into_iter()
         .find(|button| button.action_name().as_deref() == Some("win.properties"))
@@ -330,7 +330,8 @@ fn several_selected_items_are_pictured_stacked() {
 }
 
 /// Every value of the Details rows starts at one line, right of the
-/// widest name, and the names start at the pane's edge.
+/// widest name, and the names start 22 pixels in from the pane's edge;
+/// each value stays on one line, cut with "…" as in Windows 11.
 ///
 /// parity: PROP-009
 #[gtk::test]
@@ -359,9 +360,12 @@ fn the_details_values_line_up() {
         &test,
         descendants::<gtk::CenterBox>(pane).first().expect("the preview"),
     );
-    assert_eq!(name_x[0], preview.x);
+    // The rows keep 22 pixels from the pane's sides; the preview's box
+    // runs across its whole width.
+    assert_eq!(name_x[0], preview.x + 22);
     for value in &values {
-        assert!(bounds(&test, *value).right() <= preview.right() + 1);
+        assert!(bounds(&test, *value).right() <= preview.right() - 22 + 1);
+        assert_eq!(value.layout().line_count(), 1, "one line, cut with \u{2026}");
     }
 }
 

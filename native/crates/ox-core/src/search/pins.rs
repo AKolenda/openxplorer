@@ -42,6 +42,12 @@ use crate::settings::Bookmark;
 /// folders were indexed automatically.
 const EXISTING_PINS_MIGRATION: &str = "index-existing-pins";
 
+/// The one-time indexing of the standard Quick access folders (Desktop,
+/// Documents, Downloads, Pictures, Music, Videos), which show as pinned
+/// but were not pins in the settings file, so a cache whose pins were
+/// indexed before they counted indexes them once too.
+const STANDARD_FOLDERS_MIGRATION: &str = "index-standard-quick-access";
+
 /// The row of `index_options` that holds the switch.
 const PIN_INDEXING_OPTION: &str = "pin-indexing";
 
@@ -135,6 +141,30 @@ impl IndexService {
         self.index().mark_migration_applied(EXISTING_PINS_MIGRATION)
     }
 
+    /// Indexes, in the background and once per cache, the standard Quick
+    /// access folders `folders` (Desktop, Documents, Downloads, Pictures,
+    /// Music, Videos, as Quick access shows them pinned). Windows indexes
+    /// the common user folders out of the box; here they follow "Index
+    /// pinned folders automatically". Later start-ups change nothing, so a
+    /// root the user removed stays removed.
+    ///
+    /// # Errors
+    ///
+    /// Database errors. Folders that cannot be indexed are skipped.
+    pub fn index_standard_folders(
+        &self,
+        folders: &[Bookmark],
+        indexing: PinIndexing,
+    ) -> Result<(), SearchError> {
+        if self.index().is_migration_applied(STANDARD_FOLDERS_MIGRATION)? {
+            return Ok(());
+        }
+        if indexing == PinIndexing::Automatic {
+            self.index_every_pin(folders)?;
+        }
+        self.index().mark_migration_applied(STANDARD_FOLDERS_MIGRATION)
+    }
+
     /// Follows a change of the "Index pinned folders automatically"
     /// switch and remembers it for [`SearchIndex::pin_indexing`]. Turning
     /// it on indexes every pinned folder that has no root; turning it off
@@ -149,9 +179,11 @@ impl IndexService {
             PinIndexing::Automatic => {
                 self.index_every_pin(pins)?;
                 // Safety rule "a root the user removed stays removed": every
-                // pin is indexed now, so the start-up change of
-                // `index_existing_pins` must never run after this.
-                self.index().mark_migration_applied(EXISTING_PINS_MIGRATION)
+                // pin is indexed now, so the start-up changes of
+                // `index_existing_pins` and `index_standard_folders` must
+                // never run after this.
+                self.index().mark_migration_applied(EXISTING_PINS_MIGRATION)?;
+                self.index().mark_migration_applied(STANDARD_FOLDERS_MIGRATION)
             }
             PinIndexing::Off => self.remove_pinned_roots(),
         }

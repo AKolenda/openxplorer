@@ -415,12 +415,13 @@ fn rotate_turns_jpegs_by_their_orientation_and_pngs_by_their_pixels() {
     wait_until("still listed", || test.names().len() == 3);
 }
 
-/// Set as desktop background shows, grayed: the app has no way to set
-/// the desktop's background yet.
+/// Set as background shows, enabled for one picture, as in Windows 11,
+/// also where the desktop has no Wallpaper portal (as in the tests): a
+/// click then says why, and opens nothing.
 ///
 /// parity: HOME-030
 #[gtk::test]
-fn set_as_background_shows_grayed() {
+fn set_as_background_is_enabled_and_says_why_it_cannot_work() {
     let (_home, test) = one_photo();
     test.select_named("a.png");
     wait_until("the photo commands", || {
@@ -433,10 +434,14 @@ fn set_as_background_shows_grayed() {
         .iter()
         .find(|(label, _)| label == "Set as background")
         .expect("Set as background");
-    assert!(!usable, "{shown:?}");
+    assert!(usable, "{shown:?}");
     let rotate = shown
         .iter()
         .find(|(label, _)| label == "Rotate right")
         .expect("Rotate right");
     assert!(rotate.1);
+
+    test.activate("set-as-background", None);
+    let message = test.wait_for_dialog("the reason");
+    assert_eq!(message.title(), "Set as background");
 }

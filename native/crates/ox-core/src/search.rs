@@ -118,6 +118,7 @@ mod fixtures;
 mod service_tests;
 
 pub use contents::SearchIn;
+pub use crawl::UNREADABLE_PREFIX;
 pub use error::SearchError;
 pub use facets::{CalendarDay, DateFacet, FacetMatcher, KindFacet, SearchFacets, SizeFacet};
 pub use frequent::FrequentIndexing;

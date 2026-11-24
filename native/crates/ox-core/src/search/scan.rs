@@ -91,7 +91,9 @@ impl From<Entry> for ListedItem {
             is_symlink: entry.is_symlink,
             is_virtual: entry.is_virtual,
             size: entry.size,
-            modified: entry.modified,
+            // The cache keeps unsigned times, 0 for none, as the Python
+            // app does, so a date before 1970 is cached as unknown.
+            modified: entry.modified.and_then(|seconds| u64::try_from(seconds).ok()),
             type_label: entry.type_label,
         }
     }

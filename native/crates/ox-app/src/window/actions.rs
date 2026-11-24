@@ -33,6 +33,19 @@ pub(super) fn plain_action(
         .build()
 }
 
+impl BrowserWindow {
+    /// Runs `run`, which moves the keyboard into the address bar or the
+    /// search box, unless a dialog is shown over the window: as a Windows
+    /// dialog keeps Alt+D, Ctrl+L, F4 and Ctrl+F from the window behind it,
+    /// those keys no longer turn the dimmed address bar into a selected
+    /// field behind the dialog.
+    fn unless_dialog_shown(&self, run: impl Fn(&Self)) {
+        if self.dialog_layer().shown().is_none() {
+            run(self);
+        }
+    }
+}
+
 /// An action whose target is a string (a location or a volume id).
 pub(super) fn text_action(
     window_action: WindowAction,
@@ -227,11 +240,12 @@ impl BrowserWindow {
                 })
                 .build(),
             plain_action(WindowAction::Refresh, BrowserWindow::refresh),
-            plain_action(WindowAction::Location, BrowserWindow::edit_address),
-            plain_action(
-                WindowAction::AddressHistory,
-                BrowserWindow::edit_address_from_history,
-            ),
+            plain_action(WindowAction::Location, |window| {
+                window.unless_dialog_shown(BrowserWindow::edit_address);
+            }),
+            plain_action(WindowAction::AddressHistory, |window| {
+                window.unless_dialog_shown(BrowserWindow::edit_address_from_history);
+            }),
             plain_action(WindowAction::CopyAddress, BrowserWindow::copy_address),
             plain_action(WindowAction::PasteAddress, BrowserWindow::paste_address),
             text_action(WindowAction::CopyAddressOf, BrowserWindow::copy_address_of),
@@ -243,7 +257,9 @@ impl BrowserWindow {
                 WindowAction::DeleteAddressHistory,
                 BrowserWindow::delete_address_history,
             ),
-            plain_action(WindowAction::Search, BrowserWindow::focus_search),
+            plain_action(WindowAction::Search, |window| {
+                window.unless_dialog_shown(BrowserWindow::focus_search);
+            }),
             text_action(WindowAction::GoTo, BrowserWindow::navigate_or_report),
             text_action(WindowAction::MountVolume, BrowserWindow::mount_volume),
         ]);

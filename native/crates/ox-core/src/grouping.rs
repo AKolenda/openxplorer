@@ -439,9 +439,9 @@ impl Calendar {
     }
 
     /// The group of a modification time, in Unix seconds.
-    pub fn group_of_time(self, modified: Option<u64>) -> DateGroup {
+    pub fn group_of_time(self, modified: Option<impl crate::format::UnixSeconds>) -> DateGroup {
         modified
-            .and_then(|seconds| i64::try_from(seconds).ok())
+            .and_then(crate::format::UnixSeconds::signed)
             .and_then(CivilDate::from_unix_local)
             .map_or(DateGroup::Unknown, |date| self.group_of(date))
     }
@@ -511,8 +511,8 @@ pub struct DateRanges {
 impl DateRanges {
     /// The group of a time, in Unix seconds; the same as
     /// [`Calendar::group_of_time`].
-    pub fn group_of_time(&self, time: Option<u64>) -> DateGroup {
-        let Some(seconds) = time.and_then(|seconds| i64::try_from(seconds).ok()) else {
+    pub fn group_of_time(&self, time: Option<impl crate::format::UnixSeconds>) -> DateGroup {
+        let Some(seconds) = time.and_then(crate::format::UnixSeconds::signed) else {
             return DateGroup::Unknown;
         };
         let starts = &self.starts[..self.count];
@@ -674,8 +674,8 @@ mod tests {
             );
             seconds += 3_517;
         }
-        assert_eq!(ranges.group_of_time(None), DateGroup::Unknown);
-        assert_eq!(ranges.group_of_time(Some(0)), DateGroup::LongTimeAgo);
+        assert_eq!(ranges.group_of_time(None::<i64>), DateGroup::Unknown);
+        assert_eq!(ranges.group_of_time(Some(0_i64)), DateGroup::LongTimeAgo);
     }
 
     /// parity: VIEW-022
@@ -812,7 +812,7 @@ mod tests {
         assert!(DateGroup::Tomorrow < DateGroup::Today);
         assert!(DateGroup::Today < DateGroup::LongTimeAgo);
         assert!(DateGroup::LongTimeAgo < DateGroup::Unknown);
-        assert_eq!(us_calendar().group_of_time(None), DateGroup::Unknown);
+        assert_eq!(us_calendar().group_of_time(None::<i64>), DateGroup::Unknown);
     }
 
     /// parity: VIEW-022

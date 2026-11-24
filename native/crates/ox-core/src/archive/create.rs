@@ -18,8 +18,14 @@
 //!   replaces anything ([`Node::publish`]).
 //! - Progress is reported in bytes, files and the file's name, as a copy
 //!   reports it, so the progress window moves through one large file.
-//! - Links are never followed and special files never opened; both are
-//!   left out and counted. Sources are only read.
+//! - A link is stored as what it points to, under the link's name, as
+//!   Windows' Compressed (zipped) Folder stores it and its Create archive
+//!   dialog does with "Retain symbolic links" clear. A link that would
+//!   put a folder into itself, a dangling link, a link on a share and a
+//!   special file (FIFO, socket, device) cannot be stored: each is left
+//!   out and named in [`CreatedArchive::left_out`], so the app can say
+//!   what the archive lacks. Special files are never opened, and sources
+//!   are only read.
 //! - The write guard is asked about the destination folder and the new
 //!   ZIP, so nothing is written into a previous version (PROP-024).
 //!
@@ -41,6 +47,7 @@ use std::ffi::OsStr;
 use std::fmt;
 use std::fs::OpenOptions;
 use std::io::Read;
+use std::path::PathBuf;
 
 use gio::prelude::*;
 use rustix::fs::OFlags;
@@ -97,8 +104,32 @@ pub struct CreatedArchive {
     pub name: String,
     /// The files and folders it holds.
     pub item_count: usize,
-    /// Links and special files left out.
-    pub skipped_count: usize,
+    /// What the archive could not hold, by its path inside the archive.
+    pub left_out: Vec<LeftOutItem>,
+}
+
+/// An item inside the selection that a new archive does not hold.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LeftOutItem {
+    /// Its path as the archive would have named it: `Special/pipe.txt`.
+    pub name: String,
+    /// Why it is not there.
+    pub reason: LeftOutReason,
+}
+
+/// Why an item is not in a new archive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LeftOutReason {
+    /// A FIFO, socket or device, which holds no data to store.
+    SpecialFile,
+    /// A link whose target is missing, or links that lead to each other.
+    TargetMissing,
+    /// A link to a folder that holds it, which would repeat without end.
+    Loop,
+    /// A link on a share or device, where its target cannot be resolved.
+    RemoteLink,
+    /// A name that is not valid text, which an archive cannot hold.
+    UnreadableName,
 }
 
 /// One entry of the new ZIP.
@@ -120,7 +151,7 @@ struct PlannedEntry {
 #[derive(Debug, Default)]
 struct CompressionPlan {
     entries: Vec<PlannedEntry>,
-    skipped_count: usize,
+    left_out: Vec<LeftOutItem>,
     total_bytes: u64,
 }
 
@@ -226,7 +257,7 @@ impl ZipCompressor {
         let name = validate_name(&request.archive_name)?.to_owned();
         let destination = self.prepare_destination(&destination_uri, &name, cancel)?;
         self.report(format!("Preparing {name}…"), 0.0);
-        let plan = plan(&request.uris, cancel)?;
+        let mut plan = plan(&request.uris, cancel)?;
         if is_local(destination.archive.as_ref()) {
             self.compress_in_place(&plan, destination.archive.as_ref(), &name, cancel)?;
         } else {
@@ -241,7 +272,7 @@ impl ZipCompressor {
             uri: destination.archive.uri(),
             name,
             item_count: plan.entries.len(),
-            skipped_count: plan.skipped_count,
+            left_out: std::mem::take(&mut plan.left_out),
         })
     }
 
@@ -486,26 +517,46 @@ fn plan(uris: &[String], cancel: &Cancellation) -> Result<CompressionPlan, Archi
     for uri in uris {
         let file = gio::File::for_uri(&normalise(uri)?);
         let Some(name) = file.basename().and_then(|name| name.to_str().map(str::to_owned)) else {
-            plan.skipped_count += 1;
+            let shown = file.basename().map(|name| name.to_string_lossy().into_owned());
+            plan.leave_out(shown.unwrap_or_default(), LeftOutReason::UnreadableName);
             continue;
         };
         if top_names.contains(&name) {
             return Err(ArchiveError::DuplicateSelectedNames);
         }
         top_names.push(name.clone());
-        add_item(&mut plan, &file, name, cancel)?;
+        // The folder that holds the selection counts as walked, so a
+        // selected link to it or above it is a loop too.
+        let mut walked: Vec<PathBuf> = file
+            .parent()
+            .and_then(|parent| parent.path())
+            .and_then(|parent| parent.canonicalize().ok())
+            .into_iter()
+            .collect();
+        add_item(&mut plan, &file, name, &mut walked, cancel)?;
     }
     if plan.entries.is_empty() {
         return Err(ArchiveError::NothingToCompress);
     }
+    plan.left_out
+        .sort_by(|first, second| first.name.cmp(&second.name));
     Ok(plan)
 }
 
-/// Adds `file`, named `name` in the ZIP, and everything inside it.
+impl CompressionPlan {
+    fn leave_out(&mut self, name: String, reason: LeftOutReason) {
+        self.left_out.push(LeftOutItem { name, reason });
+    }
+}
+
+/// Adds `file`, named `name` in the archive, and everything inside it.
+/// `walked` holds the real paths of the local folders being walked, from
+/// the selection's folder down, so a link back up is not followed.
 fn add_item(
     plan: &mut CompressionPlan,
     file: &gio::File,
     name: String,
+    walked: &mut Vec<PathBuf>,
     cancel: &Cancellation,
 ) -> Result<(), ArchiveError> {
     let info = file.query_info(
@@ -524,22 +575,51 @@ fn add_item(
             push_entry(plan, Some(file.clone()), name, (modified, mode), size)
         }
         gio::FileType::Directory => {
+            let real = file.path().and_then(|path| path.canonicalize().ok());
+            // A folder that holds this one, reached again through a link.
+            if let Some(real) = &real {
+                if walked.iter().any(|folder| folder.starts_with(real)) {
+                    plan.leave_out(name, LeftOutReason::Loop);
+                    return Ok(());
+                }
+            }
             push_entry(plan, None, format!("{name}/"), (modified, mode), 0)?;
-            add_folder_contents(plan, file, &name, cancel)
+            let pushed = real.is_some();
+            walked.extend(real);
+            let added = add_folder_contents(plan, file, &name, walked, cancel);
+            if pushed {
+                walked.pop();
+            }
+            added
         }
-        // Links are never followed and special files never opened.
+        // Stored as what it points to, as Windows stores a link. The real
+        // path is read once here; its last part is no link, so the writer's
+        // no-follow open refuses one put there since.
+        gio::FileType::SymbolicLink => {
+            let Some(path) = file.path().filter(|_| file.has_uri_scheme("file")) else {
+                plan.leave_out(name, LeftOutReason::RemoteLink);
+                return Ok(());
+            };
+            let Ok(target) = path.canonicalize() else {
+                plan.leave_out(name, LeftOutReason::TargetMissing);
+                return Ok(());
+            };
+            add_item(plan, &gio::File::for_path(target), name, walked, cancel)
+        }
+        // Special files are never opened.
         _ => {
-            plan.skipped_count += 1;
+            plan.leave_out(name, LeftOutReason::SpecialFile);
             Ok(())
         }
     }
 }
 
-/// Adds the items inside the folder `folder`, named `name` in the ZIP.
+/// Adds the items inside the folder `folder`, named `name` in the archive.
 fn add_folder_contents(
     plan: &mut CompressionPlan,
     folder: &gio::File,
     name: &str,
+    walked: &mut Vec<PathBuf>,
     cancel: &Cancellation,
 ) -> Result<(), ArchiveError> {
     let children = folder.enumerate_children(
@@ -551,10 +631,11 @@ fn add_folder_contents(
         cancel.check()?;
         let child = children.child(&info);
         let Some(child_name) = info.name().to_str().map(str::to_owned) else {
-            plan.skipped_count += 1;
+            let shown = format!("{name}/{}", info.name().to_string_lossy());
+            plan.leave_out(shown, LeftOutReason::UnreadableName);
             continue;
         };
-        add_item(plan, &child, format!("{name}/{child_name}"), cancel)?;
+        add_item(plan, &child, format!("{name}/{child_name}"), walked, cancel)?;
     }
     Ok(())
 }
@@ -819,13 +900,14 @@ mod tests {
     use crate::archive::{ArchiveBrowser, GioArchiveOpener};
     use crate::location::file_uri;
 
-    /// A folder `Photos` with two files and a link, and a file beside it.
+    /// A folder `Photos` with two files and a dangling link, and a file
+    /// beside it.
     fn sources(root: &Path) -> Vec<String> {
         let photos = root.join("Photos");
         fs::create_dir(&photos).unwrap();
         fs::write(photos.join("a.jpg"), b"first picture").unwrap();
         fs::write(photos.join("b.jpg"), b"second picture").unwrap();
-        std::os::unix::fs::symlink("/etc/passwd", photos.join("link")).unwrap();
+        std::os::unix::fs::symlink("deleted.jpg", photos.join("link")).unwrap();
         fs::write(root.join("notes.txt"), b"notes").unwrap();
         vec![file_uri(&photos), file_uri(&root.join("notes.txt"))]
     }
@@ -849,7 +931,7 @@ mod tests {
 
     /// parity: ARC-023
     #[test]
-    fn items_are_compressed_into_a_new_zip_without_following_links() {
+    fn items_are_compressed_into_a_new_zip_naming_a_dangling_link() {
         let root = tempfile::tempdir().unwrap();
         let uris = sources(root.path());
         let cancel = Cancellation::new();
@@ -860,7 +942,11 @@ mod tests {
 
         assert_eq!(created.name, "Photos.zip");
         assert_eq!(created.item_count, 4);
-        assert_eq!(created.skipped_count, 1);
+        let left_out = LeftOutItem {
+            name: "Photos/link".to_owned(),
+            reason: LeftOutReason::TargetMissing,
+        };
+        assert_eq!(created.left_out, [left_out]);
         let browser = ArchiveBrowser::new(Arc::new(GioArchiveOpener), root.path().join("previews"));
         let top = browser.list(&created.uri, "", &cancel).unwrap();
         let top_names: Vec<&str> = top.entries.iter().map(|entry| entry.name.as_str()).collect();
@@ -977,7 +1063,7 @@ mod tests {
     /// and TAR archives", What's new in Windows 11, version 24H2), a name
     /// ending in `.7z` writes a 7z archive with the same items and rules:
     /// folders, empty ones too, files with their contents, names in any
-    /// script, links left out and nothing staged left over.
+    /// script, a dangling link named and nothing staged left over.
     ///
     /// parity: ARC-023
     #[test]
@@ -994,7 +1080,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(created.name, "Bundle.7z");
-        assert_eq!((created.item_count, created.skipped_count), (6, 1));
+        assert_eq!((created.item_count, created.left_out.len()), (6, 1));
         let bytes = fs::read(root.path().join("Bundle.7z")).unwrap();
         assert_eq!(bytes.get(..6), Some(&b"7z\xBC\xAF\x27\x1C"[..]), "a 7z signature");
         let directory = |name: &str| (name.to_owned(), true, Vec::new());

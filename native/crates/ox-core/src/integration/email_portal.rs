@@ -94,7 +94,7 @@ pub enum EmailError {
     Unavailable(#[source] glib::Error),
     /// The portal answered that it could not open the email app, as it
     /// does when no email app is set up.
-    #[error("{}", crate::i18n::gettext("The email app could not be opened."))]
+    #[error("{}", crate::i18n::gettext("No email app is set up, so the email could not be written. Choose an email app in your desktop's settings, then share again."))]
     Failed,
     /// The portal did not answer in time.
     #[error("{}", crate::i18n::gettext("The email app could not be opened."))]
@@ -192,10 +192,17 @@ pub async fn compose_email(
         handles.push(fd_list.append(file).map_err(EmailError::Unavailable)?);
     }
     let (sender, mut responses) = mpsc::unbounded();
-    // Every Response of the portal, so the answer is caught even when the
-    // portal names another request object than the one expected.
+    // The request object the portal will answer on, known before the call
+    // from this connection's unique name and the token.
+    let expected = request_path(connection.unique_name().as_deref().unwrap_or_default(), &token);
+    // Every Response, from any sender: GDBus matches a well-known sender
+    // only once it has learned the name's owner, which it asks for
+    // asynchronously, so an answer the portal sends within a millisecond
+    // (no email app set up) was dropped and Share said nothing. The
+    // request's path, which only this connection's requests carry, tells
+    // the answer apart instead.
     let _subscription = connection.subscribe_to_signal(
-        Some(portal),
+        None,
         Some(REQUEST_INTERFACE),
         Some("Response"),
         None,
@@ -222,7 +229,7 @@ pub async fn compose_email(
     let handle = reply.child_value(0).str().unwrap_or_default().to_owned();
     let answer = async {
         while let Some((path, parameters)) = responses.next().await {
-            if path == handle {
+            if path == handle || path == expected {
                 return answered(&parameters);
             }
         }
@@ -232,6 +239,15 @@ pub async fn compose_email(
     glib::future_with_timeout(ANSWER_TIMEOUT, answer)
         .await
         .unwrap_or(Err(EmailError::Unanswered))
+}
+
+/// The object path of the request `token` of the connection named
+/// `unique_name`, as the portal documentation lets a caller compute it:
+/// `:1.48` and `openxplorer_email1` give
+/// `/org/freedesktop/portal/desktop/request/1_48/openxplorer_email1`.
+pub(super) fn request_path(unique_name: &str, token: &str) -> String {
+    let sender = unique_name.trim_start_matches(':').replace('.', "_");
+    format!("/org/freedesktop/portal/desktop/request/{sender}/{token}")
 }
 
 /// The options of `ComposeEmail` (`a{sv}`): the request's token and the

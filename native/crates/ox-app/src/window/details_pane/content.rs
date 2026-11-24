@@ -200,7 +200,7 @@ impl MetadataRequest {
             uri: entry.item_uri().to_owned(),
             kind,
             size: entry.size,
-            modified: entry.modified,
+            modified: entry.modified.and_then(|seconds| u64::try_from(seconds).ok()),
         })
     }
 }
@@ -309,7 +309,7 @@ pub(in crate::window) fn pane_content(facts: &PaneFacts<'_>) -> PaneContent {
 
 fn item_content(item: &FileItem, facts: &PaneFacts<'_>) -> PaneContent {
     let entry = item.entry();
-    let dates = |seconds: Option<u64>| date_text(seconds, facts.condensed_dates);
+    let dates = |seconds: Option<i64>| date_text(seconds, facts.condensed_dates);
     // Windows' pane names no size for a folder, and nothing is counted
     // for it.
     let size = if entry.is_dir {
@@ -535,7 +535,7 @@ fn container_text(uri: &str, locations: &LocationContext) -> String {
 /// A date row: the day and the time without seconds, as the Date
 /// modified column writes it; the day only with condensed dates; empty
 /// without a date.
-fn date_text(seconds: Option<u64>, condensed: bool) -> String {
+fn date_text(seconds: Option<i64>, condensed: bool) -> String {
     if seconds.is_none() {
         String::new()
     } else if condensed {
@@ -749,7 +749,7 @@ mod tests {
                 uri: photo.uri.clone(),
                 kind: MediaKind::Picture,
                 size: Some(10),
-                modified: photo.modified,
+                modified: photo.modified.and_then(|seconds| u64::try_from(seconds).ok()),
             })
         );
         photo.content_type = Some("video/mp4".to_owned());

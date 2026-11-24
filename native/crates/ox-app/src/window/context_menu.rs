@@ -417,7 +417,7 @@ impl BrowserWindow {
             delete_label: self.delete_label(),
             disk_tool: disk_tool_of(entry),
             send_to: self.send_to_targets(),
-            can_share: self.share_portal().is_some(),
+            can_share: self.share_offered(),
             favorite: self.favorite_fact(entry, is_single),
             is_recent: is_recent_row(entry),
         }

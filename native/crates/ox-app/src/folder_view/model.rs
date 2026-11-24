@@ -943,7 +943,7 @@ mod tests {
         use ox_core::grouping::GroupBy;
 
         let store = gio::ListStore::new::<FileItem>();
-        for number in 0..3000_u64 {
+        for number in 0..3000_i64 {
             let mut entry = file_entry(&format!(
                 "f{number:04}.{}",
                 ["txt", "png", "pdf"][usize::try_from(number % 3).unwrap()]

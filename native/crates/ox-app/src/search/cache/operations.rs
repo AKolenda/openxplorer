@@ -214,7 +214,10 @@ impl SearchCache {
     /// indexed folder that holds one reads it again (SRCH-033). Local
     /// folders follow their live watches as well; a share has none, so
     /// only this shows the app's own changes there before the next check.
-    pub(crate) fn folders_written(&self, folders: Vec<String>) {
+    pub(crate) fn folders_written(&self, mut folders: Vec<String>) {
+        // The Recycle Bin (`trash:`) is never indexed; emptying it or
+        // restoring from it must not warn that the cache could not follow.
+        folders.retain(|folder| !folder.starts_with("trash:"));
         if folders.is_empty() || self.imp().indexer.borrow().is_none() {
             return;
         }

@@ -8,7 +8,7 @@
 
 use gio::prelude::*;
 
-use super::attributes::{optional_boolean, path_attribute, string_attribute, time_attribute};
+use super::attributes::{optional_boolean, path_attribute, signed_time_attribute, string_attribute};
 use super::classify::{classify_entry, Classification, FolderType, ItemMetadata};
 use super::type_label::{shortcut_label, type_label};
 use super::{Entry, EntryKind, EntryMeta};
@@ -48,6 +48,7 @@ pub(super) fn build_entry(
     let kind = file_kind(info);
     let name = display_name(uri, info, fallback_name);
     let content_type = string_attribute(info, "standard::content-type")
+        .map(|sniffed| typed_by_name_when_empty(sniffed, &name))
         .or_else(|| network_file_type(uri, info, kind, &name));
     let classification = classify_info(uri, info, kind, content_type.as_deref());
     let is_symlink = info.boolean("standard::is-symlink");
@@ -76,7 +77,7 @@ pub(super) fn build_entry(
         size,
         type_label,
         content_type,
-        modified: time_attribute(info, "time::modified"),
+        modified: signed_time_attribute(info, "time::modified"),
         is_hidden,
         is_symlink,
         trash_orig_path: path_attribute(info, "trash::orig-path"),
@@ -181,6 +182,23 @@ fn is_local_file_uri(target: &str) -> bool {
     after_scheme.starts_with("///") && gio::File::for_uri(target).path().is_some()
 }
 
+/// GIO sniffs every empty file as `application/x-zerosize`, for which no
+/// application is registered, so a new, empty "New Text Document.txt"
+/// could not be opened. Windows types an empty file by its extension, as
+/// Nautilus does, so opening, Open with and Properties' "Opens with" use
+/// the type its name gives (the Type column already did).
+fn typed_by_name_when_empty(sniffed: String, name: &str) -> String {
+    if sniffed != super::type_label::EMPTY_FILE_TYPE {
+        return sniffed;
+    }
+    let (guessed, uncertain) = gio::content_type_guess(Some(name), None::<&[u8]>);
+    if uncertain {
+        sniffed
+    } else {
+        guessed.to_string()
+    }
+}
+
 /// Classifies the item at `uri` from its kind, content type and the
 /// backend's target and virtual flag.
 fn classify_info(
@@ -237,12 +255,11 @@ fn reported_size(info: &gio::FileInfo) -> Option<u64> {
 
 /// `trash::deletion-date` as seconds since the Unix epoch. GIO stores it
 /// as local time without a zone, the way the `.trashinfo` file does.
-fn deletion_date(info: &gio::FileInfo) -> Option<u64> {
+fn deletion_date(info: &gio::FileInfo) -> Option<i64> {
     if !info.has_attribute("trash::deletion-date") {
         return None;
     }
-    let date = info.deletion_date()?;
-    u64::try_from(date.to_unix()).ok()
+    Some(info.deletion_date()?.to_unix())
 }
 
 /// `standard::icon` in a thread-safe form; see [`Entry::icon`].
@@ -315,17 +332,34 @@ mod tests {
         assert_eq!(folder.type_label, "File folder");
     }
 
-    /// The Python app sent 0 for a missing time, and the web interface
-    /// showed `—` for every 0 (`dateText` in `v2.0.0:desktop/ui/app.js`).
+    /// A file dated 1 January 1970 or earlier shows its date, as Windows
+    /// does (its file times count from 1601): GIO keeps the signed seconds,
+    /// and 0 is a real time. Only a time the backend does not report is
+    /// unknown. (The Python app sent 0 for a missing time in its own data,
+    /// which the search cache still reads as unknown.)
     ///
     /// parity: VIEW-001, VIEW-002
     #[test]
-    fn modification_time_of_zero_is_shown_as_unknown() {
+    fn times_at_and_before_1970_are_dates() {
         let info = file_info(gio::FileType::Regular, "old.txt", Some("text/plain"));
         info.set_attribute_uint64("time::modified", 0);
-        let file = entry_for_uri("file:///tmp/old.txt", &info);
-        assert_eq!(file.modified, None);
-        assert_eq!(date_text(file.modified), "—");
+        let epoch = entry_for_uri("file:///tmp/old.txt", &info);
+        assert_eq!(epoch.modified, Some(0));
+        assert_ne!(date_text(epoch.modified), "—");
+        // 1 March 1960, 12:00 UTC, as GIO stores the signed seconds.
+        let sixties: i64 = -310_651_200;
+        info.set_attribute_uint64("time::modified", u64::from_ne_bytes(sixties.to_ne_bytes()));
+        let older = entry_for_uri("file:///tmp/old.txt", &info);
+        assert_eq!(older.modified, Some(sixties));
+        assert!(
+            date_text(older.modified).contains("1960"),
+            "{}",
+            date_text(older.modified)
+        );
+        info.remove_attribute("time::modified");
+        let unknown = entry_for_uri("file:///tmp/old.txt", &info);
+        assert_eq!(unknown.modified, None);
+        assert_eq!(date_text(unknown.modified), "—");
     }
 
     /// `GVfs`'s SMB backend names a file's content type only when its
@@ -638,7 +672,7 @@ mod tests {
         let expected = glib::DateTime::from_iso8601("2026-09-26T10:11:12", Some(&local_zone))
             .expect("valid ISO 8601 date")
             .to_unix();
-        assert_eq!(item.trash_deletion_date, u64::try_from(expected).ok());
+        assert_eq!(item.trash_deletion_date, Some(expected));
     }
 
     /// A recycled item keeps the file that holds it in the trash, which

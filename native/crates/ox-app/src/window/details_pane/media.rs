@@ -53,7 +53,7 @@ pub(super) const AUDIO_ART_SIZE: i32 = 64;
 /// The largest picture or player the preview area holds: the width of
 /// the widest pane inside its padding, and a height that leaves room for
 /// the Details rows, as Windows' pane does.
-pub(super) const PREVIEW_WIDTH: i32 = 216;
+pub(super) const PREVIEW_WIDTH: i32 = super::PANE_WIDTH - 1;
 pub(super) const PREVIEW_HEIGHT: i32 = 180;
 
 impl DetailsPane {
@@ -177,6 +177,8 @@ impl DetailsPane {
         if imp.preview_area.center_widget().as_ref() != Some(widget) {
             imp.preview_area.set_center_widget(Some(widget));
         }
+        // In the middle of the preview's box, as Windows 11 centers it.
+        widget.set_valign(gtk::Align::Center);
         // A picture of the content takes the height its shape needs; the
         // art keeps the area's own height.
         let is_picture = widget.is::<gtk::Picture>();
@@ -308,12 +310,27 @@ impl DetailsPane {
                 return;
             };
             let picture = gtk::Picture::for_paintable(&texture);
-            picture.set_content_fit(gtk::ContentFit::Contain);
-            // As wide as the pane allows, which is narrower in a narrow
-            // window: the picture shrinks with it, never widening it.
+            // Edge to edge across the pane, as Windows 11 draws an image's
+            // preview: as tall as the pane's width (inside its border)
+            // needs for the picture's shape, so filling it crops nothing
+            // but a rounding pixel.
             picture.set_can_shrink(true);
             picture.set_hexpand(true);
-            picture.set_size_request(-1, preview_height(texture.width(), texture.height()));
+            let width = match pane.width() - 1 {
+                shown if shown > 1 => shown,
+                _ => PREVIEW_WIDTH,
+            };
+            let height = preview_height_at(width, texture.width(), texture.height());
+            // A picture taller than the preview's room is shown whole,
+            // narrower, rather than cropped.
+            let fits = height < PREVIEW_HEIGHT;
+            picture.set_content_fit(if fits {
+                gtk::ContentFit::Cover
+            } else {
+                gtk::ContentFit::Contain
+            });
+            // The pane's whole width, not the decoded picture's.
+            picture.set_size_request(if fits { width } else { -1 }, height);
             picture.add_css_class("detail-picture");
             picture.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
                 "Preview",
@@ -403,11 +420,18 @@ fn cached_thumbnail(uri: &str) -> Option<PathBuf> {
 /// The height of a picture `width` by `height` pixels shown as wide as
 /// the preview allows, at most [`PREVIEW_HEIGHT`]: a wide photo takes no
 /// more room than it needs, as in Windows' pane.
+#[cfg(test)]
 fn preview_height(width: i32, height: i32) -> i32 {
+    preview_height_at(PREVIEW_WIDTH, width, height)
+}
+
+/// The height of a picture `width` by `height` pixels shown `shown`
+/// pixels wide, at most [`PREVIEW_HEIGHT`].
+fn preview_height_at(shown: i32, width: i32, height: i32) -> i32 {
     if width <= 0 || height <= 0 {
         return PREVIEW_HEIGHT;
     }
-    let scaled = i64::from(PREVIEW_WIDTH) * i64::from(height) / i64::from(width);
+    let scaled = i64::from(shown) * i64::from(height) / i64::from(width);
     i32::try_from(scaled.clamp(1, i64::from(PREVIEW_HEIGHT))).unwrap_or(PREVIEW_HEIGHT)
 }
 
@@ -428,8 +452,8 @@ mod tests {
 
     #[test]
     fn a_picture_is_as_tall_as_its_shape_needs() {
-        assert_eq!(preview_height(4000, 3000), 162);
-        assert_eq!(preview_height(320, 200), 135);
+        assert_eq!(preview_height(4000, 3000), PREVIEW_HEIGHT);
+        assert_eq!(preview_height(320, 200), 163);
         assert_eq!(
             preview_height(1000, 3000),
             PREVIEW_HEIGHT,

@@ -44,6 +44,16 @@ pub(crate) enum Icon {
     ArrowCounterclockwise,
     /// `arrow_down_20_regular`: the Descending sort.
     ArrowDown,
+    /// The command bar's Rotate left for a picture: draws
+    /// `arrow_counterclockwise_20_regular`, as Restore does, but takes
+    /// its own glyph from the Windows symbol font ([`COMMAND_ROLES`]).
+    RotateLeft,
+    /// The command bar's Rotate right: draws `arrow_clockwise_20_regular`,
+    /// with its own glyph from the Windows symbol font.
+    RotateRight,
+    /// The command bar's Set as background: draws `image_20_regular`,
+    /// with its own glyph from the Windows symbol font.
+    SetAsBackground,
     /// `arrow_eject_20_regular`: Eject, Safely remove, Disconnect and
     /// Sign out of server, the commands app.js drew with its eject
     /// glyph, and the eject button of a removable drive's sidebar row.
@@ -354,8 +364,8 @@ impl Icon {
             Icon::Apps => "ox-apps-20-symbolic",
             Icon::AppsListDetail => "ox-apps-list-detail-20-symbolic",
             Icon::ArrowAutofitHeight => "ox-arrow-autofit-height-20-symbolic",
-            Icon::ArrowClockwise => "ox-arrow-clockwise-20-symbolic",
-            Icon::ArrowCounterclockwise => "ox-arrow-counterclockwise-20-symbolic",
+            Icon::ArrowClockwise | Icon::RotateRight => "ox-arrow-clockwise-20-symbolic",
+            Icon::ArrowCounterclockwise | Icon::RotateLeft => "ox-arrow-counterclockwise-20-symbolic",
             Icon::ArrowDown => "ox-arrow-down-20-symbolic",
             Icon::ArrowEject => "ox-arrow-eject-20-symbolic",
             Icon::ArrowDownload => "ox-arrow-download-20-symbolic",
@@ -417,7 +427,7 @@ impl Icon {
             Icon::HeadphonesColor48 => "ox-headphones-48-color",
             Icon::History => "ox-history-20-symbolic",
             Icon::Home => "ox-home-20-symbolic",
-            Icon::Image => "ox-image-20-symbolic",
+            Icon::Image | Icon::SetAsBackground => "ox-image-20-symbolic",
             Icon::ImageColor20 => "ox-image-20-color",
             Icon::ImageColor32 => "ox-image-32-color",
             Icon::ImageColor48 => "ox-image-48-color",
@@ -493,6 +503,11 @@ impl Icon {
         }
     }
 }
+
+/// The roles that draw another icon's bundled file but take a glyph of
+/// their own from the Windows symbol font (LOOK-031): they are not in
+/// [`ALL_ICONS`], whose names match the vendored files one to one.
+pub(crate) const COMMAND_ROLES: [Icon; 3] = [Icon::RotateLeft, Icon::RotateRight, Icon::SetAsBackground];
 
 /// Every icon, in the order of [`Icon`]: for the tests that check each one
 /// ships, is recorded and resolves, and to find the icon a drawn name

@@ -36,6 +36,7 @@ use gtk::prelude::*;
 use ox_core::entry::Entry;
 use ox_core::format;
 use ox_core::location::LocationContext;
+use ox_core::permissions::hidden_list::{hidden_list_for, is_listed, set_listed};
 use ox_core::permissions::{apply_outside_in_background, ModeChange, PermissionRequest};
 use ox_core::transfer::Cancellation;
 use ox_core::versions::PreviousVersions;
@@ -479,6 +480,12 @@ pub(super) struct GeneralEdits {
     read_only_now: Cell<Option<bool>>,
     folder_read_only: Cell<ReadOnly>,
     hidden: gtk::CheckButton,
+    /// The folder's `.hidden` list, where Hidden lists the name as Windows
+    /// sets an attribute, without renaming the item; `None` off this
+    /// computer, where Hidden adds a leading dot instead.
+    hidden_list: Option<std::path::PathBuf>,
+    /// Whether the list names the item now.
+    listed: Cell<bool>,
     /// Set while the tab changes a box itself.
     is_updating: Cell<bool>,
     /// Which locations are previous versions, which are never changed.
@@ -525,7 +532,11 @@ impl GeneralEdits {
         super::window::give_access_key(&hidden, 'h');
         super::window::wrap_check_label(&read_only);
         super::window::wrap_check_label(&hidden);
-        hidden.set_active(entry.name.starts_with('.'));
+        let hidden_list = hidden_list_for(&entry.uri);
+        let listed = hidden_list
+            .as_deref()
+            .is_some_and(|list| is_listed(list, &entry.name));
+        hidden.set_active(entry.name.starts_with('.') || listed);
         hidden.set_sensitive(rights.can_rename);
         let edits = Rc::new(Self {
             window: window.downgrade(),
@@ -543,6 +554,8 @@ impl GeneralEdits {
             read_only_now: Cell::new(read_only_now),
             folder_read_only: Cell::new(ReadOnly::Unchanged),
             hidden,
+            hidden_list,
+            listed: Cell::new(listed),
             is_updating: Cell::new(false),
             versions,
         });
@@ -637,8 +650,9 @@ impl GeneralEdits {
         boxes
     }
 
-    /// The name the item should have: the field's, with a leading dot for
-    /// Hidden and none without it.
+    /// The name the item should have: the field's, without a leading dot
+    /// when Hidden is cleared. Hidden adds a dot only where no `.hidden`
+    /// list can be written; elsewhere the name stays, as in Windows.
     fn wanted_name(&self) -> String {
         let typed = match self.hidden_extension.borrow().as_deref() {
             // An erased name is refused as it is: it never becomes the
@@ -655,16 +669,69 @@ impl GeneralEdits {
         } else {
             crate::window::trim_typed_name(&typed).to_owned()
         };
-        let was_hidden = self.original_name.borrow().starts_with('.');
+        let has_dot = self.original_name.borrow().starts_with('.');
+        let was_hidden = has_dot || self.listed.get();
         let hide = self.hidden.is_active();
         if hide == was_hidden {
             return typed;
         }
-        if hide {
+        if hide && self.hidden_list.is_none() {
             format!(".{typed}")
-        } else {
+        } else if !hide && has_dot {
             typed.trim_start_matches('.').to_owned()
+        } else {
+            typed
         }
+    }
+
+    /// Whether the `.hidden` list should name the item, when that changes.
+    fn listing_change(&self) -> Option<bool> {
+        self.hidden_list.as_ref()?;
+        let wanted = self.hidden.is_active() && !self.wanted_name().starts_with('.');
+        (wanted != self.listed.get()).then_some(wanted)
+    }
+
+    /// Lists the item, named `name` now and `old_name` before any rename,
+    /// in its folder's `.hidden` list for `hide`, or takes it off, and
+    /// lists the folder again in every window.
+    fn list_as_hidden(
+        &self,
+        window: Option<&PropertiesWindow>,
+        (name, old_name): (&str, &str),
+        hide: bool,
+    ) -> Result<(), String> {
+        // A location registered as a previous version since the window
+        // opened is never changed (PROP-024).
+        self.versions
+            .check_writable(&self.uri.borrow())
+            .map_err(|refusal| refusal.to_string())?;
+        self.apply_listing(name, old_name, hide)?;
+        let folder = gtk::gio::File::for_uri(&self.uri.borrow())
+            .parent()
+            .map(|folder| folder.uri().to_string());
+        if let (Some(opener), Some(folder)) = (window.and_then(PropertiesWindow::opener), folder) {
+            opener.announce_hidden_changed(&folder);
+        }
+        Ok(())
+    }
+
+    /// Lists the item, named `name` now and `old_name` before any rename,
+    /// in the folder's `.hidden` list, or takes it off, for `hide`.
+    fn apply_listing(&self, name: &str, old_name: &str, hide: bool) -> Result<(), String> {
+        let Some(list) = &self.hidden_list else {
+            return Ok(());
+        };
+        // The old name's line goes either way: a listed item renamed in
+        // the name field stays hidden under its new name.
+        let listing = set_listed(list, old_name, false).and_then(|()| set_listed(list, name, hide));
+        listing.map_err(|error| {
+            ox_core::i18n::format_message(
+                "The item could not be hidden or shown. {error}",
+                &[("error", &error.to_string())],
+            )
+        })?;
+        self.listed.set(hide);
+        Ok(())
     }
 
     /// A folder or a link to a folder, whose name always shows whole.
@@ -689,6 +756,32 @@ impl GeneralEdits {
         }
         let wanted = self.read_only.is_active();
         (Some(wanted) != self.read_only_now.get()).then_some(wanted)
+    }
+
+    /// After the item at `uri` was renamed to `wanted`: the tab follows
+    /// its new location and name, Hidden shows whether it is hidden
+    /// (`listing` when it is about to be listed), and the title its name.
+    fn show_renamed(&self, window: Option<&PropertiesWindow>, uri: &str, wanted: &str, listing: bool) {
+        let renamed = gtk::gio::File::for_uri(uri)
+            .parent()
+            .map(|parent| parent.child(wanted).uri().to_string());
+        if let Some(renamed) = renamed {
+            self.uri.replace(renamed);
+        }
+        self.original_name.replace(wanted.to_owned());
+        self.hidden_extension
+            .replace(hidden_extension(wanted, self.always_whole(), self.extensions).map(str::to_owned));
+        self.is_updating.set(true);
+        self.name.set_text(self.shown(wanted));
+        self.hidden
+            .set_active(wanted.starts_with('.') || self.listed.get() || listing);
+        self.is_updating.set(false);
+        if let Some(window) = window {
+            window.set_title_text(&ox_core::i18n::format_message(
+                "{title} Properties",
+                &[("title", self.shown(wanted))],
+            ));
+        }
     }
 
     async fn apply_now(self: Rc<Self>) -> Result<(), String> {
@@ -745,6 +838,8 @@ impl GeneralEdits {
         }
         let wanted = self.wanted_name();
         let original = self.original_name.borrow().clone();
+        let relisted = self.listed.get() && wanted != original && self.hidden.is_active();
+        let listing = self.listing_change().or(relisted.then_some(true));
         if wanted != original {
             let Some(opener) = opener else {
                 return Err(ox_core::i18n::gettext(
@@ -777,29 +872,15 @@ impl GeneralEdits {
                 // place; the other changes still apply.
                 self.is_updating.set(true);
                 self.name.set_text(self.shown(&original));
-                self.hidden.set_active(original.starts_with('.'));
+                self.hidden
+                    .set_active(original.starts_with('.') || self.listed.get());
                 self.is_updating.set(false);
                 return Ok(());
             }
-            let renamed = gtk::gio::File::for_uri(&uri)
-                .parent()
-                .map(|parent| parent.child(&wanted).uri().to_string());
-            if let Some(renamed) = renamed {
-                self.uri.replace(renamed);
-            }
-            self.original_name.replace(wanted.clone());
-            self.hidden_extension
-                .replace(hidden_extension(&wanted, self.always_whole(), self.extensions).map(str::to_owned));
-            self.is_updating.set(true);
-            self.name.set_text(self.shown(&wanted));
-            self.hidden.set_active(wanted.starts_with('.'));
-            self.is_updating.set(false);
-            if let Some(window) = &window {
-                window.set_title_text(&ox_core::i18n::format_message(
-                    "{title} Properties",
-                    &[("title", self.shown(&wanted))],
-                ));
-            }
+            self.show_renamed(window.as_ref(), &uri, &wanted, listing == Some(true));
+        }
+        if let Some(hide) = listing {
+            self.list_as_hidden(window.as_ref(), (&wanted, &original), hide)?;
         }
         Ok(())
     }
@@ -807,7 +888,9 @@ impl GeneralEdits {
 
 impl Pending for GeneralEdits {
     fn has_changes(&self) -> bool {
-        self.wanted_name() != *self.original_name.borrow() || self.read_only_change().is_some()
+        self.wanted_name() != *self.original_name.borrow()
+            || self.read_only_change().is_some()
+            || self.listing_change().is_some()
     }
 
     fn apply(self: Rc<Self>) -> ApplyFuture {

@@ -30,7 +30,8 @@ impl AppContext {
         let start = IndexerStart {
             location,
             settings: IndexSettings::from_preferences(&data.preferences),
-            pins: data.pins,
+            pins: ox_core::places::pinned_folders(&data),
+            standard_folders: ox_core::places::pinned_standard_folders(&data),
         };
         self.search_cache().start(start);
         self.connect_places_changed(glib::clone!(
@@ -48,6 +49,7 @@ impl AppContext {
             None => SettingsReading::Sound,
         };
         let settings = IndexSettings::from_preferences(&data.preferences);
-        self.search_cache().follow_settings(settings, &data.pins, reading);
+        let pins = ox_core::places::pinned_folders(&data);
+        self.search_cache().follow_settings(settings, &pins, reading);
     }
 }

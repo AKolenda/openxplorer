@@ -702,7 +702,10 @@ pub(super) fn recent_entry(entry: &Entry) -> RecentEntry {
         is_dir: entry.is_dir,
         size: entry.size.unwrap_or(0),
         // `settings.json` keeps 0 for an unknown time, as core.py does.
-        modified: entry.modified.unwrap_or(0),
+        modified: entry
+            .modified
+            .and_then(|seconds| u64::try_from(seconds).ok())
+            .unwrap_or(0),
         opened: None,
     }
 }

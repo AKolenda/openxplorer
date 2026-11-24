@@ -370,7 +370,16 @@ impl VersionsPanel {
             }
         };
         if found.versions.is_empty() {
-            show_empty(&list, found.message().unwrap_or_default());
+            // An item on this computer has no server to mention: Windows
+            // says only that there are no previous versions, as the heading
+            // does; a share keeps the note about its server.
+            let is_local = self.imp().uri.borrow().starts_with("file:");
+            let message = if is_local {
+                ""
+            } else {
+                found.message().unwrap_or_default()
+            };
+            show_empty(&list, message);
         } else {
             self.show_versions(&list, &found);
         }

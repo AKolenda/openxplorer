@@ -217,7 +217,9 @@ fn list_recycle_bin_blocking(cancel: &Cancellation) -> Result<Vec<RecycledItem>,
             uri: entry.uri,
             name: entry.name,
             original_path: entry.trash_orig_path,
-            deleted_at: entry.trash_deletion_date,
+            deleted_at: entry
+                .trash_deletion_date
+                .and_then(|seconds| u64::try_from(seconds).ok()),
         }
     })
 }
