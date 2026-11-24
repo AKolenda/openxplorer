@@ -46,6 +46,69 @@ fn each_pane_keeps_its_folder_and_the_window_follows_the_active_one() {
     assert_eq!(test.window.active_side(), PaneSide::Start);
 }
 
+/// A split tab moved to a new window, or into another window, takes both
+/// panes along, each with its folder and Back history, and the pane that
+/// was active stays active: moving a tab never loses one of its folders.
+///
+/// parity: VIEW-059, TAB-029, TAB-030
+#[gtk::test]
+fn a_split_tab_moves_to_another_window_with_both_panes() {
+    use crate::test_support::harness::OpenedWindows;
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.add_tab(&fixture.uri()).expect("a folder");
+    test.wait_for_listing("the second tab");
+    test.activate("split-view", None);
+    test.window.navigate_or_report(&fixture.uri_of("Documents"));
+    test.wait_for_listing("Documents in the right pane");
+    test.window.activate_pane(PaneSide::Start);
+    settle();
+    let moved = test.active_tab().expect("the split tab");
+
+    test.window.move_tab_to_new_window(moved);
+    let opened = OpenedWindows::only(&[&test.window]);
+    let window = opened.window();
+    wait_until("the moved tab to be listed", || window.is_listed());
+
+    let panes = |window: &crate::window::BrowserWindow| {
+        let session = window.imp().session.borrow();
+        let front = session.active().expect("a tab in front");
+        let beside = front
+            .beside()
+            .map(|pane| (pane.side, pane.uri().to_owned(), pane.history.can_go_back()));
+        ((front.side, front.uri().to_owned()), beside)
+    };
+    let in_new_window = panes(window);
+    assert_eq!(window.tab_count(), 1);
+    assert_eq!(
+        in_new_window,
+        (
+            (PaneSide::Start, fixture.uri()),
+            Some((PaneSide::End, fixture.uri_of("Documents"), true))
+        ),
+        "both panes came along, the left one still active, the right one with its history"
+    );
+    assert!(
+        window.imp().end_pane_column.is_visible(),
+        "the window shows the split"
+    );
+
+    // And back into the first window, with the right pane active.
+    window.activate_pane(PaneSide::End);
+    settle();
+    let id = window.imp().session.borrow().active_id().expect("a tab");
+    window.move_tab_into_window(id, test.window.id());
+    wait_until("the tab to arrive", || test.window.tab_count() == 2);
+    assert_eq!(
+        panes(&test.window),
+        (
+            (PaneSide::End, fixture.uri_of("Documents")),
+            Some((PaneSide::Start, fixture.uri(), false))
+        )
+    );
+}
+
 /// A split measures the same height whatever width it is given, also
 /// just after it opens. Until its first layout with both panes, `GtkPaned`
 /// measures the start pane at the divider's own width, however wide the

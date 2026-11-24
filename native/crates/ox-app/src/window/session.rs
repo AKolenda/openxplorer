@@ -128,6 +128,10 @@ pub(super) struct Tab {
     /// The next listing starts renaming the selected item in place: Tab
     /// moved on from a rename (OPS-012).
     pub renames_selection: bool,
+    /// The next listing of a location the tab goes to puts the keyboard
+    /// on its first item without selecting it: another application opened
+    /// the folder, or it was typed into the address bar (SEL-020).
+    pub focuses_first_item: bool,
     /// The vertical scroll position, restored when the tab is shown again.
     pub scroll: f64,
     /// The URI of the item with keyboard focus, which gets it back when
@@ -189,6 +193,7 @@ impl Tab {
             selected: Vec::new(),
             reveals_selection: false,
             renames_selection: false,
+            focuses_first_item: false,
             scroll: 0.0,
             focused: None,
             scroll_after_listing: None,

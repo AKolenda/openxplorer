@@ -19,6 +19,7 @@ use ox_core::places::{KnownFolder, NetworkLocation, Place};
 
 use crate::icons::{Art, Icon, Storage, Tint};
 use crate::locations::Page;
+use crate::volumes::VolumeKind;
 
 use super::address_bar::CrumbButton;
 use super::command_bar::{FolderPin, MoreMenuState, MorePlace, NetworkDrive};
@@ -50,6 +51,8 @@ pub(super) fn address_icon(uri: &str, home_uri: &str) -> Icon {
     }
     if location::same_location(uri, home_uri) {
         Icon::Home
+    } else if is_drive_root(uri) {
+        Icon::HardDrive
     } else if is_archive_location(uri) {
         Icon::FolderZip
     } else if is_server_location(uri) {
@@ -179,6 +182,17 @@ fn listed_place_glyph(uri: &str) -> Option<Icon> {
     }
 }
 
+/// What a tab's icon depends on besides its location: the network
+/// locations of the navigation pane, the standard folders of Quick access
+/// and the roots of the mounted drives.
+type TabPlaces<'a> = (&'a [NetworkLocation], &'a [Place], &'a [String]);
+
+/// Whether `uri` is the root of the file system, which the navigation pane
+/// and This PC show as the Local Disk.
+fn is_drive_root(uri: &str) -> bool {
+    location::same_location(uri, "file:///")
+}
+
 /// The standard folder with a navigation pane glyph of its own (Desktop,
 /// Downloads, Documents, Pictures, Music, Videos) that `known_folders`,
 /// the Quick access rows of the standard folders, place at `uri`.
@@ -202,12 +216,11 @@ fn standard_folder_at(uri: &str, known_folders: &[Place]) -> Option<KnownFolder>
 /// devices, the colour folder everywhere else, and for a network location
 /// (SMB, or a folder under a kernel CIFS/SMB3 mount, NET-006) the location
 /// on the network bar as its row of `network` shows it in the sidebar.
-pub(in crate::window) fn tab_icon(
-    uri: &str,
-    locations: &LocationContext,
-    network: &[NetworkLocation],
-    known_folders: &[Place],
-) -> Art {
+/// The root of the file system, the Local Disk, and the root of a mounted
+/// drive of `drives` show the drive, as their navigation pane rows do and
+/// Windows 11's tab of a drive does.
+pub(in crate::window) fn tab_icon(uri: &str, locations: &LocationContext, places: TabPlaces<'_>) -> Art {
+    let (network, known_folders, drives) = places;
     match Page::from_uri(uri) {
         Some(page @ (Page::Home | Page::Network | Page::Settings)) => return Art::Glyph(page.icon()),
         Some(Page::ThisPc) => return Art::TintedGlyph(Page::ThisPc.icon(), Tint::ThisPc),
@@ -235,6 +248,8 @@ pub(in crate::window) fn tab_icon(
     }
     if is_device_location(uri) {
         Art::Glyph(Icon::Phone)
+    } else if is_drive_root(uri) || drives.iter().any(|drive| location::same_location(drive, uri)) {
+        Art::Glyph(Icon::HardDrive)
     } else if is_archive_location(uri) {
         Art::ZipFolder
     } else if locations.is_network_location(uri) {
@@ -252,11 +267,10 @@ fn tab_view(
     tab: &Tab,
     session: &Session,
     locations: &LocationContext,
-    places: (&[NetworkLocation], &[Place]),
+    places: TabPlaces<'_>,
     names_query: bool,
     busy: bool,
 ) -> TabView {
-    let (network, known_folders) = places;
     let uri = tab.uri();
     let is_search = tab.history.current_search().is_some();
     let mut tooltip = locations.display_location(uri);
@@ -271,7 +285,7 @@ fn tab_view(
         icon: if is_search {
             Art::Glyph(Icon::Search)
         } else {
-            tab_icon(uri, locations, network, known_folders)
+            tab_icon(uri, locations, places)
         },
         active: session.is_active(tab.id),
         previous_version: None,
@@ -500,6 +514,15 @@ impl BrowserWindow {
     pub(super) fn render_tabs(&self) {
         let network = self.network_locations();
         let known_folders = self.context().known_folders();
+        // The mounted drives' roots, whose tabs show the drive.
+        let drives: Vec<String> = self
+            .imp()
+            .volumes
+            .borrow()
+            .iter()
+            .filter(|row| row.kind == VolumeKind::Drive && !row.is_network())
+            .filter_map(|row| row.uri().map(str::to_owned))
+            .collect();
         let names_query = !self.shows_search_filter_bar();
         let searching = self.is_searching() && self.imp().search.borrow().is_running();
         let mut views: Vec<TabView> = {
@@ -512,7 +535,7 @@ impl BrowserWindow {
                     tab,
                     &session,
                     &locations,
-                    (&network, &known_folders),
+                    (&network, &known_folders, &drives),
                     names_query,
                     busy,
                 )
@@ -622,6 +645,14 @@ mod tests {
                 tab: Art::SHARE,
                 address: Icon::Organization,
             },
+            // The root of the file system is the Local Disk of the
+            // navigation pane and This PC, whose drive it shows, as
+            // Windows 11 File Explorer's tab of a drive does.
+            IconCase {
+                uri: "file:///",
+                tab: Art::Glyph(Icon::HardDrive),
+                address: Icon::HardDrive,
+            },
             IconCase {
                 uri: "mtp://%5Busb%3A001%2C010%5D/",
                 tab: Art::Glyph(Icon::Phone),
@@ -671,7 +702,12 @@ mod tests {
         ];
         let locations = LocationContext::default();
         for case in cases {
-            assert_eq!(tab_icon(case.uri, &locations, &[], &[]), case.tab, "{}", case.uri);
+            assert_eq!(
+                tab_icon(case.uri, &locations, (&[], &[], &[])),
+                case.tab,
+                "{}",
+                case.uri
+            );
             let address = address_icon(case.uri, "file:///home/demo");
             assert_eq!(address, case.address, "{}", case.uri);
         }
@@ -702,7 +738,7 @@ mod tests {
             network_mounts: vec!["/mnt/nas".into()],
             ..LocationContext::default()
         };
-        let tab_on = |uri: &str| tab_icon(uri, &locations, &[], &known_folders);
+        let tab_on = |uri: &str| tab_icon(uri, &locations, (&[], &known_folders, &[]));
         assert_eq!(
             tab_on("file:///home/demo/Downloads/"),
             Art::for_known_folder(KnownFolder::Downloads)
@@ -735,7 +771,7 @@ mod tests {
             ..LocationContext::default()
         };
         assert_eq!(
-            tab_icon("file:///home/demo/", &locations, &[], &known_folders),
+            tab_icon("file:///home/demo/", &locations, (&[], &known_folders, &[])),
             Art::Glyph(Page::Home.icon())
         );
     }
@@ -786,7 +822,7 @@ mod tests {
             let mut session = Session::default();
             let id = session.add(case.uri, super::super::session::TabPlacement::Foreground);
             let tab = session.tab(id).expect("the tab was added");
-            let view = tab_view(tab, &session, &locations, (&[], &[]), true, false);
+            let view = tab_view(tab, &session, &locations, (&[], &[], &[]), true, false);
             assert_eq!(view.title, case.title, "{}", case.uri);
             assert_eq!(view.tooltip, case.tooltip, "{}", case.uri);
             assert!(view.active);
@@ -804,7 +840,7 @@ mod tests {
         let mapped_drive = studio_nas_mapped_drive();
         let network = [server.clone(), mapped_drive.clone()];
         let locations = LocationContext::default();
-        let tab_on = |uri: &str| tab_icon(uri, &locations, &network, &[]);
+        let tab_on = |uri: &str| tab_icon(uri, &locations, (&network, &[], &[]));
         assert_eq!(tab_on(&server.uri), Art::for_network_row(&server));
         assert_eq!(tab_on(&mapped_drive.uri), Art::for_network_row(&mapped_drive));
         assert_eq!(tab_on("smb://studio-nas/projects/2024"), Art::SHARE);
@@ -823,7 +859,7 @@ mod tests {
             network_mounts: vec!["/mnt/nas".into()],
             ..LocationContext::default()
         };
-        let tab_on = |uri: &str| tab_icon(uri, &locations, &[], &[]);
+        let tab_on = |uri: &str| tab_icon(uri, &locations, (&[], &[], &[]));
         assert_eq!(tab_on("file:///mnt/nas"), Art::SHARE);
         assert_eq!(tab_on("file:///mnt/nas/Projects"), Art::SHARE);
         assert_eq!(tab_on("file:///mnt/nas-other"), Art::Folder);

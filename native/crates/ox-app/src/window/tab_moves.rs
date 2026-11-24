@@ -35,7 +35,7 @@ use crate::settings_page::SettingsView;
 use super::actions::tab_action;
 use super::folder_pane::FolderView;
 use super::menu_popover::{MenuEntry, MenuItem};
-use super::session::TabId;
+use super::session::{PaneSide, Tab, TabId};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
@@ -87,6 +87,45 @@ pub(super) struct MovedTab {
     /// A location the tab was still going to, looked up or mounted,
     /// which the destination goes on to (VIEW-068).
     opening: Option<String>,
+    /// The side of the window the pane above shows on: the right one when
+    /// it is the active pane of a split tab on the right.
+    side: PaneSide,
+    /// The other pane of a split tab, which moves along (VIEW-059).
+    beside: Option<MovedPane>,
+}
+
+/// The pane beside the active one of a split tab that moves, with what it
+/// takes along of its own.
+#[derive(Debug, Clone)]
+struct MovedPane {
+    /// Where it has been and where it is.
+    history: History,
+    /// The view it left in each place of its history (NAV-008).
+    left_views: HistoryViews,
+    /// The selected items' URIs.
+    selected: Vec<String>,
+    /// The vertical scroll position.
+    scroll: f64,
+}
+
+impl MovedPane {
+    /// What the pane `pane` takes along.
+    fn of(pane: &Tab) -> Self {
+        Self {
+            history: pane.history.clone(),
+            left_views: pane.left_views.clone(),
+            selected: pane.selected.clone(),
+            scroll: pane.scroll_after_listing.unwrap_or(pane.scroll),
+        }
+    }
+}
+
+/// Gives the pane `tab`, just added, what the moved pane `moved` took
+/// along; the selection and scroll position come back once it is listed.
+fn receive_pane(tab: &mut Tab, moved: MovedPane) {
+    tab.selected = moved.selected;
+    tab.left_views = moved.left_views;
+    tab.scroll_after_listing = Some(moved.scroll);
 }
 
 /// The menu that moves tab `id` into one of `windows`, which lists each
@@ -161,6 +200,7 @@ impl BrowserWindow {
         };
         if shows_its_view {
             self.save_tab_view();
+            self.save_beside_view();
         }
         // A carried tab out of its strip: the pane in front shows the tab
         // beside it.
@@ -182,6 +222,8 @@ impl BrowserWindow {
             sort,
             settings_view: is_settings.then(|| self.settings_page().view()),
             opening: tab.opening.as_ref().map(|opening| opening.target().to_owned()),
+            side: tab.side,
+            beside: tab.beside().map(MovedPane::of),
         })
     }
 
@@ -203,20 +245,68 @@ impl BrowserWindow {
         }
         self.save_tab_view();
         let uri = tab.history.current().to_owned();
-        let id = self.imp().session.borrow_mut().insert_moved(tab.history, before);
-        if let Some(received) = self.imp().session.borrow_mut().tab_mut(id) {
-            received.selected = tab.selected;
-            received.left_views = tab.left_views;
-            received.scroll_after_listing = Some(tab.scroll);
-        }
+        let active = MovedPane {
+            history: tab.history,
+            left_views: tab.left_views,
+            selected: tab.selected,
+            scroll: tab.scroll,
+        };
+        let id = self.insert_moved_panes(active, tab.side, tab.beside, before);
         self.context().remember_network(&uri);
         self.show_view(tab.view);
         self.folder_pane().details().sort_by(tab.sort);
         self.show_tab(id);
+        // The pane beside shows in the view and order of the active one,
+        // as when the tab was split here.
+        if self.imp().session.borrow().active().is_some_and(Tab::is_split) {
+            self.copy_pane_view(self.active_side(), self.active_side().other());
+            self.show_beside_pane();
+        }
         if let Some(target) = tab.opening {
             self.resume_opening(id, &target);
         }
         Ok(())
+    }
+
+    /// Adds the panes of a moved tab before tab `before` or at the end:
+    /// `active` on `side`, and the pane `beside` it on the other side when
+    /// the tab is split, as it was in its window. The id of the active
+    /// pane, which is in front.
+    fn insert_moved_panes(
+        &self,
+        active: MovedPane,
+        side: PaneSide,
+        beside: Option<MovedPane>,
+        before: Option<TabId>,
+    ) -> TabId {
+        let mut session = self.imp().session.borrow_mut();
+        let Some(beside) = beside else {
+            let id = session.insert_moved(active.history.clone(), before);
+            if let Some(tab) = session.tab_mut(id) {
+                receive_pane(tab, active);
+            }
+            return id;
+        };
+        // A split opens its new pane on the right, in front: the left pane
+        // comes first, and the left one is made active again after.
+        let (left, right) = match side {
+            PaneSide::Start => (active, beside),
+            PaneSide::End => (beside, active),
+        };
+        let left_id = session.insert_moved(left.history.clone(), before);
+        if let Some(tab) = session.tab_mut(left_id) {
+            receive_pane(tab, left);
+        }
+        if let Some(right_id) = session.split_active(right.history.current()) {
+            if let Some(tab) = session.tab_mut(right_id) {
+                tab.history = right.history.clone();
+                receive_pane(tab, right);
+            }
+            if side == PaneSide::Start {
+                session.activate_beside();
+            }
+        }
+        session.active_id().unwrap_or(left_id)
     }
 
     /// Hands tab `id` to `destination`, before its tab `before` or at the

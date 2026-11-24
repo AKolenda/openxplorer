@@ -118,6 +118,7 @@ impl BrowserWindow {
         if let Some(id) = active {
             self.wait_to_mount(id);
         }
+        self.focus_first_item_when_listed();
     }
 
     /// Makes tab `id`'s listings, the one running included, leave its

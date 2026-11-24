@@ -519,7 +519,7 @@ fn folder_art(facts: &PaneFacts<'_>) -> Art {
     if ox_core::location::is_archive_location(uri) && !is_zip_top(uri) {
         return Art::Folder;
     }
-    match tab_icon(uri, facts.locations, facts.network, facts.known_folders) {
+    match tab_icon(uri, facts.locations, (facts.network, facts.known_folders, &[])) {
         Art::Glyph(icon) if icon == Page::Home.icon() => Art::TintedGlyph(icon, Tint::Home),
         Art::Glyph(icon) if icon == Page::Network.icon() => Art::TintedGlyph(icon, Tint::Network),
         art => art,

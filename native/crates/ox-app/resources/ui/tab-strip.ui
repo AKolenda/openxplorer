@@ -8,6 +8,9 @@
          takes the rest of the bar. -->
     <property name="hexpand">false</property>
     <property name="valign">end</property>
+    <style>
+      <class name="tab-strip"/>
+    </style>
     <child>
       <!-- The scroll arrows at the two ends of the strip, shown only while
            the tabs overflow, as Windows 11 shows them; Tab skips them, as

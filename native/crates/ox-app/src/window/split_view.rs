@@ -217,7 +217,7 @@ impl BrowserWindow {
 
     /// Shows the folder pane on `to` in the view and order of the one on
     /// `from`.
-    fn copy_pane_view(&self, from: PaneSide, to: PaneSide) {
+    pub(super) fn copy_pane_view(&self, from: PaneSide, to: PaneSide) {
         if from == to {
             return;
         }

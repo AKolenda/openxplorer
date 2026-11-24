@@ -45,6 +45,19 @@ impl BrowserWindow {
         session.active().is_some_and(|tab| tab.listing_state.is_listing())
     }
 
+    /// The location of each tab's active pane, left to right, for tests.
+    #[cfg(test)]
+    pub(crate) fn tab_uris(&self) -> Vec<String> {
+        let session = self.imp().session.borrow();
+        session.tabs().iter().map(|tab| tab.uri().to_owned()).collect()
+    }
+
+    /// Whether the window saves its tabs for the next start, for tests.
+    #[cfg(test)]
+    pub(crate) fn remembers_session(&self) -> bool {
+        self.imp().remembers_session.get()
+    }
+
     /// The active listing's failure, if one occurred, for tests.
     #[cfg(test)]
     pub(super) fn load_error(&self) -> Option<String> {

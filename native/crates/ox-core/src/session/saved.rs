@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! The tabs of the last window closed, which a start without locations
+//! The tabs of the windows open last, which a start without locations
 //! reopens when the settings ask for it (TAB-053, Dolphin's
-//! `RememberOpenedTabs`).
+//! `RememberOpenedTabs`, and Windows 11's "Restore previous folder windows
+//! at logon", which reopens every folder window with its tabs).
+//!
+//! The window in front keeps the one-window form at the top of the file
+//! (`tabs` and `activeTab`), so a version that knows only one window still
+//! reopens it; the other windows follow in `otherWindows`.
 //!
 //! The file is `session.json` in the settings directory, written as a
 //! private file and replaced atomically. It is read back as untrusted
@@ -25,8 +30,11 @@ const SESSION_FILE: &str = "session.json";
 /// The prefix of the temporary file a save writes first.
 const TEMPORARY_PREFIX: &str = ".session.json.";
 
-/// The most tabs a saved session restores.
+/// The most tabs a saved window restores.
 pub const MAX_SAVED_TABS: usize = 100;
+
+/// The most windows a saved session restores, the one in front included.
+pub const MAX_SAVED_WINDOWS: usize = 20;
 
 /// The largest session file read, in bytes.
 const MAX_FILE_BYTES: u64 = 4 * 1024 * 1024;
@@ -99,15 +107,78 @@ impl SavedSession {
         replace_file_atomically(&session_file(directory), TEMPORARY_PREFIX, contents.as_bytes())
     }
 
-    /// The session saved in `directory`; `None` when there is none, or it
-    /// cannot be read or is not valid.
+    /// The window in front of the session saved in `directory`; `None`
+    /// when there is none, or it cannot be read or is not valid.
     pub fn load(directory: &Path) -> Option<Self> {
-        let path = session_file(directory);
-        let file = private_file_if_present(&path, PrivateFileOptions::default()).ok()??;
-        let text = read_limited_text(file, &path, MAX_FILE_BYTES).ok()?;
-        let value: Value = serde_json::from_str(&text).ok()?;
-        Self::from_json(&value).ok()
+        Self::from_json(&read_session(directory)?).ok()
     }
+}
+
+/// Every window of a saved session, the one in front first.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SavedWindows {
+    /// 1 to [`MAX_SAVED_WINDOWS`] windows, the one in front first.
+    pub windows: Vec<SavedSession>,
+}
+
+impl SavedWindows {
+    /// The windows in their persistent JSON form: the front window's tabs
+    /// at the top, as [`SavedSession::to_json`] writes them, and the
+    /// others in `otherWindows`.
+    pub fn to_json(&self) -> Value {
+        let mut windows = self.windows.iter().take(MAX_SAVED_WINDOWS);
+        let mut value = windows.next().map_or_else(|| json!({}), SavedSession::to_json);
+        let others: Vec<Value> = windows.map(SavedSession::to_json).collect();
+        if !others.is_empty() {
+            value["otherWindows"] = Value::Array(others);
+        }
+        value
+    }
+
+    /// Validates saved windows in their JSON form: the front window must
+    /// be valid; another window that is not is left out, and windows past
+    /// [`MAX_SAVED_WINDOWS`] are too.
+    pub fn from_json(value: &Value) -> Option<Self> {
+        let front = SavedSession::from_json(value).ok()?;
+        let others = value
+            .get("otherWindows")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let windows = std::iter::once(front)
+            .chain(
+                others
+                    .iter()
+                    .filter_map(|window| SavedSession::from_json(window).ok()),
+            )
+            .take(MAX_SAVED_WINDOWS)
+            .collect();
+        Some(Self { windows })
+    }
+
+    /// Saves the windows in `directory`, replacing the last session.
+    ///
+    /// # Errors
+    ///
+    /// [`StorageError`] when the file cannot be written.
+    pub fn save(&self, directory: &Path) -> Result<(), StorageError> {
+        let contents = self.to_json().to_string();
+        replace_file_atomically(&session_file(directory), TEMPORARY_PREFIX, contents.as_bytes())
+    }
+
+    /// The windows saved in `directory`; `None` when there are none, or
+    /// the front window cannot be read or is not valid.
+    pub fn load(directory: &Path) -> Option<Self> {
+        Self::from_json(&read_session(directory)?)
+    }
+}
+
+/// The session file in `directory` as JSON, when it can be read.
+fn read_session(directory: &Path) -> Option<Value> {
+    let path = session_file(directory);
+    let file = private_file_if_present(&path, PrivateFileOptions::default()).ok()??;
+    let text = read_limited_text(file, &path, MAX_FILE_BYTES).ok()?;
+    serde_json::from_str(&text).ok()
 }
 
 /// Where the session is saved in `directory`.
@@ -197,6 +268,89 @@ mod tests {
 
         assert_eq!(loaded, Some(session));
         assert_eq!(SavedSession::load(directory.path()), None);
+    }
+
+    /// Every window of a saved session comes back, the one in front first,
+    /// as Windows 11 reopens every folder window with its tabs. The window
+    /// in front keeps the one-window form, so a file saved before several
+    /// windows were kept, or read by such a version, still opens it; a
+    /// damaged other window is left out, and only so many windows return.
+    ///
+    /// parity: TAB-053
+    #[test]
+    fn every_saved_window_comes_back_with_the_front_one_first() {
+        let directory = tempfile::tempdir().expect("a temporary directory");
+        let pane = |uri: &str| {
+            TabSnapshot::from_json(&json!({ "uri": uri, "history": [uri], "index": 0 })).expect("a valid tab")
+        };
+        let window = |uris: &[&str], active_tab: usize| SavedSession {
+            tabs: uris
+                .iter()
+                .map(|uri| SavedTab {
+                    panes: vec![pane(uri)],
+                    active_pane: 0,
+                })
+                .collect(),
+            active_tab,
+        };
+        let windows = SavedWindows {
+            windows: vec![
+                window(&["file:///srv/front", "file:///srv/front/Plans"], 1),
+                window(&["file:///srv/second"], 0),
+                window(
+                    &["file:///srv/third", "file:///srv/third/A", "file:///srv/third/B"],
+                    2,
+                ),
+            ],
+        };
+
+        windows.save(directory.path()).expect("the windows are saved");
+        let loaded = SavedWindows::load(directory.path());
+        let front_only = SavedSession::load(directory.path());
+
+        assert_eq!(loaded.as_ref(), Some(&windows));
+        assert_eq!(
+            front_only.as_ref(),
+            Some(&windows.windows[0]),
+            "an older version reads the front window"
+        );
+
+        // A file of one window, as earlier versions saved it.
+        windows.windows[1]
+            .save(directory.path())
+            .expect("one window is saved");
+        assert_eq!(
+            SavedWindows::load(directory.path()),
+            Some(SavedWindows {
+                windows: vec![windows.windows[1].clone()]
+            })
+        );
+
+        // A damaged other window is left out; the others come back.
+        let mut value = windows.to_json();
+        value["otherWindows"][0] = json!({ "tabs": [] });
+        let read = SavedWindows::from_json(&value).expect("the front window is valid");
+        assert_eq!(
+            read.windows,
+            [windows.windows[0].clone(), windows.windows[2].clone()]
+        );
+
+        // At most MAX_SAVED_WINDOWS windows return.
+        let many = json!({
+            "tabs": [{ "panes": [pane("file:///srv/front").to_json()], "activePane": 0 }],
+            "activeTab": 0,
+            "otherWindows": vec![window(&["file:///srv/more"], 0).to_json(); MAX_SAVED_WINDOWS + 5],
+        });
+        let read = SavedWindows::from_json(&many).expect("the front window is valid");
+        assert_eq!(read.windows.len(), MAX_SAVED_WINDOWS);
+
+        // Without a valid front window nothing is restored.
+        assert_eq!(
+            SavedWindows::from_json(
+                &json!({ "tabs": [], "otherWindows": [window(&["file:///srv/x"], 0).to_json()] })
+            ),
+            None
+        );
     }
 
     /// Saving and reading session files strips account names from every
