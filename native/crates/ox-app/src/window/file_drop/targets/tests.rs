@@ -486,11 +486,73 @@ fn items_dropped_on_a_trusted_launcher_start_its_application() {
         panic!("a trusted launcher takes drops");
     };
     let name = program.name.clone();
+    let dropped = vec![fixture.uri_of("Notes 2.txt")];
+    assert_eq!(name, "Copier", "named after its application");
+
+    // An executable launcher not yet marked trusted asks first, as GNOME's
+    // "Untrusted application launcher" does; Cancel runs nothing.
+    test.window.open_with_program(program.clone(), dropped.clone());
+    let question = crate::window::tests::file_ops_support::open_dialog(&test);
+    assert_eq!(question.title_text(), "Run this program?");
+    assert_eq!(
+        question.message_text(),
+        "“Copier” is a launcher that has not been marked as trusted. Launching it runs the command it \
+         holds. Launch it only if you trust where it came from."
+    );
+    assert_eq!(question.button_labels(), ["Cancel", "Trust and Launch"]);
+    question.press("Cancel");
+    wait_for(Duration::from_millis(300));
+    assert!(!launched.exists(), "Cancel runs nothing");
+
+    // Trust and Launch runs it and marks it trusted, so the next drop
+    // starts it at once.
+    test.window.open_with_program(program.clone(), dropped.clone());
+    crate::window::tests::file_ops_support::open_dialog(&test).press("Trust and Launch");
+    wait_until("the application to run", || launched.is_file());
+    std::fs::remove_file(&launched).expect("the fixture is ours");
+    crate::window::tests::file_ops_support::wait_for_no_dialog(&test);
+    test.window.open_with_program(program, dropped);
+    wait_until("the trusted application to run", || launched.is_file());
+    assert!(
+        crate::window::tests::file_ops_support::dialog_over(&test).is_none(),
+        "a trusted launcher is not asked about again"
+    );
+}
+
+/// A launcher in Downloads that came with its execute bit, as one
+/// extracted from an archive does, never runs from a drop without the
+/// trust question; Cancel runs nothing.
+///
+/// parity: SAFE-023
+#[gtk::test]
+fn a_downloaded_launcher_asks_before_it_runs() {
+    let fixture = Fixture::standard();
+    std::fs::create_dir(fixture.path("Downloads")).expect("the fixture is ours");
+    let ran = fixture.path("ran");
+    let entry = format!(
+        "[Desktop Entry]\nType=Application\nName=Free Game\nExec=touch \"{}\"\n",
+        ran.display()
+    );
+    let launcher = fixture.path("Downloads/Free Game.desktop");
+    std::fs::write(&launcher, entry).expect("the fixture is ours");
+    std::fs::set_permissions(&launcher, std::fs::Permissions::from_mode(0o755)).expect("the fixture is ours");
+    let test = TestWindow::open(&fixture.uri_of("Downloads"));
+    let position = test.position_of("Free Game.desktop");
+    wait_until("GIO's answer", || {
+        test.window.item_destination(position).is_some()
+    });
+    let Some(DropDestination::Program(program)) = test.window.item_destination(position) else {
+        panic!("an executable launcher takes drops");
+    };
+
     test.window
         .open_with_program(program, vec![fixture.uri_of("Notes 2.txt")]);
+    let question = crate::window::tests::file_ops_support::open_dialog(&test);
+    assert_eq!(question.title_text(), "Run this program?");
+    question.press("Cancel");
+    wait_for(Duration::from_millis(300));
 
-    assert_eq!(name, "Copier", "named after its application");
-    wait_until("the application to run", || launched.is_file());
+    assert!(!ran.exists(), "nothing ran");
 }
 
 /// parity: DND-026

@@ -4779,6 +4779,23 @@ native = "done"
 native_note = "native/crates/ox-app/src/window/quiet_tooltips.rs (install_tooltip_hiding, hide_tooltip, pointer_moved, follow_focus_for_tooltips, watch_tooltip_window and the Pressed, Menu and Rename reasons of TooltipsOff); native/crates/ox-app/src/window/location_view.rs (render_location hides the tooltip). GTK 4 has no call that hides a tooltip: the window turns its widgets' tooltips off and has GTK look under the pointer again, which hides it; they stay off until the pointer moves 3 pixels, as GTK would otherwise show at once the tooltip of whatever comes under a resting pointer, such as the first row of the folder a double-click opened, and a tooltip a widget made since then shows is hidden again. The keyboard in a menu, another popover or a rename box keeps them off until it leaves, or the popover closes. Tested with a real pointer and keys in native/crates/ox-app/src/window/tests/tooltips.rs (no_tooltip_stays_over_a_menu_the_rename_box_or_the_next_folder)."
 
 [[feature]]
+id = "VIEW-074"
+area = "VIEW"
+title = "Launchers look and are named like shortcuts"
+behaviour = "A .desktop launcher is a shortcut as Windows has them: its icon carries the link arrow in the bottom-left corner, as a symbolic link's does and as Windows draws its shortcut overlay, and its name never shows '.desktop', whatever 'File name extensions' says, as Windows never shows a shortcut's '.lnk' (NeverShowExt); renaming one edits the name without '.desktop' and keeps it. A shortcut (a symbolic link the app types 'Shortcut') shows its own Size and Date modified, the link's, as Windows shows a .lnk's (a few bytes, '1 KB'), not its target's, a folder's shortcut included, which is never counted as a folder; and sorting by name puts a folder's shortcut among the files, not the folders, as Windows 11 does (both checked in a Windows 11 VM). The launcher's own Icon= picture is not drawn: the view draws only the app's bundled Fluent art."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "https://devblogs.microsoft.com/oldnewthing/20241120-00/?p=110547 (some extensions, such as .lnk, are never shown)",
+  "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-ishelliconoverlayidentifier (the link arrow in the lower-left corner)",
+]
+python_tests = []
+bridge = []
+native = "partial"
+native_note = "native/crates/ox-app/src/icons/emblem.rs (is_launcher; links_and_read_only_items_carry_their_emblems) and native/crates/ox-app/src/folder_view/shown_name.rs (launcher_extension; a_launchers_desktop_extension_is_always_hidden), native/crates/ox-core/src/entry/enumerate.rs (list_shortcuts_own_facts; a_shortcut_lists_its_own_size_and_date), native/crates/ox-app/src/folder_view/model/sorters.rs (a_folder_shortcut_sorts_among_the_files) and folder_view/details/column_text.rs (a_folder_shortcut_shows_its_own_size). Partial: the launcher's Icon= picture is not shown."
+
+[[feature]]
 id = "SEL-001"
 area = "SEL"
 title = "Mouse selection: click, Ctrl+click, Shift+click"
@@ -7186,7 +7203,7 @@ native_note = "The desktops have no portal for a share menu, and KDE's Purpose s
 id = "CMD-038"
 area = "CMD"
 title = "Send to in the classic menu, as Windows Explorer has it"
-behaviour = "The classic file and folder menu (Show more options, Shift+right-click) has a 'Send to' submenu in a group of its own above Cut and Copy, as Windows Explorer's classic menu has it; the compact menu has none, as in Windows 11. It lists, in Windows' order: 'Bluetooth device', only when the computer has a Bluetooth adapter (an hci device under /sys/class/bluetooth) and the desktop has a Bluetooth sender (GNOME Bluetooth's bluetooth-sendto, Blueman's blueman-sendto or KDE BlueDevil's bluedevil-sendfile, in that order), which it starts with the selected files' paths, the sender asking for the device; 'Compressed (zipped) folder', Compress to ZIP file; 'Desktop (create shortcut)', only when the desktop has a Desktop folder; 'Documents', only when it has a Documents folder, which gets a copy; 'Mail recipient', only where the desktop's Email portal can attach files, which is Share (CMD-037); then each mounted removable drive and each saved network location, under the name This PC shows (for example 'Backup (\\\\fileserver) (S:)'), which gets a copy. Documents and Mail recipient show Fluent's colour art (document_20_color, mail_20_color), as Windows shows colour glyphs there; Fluent has no colour art for Bluetooth, the zipped folder, the Desktop or drives, which keep their Fluent glyphs. Fixed disks are not listed, as Windows lists none, and no other application adds entries (Windows' third-party entries are left out). A Recent row sends the file it stands for. Copies run through the transfer engine as a paste into that folder does, with the name-conflict dialog, progress and Undo, and afterwards the sent items stay selected, as in Windows; a read-only destination says 'This folder is read-only.'. Desktop (create shortcut) makes a symbolic link on the Desktop to each item, named as Windows names a new shortcut, the template '%s - Shortcut' filled with the item's whole name ('report.txt - Shortcut', 'Reports - Shortcut'), numbered '(2)', '(3)' when the name is taken by anything, a broken link included; a name too long for that within 255 bytes loses whole characters before its extension, as copies' names do, so the extension and the number are kept; it never replaces anything, Undo moves the shortcuts to the Recycle Bin, and a location without symbolic links (an SMB share through GVfs, a FAT drive) says 'Shortcuts cannot be created here: this location does not support symbolic links.'. ox-core's create_shortcut(target, folder) is the one function that makes such a shortcut. Every entry is a keyboard-reachable menu item named by its label; one that cannot run is disabled with its reason in its accessible description (no tooltip, as Windows 11's menu rows show none): Bluetooth device for a folder ('Only files can be sent to a Bluetooth device.'), Mail recipient as Share is ('Only files can be attached to an email.'), Desktop (create shortcut) in a previous version ('Items in a previous version are read-only.'), Compressed (zipped) folder in a read-only folder ('This folder is read-only.'), Documents, the drives and the network locations while no transfer can start ('Wait for the running file operation to finish.', or 'Four file operations are already running. Wait for one to finish.' while every transfer slot is taken), and Desktop (create shortcut) while any file operation runs; Bluetooth device and Mail recipient use no transfer slot and keep their own rules. A saved network location that is not connected is enabled, as Windows offers a mapped drive that is not connected: choosing it connects it through the window's usual mount and sign-in dialog, and the copy starts only once that succeeds, so no write is replayed after a mount (NET-004); a failed connection is reported and nothing is copied."
+behaviour = "The classic file and folder menu (Show more options, Shift+right-click) has a 'Send to' submenu in a group of its own above Cut and Copy, as Windows Explorer's classic menu has it; the compact menu has none, as in Windows 11. It lists, in Windows' order: 'Bluetooth device', only when the computer has a Bluetooth adapter (an hci device under /sys/class/bluetooth) and the desktop has a Bluetooth sender (GNOME Bluetooth's bluetooth-sendto, Blueman's blueman-sendto or KDE BlueDevil's bluedevil-sendfile, in that order), which it starts with the selected files' paths, the sender asking for the device; 'Compressed (zipped) folder', Compress to ZIP file; 'Desktop (create shortcut)', only when the desktop has a Desktop folder; 'Documents', only when it has a Documents folder, which gets a copy; 'Mail recipient', only where the desktop's Email portal can attach files, which is Share (CMD-037); then each mounted removable drive and each saved network location, under the name This PC shows (for example 'Backup (\\\\fileserver) (S:)'), which gets a copy. Documents and Mail recipient show Fluent's colour art (document_20_color, mail_20_color), as Windows shows colour glyphs there; Fluent has no colour art for Bluetooth, the zipped folder, the Desktop or drives, which keep their Fluent glyphs. Fixed disks are not listed, as Windows lists none, and no other application adds entries (Windows' third-party entries are left out). A Recent row sends the file it stands for. Copies run through the transfer engine as a paste into that folder does, with the name-conflict dialog, progress and Undo, and afterwards the sent items stay selected, as in Windows; a read-only destination says 'This folder is read-only.'. Desktop (create shortcut) makes a symbolic link on the Desktop to each item, named as Windows names a new shortcut, the template '%s - Shortcut' filled with the item's name as the view shows it: whole while file name extensions are shown ('report.txt - Shortcut', 'Reports - Shortcut'), without a known type's extension while they are hidden, as by default ('report - Shortcut'; a folder's name and an extension of digits alone stay whole), as Windows 11 names it (checked in a Windows 11 VM), numbered '(2)', '(3)' when the name is taken by anything, a broken link included; a name too long for that within 255 bytes loses whole characters before its extension, as copies' names do, so the extension and the number are kept; it never replaces anything, Undo moves the shortcuts to the Recycle Bin, and a location without symbolic links (an SMB share through GVfs, a FAT drive) says 'Shortcuts cannot be created here: this location does not support symbolic links.'. ox-core's create_shortcut(target, folder) is the one function that makes such a shortcut. Every entry is a keyboard-reachable menu item named by its label; one that cannot run is disabled with its reason in its accessible description (no tooltip, as Windows 11's menu rows show none): Bluetooth device for a folder ('Only files can be sent to a Bluetooth device.'), Mail recipient as Share is ('Only files can be attached to an email.'), Desktop (create shortcut) in a previous version ('Items in a previous version are read-only.'), Compressed (zipped) folder in a read-only folder ('This folder is read-only.'), Documents, the drives and the network locations while no transfer can start ('Wait for the running file operation to finish.', or 'Four file operations are already running. Wait for one to finish.' while every transfer slot is taken), and Desktop (create shortcut) while any file operation runs; Bluetooth device and Mail recipient use no transfer slot and keep their own rules. A saved network location that is not connected is enabled, as Windows offers a mapped drive that is not connected: choosing it connects it through the window's usual mount and sign-in dialog, and the copy starts only once that succeeds, so no write is replayed after a mount (NET-004); a failed connection is reported and nothing is copied."
 origin = ["openxplorer"]
 priority = "should"
 openxplorer = "missing"
@@ -7219,6 +7236,22 @@ python_tests = []
 bridge = []
 native = "done"
 native_note = "Ctrl+1 to 9 are further triggers of win.show-tab-number and Ctrl+Shift+E a key of its own in the capture-phase window keys (native/crates/ox-app/src/window/window_keys.rs), which a text field and a dialog keep; folder_tree/actions.rs (reveal_in_navigation_pane), folder_tree/follow.rs (reveal_shown) and sidebar/collapsing.rs (reveal_location) carry it out. The keypad keys are in the folder tree's and the places list's own key handlers (folder_tree.rs, sidebar/collapsing.rs), which ignore Caps Lock's and Num Lock's bits in the key state, as the picker's and the Properties tabs' handlers do, so the keys and Left and Right work with the locks on (more_explorer_keys.rs, the_folder_tree_keys_work_with_num_lock_on, the_navigation_pane_keys_work_with_num_lock_on). On Xvfb a real Num Lock did not reach the handlers, so the real-input run passed before and after this; the unit tests send the lock bits. Properties' Ctrl+1 to 9 are in its tab keys (native/crates/ox-app/src/properties/window/tab_strip.rs). Ctrl+F5 is an application accelerator of win.refresh (actions.rs); Ctrl+Insert and Shift+Insert are bubble-phase file keys (file_ops/shortcuts.rs). view_keys.rs adds the shifted-symbol triggers of the view keys. Backspace in an Open or Save dialog stays Back (NAV-004), not the Windows dialog's up one level, until the owner decides. Tests: native/crates/ox-app/src/window/tests/more_explorer_keys.rs, window/tests/properties_width.rs (ctrl_and_a_number_show_that_tab_of_properties), window_keys.rs, view_keys.rs and shortcuts_window.rs (the_shortcuts_window_lists_the_navigation_pane_and_tab_keys); the job's real-input checks drove the built app with xdotool on Xvfb. In the folder tree, Right on an open folder moves to its first subfolder only: on a folder without subfolders it stays, where it went on to the next folder down ('Right arrow: Display the current selection (if it's collapsed), or select the first subfolder', https://support.microsoft.com/en-us/accessibility/windows/keyboard-shortcuts-in-windows; more_explorer_keys.rs right_on_a_folder_without_subfolders_stays_on_it_in_the_folder_tree)."
+
+[[feature]]
+id = "CMD-040"
+area = "CMD"
+title = "Create shortcut in the classic menu"
+behaviour = "The classic file and folder menu (Show more options, Shift+F10) lists 'Create shortcut' before Delete and Rename, as Windows Explorer's classic menu does, drawn as text alone; the app's own Duplicate follows Rename. It makes a shortcut to each selected item beside it, named as Windows names a new shortcut (CMD-038: 'report - Shortcut' while extensions are hidden, 'report.txt - Shortcut' while shown, then '(2)'), as one operation with Undo, and the items stay selected, as in Windows 11. Where the folder takes no shortcut (it cannot be written, or it is a search, Recent or another location with no path on this computer), it asks in a message box with the warning icon, titled 'Shortcut', as Windows asks, 'OpenXplorer can’t create a shortcut here. Do you want the shortcut to be placed on the desktop instead?' with Yes and No; Yes is Send to › Desktop (create shortcut), No makes nothing."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shgetnewlinkinfoa (SHGetNewLinkInfo: a new shortcut's name, made unique in its folder)",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/context_menu/entries.rs (create_shortcut_item, classic_item_menu) and native/crates/ox-app/src/window/send_to.rs (create_shortcuts_here). Tested in native/crates/ox-app/src/window/tests/send_to.rs (create_shortcut_makes_one_beside_the_item_and_selects_it, create_shortcut_in_a_read_only_folder_offers_the_desktop) and the classic menu order tests in entries.rs and tests/context_menus.rs."
 
 [[feature]]
 id = "OPS-001"
@@ -7325,7 +7358,7 @@ bridge = ["create"]
 dolphin = "KNewFileMenu 'Link to File or Directory…'; Create New → “Basic Link to File or Directory…”; drop menu “Link Here”"
 gnome = "Gio.File.make_symbolic_link; g_file_make_symbolic_link (Nautilus “Make Link”, Ctrl+M, show-create-link)"
 native = "done"
-native_note = "native/crates/ox-core/src/ops/links.rs (new_link_points_to_the_typed_path_and_is_named_after_it_by_default); native/crates/ox-app/src/window/tests/file_operations.rs (new_link_asks_for_the_path_and_selects_the_new_link). New ▸ 'Shortcut' (Windows 11's name for it; 'Link to file or folder…' before 2026-11-06) asks 'New link' for 'Link to' (an absolute path, ~/…, a path relative to the folder or a file: URI) and 'Name' (empty uses the target's name). The target must exist; the link never replaces anything (a taken name stays in the dialog as 'An item named “X” already exists. Nothing was overwritten.'), the folder must be local and pass the write protection. The new link is selected and Undo moves it to the Trash ('Undo Link'). Drops make links with Ctrl+Shift or the drop menu (DND-019)."
+native_note = "native/crates/ox-core/src/ops/links.rs (new_link_points_to_the_typed_path_and_is_named_after_it_by_default); native/crates/ox-app/src/window/tests/shortcuts.rs (new_shortcut_is_the_create_shortcut_wizard). New ▸ 'Shortcut' (Windows 11's name for it) opens the Create Shortcut wizard (OPS-051): the location (an absolute path, ~/…, a path relative to the folder or a file: URI, between double quotes or not) on its first page, the name, proposed as the target's name, on its second. The target must exist; the link never replaces anything (a taken name stays on the page as 'An item named “X” already exists. Nothing was overwritten.'), the folder must be local and pass the write protection. The new link is selected and Undo moves it to the Trash ('Undo Link'). Drops make links with Ctrl+Shift or the drop menu (DND-019)."
 
 [[feature]]
 id = "OPS-005"
@@ -8295,6 +8328,22 @@ python_tests = []
 bridge = ["rename"]
 native = "done"
 native_note = "native/crates/ox-core/src/ops/numbered_rename.rs (each_item_keeps_its_own_extension_and_folders_get_none, a_typed_extension_of_the_edited_item_is_not_numbered, a_dotted_name_typed_for_a_folder_is_not_split, a_taken_number_is_skipped_and_nothing_is_overwritten, taken_numbers_do_not_walk_the_item_again, a_name_taken_after_the_question_is_skipped_too, an_item_that_has_its_numbered_name_already_keeps_it, an_item_that_cannot_be_renamed_is_reported_and_the_rest_go_on); native/crates/ox-app/src/window/tests/renaming_several.rs (several_selected_items_get_the_typed_name_numbered_in_view_order, a_taken_numbered_name_is_skipped, escape_renames_none_of_the_selected_items, an_item_that_cannot_be_renamed_is_asked_about_and_the_rest_are_renamed, one_selected_item_gets_exactly_the_typed_name, several_items_off_screen_are_named_in_the_rename_dialog, the_unchanged_name_in_the_rename_dialog_renames_nothing, a_dotted_name_typed_for_a_folder_is_numbered_whole, a_hiding_name_in_the_rename_dialog_asks_first, a_file_without_an_extension_gaining_one_asks_first); native/crates/ox-core/tests/ops_undo.rs (a_numbered_rename_is_undone_and_redone_as_one_step). As in Windows Explorer, F2, the command bar's and the context menu's Rename with several items selected edit one name in place: the focused item's, or the first selected item's when focus is on none of them (Rename dialog when its cell is not on screen). Enter gives every selected item the typed name plus ' (1)', ' (2)' and so on in the order shown, folders and files in one sequence, each file keeping the extension after its last dot; folders and files without an extension get none. When the edited item is a file, its extension at the end of the typed name is dropped from the name the numbers follow; any other typed text is kept, and a name typed for a folder is numbered whole ('Archive.v1 (1)'), so a file's extension never changes; only a file without one gains one from a dotted name ('README' becomes 'Plan.v1 (2)'), and then the extension question (OPS-049) asks first, in place and in the Rename dialog, with No keeping the typed name. A number whose name is taken is skipped and nothing is overwritten: each numbered name is first looked up through the item's own location, so the write check walks the item's tree once rather than once per taken number, and a name taken in between is still found by the never-overwriting rename and skipped; an item that fails for another reason is asked about in the progress window (OPS-047), and the next item takes its number. Escape, or Enter or Save on the unchanged name (in place or in the Rename dialog), renames nothing. A name starting with a dot while hidden files are not shown asks 'Rename and hide?' first (OPS-013), in place and in the Rename dialog; Cancel keeps the typed name in the field or the dialog. The renamed items are selected without a message, and Undo and Redo reverse the whole rename as one step ('Undo Rename'). Dolphin's 'Rename Items' dialog with its '#' template stays available as 'Rename items…' in the classic menu (OPS-014)."
+
+[[feature]]
+id = "OPS-051"
+area = "OPS"
+title = "The Create Shortcut wizard"
+behaviour = "New › Shortcut opens Windows' Create Shortcut wizard, titled 'Create Shortcut' in a title bar of its own. Its first page asks 'What item would you like to create a shortcut for?' with 'This wizard helps you to create shortcuts to local or network programs, files, folders, computers, or Internet addresses.', the field 'Type the location of the item:' with Browse… beside it (the desktop's file chooser, which puts the item chosen between double quotes, as Windows' Browse does), 'Click Next to continue.', and Cancel and Next. Next reads the location: an item of this computer that exists (with or without the quotes), an Internet address (http://, https://, mailto:) or a network share (\\\\server\\share or smb://); anything else, or a path where nothing is, stays on the page with the reason. Its second page asks 'What would you like to name the shortcut?' with 'Type a name for this shortcut:', proposed as Windows proposes it (the item's name with its extension, the share's name, 'New Internet Shortcut' for an Internet address) and selected, 'Click Finish to create the shortcut.', and Back (which returns to the first page with the location kept), Cancel and Finish. Finish makes a symbolic link for an item, and a .desktop link (Type=Link, Name, URL) named '<name>.desktop' for an address or a share, which opens it (OPEN-009) and runs nothing; a taken name stays on the page and nothing is replaced. The shortcut is selected and Undo moves it to the Recycle Bin."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "https://support.microsoft.com/en-us/office/command-line-switches-for-microsoft-office-products (New › Shortcut: Type the location of the item, Browse, Next, Type a name for this shortcut, Finish)",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-core/src/ops/links.rs (shortcut_location, suggested_name, create_address_link; the_wizard_reads_an_item_an_internet_address_or_a_share, a_shortcut_to_an_address_is_a_desktop_link) and native/crates/ox-app/src/window/file_ops/links.rs (create_link, ask_shortcut_location, ask_shortcut_name). Tested in native/crates/ox-app/src/window/tests/shortcuts.rs (new_shortcut_is_the_create_shortcut_wizard, new_shortcut_to_an_internet_address_is_a_desktop_link)."
 
 [[feature]]
 id = "XFER-001"
@@ -13210,6 +13259,55 @@ native = "partial"
 native_note = "'Apps for this type' (window/type_applications.rs, the win.type-applications action) lists 'Apps for this type' (window/type_applications.rs): every application associated with the file's content type, the default first and the ones the user added marked, and a list of the other installed applications; Set as default, Remove (only an association the user added), Add and Reset (the system's associations) apply at once through GIO (g_app_info_set_as_default_for_type, add_supports_type, remove_supports_type, reset_type_associations in integration/type_associations.rs), which writes only the user's ~/.config/mimeapps.list. Folder, SMB and ZIP types are refused: Settings > Default apps changes those (INT-008 to INT-012). Not reachable now: its button was in Properties' General tab, which Windows 11's layout replaced (Change... opens Open with); it needs a new place. Test: native/crates/ox-app/src/integration/type_associations.rs (an_added_application_is_removed_made_default_and_reset)."
 
 [[feature]]
+id = "OPEN-027"
+area = "OPEN"
+title = "A shortcut opens its target"
+behaviour = "Opening a shortcut (a symbolic link the app names '… - Shortcut', or any link whose name has no known type's extension) opens what it points to, as Windows Explorer opens a .lnk's target: a folder at the folder's own address, so the address bar and Up lead from where the folder is, and a file under its own name, which the application receives. A chain of links is followed to its end, at most 40 links. Where it leads is read on a worker thread, so a link onto a share that stopped answering never blocks the window. A symbolic link named for a type ('photo.jpg') keeps opening at its own path, as Windows opens a symbolic link."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishelllinkw-resolve (IShellLink::Resolve: a shortcut is resolved to its target before it is opened)",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-core/src/ops/shortcut_destination.rs (resolve_shortcut; a_shortcut_leads_to_its_item_through_links_and_relative_names) and native/crates/ox-app/src/window/activation.rs (resolve_activation). Tested in native/crates/ox-app/src/window/tests/shortcuts.rs (a_folder_shortcut_opens_the_folder_at_its_own_address, a_file_shortcut_opens_the_file_itself)."
+
+[[feature]]
+id = "OPEN-028"
+area = "OPEN"
+title = "Problem with Shortcut"
+behaviour = "Opening a shortcut whose item is gone (a symbolic link to nothing, a loop of links, or a .desktop link to a deleted folder of this computer) asks Windows' 'Problem with Shortcut' question, in a message box with the warning icon: 'The item ‘<name>’ that this shortcut refers to has been changed or moved, so this shortcut will no longer work properly. Do you want to delete this shortcut?' with Yes, the default, and No (Alt+Y, Alt+N, or Y and N alone). Yes deletes the shortcut, never anything else, permanently, as Windows 11 deletes it (checked in a Windows 11 VM), never following a link; No keeps it. A shortcut onto a removable drive or share that is not connected (its folder under /media/<user>, /run/media/<user>, /mnt or GVfs's runtime folder is missing or holds no mounted drive) says instead 'The drive or network connection that the shortcut ‘<name>’ refers to is unavailable. Make sure that the disk is properly inserted or the network resource is available, and then try again.' with OK, and deletes nothing."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = [
+  "https://learn.microsoft.com/en-us/answers/questions/3744068/application-shortcut-through-a-mapped-network-driv (the Problem with Shortcut text)",
+  "https://learn.microsoft.com/en-us/answers/questions/577516/the-drive-or-network-connection-that-the-shortcut (the unavailable drive text)",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-core/src/ops/shortcut_destination.rs (missing, unavailable and loops; destination_of for .desktop links) and native/crates/ox-app/src/window/activation/broken_shortcut.rs (the dialog; Yes runs delete_shortcut in window/file_ops/delete.rs). Tested in native/crates/ox-app/src/window/tests/shortcuts.rs (a_broken_shortcut_offers_to_delete_it, a_shortcut_onto_a_drive_that_is_not_connected_says_so, a_desktop_link_to_a_deleted_folder_offers_to_delete_it)."
+
+[[feature]]
+id = "OPEN-029"
+area = "OPEN"
+title = "Run installed apps' launchers on double-click (opt-in)"
+behaviour = "Settings › Confirmations › Launchers has 'Run installed apps' launchers on double-click', off by default, so OPEN-007 holds: opening a launcher shows it in its editor and nothing runs. On, opening an application's launcher (Type=Application), or a shortcut to one, runs it, as Windows runs a shortcut to a program: one installed in an applications folder of the user's or the system's data folders starts its app without a question; one that is neither installed nor marked trusted, such as one downloaded, asks the trust question first (SAFE-023), and Cancel runs nothing."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = [
+  "https://learn.microsoft.com/en-us/answers/questions/3744068/application-shortcut-through-a-mapped-network-driv (a shortcut to a program runs it when opened)",
+]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-core/src/settings/preferences.rs (run_installed_launchers, 'runInstalledLaunchers'), native/crates/ox-app/src/window/run_on_open.rs (run_or_open) and native/crates/ox-app/src/settings_page/confirmations.rs (launchers_group). Tested in native/crates/ox-core/src/settings/tests/preferences.rs (running_installed_launchers_is_off_until_chosen), native/crates/ox-app/src/window/tests/shortcuts.rs (installed_launchers_run_on_open_only_when_chosen) and native/crates/ox-app/src/settings_page/tests.rs (the_run_installed_launchers_switch_is_off_and_saves_the_choice)."
+
+[[feature]]
 id = "ARC-001"
 area = "ARC"
 title = "ZIP files look like compressed folders"
@@ -13990,7 +14088,7 @@ native_note = "native/crates/ox-app/src/window/tests/item_dialogs.rs (alt_enter_
 id = "PROP-004"
 area = "PROP"
 title = "Properties General tab: item counts, link target and mount details"
-behaviour = "The General tab also shows, for folders, the number of files and sub-folders; 'Points to' for symbolic links; and for mount points 'Mounted on', 'Mounted from', the file system and a free-space bar."
+behaviour = "The General tab also shows, for folders, the number of files and sub-folders; 'Points to' for symbolic links; and for mount points 'Mounted on', 'Mounted from', the file system and a free-space bar. A shortcut's Properties (a launcher's, or a link's named with no known type's extension) open on its Shortcut tab, as Windows 11 opens a shortcut's; its General tab gives the target's name as its Description and shows its icon with the shortcut arrow (checked in a Windows 11 VM). A symbolic link named for a type opens on General and shows its Target there."
 origin = ["dolphin"]
 priority = "must"
 openxplorer = "missing"
@@ -18313,3 +18411,20 @@ dolphin = "KDE Activities privacy “Remember opened documents”"
 gnome = "GSettings org.gnome.desktop.privacy remember-recent-files and recent-files-max-age (GtkRecentManager honours them automatically)"
 native = "done"
 native_note = "native/crates/ox-app/src/window/tests/sidebar.rs (recent_files_follow_the_desktop_history_setting); native/crates/ox-app/src/app_context/recent_privacy.rs. The app applies the stricter of GTK recent-history settings and GNOME org.gnome.desktop.privacy: while remember-recent-files is off (or recent-files-max-age is 0) an opened file or visited folder is added neither to the desktop's recently used list nor to settings.json, the recent files settings.json holds are forgotten, and the sidebar hides Recent files and Recent locations; with a recent-files-max-age of N days, files opened longer ago are forgotten (settings.json now keeps an \"opened\" time per entry; entries the Python app wrote have none and count as old). The sidebar's Recent files has a menu with \"Clear recent files\", which empties the app's list and the desktop's (GtkRecentManager::purge_items). Without the GNOME schema the GTK history policy still applies. GtkRecentManager prunes the desktop's own list by the same settings."
+
+[[feature]]
+id = "SAFE-023"
+area = "SAFE"
+title = "The trust question before a launcher runs"
+behaviour = "A .desktop launcher that is neither installed (in an applications folder of the user's or the system's data folders) nor marked trusted (metadata::trusted, which GNOME's Allow Launching sets) never starts its command without asking, whatever its execute bit says, as a launcher in Downloads that came out of an archive keeps its execute bit. Dropping items on it, or Run after opening it, asks 'Run this program?': '“<name>” is a launcher that has not been marked as trusted. Launching it runs the command it holds. Launch it only if you trust where it came from.' with Cancel and Trust and Launch, neither of which Enter presses. Cancel runs nothing; Trust and Launch runs it and marks it trusted, as GNOME's Trust and Launch does, so it is not asked about again."
+origin = ["gnome"]
+priority = "must"
+openxplorer = "missing"
+sources = [
+  "https://gitlab.gnome.org/GNOME/nautilus (the Untrusted application launcher question and metadata::trusted)",
+]
+python_tests = []
+bridge = []
+gnome = "metadata::trusted on the launcher, set by Allow Launching and Trust and Launch"
+native = "done"
+native_note = "native/crates/ox-app/src/window/file_drop/launcher.rs (is_marked_trusted, mark_trusted) and native/crates/ox-app/src/window/file_drop/program.rs (run_program, confirm_trust). Tested in native/crates/ox-app/src/window/file_drop/targets/tests.rs (items_dropped_on_a_trusted_launcher_start_its_application, a_downloaded_launcher_asks_before_it_runs)."

@@ -274,7 +274,8 @@ impl FileItem {
     /// total.
     pub(crate) fn file_size(&self) -> Option<u64> {
         let entry = self.entry();
-        if entry.is_dir {
+        // A shortcut to a folder has a size of its own, as a `.lnk` has.
+        if entry.is_dir && !entry.is_shortcut() {
             return None;
         }
         entry.size

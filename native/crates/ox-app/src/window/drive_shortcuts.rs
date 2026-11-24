@@ -104,6 +104,7 @@ impl BrowserWindow {
         let request = NamedShortcuts {
             targets: drives,
             destination_folder: folder,
+            names: self.shortcut_names(),
         };
         self.run_named_shortcuts(&request).await
     }

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Confirmations: the questions asked before items are deleted, before a
 //! program that is opened runs (OPEN-008) and before a window with several
-//! tabs closes, as Dolphin's Confirmations page (SET-010).
+//! tabs closes, as Dolphin's Confirmations page (SET-010), and whether an
+//! installed app's launcher runs when it is opened (OPEN-029).
 
 use ox_core::settings::PreferencesUpdate;
 
@@ -48,12 +49,37 @@ const ASK_TO_RUN: RowText = RowText {
                executable launcher open",
 };
 
+const RUN_LAUNCHERS: RowText = RowText {
+    title: "Run installed apps' launchers on double-click",
+    description: "Like Windows: a shortcut to an installed app starts it. Off: it opens in its editor. \
+                  Other launchers still ask before they run.",
+    keywords: "run installed apps launchers double click desktop entry shortcut application start \
+               execute trust windows",
+};
+
 /// The Confirmations page.
 pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::Confirmations;
     let confirmations = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
     confirmations.append_group(&ask_before_group(page));
+    confirmations.append_group(&launchers_group(page));
     confirmations
+}
+
+/// Whether opening an installed app's launcher starts the app (OPEN-029).
+fn launchers_group(page: &SettingsPage) -> SettingsGroup {
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Launchers"));
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.run_installed_launchers,
+        write: |on| PreferencesUpdate {
+            run_installed_launchers: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    let row = SettingRow::new(RUN_LAUNCHERS);
+    row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    group.add_row(&row);
+    group
 }
 
 /// The questions asked before items are deleted, before a program that is

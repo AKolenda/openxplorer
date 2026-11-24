@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! Emblems over a listed item's icon: the link glyph on a symbolic link,
-//! as Dolphin and Windows (its shortcut arrow) mark one, and the lock on
+//! Emblems over a listed item's icon: the link glyph on a symbolic link
+//! or a `.desktop` launcher, as Dolphin and Windows (its shortcut arrow)
+//! mark one (VIEW-074), and the lock on
 //! an item GIO reports as not writable, the parity behaviour. Dolphin's
 //! `KFileItem::overlays` locks items that are not readable instead; an item
 //! the user cannot change is the more useful warning in a file manager
@@ -24,7 +25,7 @@ const EMBLEM_CLASS: &str = "emblem";
 /// The emblems an item's icon carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct Emblems {
-    /// The item is a symbolic link.
+    /// The item is a symbolic link or a launcher: a shortcut.
     pub(crate) link: bool,
     /// The user cannot change the item.
     pub(crate) read_only: bool,
@@ -37,7 +38,7 @@ impl Emblems {
     pub(crate) fn for_entry(entry: &Entry) -> Self {
         let is_plain_item = !entry.is_virtual && entry.trash_orig_path.is_none();
         Self {
-            link: is_plain_item && entry.is_symlink,
+            link: is_plain_item && (entry.is_symlink || is_launcher(entry)),
             read_only: is_plain_item && entry.can_write == Some(false),
         }
     }
@@ -46,6 +47,16 @@ impl Emblems {
     pub(crate) fn is_empty(self) -> bool {
         !self.link && !self.read_only
     }
+}
+
+/// Whether `entry` is a `.desktop` launcher, a shortcut as Windows has
+/// them: a file of the desktop-entry type, or named `.desktop` where GIO
+/// gave no type.
+fn is_launcher(entry: &Entry) -> bool {
+    let is_file = !entry.is_dir;
+    let by_type = entry.content_type.as_deref() == Some("application/x-desktop");
+    let by_name = entry.content_type.is_none() && entry.name.to_ascii_lowercase().ends_with(".desktop");
+    is_file && (by_type || by_name)
 }
 
 /// An emblem's edge for an icon `size` pixels high: half the icon, and
@@ -147,6 +158,17 @@ mod tests {
         assert!(Emblems::for_entry(&share).is_empty());
         assert!(Emblems::for_entry(&deleted).is_empty());
         assert!(Emblems::for_entry(&file_entry("notes.txt")).is_empty());
+        // A launcher is a shortcut too, and carries the arrow as a link does
+        // (VIEW-074).
+        let mut launcher = file_entry("Calculator.desktop");
+        launcher.content_type = Some("application/x-desktop".into());
+        assert_eq!(
+            Emblems::for_entry(&launcher),
+            Emblems {
+                link: true,
+                ..Emblems::default()
+            }
+        );
 
         let image = ArtImage::new(Art::Folder, 16);
         image.set_emblems(both, 16);

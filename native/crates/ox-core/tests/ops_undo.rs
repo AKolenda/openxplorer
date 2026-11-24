@@ -537,6 +537,7 @@ fn undoing_links_moves_only_the_links_to_the_trash() {
     let request = LinkRequest {
         uris: vec![file_uri(&items.join("a.txt"))],
         destination_folder: file_uri(&links),
+        names: ox_core::ops::ShortcutNames::WholeName,
     };
 
     let outcome = block_on(create_links(&request, &OperationContext::default())).expect("a local folder");

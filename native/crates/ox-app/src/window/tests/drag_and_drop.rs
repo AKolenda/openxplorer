@@ -372,14 +372,14 @@ fn a_ctrl_shift_drop_creates_links_to_the_items() {
         .drop_files(&[source.uri_of("Notes 2.txt")], None, DropAction::Link);
 
     assert!(taken);
-    let link = fixture.path("Documents/Notes 2.txt - Shortcut");
+    let link = fixture.path("Documents/Notes 2 - Shortcut");
     wait_until("the link", || link.symlink_metadata().is_ok());
     assert_eq!(
         std::fs::read_link(&link).expect("a symbolic link"),
         source.path("Notes 2.txt")
     );
     wait_until("the new link to be selected", || {
-        test.selected_names() == ["Notes 2.txt - Shortcut"]
+        test.selected_names() == ["Notes 2 - Shortcut"]
     });
     super::file_ops_support::assert_ended_without_a_message(&test);
 }
@@ -427,7 +427,7 @@ fn an_alt_drop_asks_with_the_drop_menu_and_runs_the_answer() {
 
 /// A right-button drag of this app's own items within their drive asks
 /// with Windows Explorer's menu, Move here in bold; closing it unanswered,
-/// as Escape does, does nothing, and Create shortcuts here makes `Notes 2.txt - Shortcut`.
+/// as Escape does, does nothing, and Create shortcuts here makes `Notes 2 - Shortcut`, named without the extension, as Windows names it while extensions are hidden.
 ///
 /// parity: DND-027
 #[gtk::test]
@@ -461,7 +461,7 @@ fn a_right_drag_drop_asks_and_creates_shortcuts_here() {
     );
     assert_eq!(bold, ["Move here"]);
     assert!(escape_made_nothing, "Escape does nothing");
-    let shortcut = fixture.path("Documents/Notes 2.txt - Shortcut");
+    let shortcut = fixture.path("Documents/Notes 2 - Shortcut");
     wait_until("the shortcut", || shortcut.symlink_metadata().is_ok());
     assert_eq!(
         std::fs::read_link(&shortcut).expect("a symbolic link"),

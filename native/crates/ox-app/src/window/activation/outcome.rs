@@ -88,6 +88,13 @@ impl BrowserWindow {
             Ok(Resolved::Folder(uri)) => self.navigate_background_tab(origin.tab, &uri),
             Ok(Resolved::Archive(archive)) if is_active => self.open_archive_or_file(&archive),
             Ok(Resolved::Archive(_) | Resolved::Opened) => {}
+            Ok(Resolved::BrokenShortcut(broken)) => {
+                glib::spawn_future_local(glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    async move { window.report_broken_shortcut(broken).await }
+                ));
+            }
             Ok(Resolved::Gone) if is_active => self.report_item_not_found(entry.item_uri()),
             Ok(Resolved::Gone) => self.show_message(&ox_core::i18n::format_message(
                 "Could not open {name}: {reason}",

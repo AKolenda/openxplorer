@@ -12,12 +12,19 @@
 //! device hands the files to the desktop's Bluetooth sender, which asks
 //! for the device. Only what the computer has is offered
 //! ([`BrowserWindow::send_to_targets`]).
+//!
+//! The classic menu's Create shortcut (CMD-040) runs here too, as Windows
+//! makes it: a shortcut to each selected item beside it, selected
+//! afterwards. Where the folder takes none (a read-only folder, a search,
+//! Recent, a location with no path on this computer), Windows asks
+//! whether to place the shortcut on the desktop instead, and Yes is Desktop
+//! (create shortcut).
 
 use std::path::{Path, PathBuf};
 
-use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{gio, glib};
 use ox_core::integration::{BluetoothSender, ExecutableSearch, Sandbox};
 use ox_core::location::same_location;
 use ox_core::network::local_path;
@@ -29,7 +36,8 @@ use super::actions::{plain_action, text_action};
 use super::context_menu::{SendToDrive, SendToTargets};
 use super::file_ops::{IncomingItems, MAX_JOBS};
 use super::window_action::WindowAction;
-use super::BrowserWindow;
+use super::{BrowserWindow, ButtonStyle};
+use crate::dialog::Dialog;
 use crate::volumes::{VolumeKind, VolumeState};
 
 /// Why Bluetooth device sent nothing: the sender needs files on this
@@ -81,6 +89,22 @@ fn capacity_refusals(
     (copy, shortcut)
 }
 
+/// Whether the folder at `uri` says it can be written, read without
+/// blocking the window; a folder that does not answer cannot.
+async fn can_write(uri: &str) -> bool {
+    gio::File::for_uri(uri)
+        .query_info_future(
+            gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE,
+            gio::FileQueryInfoFlags::NONE,
+            glib::Priority::DEFAULT,
+        )
+        .await
+        .is_ok_and(|info| {
+            !info.has_attribute(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE)
+                || info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_WRITE)
+        })
+}
+
 /// The desktop's Bluetooth sender, where the computer has an adapter.
 fn bluetooth_sender() -> Option<(BluetoothSender, PathBuf)> {
     BluetoothSender::find(&ExecutableSearch::for_sandbox(Sandbox::detect()), Path::new("/"))
@@ -99,6 +123,10 @@ impl BrowserWindow {
                 glib::spawn_future_local(async move { window.send_to_desktop().await });
             }),
             plain_action(WindowAction::SendToBluetooth, BrowserWindow::send_to_bluetooth),
+            plain_action(WindowAction::CreateShortcut, |window| {
+                let window = window.clone();
+                glib::spawn_future_local(async move { window.create_shortcuts_here().await });
+            }),
         ]);
         self.update_send_to_actions();
     }
@@ -110,6 +138,7 @@ impl BrowserWindow {
             WindowAction::SendTo,
             WindowAction::SendToDesktop,
             WindowAction::SendToBluetooth,
+            WindowAction::CreateShortcut,
         ] {
             self.set_action_enabled(action, selected);
         }
@@ -257,9 +286,64 @@ impl BrowserWindow {
         let request = LinkRequest {
             uris,
             destination_folder: desktop.uri,
+            names: self.shortcut_names(),
         };
         // A Recent row sends its file, but the row stays selected.
         self.run_shortcuts(&request, rows).await;
+    }
+
+    /// Create shortcut: a shortcut to each selected item beside it, named
+    /// as Windows names it, the items staying selected as in Windows 11;
+    /// where the folder takes none, the Desktop, after asking as Windows
+    /// asks (CMD-040).
+    async fn create_shortcuts_here(&self) {
+        let (rows, uris) = self.selected_rows_and_sources();
+        if uris.is_empty() {
+            return;
+        }
+        let folder = self.current_uri().filter(|folder| {
+            let has_path = gio::File::for_uri(folder).path().is_some();
+            has_path && self.imp().locations.borrow().is_writable_location(folder)
+        });
+        let folder = match folder {
+            Some(folder) if can_write(&folder).await => Some(folder),
+            _ => None,
+        };
+        let Some(folder) = folder else {
+            if self.places_shortcut_on_desktop().await {
+                self.send_to_desktop().await;
+            }
+            return;
+        };
+        let request = LinkRequest {
+            uris,
+            destination_folder: folder,
+            names: self.shortcut_names(),
+        };
+        self.run_shortcuts(&request, rows).await;
+    }
+
+    /// Asks, as Windows asks where it cannot make a shortcut, whether to
+    /// place it on the Desktop instead.
+    async fn places_shortcut_on_desktop(&self) -> bool {
+        // A message box with the warning icon, as Windows asks it.
+        let dialog = Dialog::message_box(
+            self,
+            ox_core::i18n::gettext_static("Shortcut"),
+            ox_core::i18n::gettext_static(
+                "OpenXplorer can’t create a shortcut here.\n\nDo you want the shortcut to be placed on the \
+                 desktop instead?",
+            ),
+        );
+        let yes = dialog.add_button(ox_core::i18n::gettext_static("Yes"), ButtonStyle::Accent);
+        let no = dialog.add_button(ox_core::i18n::gettext_static("No"), ButtonStyle::Bordered);
+        dialog.also_press_with(yes, 'y');
+        dialog.also_press_with(no, 'n');
+        dialog.press_with_letters_alone();
+        dialog.open();
+        let answer = dialog.next_response().await;
+        dialog.finish();
+        answer == Some(yes)
     }
 
     /// Send to ▸ Bluetooth device: starts the desktop's Bluetooth sender

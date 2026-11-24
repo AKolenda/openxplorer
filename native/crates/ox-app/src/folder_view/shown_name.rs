@@ -13,6 +13,10 @@
 //! never lose anything, a name that starts with a dot and has no other
 //! (`.bashrc`) keeps it whole, and only the last extension goes, so
 //! `backup.tar.gz` shows as `backup.tar`, as in Windows.
+//!
+//! A launcher's `.desktop` is never shown, whatever the setting, as
+//! Windows never shows a shortcut's `.lnk` (its `NeverShowExt`), and
+//! renaming one keeps it (VIEW-074).
 
 use ox_core::entry::Entry;
 
@@ -42,11 +46,26 @@ pub(crate) fn shows_whole(entry: &Entry) -> bool {
 /// though the desktop knows `.1` as a manual page; the Open and Save
 /// dialog reads such a name the same way.
 pub(crate) fn hidden_extension(name: &str, is_folder: bool, extensions: Extensions) -> Option<&str> {
-    if is_folder || extensions == Extensions::Shown {
+    if is_folder {
+        return None;
+    }
+    if let Some(extension) = launcher_extension(name) {
+        return Some(extension);
+    }
+    if extensions == Extensions::Shown {
         return None;
     }
     ox_core::entry::known_extension(name)
         .filter(|extension| !extension[1..].chars().all(|character| character.is_ascii_digit()))
+}
+
+/// The `.desktop` of a launcher's name, which is never shown; `None` for
+/// any other name, and for one that is only `.desktop`.
+fn launcher_extension(name: &str) -> Option<&str> {
+    const DESKTOP: &str = ".desktop";
+    let start = name.len().checked_sub(DESKTOP.len()).filter(|&start| start > 0)?;
+    let extension = name.get(start..)?;
+    extension.eq_ignore_ascii_case(DESKTOP).then_some(extension)
 }
 
 /// The name a view shows for `name`.
@@ -60,6 +79,28 @@ pub(crate) fn shown_name(name: &str, is_folder: bool, extensions: Extensions) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A launcher's `.desktop` is never shown, as Windows never shows a
+    /// shortcut's `.lnk`, even with extensions shown; a name that is only
+    /// `.desktop` stays whole.
+    ///
+    /// parity: VIEW-074
+    #[test]
+    fn a_launchers_desktop_extension_is_always_hidden() {
+        for extensions in [Extensions::Hidden, Extensions::Shown] {
+            assert_eq!(shown_name("Calculator.desktop", false, extensions), "Calculator");
+            assert_eq!(
+                shown_name("Example Site.DESKTOP", false, extensions),
+                "Example Site"
+            );
+            assert_eq!(
+                hidden_extension("Calculator.desktop", false, extensions),
+                Some(".desktop")
+            );
+            assert_eq!(shown_name(".desktop", false, extensions), ".desktop");
+        }
+        assert_eq!(shown_name("notes.txt", false, Extensions::Shown), "notes.txt");
+    }
 
     /// Windows' rule: a known type's extension is hidden, the rest of the
     /// name stays; folders, names with no known type, names that are only

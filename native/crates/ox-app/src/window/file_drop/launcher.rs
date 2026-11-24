@@ -15,7 +15,12 @@
 //! entry's command, field codes and terminal flag exactly as the desktop
 //! does; the dropped items are its file arguments, never a command line.
 //! Launchers get the same "Run this program?" question as programs on a
-//! network share, a removable drive or a drive without Unix permissions.
+//! network share, a removable drive or a drive without Unix permissions,
+//! and a launcher that is neither installed nor marked trusted
+//! (`metadata::trusted`, which GNOME's "Allow Launching" and "Trust and
+//! Launch" set) asks the trust question first, whatever its execute bit
+//! says: one in Downloads that came out of an archive keeps its execute
+//! bit (SAFE-023). Trusting it marks it trusted, as GNOME does.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -86,6 +91,32 @@ pub(super) async fn query_launcher(entry: &Entry, info: &gio::FileInfo) -> Optio
 pub(super) fn is_trusted(path: &Path, info: &gio::FileInfo, keeps_permissions: bool) -> bool {
     let allowed_to_launch = keeps_permissions && info.boolean(gio::FILE_ATTRIBUTE_ACCESS_CAN_EXECUTE);
     allowed_to_launch || is_in_applications_folder(path)
+}
+
+/// The `metadata::trusted` value GNOME's "Allow Launching" sets.
+const TRUSTED: &str = "metadata::trusted";
+
+/// Whether the launcher at `path`, which GIO's `info` describes, runs
+/// without the trust question: installed in an applications folder, or
+/// marked trusted (SAFE-023). `info` must hold `metadata::trusted`.
+pub(super) fn is_marked_trusted(path: &Path, info: &gio::FileInfo) -> bool {
+    let is_marked = info
+        .attribute_string(TRUSTED)
+        .is_some_and(|value| value == "true");
+    is_marked || is_in_applications_folder(path)
+}
+
+/// Marks the launcher at `uri` trusted once the user trusted it, as GNOME's
+/// "Trust and Launch" does. Where the desktop keeps no metadata, nothing is
+/// marked and the question comes again.
+pub(super) async fn mark_trusted(uri: &str) {
+    let file = gio::File::for_uri(uri);
+    let info = gio::FileInfo::new();
+    info.set_attribute_string(TRUSTED, "true");
+    // A launcher that cannot be marked is asked about again; it still runs.
+    let _ = file
+        .set_attributes_future(&info, gio::FileQueryInfoFlags::NONE, glib::Priority::DEFAULT)
+        .await;
 }
 
 /// True for a launcher in the `applications` folder of the user's or the

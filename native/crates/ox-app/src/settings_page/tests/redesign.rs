@@ -252,6 +252,8 @@ fn every_setting_of_the_earlier_layout_is_on_one_of_the_new_pages() {
         "Music icon",
         "Code icon",
         "File name endings",
+        // Opening installed apps' launchers (OPEN-029).
+        "Run installed apps' launchers on double-click",
     ];
     for title in added_since {
         settings.row(title);

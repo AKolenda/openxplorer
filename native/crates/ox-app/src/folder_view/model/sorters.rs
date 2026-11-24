@@ -84,12 +84,19 @@ pub(super) fn folders_first(options: &SharedOptions) -> gtk::CustomSorter {
         let options = options.get();
         let (a, b) = (as_item(a).entry(), as_item(b).entry());
         let folders = if options.folders_first {
-            b.is_dir.cmp(&a.is_dir)
+            sorts_as_folder(b).cmp(&sorts_as_folder(a))
         } else {
             Ordering::Equal
         };
         folders.into()
     })
+}
+
+/// Whether `entry` sorts among the folders: a folder, but not a shortcut
+/// to one, which sorts among the files, as Windows 11 sorts a folder's
+/// shortcut (checked in a Windows 11 VM).
+fn sorts_as_folder(entry: &ox_core::entry::Entry) -> bool {
+    entry.is_dir && !entry.is_shortcut()
 }
 
 /// Sorts by the further key while one is chosen; the column view is then
@@ -138,6 +145,29 @@ pub(super) fn names_ascending() -> gtk::CustomSorter {
 mod tests {
     use super::*;
     use crate::test_support::file_entry;
+
+    /// A shortcut to a folder sorts among the files, as in Windows 11; a
+    /// folder sorts first.
+    ///
+    /// parity: VIEW-074
+    #[gtk::test]
+    fn a_folder_shortcut_sorts_among_the_files() {
+        let options: SharedOptions = Rc::default();
+        let sorter = folders_first(&options);
+        let folder = FileItem::new(crate::test_support::folder_entry("Reports"));
+        let mut link = crate::test_support::folder_entry("Projects - Shortcut");
+        link.is_symlink = true;
+        let shortcut = FileItem::new(link);
+        let file = FileItem::new(file_entry("agenda.txt"));
+
+        let order = |a: &FileItem, b: &FileItem| gtk::prelude::SorterExt::compare(&sorter, a, b);
+        assert_eq!(order(&folder, &shortcut), gtk::Ordering::Smaller);
+        assert_eq!(
+            order(&shortcut, &file),
+            gtk::Ordering::Equal,
+            "sorted with the files by name"
+        );
+    }
 
     /// Sizes sort by value; folders never measured and files of unknown
     /// size count as 0.

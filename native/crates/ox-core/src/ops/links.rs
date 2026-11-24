@@ -10,6 +10,15 @@
 //! for the path, and the name defaults to the name of what it points to.
 //! Undo moves the links, never what they point to, to the Trash.
 //!
+//! New ▸ Shortcut is Windows' Create Shortcut wizard (OPS-051): the
+//! location may also be an Internet address (`http:`, `https:`,
+//! `mailto:`) or a network share (`\\server\share`, `smb://`), which a
+//! symbolic link cannot point to; such a shortcut is a `.desktop` link
+//! (`Type=Link`), as the desktop keeps one, which opens the address
+//! (OPEN-009) and runs nothing. The wizard's second page proposes the name
+//! Windows proposes: the item's own name, extension included, the share's
+//! name, or "New Internet Shortcut" ([`suggested_name`]).
+//!
 //! Safety rule "a link never replaces anything": a dropped item's
 //! shortcut takes the next free number instead of a taken name, a broken
 //! link included; New ▸ Link reports a taken name and writes nothing. The folder
@@ -28,7 +37,7 @@ use super::create::name_taken_or;
 use super::error::OpsError;
 use super::results::{AskedItem, ItemQuestions};
 use super::run_transfer::TransferOutcome;
-use super::shortcuts::create_shortcut;
+use super::shortcuts::{create_shortcut_named, ShortcutNames};
 use super::undo::UndoRecord;
 use crate::location::{file_uri, normalise, typed_local_path, validate_name};
 use crate::transfer::{TransferMode, MAX_ITEMS};
@@ -42,6 +51,101 @@ const NOT_LOCAL_ITEM: &str = crate::i18n::message_id("Links can only point to it
 
 /// Why New ▸ Link has nothing to point to.
 const NO_TARGET: &str = crate::i18n::message_id("Enter the path of the file or folder to link to.");
+
+/// What the Create Shortcut wizard's location names (OPS-051).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShortcutLocation {
+    /// An item of this computer, as typed: absolute, or relative to the
+    /// shortcut's folder.
+    Item(PathBuf),
+    /// An Internet address or a network share, as the `.desktop` link
+    /// keeps it.
+    Address(String),
+}
+
+/// What the wizard proposes for an Internet address, in Windows' words.
+const NEW_INTERNET_SHORTCUT: &str = crate::i18n::message_id("New Internet Shortcut");
+
+/// Why the wizard takes no such location.
+const NOT_A_SHORTCUT_LOCATION: &str = crate::i18n::message_id(
+    "Type the location of a file or folder on this computer, a network share such as \\\\server\\share, \
+     or an Internet address that starts with http:// or https://.",
+);
+
+/// Reads the location typed into the Create Shortcut wizard, for a
+/// shortcut in the folder `folder`: between the double quotes Browse adds
+/// or not, an existing item of this computer, an Internet address or a
+/// network share. Blocking: it looks the item up.
+///
+/// # Errors
+///
+/// Nothing typed, nothing at the path typed ([`OpsError::NotFound`]), or
+/// an address of another kind.
+pub fn shortcut_location(typed: &str, folder: &str) -> Result<ShortcutLocation, OpsError> {
+    let typed = typed.trim();
+    let typed = typed
+        .strip_prefix('"')
+        .and_then(|inner| inner.strip_suffix('"'))
+        .unwrap_or(typed)
+        .trim();
+    if typed.is_empty() {
+        return Err(OpsError::failed(crate::i18n::gettext(NO_TARGET)));
+    }
+    let scheme = typed
+        .split_once(':')
+        .map(|(scheme, _)| scheme.to_ascii_lowercase());
+    match scheme.as_deref() {
+        Some("http" | "https") if typed.contains("://") => {
+            return Ok(ShortcutLocation::Address(typed.to_owned()));
+        }
+        Some("mailto") => return Ok(ShortcutLocation::Address(typed.to_owned())),
+        _ => {}
+    }
+    let is_share = typed.starts_with("\\\\") || scheme.as_deref() == Some("smb");
+    if is_share {
+        let uri = normalise(typed).map_err(|error| OpsError::failed(error.to_string()))?;
+        return Ok(ShortcutLocation::Address(uri));
+    }
+    let not_local = || OpsError::failed(crate::i18n::gettext(NOT_A_SHORTCUT_LOCATION));
+    let target = typed_local_path(typed).ok_or_else(not_local)?;
+    let folder = gio::File::for_uri(&normalise(folder)?)
+        .path()
+        .ok_or_else(not_local)?;
+    if folder.join(&target).symlink_metadata().is_err() {
+        return Err(OpsError::NotFound(crate::i18n::format_message(
+            "Nothing exists at “{display}”. Check the path.",
+            &[("display", &(target.display()).to_string())],
+        )));
+    }
+    Ok(ShortcutLocation::Item(target))
+}
+
+/// The name the wizard proposes for a shortcut to `location`, as Windows
+/// proposes it: the item's own name, extension included; a share's name,
+/// or its server's; "New Internet Shortcut" for an Internet address.
+pub fn suggested_name(location: &ShortcutLocation) -> String {
+    match location {
+        ShortcutLocation::Item(path) => path.file_name().map_or_else(
+            || path.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        ),
+        // Read from the address itself: GVfs' SMB backend names a share's
+        // URI after its server.
+        ShortcutLocation::Address(uri) if uri.starts_with("smb:") => {
+            let parts = crate::location::split_location(uri).ok();
+            let share = parts.as_ref().and_then(|parts| {
+                let last = parts.path.trim_end_matches('/').rsplit('/').next()?;
+                let name = glib::Uri::unescape_string(last, None::<&str>)?;
+                (!name.is_empty()).then(|| name.to_string())
+            });
+            let server = parts
+                .map(|parts| parts.authority)
+                .filter(|server| !server.is_empty());
+            share.or(server).unwrap_or_else(|| uri.clone())
+        }
+        ShortcutLocation::Address(_) => crate::i18n::gettext(NEW_INTERNET_SHORTCUT),
+    }
+}
 
 /// A link New ▸ Link to file or folder makes (OPS-004).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,15 +195,14 @@ fn create_link_blocking(request: &NewLink, context: &OperationContext) -> Result
     let folder = gio::File::for_uri(&folder_uri)
         .path()
         .ok_or_else(|| OpsError::failed(crate::i18n::gettext(NOT_LOCAL_FOLDER)))?;
-    let target = link_target(&request.target)?;
     // A relative target is relative to the link's folder, as the system
-    // resolves it.
-    if folder.join(&target).symlink_metadata().is_err() {
-        return Err(OpsError::NotFound(crate::i18n::format_message(
-            "Nothing exists at “{display}”. Check the path.",
-            &[("display", &(target.display()).to_string())],
-        )));
-    }
+    // resolves it; an address becomes a `.desktop` link.
+    let target = match shortcut_location(&request.target, &folder_uri)? {
+        ShortcutLocation::Item(target) => target,
+        ShortcutLocation::Address(address) => {
+            return create_address_link(&folder, &request.name, &address);
+        }
+    };
     let name = match request.name.trim() {
         "" => default_link_name(&target)?,
         typed => typed.to_owned(),
@@ -110,14 +213,38 @@ fn create_link_blocking(request: &NewLink, context: &OperationContext) -> Result
     Ok(CreatedLink { uri: file_uri(&link) })
 }
 
-/// The path a link points to, from what was typed: `~` is the home
-/// folder, and a `file:` URI its local path.
-fn link_target(typed: &str) -> Result<PathBuf, OpsError> {
-    let typed = typed.trim();
-    if typed.is_empty() {
-        return Err(OpsError::failed(crate::i18n::gettext(NO_TARGET)));
-    }
-    typed_local_path(typed).ok_or_else(|| OpsError::failed(crate::i18n::gettext(NOT_LOCAL_ITEM)))
+/// Writes the `.desktop` link `<name>.desktop` to `address` in `folder`,
+/// named `name` or what the wizard proposes, never replacing anything.
+fn create_address_link(folder: &Path, name: &str, address: &str) -> Result<CreatedLink, OpsError> {
+    use std::io::Write;
+
+    let location = ShortcutLocation::Address(address.to_owned());
+    let name = match name.trim() {
+        "" => suggested_name(&location),
+        typed => typed.to_owned(),
+    };
+    let file_name = format!("{name}.desktop");
+    validate_name(&file_name)?;
+    let entry = glib::KeyFile::new();
+    let group = "Desktop Entry";
+    entry.set_string(group, "Type", "Link");
+    entry.set_string(group, "Name", &name);
+    entry.set_string(group, "URL", address);
+    let icon = if address.starts_with("smb:") {
+        "folder-remote"
+    } else {
+        "text-html"
+    };
+    entry.set_string(group, "Icon", icon);
+    let path = folder.join(&file_name);
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .map_err(|error| name_taken_or(error.into(), &file_name))?;
+    file.write_all(entry.to_data().as_bytes())
+        .map_err(OpsError::from)?;
+    Ok(CreatedLink { uri: file_uri(&path) })
 }
 
 /// The name a link gets when none was typed: the name of what it points
@@ -136,6 +263,8 @@ pub struct LinkRequest {
     pub uris: Vec<String>,
     /// The folder the links go into.
     pub destination_folder: String,
+    /// Whether the links' names keep their items' extensions.
+    pub names: ShortcutNames,
 }
 
 /// Makes a symbolic link in the request's folder to each of its items, on
@@ -185,7 +314,7 @@ fn create_links_blocking(
         };
         // An item that gets no link is asked about in the progress window
         // (OPS-047).
-        let attempt = || link_item(uri, &folder).map_err(OpsError::Failed);
+        let attempt = || link_item(uri, &folder, request.names).map_err(OpsError::Failed);
         if let Some(link) = questions.run(&mut outcome.result, asked, attempt) {
             outcome.result.done.push(uri.clone());
             outcome.created.push(file_uri(&link));
@@ -204,14 +333,15 @@ fn create_links_blocking(
 
 /// Makes the shortcut to the item at `uri` in `folder`, named as Windows
 /// names one ([`create_shortcut`]); the link's path, or why there is none.
-fn link_item(uri: &str, folder: &Path) -> Result<PathBuf, String> {
+fn link_item(uri: &str, folder: &Path, names: ShortcutNames) -> Result<PathBuf, String> {
     let target = gio::File::for_uri(uri)
         .path()
         .ok_or_else(|| crate::i18n::gettext(NOT_LOCAL_ITEM))?;
     if target.file_name().is_none() {
         return Err(crate::i18n::gettext(NOT_LOCAL_ITEM));
     }
-    let link = create_shortcut(uri, &file_uri(folder)).map_err(|error| error.to_string())?;
+    let link =
+        create_shortcut_named(uri, &file_uri(folder), None, names).map_err(|error| error.to_string())?;
     gio::File::for_uri(&link)
         .path()
         .ok_or_else(|| crate::i18n::gettext(NOT_LOCAL_ITEM))
@@ -245,6 +375,7 @@ mod tests {
         let request = LinkRequest {
             uris: vec![file_uri(&item)],
             destination_folder: file_uri(&links),
+            names: ShortcutNames::WholeName,
         };
 
         let outcome = create_links_blocking(&request, &context()).expect("the folder is local");
@@ -283,6 +414,50 @@ mod tests {
         assert!(matches!(missing, Err(OpsError::NotFound(_))), "{missing:?}");
     }
 
+    /// A shortcut to an address is a `.desktop` link named as typed, which
+    /// opens it; a taken name is refused and nothing is replaced.
+    ///
+    /// parity: OPS-051
+    #[test]
+    fn a_shortcut_to_an_address_is_a_desktop_link() {
+        let folder = temporary_folder();
+        let request = |name: &str, target: &str| NewLink {
+            folder: file_uri(folder.path()),
+            name: name.to_owned(),
+            target: target.to_owned(),
+        };
+
+        let web = create_link_blocking(&request("Example news", "https://example.org/news"), &context());
+        let share = create_link_blocking(&request("", "smb://fileserver/Team%20Files"), &context());
+        let taken = create_link_blocking(&request("Example news", "https://example.org/"), &context());
+
+        let link = folder.path().join("Example news.desktop");
+        assert_eq!(web.map(|made| made.uri), Ok(file_uri(&link)));
+        let entry = glib::KeyFile::new();
+        entry
+            .load_from_file(&link, glib::KeyFileFlags::NONE)
+            .expect("a desktop entry");
+        assert_eq!(entry.string("Desktop Entry", "Type").expect("a type"), "Link");
+        assert_eq!(
+            entry.string("Desktop Entry", "Name").expect("a name"),
+            "Example news"
+        );
+        assert_eq!(
+            entry.string("Desktop Entry", "URL").expect("an address"),
+            "https://example.org/news"
+        );
+        assert!(share.is_ok(), "{share:?}");
+        assert!(folder.path().join("Team Files.desktop").is_file());
+        assert!(matches!(taken, Err(OpsError::Exists(_))), "{taken:?}");
+        let kept = glib::KeyFile::new();
+        kept.load_from_file(&link, glib::KeyFileFlags::NONE)
+            .expect("kept");
+        assert_eq!(
+            kept.string("Desktop Entry", "URL").expect("an address"),
+            "https://example.org/news"
+        );
+    }
+
     /// parity: DND-019, DND-027
     #[test]
     fn a_taken_name_is_numbered_and_never_replaced() {
@@ -295,6 +470,7 @@ mod tests {
         let request = LinkRequest {
             uris: vec![file_uri(&item)],
             destination_folder: file_uri(&links),
+            names: ShortcutNames::WholeName,
         };
 
         let outcome = create_links_blocking(&request, &context()).expect("the folder is local");
@@ -316,10 +492,12 @@ mod tests {
         let to_share = LinkRequest {
             uris: vec![file_uri(&folder.path().join("a.txt"))],
             destination_folder: "smb://nas/share/folder".to_owned(),
+            names: ShortcutNames::WholeName,
         };
         let from_share = LinkRequest {
             uris: vec!["smb://nas/share/a.txt".to_owned()],
             destination_folder: file_uri(folder.path()),
+            names: ShortcutNames::WholeName,
         };
 
         let refused = create_links_blocking(&to_share, &context());
