@@ -349,6 +349,18 @@ pub trait Node: Send + Sync {
     fn filesystem(&self, _cancel: Option<&Cancellation>) -> Option<FilesystemInfo> {
         None
     }
+
+    /// Writes out to its drive what the file system holding this item
+    /// still keeps in memory, so the item survives the drive being pulled
+    /// or the power lost (XFER-013). Backends that write through, or
+    /// cannot be told to, do nothing.
+    ///
+    /// # Errors
+    ///
+    /// The drive's error when it cannot write the item out.
+    fn flush(&self) -> Result<(), TransferError> {
+        Ok(())
+    }
 }
 
 /// Rejects writes into protected locations such as snapshot folders.

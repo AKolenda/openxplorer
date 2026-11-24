@@ -32,6 +32,9 @@ enum Event {
     /// new file and renaming it over the name, after the copy was built and
     /// before the source is removed.
     SavedOver,
+    /// The drive cannot write out what it holds in memory (the USB stick
+    /// was pulled after the copy was published).
+    FlushFails,
 }
 
 /// A destination on another file system: the user's items cannot be moved
@@ -43,6 +46,8 @@ struct OtherFilesystem {
     cancel: Cancellation,
     /// The destination is FAT, which stores no links.
     fat: bool,
+    /// What reached the destination's drive and left the source, in order.
+    log: std::sync::Mutex<Vec<String>>,
 }
 
 impl OtherFilesystem {
@@ -52,6 +57,7 @@ impl OtherFilesystem {
             source_folder: fixture.source_folder.clone(),
             cancel: fixture.cancel.clone(),
             fat: false,
+            log: std::sync::Mutex::default(),
         }
     }
 }
@@ -100,7 +106,33 @@ impl Provider for OtherFilesystem {
         if self.event == Event::RemovalFails && node.local_path().starts_with(&self.source_folder) {
             return Err(TransferError::failed("Permission denied."));
         }
+        if node.local_path().starts_with(&self.source_folder) {
+            let name = node
+                .local_path()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
+            self.log.lock().unwrap().push(format!("delete {name}"));
+        }
         node.local_delete()
+    }
+
+    fn flush(&self, node: &LocalNode) -> Result<(), TransferError> {
+        if node.local_path().starts_with(&self.source_folder) {
+            return Ok(());
+        }
+        if self.event == Event::FlushFails {
+            return Err(TransferError::failed("Input/output error."));
+        }
+        let name = node
+            .local_path()
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        self.log.lock().unwrap().push(format!("flush {name}"));
+        Ok(())
     }
 
     fn filesystem(&self, _node: &LocalNode) -> Option<FilesystemInfo> {
@@ -287,5 +319,48 @@ fn a_move_keeps_the_entries_it_could_not_copy() {
         !result.errors.iter().any(|error| error.contains("appeared")),
         "{result:?}"
     );
+    fixture.assert_no_staging();
+}
+
+/// The copy of a move is written out to its drive before any original is
+/// removed: a USB stick pulled, or the power lost, right after the move
+/// otherwise loses both, as the originals are gone and the copy was only
+/// in memory. A drive that cannot write it out keeps every original.
+///
+/// parity: XFER-013
+#[test]
+fn the_copy_reaches_its_drive_before_an_original_is_removed() {
+    let fixture = Fixture::new();
+    let source = album(&fixture);
+    let provider = Arc::new(OtherFilesystem::new(&fixture, Event::None));
+    let mut engine = consenting(&fixture, provider.clone());
+
+    let result = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
+
+    assert!(result.errors.is_empty(), "{result:?}");
+    assert!(!source.exists());
+    let log = provider.log.lock().unwrap().clone();
+    let flushed = log.iter().position(|step| step == "flush album");
+    let first_removal = log.iter().position(|step| step.starts_with("delete "));
+    assert!(
+        flushed.is_some() && flushed < first_removal,
+        "the copy is written out first: {log:?}"
+    );
+    fixture.assert_no_staging();
+
+    let fixture = Fixture::new();
+    let source = album(&fixture);
+    let mut engine = consenting(
+        &fixture,
+        Arc::new(OtherFilesystem::new(&fixture, Event::FlushFails)),
+    );
+
+    let failed = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
+
+    assert_eq!(list(&source), ["one.jpg", "two.jpg"], "every original is kept");
+    let copy = fixture.destination_folder.join("album");
+    assert_eq!(failed.errors.len(), 1, "{failed:?}");
+    assert!(failed.errors[0].contains(&file_uri(&copy)), "{failed:?}");
+    assert!(failed.errors[0].contains("the original was kept"), "{failed:?}");
     fixture.assert_no_staging();
 }

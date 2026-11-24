@@ -1037,6 +1037,15 @@ impl TransferEngine {
                 &[("uri", &destination.uri())],
             )));
         }
+        // XFER-013: the copy reaches its drive before an original goes, so
+        // a USB stick pulled, or the power lost, right after the move does
+        // not lose both. A drive that cannot write it out keeps them all.
+        destination.flush().map_err(|error| {
+            TransferError::RecoveryRequired(crate::i18n::format_message(
+                "The copy at {uri} could not be written to its drive, so the original was kept. {error}",
+                &[("uri", &destination.uri()), ("error", &error.to_string())],
+            ))
+        })?;
         let source = selected.node.as_ref();
         let left_out = self.failures.left_out_sources();
         let kept = remove_copied_source(source, &selected.info, &copied, left_out, self.guard()).map_err(|error| {

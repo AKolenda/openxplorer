@@ -14,6 +14,10 @@
 //! - XFER-005: while a copy is being built, every staged folder is
 //!   owner-only (`0700`); the source's exact modes are restored
 //!   children-first, just before the completed subtree is published.
+//!   A file system that keeps no Unix modes (a FAT or exFAT USB stick, an
+//!   NTFS drive, many FUSE file systems) refuses the change on a folder of
+//!   the user's own; the copy goes on there without it, as Windows copies
+//!   to such a stick ([`keep_without_modes`]).
 //! - OPS-047: an item written as administrator under `admin://` has no
 //!   path the app may open, so its staged folders get their modes from
 //!   `gvfsd-admin`, by path: [`crate::admin_copy`] let the copy in only
@@ -78,13 +82,52 @@ pub(crate) fn open_directory_nofollow(path: &Path) -> std::io::Result<File> {
         .open(path)
 }
 
-/// Sets `mode` on an already opened directory (`fchmod`).
+/// Sets `mode` on an already opened directory (`fchmod`). On a file
+/// system that keeps no Unix modes, a folder of the user's own keeps the
+/// mode it has ([`keep_without_modes`]).
 ///
 /// # Errors
 ///
-/// The kernel's refusal, for example on a filesystem without Unix modes.
+/// The kernel's refusal, other than that of a file system without Unix
+/// modes on a folder of the user's own.
 pub(crate) fn set_mode(directory: &File, mode: u32) -> std::io::Result<()> {
-    directory.set_permissions(Permissions::from_mode(mode))
+    keep_without_modes(directory.set_permissions(Permissions::from_mode(mode)), || {
+        directory.metadata().map(|metadata| metadata.uid())
+    })
+}
+
+/// The result of changing the mode of a folder whose owner `owner` reads,
+/// where a refusal by a file system that keeps no Unix modes counts as
+/// done. FAT (`EPERM` when the mode does not match its mount's masks),
+/// exFAT and NTFS through FUSE, and other FUSE file systems (`ENOSYS`,
+/// `ENOTSUP`) cannot store a mode at all, so stopping a copy there would
+/// only keep the user from using a USB stick. Only a folder the user owns
+/// qualifies: a folder of another account that refuses stops the copy.
+///
+/// # Errors
+///
+/// `changed`'s error when it is another error, or the folder is not the
+/// user's own or its owner cannot be read.
+pub(crate) fn keep_without_modes(
+    changed: std::io::Result<()>,
+    owner: impl FnOnce() -> std::io::Result<u32>,
+) -> std::io::Result<()> {
+    let Err(error) = changed else {
+        return Ok(());
+    };
+    let without_modes = [
+        rustix::io::Errno::PERM,
+        rustix::io::Errno::NOSYS,
+        rustix::io::Errno::NOTSUP,
+    ]
+    .iter()
+    .any(|errno| error.raw_os_error() == Some(errno.raw_os_error()));
+    let ours = || owner().is_ok_and(|uid| uid == rustix::process::geteuid().as_raw());
+    if without_modes && ours() {
+        Ok(())
+    } else {
+        Err(error)
+    }
 }
 
 /// The path to apply Unix modes to. XFER-004: only real local items
@@ -279,6 +322,36 @@ mod tests {
         std::os::unix::fs::symlink(&folder, &link).expect("create link");
         assert!(apply_mode(&link, 0o700).is_err());
         assert_eq!(permission_bits(&folder), 0o750);
+    }
+
+    /// A folder of the user's own on a file system that keeps no Unix
+    /// modes (FAT and exFAT USB sticks, NTFS drives, many FUSE file
+    /// systems) refuses `chmod` with EPERM, ENOSYS or ENOTSUP. That is no
+    /// reason to stop a copy there, as Windows copies to such a stick; a
+    /// folder of another account, or any other error, still stops it.
+    /// parity: XFER-004
+    #[test]
+    fn a_folder_of_ours_on_a_file_system_without_unix_modes_keeps_the_copy_going() {
+        let ours = rustix::process::geteuid().as_raw();
+        let refused = |errno: i32| std::io::Error::from_raw_os_error(errno);
+        for errno in [
+            rustix::io::Errno::PERM,
+            rustix::io::Errno::NOSYS,
+            rustix::io::Errno::NOTSUP,
+        ] {
+            assert!(keep_without_modes(Err(refused(errno.raw_os_error())), || Ok(ours)).is_ok());
+            assert!(keep_without_modes(Err(refused(errno.raw_os_error())), || Ok(ours + 1)).is_err());
+        }
+        let io_error = rustix::io::Errno::IO.raw_os_error();
+        assert!(keep_without_modes(Err(refused(io_error)), || Ok(ours)).is_err());
+        assert!(keep_without_modes(Ok(()), || Ok(ours + 1)).is_ok());
+        let access = rustix::io::Errno::ACCESS.raw_os_error();
+        assert!(
+            keep_without_modes(Err(refused(rustix::io::Errno::PERM.raw_os_error())), || Err(
+                refused(access)
+            ))
+            .is_err()
+        );
     }
 
     #[test]
