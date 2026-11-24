@@ -29,6 +29,7 @@ mod indexing;
 mod moved_from_more;
 mod passwordless;
 mod redesign;
+mod window_decorations;
 
 /// A window on the standard fixture with Settings open in front.
 struct SettingsTest {
@@ -554,6 +555,7 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Music icon",
             "Code icon",
             "File name endings",
+            "Use system window decorations",
             "Compact view",
             "Hide expand arrows in the sidebar",
             "Show more items in the navigation pane",

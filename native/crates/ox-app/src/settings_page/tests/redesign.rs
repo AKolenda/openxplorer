@@ -236,6 +236,7 @@ fn every_setting_of_the_earlier_layout_is_on_one_of_the_new_pages() {
     // "Open Quick access on Home" came later, and so did the rows of the
     // folder options Windows users look for in settings.
     let added_since = [
+        "Use system window decorations",
         "Open Quick access on Home",
         "Show hidden files, folders, and drives",
         "Hide extensions for known file types",

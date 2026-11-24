@@ -250,6 +250,7 @@ impl BrowserWindow {
             .set(context.clone())
             .expect("a new window has no context yet");
         window.start_network();
+        window.configure_window_decorations();
         window.install_actions();
         window.install_split_view();
         window.install_size_scans();

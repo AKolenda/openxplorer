@@ -62,9 +62,7 @@ impl BrowserWindow {
     /// [`take_tab_presses_from_the_window_handle`] for why it is the
     /// title bar's window handle and not the tab strip.
     pub(super) fn attach_tab_drag_source(&self) {
-        let Some(handle) = self.titlebar().and_downcast::<gtk::WindowHandle>() else {
-            return;
-        };
+        let handle = self.imp().tab_bar.get();
         let source = gtk::DragSource::new();
         source.set_actions(gdk::DragAction::MOVE);
         source.set_propagation_phase(gtk::PropagationPhase::Capture);

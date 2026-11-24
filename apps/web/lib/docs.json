@@ -551,6 +551,14 @@
         ]
       },
       {
+        "id": "window-decorations",
+        "title": "Use your desktop's window frame",
+        "paragraphs": [
+          "Settings → Appearance → Layout → Use system window decorations uses your desktop's title bar and window buttons, with the tabs in a separate row below. It is off by default, preserving the integrated Explorer-style title bar. On desktops without system decorations, GTK provides a standard title bar instead.",
+          "The choice is saved across restarts and applies to windows opened after the change. Windows already open keep their frame until you close them, so changing it never interrupts a file operation."
+        ]
+      },
+      {
         "id": "open-terminal",
         "title": "Open in Terminal",
         "paragraphs": [

@@ -4633,6 +4633,18 @@ msgstr ""
 msgid "Zorin + Brave setup and troubleshooting"
 msgstr ""
 
+#: crates/ox-app/src/settings_page/window_decorations.rs
+msgid "Use system window decorations"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/window_decorations.rs
+msgid "Use your desktop's title bar and window buttons, with the tabs below them. Applies to windows opened after the change. Where the desktop draws no title bars, GTK draws a standard one."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/window_decorations.rs
+msgid "appearance layout frame border titlebar title bar desktop native system decorations KDE KWin GNOME Wayland X11 CSD SSD minimize maximize close"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/theme/appearance_button.rs
 msgid "Appearance: {shown}. Click to change."
@@ -10746,6 +10758,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "Adds item check boxes as in Windows 11 and a redesigned Settings page with eight pages, a search across all of them and details in ⓘ bubbles. Open and Save dialogs no longer wait on network shares and say why Save cannot save, and a folder's expand arrow stays inside its row's highlight. Dropping files onto a file on a Windows drive or share no longer runs it unless it really is a program, and asks first."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "An item's Properties window can now be made larger from its edges and corners, and Previous Versions' list grows with it, so more versions show at once. Releases are also published in a signed Flatpak repository, so a Flatpak install updates through the software centre or flatpak update."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml

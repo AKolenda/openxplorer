@@ -467,6 +467,7 @@ fn choose_text_size(page: &SettingsPage, size: TextSize) {
 /// Shift+F10's menu and the pane widths.
 fn layout_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Layout"));
+    group.add_row(&super::window_decorations::row(page));
     group.add_row(&super::files_folders::compact_view_row(page));
     let arrows = SettingRow::new(HIDE_EXPAND_ARROWS);
     let binding = PreferenceBinding {

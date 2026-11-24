@@ -375,6 +375,10 @@ pub struct Preferences {
     /// Windows font stack. Stored only when on.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub desktop_font: bool,
+    /// Use the desktop's standard window decorations, with tabs below the
+    /// title bar, in newly opened browsing windows. Stored only when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub system_window_decorations: bool,
     /// The navigation pane is hidden (Dolphin's Places panel closed,
     /// Explorer's View > Show > Navigation pane off).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -658,6 +662,7 @@ impl Default for Preferences {
             recycle_replaced_files: true,
             enabled_service_actions: Vec::new(),
             desktop_font: false,
+            system_window_decorations: false,
             hide_sidebar: false,
             hide_expand_arrows: false,
             more_navigation_pane_items: true,
@@ -872,8 +877,7 @@ impl Preferences {
         replace_if_some(&mut self.full_path_in_title, update.full_path_in_title);
         self.apply_confirmations(update);
         self.apply_service_actions(update.enabled_service_actions.as_ref());
-        replace_if_some(&mut self.desktop_font, update.desktop_font);
-        replace_if_some(&mut self.shift_f10_classic, update.shift_f10_classic);
+        self.apply_appearance(update);
         replace_if_some(&mut self.progress_details, update.progress_details);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
         replace_if_some(&mut self.hide_expand_arrows, update.hide_expand_arrows);
@@ -943,6 +947,16 @@ impl Preferences {
         self.apply_update_checks(update);
         self.apply_star_prompt(update);
         self.sync_style_defaults(update, columns_changed);
+    }
+
+    /// Applies the opt-in desktop look and context-menu keyboard behaviour.
+    fn apply_appearance(&mut self, update: &PreferencesUpdate) {
+        replace_if_some(&mut self.desktop_font, update.desktop_font);
+        replace_if_some(
+            &mut self.system_window_decorations,
+            update.system_window_decorations,
+        );
+        replace_if_some(&mut self.shift_f10_classic, update.shift_f10_classic);
     }
 
     /// Takes the view options of `update`; true when their details columns
@@ -1082,6 +1096,8 @@ pub struct PreferencesUpdate {
     pub enabled_service_actions: Option<Vec<String>>,
     /// Use the desktop's font, or the Windows font stack.
     pub desktop_font: Option<bool>,
+    /// Use the desktop's standard window decorations in new windows.
+    pub system_window_decorations: Option<bool>,
     /// Hide or show the navigation pane.
     pub hide_sidebar: Option<bool>,
     /// Hide the navigation pane's expand arrows until it is pointed at, or
@@ -1233,6 +1249,7 @@ impl PreferencesUpdate {
             progress_details: flag("progressDetails"),
             enabled_service_actions: values.get("enabledServiceActions").and_then(read_keys),
             desktop_font: flag("desktopFont"),
+            system_window_decorations: flag("systemWindowDecorations"),
             hide_sidebar: flag("hideSidebar"),
             hide_expand_arrows: flag("hideExpandArrows"),
             more_navigation_pane_items: flag("moreNavigationPaneItems"),
@@ -1963,6 +1980,28 @@ mod tests {
         assert_eq!(stored["itemChecksOnCtrl"], json!(false));
         let read = PreferencesUpdate::from_json(&stored).expect("read back");
         assert_eq!(read.item_checks_on_ctrl, Some(false));
+    }
+
+    #[test]
+    fn system_window_decorations_are_opt_in_and_round_trip() {
+        let mut preferences = Preferences::default();
+        assert!(!preferences.system_window_decorations);
+        let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+        assert!(stored.get("systemWindowDecorations").is_none());
+        for on in [true, false] {
+            let update = PreferencesUpdate::from_json(&json!({ "systemWindowDecorations": on }))
+                .expect("a boolean preference");
+            preferences.apply(&update);
+            let stored = serde_json::to_value(&preferences).expect("serializable preferences");
+            let mut read = Preferences::default();
+            read.apply(&PreferencesUpdate::from_json(&stored).expect("read back"));
+            assert_eq!(read.system_window_decorations, on);
+        }
+        for invalid in [json!(null), json!(1), json!("true"), json!([]), json!({})] {
+            let update = PreferencesUpdate::from_json(&json!({ "systemWindowDecorations": invalid }))
+                .expect("invalid flags are ignored");
+            assert_eq!(update.system_window_decorations, None);
+        }
     }
 
     /// The expand arrows are shown by default and the choice is not
