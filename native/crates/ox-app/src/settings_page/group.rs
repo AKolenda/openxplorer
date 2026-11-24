@@ -229,7 +229,7 @@ impl SettingsGroup {
 
     /// What the heading shows: the title and the labels of its buttons,
     /// such as "What opens where Refresh status", or a folded group's title.
-    fn heading_text(&self) -> String {
+    pub(crate) fn heading_text(&self) -> String {
         let imp = self.imp();
         let actions = shown_text(&*imp.actions);
         let fold = imp

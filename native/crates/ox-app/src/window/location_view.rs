@@ -298,7 +298,9 @@ pub(in crate::window) fn tab_icon(uri: &str, locations: &LocationContext, places
     }
     if is_device_location(uri) {
         Art::Glyph(Icon::Phone)
-    } else if is_drive_root(uri) || drives.iter().any(|drive| location::same_location(drive, uri)) {
+    } else if is_drive_root(uri) {
+        Art::SystemDrive
+    } else if drives.iter().any(|drive| location::same_location(drive, uri)) {
         Art::Glyph(Icon::HardDrive)
     } else if is_archive_location(uri) {
         Art::ZipFolder
@@ -558,7 +560,25 @@ impl BrowserWindow {
         }
         let address = locations.display_location(uri);
         let icon = step_icon(uri, &locations.home_uri(), is_search);
-        self.address_bar().show_location(&crumbs, &address, icon);
+        // The same place as the tab shows, for Windows icon files (LOOK-030).
+        let role = (!is_search)
+            .then(|| {
+                let drive_roots: Vec<String> = self
+                    .imp()
+                    .volumes
+                    .borrow()
+                    .iter()
+                    .filter(|row| row.kind == VolumeKind::Drive && !row.is_network())
+                    .filter_map(|row| row.uri().map(str::to_owned))
+                    .collect();
+                tab_icon(
+                    uri,
+                    &locations,
+                    (&self.network_locations(), &known_folders, &drive_roots),
+                )
+            })
+            .and_then(crate::icons::user_icons::role_of);
+        self.address_bar().show_location(&crumbs, &address, icon, role);
     }
 
     /// Redraws the tab strip.
@@ -729,10 +749,11 @@ mod tests {
             },
             // The root of the file system is the Local Disk of the
             // navigation pane and This PC, whose drive it shows, as
-            // Windows 11 File Explorer's tab of a drive does.
+            // Windows 11 File Explorer's tab of a drive does: the system's
+            // own drive, which a Windows icon file draws with its logo.
             IconCase {
                 uri: "file:///",
-                tab: Art::Glyph(Icon::HardDrive),
+                tab: Art::SystemDrive,
                 address: Icon::HardDrive,
             },
             IconCase {

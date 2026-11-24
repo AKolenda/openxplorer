@@ -40,6 +40,8 @@ pub(crate) mod file_icons;
 mod file_type;
 mod icon;
 mod tint;
+pub(crate) mod user_glyphs;
+pub(crate) mod user_icons;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -48,7 +50,7 @@ use std::sync::Once;
 use gtk::prelude::*;
 use gtk::{gdk, glib};
 
-pub(crate) use art::{Art, Connection, Storage};
+pub(crate) use art::{Art, Connection, Medium, Storage};
 pub(crate) use art_image::ArtImage;
 pub(crate) use emblem::Emblems;
 pub(crate) use file_type::FileType;
@@ -106,11 +108,14 @@ fn decorative_image() -> gtk::Image {
         .build()
 }
 
-/// Shows `icon` in `image` at `size` logical pixels.
+/// Shows `icon` in `image` at `size` logical pixels: the glyph of the
+/// Windows symbol font the user chose in its place, when there is one
+/// ([`user_glyphs`], LOOK-031), else the bundled icon.
 pub(crate) fn set_icon(image: &gtk::Image, icon: Icon, size: i32) {
-    image.set_icon_name(Some(icon.name()));
+    let name = user_glyphs::drawn_name(icon, size);
+    image.set_icon_name(Some(name));
     image.set_pixel_size(size);
-    keep_loaded(image, icon, size);
+    keep_loaded(image, name, size);
 }
 
 /// The scale a window can draw at before it knows its monitor's, on X11
@@ -242,10 +247,10 @@ fn refresh_kept(display: &gdk::Display) {
 /// cached icon is never finalized (see the module documentation). The
 /// icon stays kept after a change of icon theme and when a monitor is
 /// added or rescaled. Only the main thread calls it, as GTK does.
-pub(crate) fn keep_loaded(image: &impl IsA<gtk::Widget>, icon: Icon, size: i32) {
+pub(crate) fn keep_loaded(image: &impl IsA<gtk::Widget>, name: &'static str, size: i32) {
     let display = image.as_ref().display();
     let is_rtl = image.as_ref().direction() == gtk::TextDirection::Rtl;
-    let shown: Shown = (icon.name(), size, is_rtl);
+    let shown: Shown = (name, size, is_rtl);
     let theme = gtk::IconTheme::for_display(&display);
     let is_new_display = KEPT.with_borrow_mut(|kept| {
         let name = display.name().to_string();

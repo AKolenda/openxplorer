@@ -3114,6 +3114,26 @@ msgid "Buttons in the right-click menu"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Choose Windows icon files"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Choose files…"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Choose font…"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Choose the Windows symbol font"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/settings_page/indexed_folders/suggestions.rs
+msgid "Clear"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Column header style"
 msgstr ""
 
@@ -3139,11 +3159,19 @@ msgid "F6 moves like Windows"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Fonts"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Hide expand arrows in the sidebar"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "How the Details view marks the sorted column. OpenXplorer puts an arrow after its title and colors a sort other than Name ascending; Windows shows only a small gray arrow above the title, as Windows 11 does."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Icons from Windows icon files"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -3163,11 +3191,31 @@ msgid "Near the pointer (default)"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "No files chosen"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "No font chosen"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Off: OpenXplorer's own icons"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "On, but no file is chosen yet"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "OpenXplorer (default)"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "OpenXplorer shows its menus, buttons and messages in your desktop's language when a translation for it is installed, and in English otherwise. Change the language in your desktop's language or region settings, then start OpenXplorer again."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Reading the chosen files…"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/settings_page/file_icons.rs crates/ox-app/src/window/type_applications.rs
@@ -3195,6 +3243,10 @@ msgid "Show more items in the tab menu"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Shows folders, the standard folders, drives, Home, Gallery, This PC, Network, the Recycle Bin, Settings and common file types with the icons of Windows icon files you choose, for example imageres.dll.mun and shell32.dll.mun from a Windows installation. OpenXplorer includes no Windows icons: it reads the files you choose while it runs and keeps their pictures only in your cache folder. Anything the files do not have keeps OpenXplorer's own icon."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Sidebar and column widths"
 msgstr ""
 
@@ -3211,7 +3263,19 @@ msgid "Text uses your desktop's interface font and size instead of Segoe UI."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "The .dll, .mun or .exe files the icons are read from. Only where they are is saved, never the icons. Choosing files again replaces the list."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "The Segoe Fluent Icons font (SegoeIcons.ttf) or Segoe MDL2 Assets (segmdl2.ttf) from a Windows installation, whose glyphs then draw the command bar, menus, navigation buttons and address bar, in your theme's colors. Only where the font is is saved; it is read, never installed. Glyphs it lacks keep OpenXplorer's own."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "The app, menus, and network sign-in use the same theme."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "The chosen files have none of these icons, so OpenXplorer's own are shown"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -3250,6 +3314,14 @@ msgstr ""
 msgid "Windows 11 · Compact actions (default)"
 msgstr ""
 
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Windows icon files"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Windows symbol font"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "Your desktop's language ({language})"
@@ -3284,11 +3356,19 @@ msgid "hide expand arrows chevron expander triangle sidebar navigation pane tree
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "it has none of these glyphs, so OpenXplorer's own are shown"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "language languages translation translations locale localization interface display chinese english region"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "navigation pane sidebar recent files locations recycle bin trash drive space capacity usage bar extra more rows windows"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "reading…"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -3304,7 +3384,38 @@ msgid "tab menu right-click move tab new window open windows extra more items wi
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "used while Icons from Windows icon files is on"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "windows icons icon files choose browse imageres shell32 dll mun exe clear remove"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "windows icons icon files imageres shell32 dll mun exe resources folder drive recycle bin this pc home gallery look classic original"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "windows symbol font glyphs segoe fluent icons mdl2 assets segoeicons segmdl2 ttf command bar menu buttons"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "zoom font larger smaller ctrl plus minus reset accessibility scale. Ctrl + makes text larger, Ctrl − smaller, and Ctrl 0 resets it. Saved for all windows; desktop scaling is unchanged."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "{found} of {total} icons come from the chosen files"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "{found} of {wanted} glyphs"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "{name} · {state}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -4458,10 +4569,6 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs
 msgid "Cache {label}"
-msgstr ""
-
-#: crates/ox-app/src/settings_page/indexed_folders/suggestions.rs
-msgid "Clear"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexed_folders.rs crates/ox-app/src/settings_page/indexed_folders/suggestions.rs

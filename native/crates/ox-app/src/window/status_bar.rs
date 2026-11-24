@@ -42,7 +42,7 @@ use super::window_action::WindowAction;
 
 /// The glyph of the status bar's buttons (ui-spec.md I09; the web app's
 /// were 15).
-const BUTTON_GLYPH: i32 = 16;
+const BUTTON_GLYPH: i32 = 18;
 
 /// The class that mutes a hint for typed text no name starts with.
 const MISS_CLASS: &str = "miss";

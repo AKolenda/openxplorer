@@ -251,6 +251,7 @@ impl AppContext {
         context.watch_known_folders(folder_locations);
         context.read_saved_searches();
         context.follow_recent_privacy();
+        context.follow_icon_files();
         context
     }
 
@@ -564,6 +565,22 @@ impl AppContext {
             callback();
             None
         })
+    }
+
+    /// Draws the icons of the Windows icon files the user chose, when that
+    /// is on, now and whenever the settings change (LOOK-030).
+    fn follow_icon_files(&self) {
+        crate::icons::user_icons::remember_standard_folders(&self.known_folders());
+        crate::icons::user_icons::follow_preferences(&self.settings_data().preferences);
+        crate::icons::user_glyphs::follow_preferences(&self.settings_data().preferences);
+        let context = self.downgrade();
+        self.connect_places_changed(move || {
+            if let Some(context) = context.upgrade() {
+                crate::icons::user_icons::remember_standard_folders(&context.known_folders());
+                crate::icons::user_icons::follow_preferences(&context.settings_data().preferences);
+                crate::icons::user_glyphs::follow_preferences(&context.settings_data().preferences);
+            }
+        });
     }
 
     /// Tells every window to redraw its sidebar and landing page.

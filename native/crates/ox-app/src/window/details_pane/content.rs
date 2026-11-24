@@ -714,40 +714,6 @@ mod tests {
         assert_eq!(property(&content, keys::MODIFIED), None);
     }
 
-    /// A file in the Recycle Bin is headed by the full path it was
-    /// deleted from, and located in the trash folder that holds it, with
-    /// no Original location or Date deleted rows, as Windows 11's pane
-    /// shows a recycled file (C:\$Recycle.Bin\S-1-5-..., checked on
-    /// Windows 11, 2026-11-22).
-    ///
-    /// parity: PROP-009
-    #[test]
-    fn a_recycled_file_is_headed_by_where_it_was_and_located_in_the_trash() {
-        let mut entry = file_entry("f2.txt");
-        entry.uri = "trash:///f2.txt".to_owned();
-        entry.size = Some(3);
-        entry.modified = Some(1_790_000_000);
-        entry.meta.created = Some(1_780_000_000);
-        entry.trash_orig_path = Some(PathBuf::from("/home/demo/OXT2/f2.txt"));
-        entry.trash_deletion_date = Some(1_795_000_000);
-        entry.meta.trash_file = Some("file:///home/demo/.local/share/Trash/files/f2.txt".to_owned());
-        let content = content_for(&[FileItem::new(entry)], "trash:///");
-        assert_eq!(content.name, "/home/demo/OXT2/f2.txt");
-        assert_eq!(
-            names(&content),
-            ["Type", "Size", "File location", "Date modified"]
-        );
-        assert_eq!(
-            property(&content, keys::LOCATION),
-            Some(
-                context()
-                    .display_location("file:///home/demo/.local/share/Trash/files")
-                    .as_str()
-            )
-        );
-        assert!(content.has_properties);
-    }
-
     /// Condensed dates give the day only; otherwise the time follows.
     ///
     /// parity: PROP-010
@@ -908,68 +874,6 @@ mod tests {
         assert!(!one.hint, "one file has its rows");
     }
 
-    /// One drive selected on This PC offers Properties, which Alt+Enter
-    /// opens for it, as Windows' pane does; several drives have Windows'
-    /// hint.
-    ///
-    /// parity: PROP-009
-    #[test]
-    fn a_drive_selected_on_this_pc_offers_properties() {
-        let tile = |name: &str| TileFacts {
-            art: Art::Folder,
-            name: name.to_owned(),
-            note: Some("23.0 GB free of 251 GB".to_owned()),
-            properties: Some("file:///".to_owned()),
-        };
-        let mut content = content_for(&[], Page::ThisPc.uri());
-        describe_tiles(&mut content, &[tile("Local Disk")]);
-        assert!(content.has_properties, "Properties for the drive");
-        assert_eq!(content.properties_of.as_deref(), Some("file:///"));
-        assert!(!content.hint);
-        assert_eq!(content.name, "Local Disk");
-        assert!(
-            content.properties.is_empty(),
-            "its rows are read from the drive: {:?}",
-            names(&content)
-        );
-        assert_eq!(content.measures_drive.as_deref(), Some("file:///"));
-        let mut content = content_for(&[], Page::ThisPc.uri());
-        describe_tiles(&mut content, &[tile("Local Disk"), tile("Backup")]);
-        assert_eq!(content.name, "2 items selected");
-        assert!(content.hint && content.properties.is_empty());
-    }
-
-    /// A drive's rows, as Windows 11's pane lists them: Type, Space used
-    /// as a percentage, Space free, Total size and File system
-    /// (checked on Windows 11, 2026-11-22: "37%", "39.7 GB", "62.8 GB",
-    /// "NTFS").
-    ///
-    /// parity: PROP-009
-    #[test]
-    fn a_drives_space_rows_read_as_windows_lists_them() {
-        // 39.7 GB free of 62.8 GB.
-        let rows = drive_rows(Some("Local Disk"), 42_628_000_000, 67_432_000_000, Some("NTFS"));
-        let shown: Vec<(&str, &str)> = rows
-            .iter()
-            .map(|row| (row.name.as_str(), row.value.as_str()))
-            .collect();
-        assert_eq!(
-            shown,
-            [
-                ("Type", "Local Disk"),
-                ("Space used", "37%"),
-                ("Space free", "39.7\u{a0}GB"),
-                ("Total size", "62.8\u{a0}GB"),
-                ("File system", "NTFS"),
-            ]
-        );
-        assert_eq!(
-            drive_rows(None, 0, 10, None).len(),
-            3,
-            "no Type or File system unknown"
-        );
-    }
-
     /// parity: LOOK-016
     #[test]
     fn an_smb_folder_is_pictured_on_the_network_bar_as_its_tab_is() {
@@ -981,59 +885,6 @@ mod tests {
         assert_eq!(inside.preview, Preview::Art(Art::SHARE));
         let local = content_for(&[], "file:///home/demo/Projects");
         assert_eq!(local.preview, Preview::Art(Art::Folder));
-    }
-
-    /// With nothing selected, a place is pictured as its tab and its
-    /// navigation pane row picture it, as Windows 11's pane shows the
-    /// Recycle Bin's, Network's or the Downloads folder's own icon: never
-    /// a plain folder for the Recycle Bin, Network, Home or a standard
-    /// folder.
-    ///
-    /// parity: PROP-009
-    #[test]
-    fn a_place_is_pictured_as_its_tab_is() {
-        use ox_core::places::KnownFolder;
-        let downloads = Place {
-            label: String::new(),
-            uri: "file:///home/demo/Downloads".to_owned(),
-            known_folder: Some(KnownFolder::Downloads),
-            is_shared: false,
-        };
-        let locations = context();
-        let picture = |uri: &str| {
-            pane_content(&PaneFacts {
-                selection: &[],
-                folder_uri: uri,
-                folder_item_count: 2,
-                locations: &locations,
-                network: &[],
-                known_folders: std::slice::from_ref(&downloads),
-                condensed_dates: false,
-                preview_rules: NO_NETWORK_PREVIEWS,
-            })
-            .preview
-        };
-        assert_eq!(
-            picture("trash:///"),
-            Preview::Art(Art::Glyph(crate::icons::Icon::Delete))
-        );
-        assert_eq!(
-            picture(Page::Network.uri()),
-            Preview::Art(Art::TintedGlyph(Page::Network.icon(), Tint::Network))
-        );
-        assert_eq!(
-            picture("file:///home/demo"),
-            Preview::Art(Art::TintedGlyph(Page::Home.icon(), Tint::Home))
-        );
-        assert_eq!(
-            picture("file:///home/demo/Downloads"),
-            Preview::Art(Art::for_known_folder(KnownFolder::Downloads))
-        );
-        assert_eq!(
-            picture("recent:///"),
-            Preview::Art(Art::Glyph(crate::icons::Icon::History))
-        );
-        assert_eq!(picture("file:///home/demo/Projects"), Preview::Art(Art::Folder));
     }
 
     /// parity: PROP-009

@@ -141,6 +141,7 @@ fn a_drive_opens_and_offers_what_it_allows_and_a_volume_mounts() {
         can_stop: true,
         can_open_in_disks: true,
         can_format: true,
+        is_optical: false,
     };
     let drive = PlaceMenu::Drive {
         uri: "file:///media/demo/USB".into(),
@@ -347,6 +348,7 @@ fn a_drive_menu_follows_windows_11_in_the_compact_style() {
             can_stop: false,
             can_open_in_disks: true,
             can_format: true,
+            is_optical: false,
         },
     };
     let local_disk = PlaceMenu::Drive {
@@ -427,6 +429,7 @@ fn rename_changes_a_removable_drives_label() {
             can_stop: true,
             can_open_in_disks: false,
             can_format: true,
+            is_optical: false,
         },
     };
     let local_disk = PlaceMenu::Drive {
