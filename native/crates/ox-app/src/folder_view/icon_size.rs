@@ -186,6 +186,14 @@ impl CellSize {
 /// the other sizes, which the Python app does not have.
 pub(crate) fn cell_size(size: IconSize, text_size: TextSize) -> CellSize {
     let metrics = text_size::metrics(text_size);
+    if size == IconSize::SMALL {
+        // One line per item, as tall as List's, in columns Windows 11's
+        // distance apart.
+        return CellSize {
+            width: text_size::ceil_pixels(SMALL_ICONS_COLUMN * metrics.scale),
+            height: compact_row(text_size) - 1,
+        };
+    }
     let icon_growth = size.pixels() - WEB_TILE_ICON;
     let width_for_icon = size.pixels() + TILE_WIDTH_BEYOND_ICON;
     CellSize {
@@ -193,6 +201,11 @@ pub(crate) fn cell_size(size: IconSize, text_size: TextSize) -> CellSize {
         height: metrics.grid_row + icon_growth,
     }
 }
+
+/// Pixels from one Small icons column to the next at 100%, as Windows 11
+/// spaces them (measured in the Windows 11 VM at 1920x1080, 100% scale):
+/// the items fill rows left to right and the view scrolls down.
+pub(crate) const SMALL_ICONS_COLUMN: f64 = 310.0;
 
 /// The icon edge of Tiles: Windows 11's tiles show 48-pixel icons and
 /// thumbnails (VIEW-071).

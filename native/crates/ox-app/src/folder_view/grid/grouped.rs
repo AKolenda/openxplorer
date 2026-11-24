@@ -23,7 +23,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::folder_view::details::GroupTitle;
-use crate::folder_view::group_slots::{collapsed_runs, ItemsChange, Slot, SlotLayout};
+use crate::folder_view::group_slots::{collapsed_runs, group_runs, ItemsChange, Slot, SlotLayout};
 use crate::folder_view::item::FileItem;
 
 /// What a [`GroupSlot`] draws.
@@ -261,6 +261,10 @@ mod imp {
         /// heading row then shows as selected.
         pub(super) groups_selected: RefCell<Vec<bool>>,
         pub(super) handlers: RefCell<Vec<glib::SignalHandlerId>>,
+        /// Whether each heading takes one slot at the top of its group's
+        /// column, as List heads its groups; its groups then never
+        /// collapse, as List's headings have no chevron.
+        pub(super) inline: Cell<bool>,
     }
 
     impl std::fmt::Debug for GroupedSelection {
@@ -399,8 +403,32 @@ impl GroupedSelection {
         collapsed: &CollapsedGroups,
         columns: u32,
     ) -> Self {
+        Self::build(items, title, collapsed, columns, false)
+    }
+
+    /// `items` grouped by `title` as List lays its groups out (VIEW-008):
+    /// in lines of `rows` slots, which the grid shows as columns, each
+    /// group's heading at the top of its first column and its items under
+    /// it. Its groups never collapse.
+    pub(crate) fn new_list(
+        items: &gtk::MultiSelection,
+        title: GroupTitle,
+        collapsed: &CollapsedGroups,
+        rows: u32,
+    ) -> Self {
+        Self::build(items, title, collapsed, rows, true)
+    }
+
+    fn build(
+        items: &gtk::MultiSelection,
+        title: GroupTitle,
+        collapsed: &CollapsedGroups,
+        columns: u32,
+        inline: bool,
+    ) -> Self {
         let model: Self = glib::Object::new();
         let imp = model.imp();
+        imp.inline.set(inline);
         imp.items
             .set(items.clone())
             .expect("a new model has no items yet");
@@ -433,6 +461,11 @@ impl GroupedSelection {
         ));
         imp.handlers.replace(vec![on_items, on_selection]);
         model
+    }
+
+    /// Whether the model lays its groups out as List's columns.
+    pub(crate) fn is_list(&self) -> bool {
+        self.imp().inline.get()
     }
 
     /// The folder's selection model.
@@ -681,6 +714,10 @@ impl GroupedSelection {
     /// Collapses the group titled `title`, or expands it with `collapsed`
     /// false. Its items keep their selection.
     pub(crate) fn set_collapsed(&self, title: &str, collapsed: bool) {
+        if self.is_list() {
+            // List's headings have no chevron: its groups stay open.
+            return;
+        }
         let changed = {
             let mut titles = self.collapsed().borrow_mut();
             if collapsed {
@@ -696,6 +733,9 @@ impl GroupedSelection {
 
     /// Collapses every group, or expands every one with `collapsed` false.
     pub(crate) fn set_all_collapsed(&self, collapsed: bool) {
+        if self.is_list() {
+            return;
+        }
         let titles: Vec<String> = self
             .imp()
             .layout
@@ -726,7 +766,7 @@ impl GroupedSelection {
             Slot::Heading(_) => &group_objects.heading,
             Slot::Rule => group_objects.rules.get(usize::try_from(offset).ok()? - 1)?,
             Slot::Blank => {
-                let past = offset - layout.columns() - layout.groups()[group].shown();
+                let past = offset - layout.heading_slots() - layout.groups()[group].shown();
                 group_objects.blanks.get(usize::try_from(past).ok()?)?
             }
         };
@@ -748,8 +788,12 @@ impl GroupedSelection {
                     .unwrap_or_default()
             })
             .collect();
-        let runs = collapsed_runs(titles.iter().map(String::as_str), &self.collapsed().borrow());
-        let layout = SlotLayout::new(runs, columns);
+        let layout = if imp.inline.get() {
+            SlotLayout::inline(group_runs(titles.iter().map(String::as_str)), columns)
+        } else {
+            let runs = collapsed_runs(titles.iter().map(String::as_str), &self.collapsed().borrow());
+            SlotLayout::new(runs, columns)
+        };
         self.keep_objects(&layout);
         let old = imp.layout.replace(Some(layout));
         let regrouped = self.count_selected_groups();
@@ -795,9 +839,10 @@ impl GroupedSelection {
                 let mut objects = kept
                     .remove(&group.title)
                     .unwrap_or_else(|| GroupObjects::new(self, &group.title));
-                let rules = usize::try_from(columns - 1).unwrap_or_default();
-                let blanks =
-                    usize::try_from((columns - group.shown() % columns) % columns).unwrap_or_default();
+                let heading = layout.heading_slots();
+                let rules = usize::try_from(heading - 1).unwrap_or_default();
+                let blanks = usize::try_from((columns - (heading + group.shown()) % columns) % columns)
+                    .unwrap_or_default();
                 GroupObjects::fit(&mut objects.rules, rules, SlotKind::Rule, self, &group.title);
                 GroupObjects::fit(&mut objects.blanks, blanks, SlotKind::Blank, self, &group.title);
                 let alone = objects.rules.is_empty();

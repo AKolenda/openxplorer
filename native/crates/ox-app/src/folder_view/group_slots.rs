@@ -116,6 +116,12 @@ impl RowHeights {
         })
     }
 
+    /// How far down the list `row` of `layout` starts: the heights of the
+    /// rows above it.
+    pub(crate) fn top_of(self, layout: &SlotLayout, row: u32) -> f64 {
+        (0..row).map(|above| self.of(layout, above)).sum()
+    }
+
     /// How far apart rows `from` and `to` of `layout` are: the heights of
     /// the rows a move from one to the other passes, the one it lands on
     /// included.
@@ -154,6 +160,9 @@ impl ItemsChange {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SlotLayout {
     columns: u32,
+    /// How many slots a heading takes: a whole row (`columns`), or one
+    /// slot at the top of a column in List.
+    heading_slots: u32,
     groups: Vec<GroupRun>,
     /// The first slot of each group: its heading.
     starts: Vec<u32>,
@@ -161,22 +170,39 @@ pub(crate) struct SlotLayout {
 }
 
 impl SlotLayout {
-    /// The slots of `groups` in `columns` columns (at least one).
+    /// The slots of `groups` in `columns` columns (at least one), each
+    /// heading taking a row of its own.
     pub(crate) fn new(groups: Vec<GroupRun>, columns: u32) -> Self {
         let columns = columns.max(1);
+        Self::laid_out(groups, columns, columns)
+    }
+
+    /// The slots of `groups` in lines of `columns` slots, each heading
+    /// taking the first slot of its group's first line, its items
+    /// following it: List's columns, filled top to bottom (VIEW-008).
+    pub(crate) fn inline(groups: Vec<GroupRun>, columns: u32) -> Self {
+        Self::laid_out(groups, columns.max(1), 1)
+    }
+
+    fn laid_out(groups: Vec<GroupRun>, columns: u32, heading_slots: u32) -> Self {
         let mut starts = Vec::with_capacity(groups.len());
         let mut len = 0;
         for group in &groups {
             starts.push(len);
-            let rows = group.shown().div_ceil(columns);
-            len += columns * (1 + rows);
+            len += (heading_slots + group.shown()).div_ceil(columns) * columns;
         }
         Self {
             columns,
+            heading_slots,
             groups,
             starts,
             len,
         }
+    }
+
+    /// How many slots a heading takes, its line's included.
+    pub(crate) fn heading_slots(&self) -> u32 {
+        self.heading_slots
     }
 
     /// How many slots the grid lists.
@@ -215,10 +241,10 @@ impl SlotLayout {
         let offset = slot - self.starts[index];
         Some(if offset == 0 {
             Slot::Heading(index)
-        } else if offset < self.columns {
+        } else if offset < self.heading_slots {
             Slot::Rule
-        } else if offset - self.columns < group.shown() {
-            Slot::Item(group.start + offset - self.columns)
+        } else if offset - self.heading_slots < group.shown() {
+            Slot::Item(group.start + offset - self.heading_slots)
         } else {
             Slot::Blank
         })
@@ -240,7 +266,7 @@ impl SlotLayout {
         if group.collapsed {
             return None;
         }
-        Some(self.starts[index] + self.columns + position - group.start)
+        Some(self.starts[index] + self.heading_slots + position - group.start)
     }
 
     /// The index of the group holding the item at `position`.
@@ -347,7 +373,14 @@ impl SlotLayout {
     fn item_in_row(&self, row: u32, column: u32) -> Option<u32> {
         let first = row.checked_mul(self.columns)?;
         let last = first + column.min(self.columns - 1);
-        (first..=last).rev().find_map(|slot| self.item_at(slot))
+        let before = (first..=last).rev().find_map(|slot| self.item_at(slot));
+        // A List column starting with its heading has its first item next.
+        let after = || {
+            (self.heading_slots == 1 && self.columns > 1)
+                .then(|| (last + 1..first + self.columns).find_map(|slot| self.item_at(slot)))
+                .flatten()
+        };
+        before.or_else(after)
     }
 
     /// The column the item at `position` is in.
@@ -381,10 +414,24 @@ impl SlotLayout {
         }
     }
 
+    /// The title of the group a rule or blank at `slot` belongs to, and
+    /// its place among the group's rules or blanks.
+    fn owned_place(&self, slot: u32) -> Option<(&str, u32)> {
+        let (group, offset) = self.place(slot)?;
+        let run = &self.groups[group];
+        let place = match self.slot(slot)? {
+            Slot::Rule => offset.checked_sub(1)?,
+            Slot::Blank => offset.checked_sub(self.heading_slots + run.shown())?,
+            Slot::Heading(_) | Slot::Item(_) => return None,
+        };
+        Some((run.title.as_str(), place))
+    }
+
     /// The slots that differ between `self`, laid out before `change`, and
     /// `new`, laid out after it, as a grid model reports a change: the
     /// first slot that differs, how many went and how many came. Items
-    /// match where `change` left them, headings by title. `None` when
+    /// match where `change` left them, headings by title, rules and blanks
+    /// by their group and place. `None` when
     /// nothing differs.
     pub(crate) fn changes_to(
         &self,
@@ -398,7 +445,12 @@ impl SlotLayout {
             (Some(Slot::Item(old)), Some(Slot::Item(now))) => {
                 change.map_or(Some(old), |change| change.moved(old)) == Some(now)
             }
-            (Some(Slot::Rule), Some(Slot::Rule)) | (Some(Slot::Blank), Some(Slot::Blank)) => true,
+            // A rule or blank is its group's own object, by its place in
+            // the group's rows (`GroupedSelection` keeps them so): one that
+            // moved, or now belongs to another group, has changed.
+            (Some(Slot::Rule), Some(Slot::Rule)) | (Some(Slot::Blank), Some(Slot::Blank)) => {
+                self.owned_place(old_slot) == new.owned_place(new_slot)
+            }
             _ => false,
         };
         let shorter = self.len.min(new.len);
@@ -542,6 +594,62 @@ mod tests {
         assert_eq!(old.changes_to(&old, None), None);
         let wider = SlotLayout::new(listing(), 4);
         assert_eq!(old.changes_to(&wider, None), Some((3, 18, 21)));
+    }
+
+    /// What object the grid shows in `slot` of `layout`, as
+    /// `GroupedSelection` keeps them: a heading, rule or blank is its
+    /// group's own, by title and place, and an item is its position.
+    fn identity(layout: &SlotLayout, slot: u32) -> (String, u32, Option<u32>) {
+        let (group, offset) = layout.place(slot).expect("a slot of the layout");
+        let title = layout.groups()[group].title.clone();
+        match layout.slot(slot).expect("a slot of the layout") {
+            Slot::Heading(_) => (title, 0, None),
+            Slot::Rule => (title, 1, Some(offset - 1)),
+            Slot::Blank => (
+                title,
+                2,
+                Some(offset - layout.heading_slots() - layout.groups()[group].shown()),
+            ),
+            Slot::Item(position) => (String::new(), 3, Some(position)),
+        }
+    }
+
+    /// Every slot outside the range a change reports shows the same
+    /// object before and after it, also when the columns change: a rule
+    /// or blank belongs to its group, so one that moved is in the range.
+    /// GTK warned "Duplicate item detected in list" when a grouped grid
+    /// zoomed or the window narrowed, as a rule or blank that moved was
+    /// reported unchanged.
+    ///
+    /// parity: VIEW-022, VIEW-071
+    #[test]
+    fn a_change_of_columns_covers_every_rule_and_blank_that_moved() {
+        let mut titles: Vec<&str> = vec!["7z Archive"; 1];
+        titles.extend(["File folder"; 5]);
+        titles.extend(["JPG File"; 2]);
+        titles.extend(["Text Document"; 7]);
+        let runs = group_runs(titles);
+        for (from, to) in [(6, 4), (4, 6), (8, 3), (3, 8), (5, 2), (2, 7), (4, 5)] {
+            let old = SlotLayout::new(runs.clone(), from);
+            let new = SlotLayout::new(runs.clone(), to);
+            let (start, removed, added) = old.changes_to(&new, None).unwrap_or((old.len(), 0, 0));
+            for slot in 0..start {
+                assert_eq!(
+                    identity(&old, slot),
+                    identity(&new, slot),
+                    "{from} to {to} columns: slot {slot} before the change"
+                );
+            }
+            let after = old.len() - start - removed;
+            assert_eq!(after, new.len() - start - added);
+            for back in 0..after {
+                assert_eq!(
+                    identity(&old, old.len() - 1 - back),
+                    identity(&new, new.len() - 1 - back),
+                    "{from} to {to} columns: slot {back} from the end"
+                );
+            }
+        }
     }
 
     /// A collapsed group keeps its heading row and shows none of its

@@ -14,7 +14,7 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use super::file_ops_support::{is_triggered_by, press_shortcut_where_focused, shortcuts_of};
-use crate::test_support::harness::{capture, descendants, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{capture, descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::window::rubber_band::{BandMode, RELEASE_WATCH};
 
 /// A folder long enough to scroll.
@@ -46,7 +46,7 @@ fn selected(test: &TestWindow) -> Vec<u32> {
 /// window's capture-phase shortcuts, then the view's capture-phase key
 /// controller while focus is in the view, then the first shortcut for it
 /// from the focused widget up.
-fn press_key(test: &TestWindow, keyval: gdk::Key, modifiers: gdk::ModifierType) {
+pub(super) fn press_key(test: &TestWindow, keyval: gdk::Key, modifiers: gdk::ModifierType) {
     let runs = |widget: &gtk::Widget, phase| {
         shortcuts_of(widget, phase).into_iter().any(|shortcut| {
             let is_the_key = shortcut
@@ -443,6 +443,119 @@ fn changing_the_view_keeps_the_focused_item_in_view() {
     }
 }
 
+/// A grouped folder keeps the item with the keyboard in view when the
+/// view changes too, in the grouped grids as in Details: from Details to
+/// Large, Medium and Extra large icons, Tiles and Content and back.
+///
+/// parity: SEL-007, VIEW-001, VIEW-022
+#[gtk::test]
+fn changing_the_view_of_a_grouped_folder_keeps_the_focused_item_in_view() {
+    let fixture = Fixture::empty();
+    for number in 0..30 {
+        for extension in ["mp3", "jpg", "pdf", "odt"] {
+            fixture.write(&format!("Track {number:02}.{extension}"));
+        }
+    }
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    let none = gdk::ModifierType::empty();
+    show_view(&test, "details");
+    start_at(&test, 0);
+    press_key(&test, gdk::Key::End, none);
+    let last = test.window.folder_pane().model().n_items() - 1;
+    assert_eq!(selected(&test), [last]);
+    let pane = test.window.folder_pane();
+    let in_view = || {
+        let shown = pane.view_widget();
+        pane.owners().widget_at(last).is_some_and(|cell| {
+            cell.is_ancestor(&shown)
+                && cell.compute_bounds(&shown).is_some_and(|bounds| {
+                    let bottom = f64::from(bounds.y() + bounds.height());
+                    bounds.y() >= 0.0 && bottom <= f64::from(shown.height()) + 1.0
+                })
+        })
+    };
+    let views = [
+        "large",
+        "details",
+        "medium",
+        "tiles",
+        "extra-large",
+        "content",
+        "details",
+    ];
+    for view in views {
+        test.activate("view", Some(view));
+        wait_until(
+            &format!("{view}: the last item in view, with the keyboard"),
+            || in_view() && pane.focused_position() == Some(last),
+        );
+        assert_eq!(selected(&test), [last], "{view}: the selection stays");
+    }
+    // With the keyboard elsewhere, as after a choice in the View menu, the
+    // selected item still shows.
+    for view in views {
+        gtk::prelude::GtkWindowExt::set_focus(&test.window, None::<&gtk::Widget>);
+        test.activate("view", Some(view));
+        wait_until(&format!("{view}: the selected item in view"), in_view);
+        assert_eq!(selected(&test), [last], "{view}: the selection stays");
+    }
+}
+
+/// Switching to Small icons (Ctrl+Shift+4) from Details or Large icons
+/// shows the list from the top, its first row whole, as Windows 11 keeps
+/// the scroll at the top: with nothing selected, with the first item
+/// selected, and with nothing selected while the keyboard rests on an
+/// item further down (after a Ctrl+click took the selection away). Only
+/// a selected item out of view would scroll it.
+///
+/// parity: VIEW-006, SEL-007
+#[gtk::test]
+fn switching_to_small_icons_keeps_the_list_at_the_top() {
+    let fixture = Fixture::with_files(LONG_FOLDER);
+    let test = TestWindow::open(&fixture.uri());
+    let views = gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::SHIFT_MASK;
+    let pane = test.window.folder_pane();
+    let last = u32::try_from(LONG_FOLDER).expect("small") - 1;
+    for (from, first_selected, keyboard_at) in [
+        (gdk::Key::_6, false, 0),
+        (gdk::Key::_2, false, 0),
+        (gdk::Key::_6, true, 0),
+        (gdk::Key::_2, true, 0),
+        (gdk::Key::_6, false, last),
+        (gdk::Key::_2, false, last),
+    ] {
+        press_key(&test, from, views);
+        wait_for_frames(&test.window, 4);
+        pane.focus_view();
+        start_at(&test, keyboard_at);
+        if !first_selected {
+            pane.model().select_none();
+        }
+        pane.restore_scroll_position(0.0);
+        wait_for_frames(&test.window, 4);
+        press_key(&test, gdk::Key::_4, views);
+        for _ in 0..10 {
+            wait_for_frames(&test.window, 1);
+        }
+        let adjustment = pane.icon_view().scroll_adjustment();
+        let shown = pane.view_widget();
+        let first = pane
+            .owners()
+            .widget_at(0)
+            .filter(|cell| cell.is_ancestor(&shown))
+            .and_then(|cell| cell.compute_bounds(&shown))
+            .expect("the first item is laid out");
+        assert!(
+            adjustment.value() <= adjustment.lower() + 0.5 && first.y() >= 0.0,
+            "from {from:?}, first selected {first_selected}, keyboard at {keyboard_at}: \
+             scrolled to {} (first row at {})",
+            adjustment.value(),
+            first.y()
+        );
+    }
+}
+
 /// parity: SEL-009
 #[gtk::test]
 fn ctrl_arrows_move_without_selecting_and_ctrl_space_toggles() {
@@ -488,22 +601,32 @@ fn arrows_move_in_two_dimensions_in_the_icon_grid() {
     assert_eq!(selected(&test), [above], "Up remembers the column");
 }
 
-/// Small icons fill columns top to bottom, as List does: Down and Up move
-/// to the next and previous item in the column, Right and Left to the
-/// same row of the next and previous column, as Windows 11 moves.
+/// Small icons fill rows left to right, as in Windows 11 (VM-checked):
+/// Right and Left move to the next and previous item in the row, Down to
+/// the item below it in the next row.
 ///
 /// parity: SEL-010, VIEW-005
 #[gtk::test]
-fn arrows_move_down_columns_in_small_icons() {
+fn arrows_move_across_rows_in_small_icons() {
     let fixture = Fixture::with_files(PRIME_FOLDER);
     let test = TestWindow::open(&fixture.uri());
     show_view(&test, "small");
     let none = gdk::ModifierType::empty();
     start_at(&test, 0);
     press_key(&test, gdk::Key::Right, none);
-    let rows = test.window.folder_pane().icon_view().grid().max_columns();
-    assert_eq!(selected(&test), [rows], "Right goes to the next column");
+    assert_eq!(selected(&test), [1], "Right goes to the next item in the row");
+    press_key(&test, gdk::Key::Left, none);
+    assert_eq!(selected(&test), [0]);
+    press_key(&test, gdk::Key::Down, none);
+    let columns = test.window.folder_pane().icon_view().grid().max_columns();
+    assert!(columns >= 2);
+    assert_eq!(
+        selected(&test),
+        [columns],
+        "Down goes to the item below, in the next row"
+    );
 }
+
 /// In Tiles the arrows move across and down the tiles, Down keeping to
 /// the column; in Content, one row per item, Down and Up move a row, and
 /// Home, End and Shift work as in the other views.
@@ -540,8 +663,8 @@ fn arrows_move_through_tiles_and_content() {
     assert_eq!(test.selected_names(), ["file 0004.txt"], "type-ahead selects");
 }
 
-/// In grouped Tiles and Content every key moves between items across
-/// the headings, as in Details: Down from a group's last row rests on the
+/// In grouped Tiles, Content and the icon sizes above Small icons every
+/// key moves between items across the headings, as in Details: Down from a group's last row rests on the
 /// next group's heading, then goes to its first row, Right from a group's
 /// last item goes to the next group's first, Up comes back to the column,
 /// and Shift and Ctrl work as elsewhere.
@@ -556,7 +679,7 @@ fn arrows_cross_the_group_headings_in_tiles_and_content() {
     let none = gdk::ModifierType::empty();
     let shift = gdk::ModifierType::SHIFT_MASK;
     let last = test.window.folder_pane().model().n_items() - 1;
-    for view in ["tiles", "content"] {
+    for view in ["tiles", "content", "small", "medium", "large", "extra-large"] {
         show_view(&test, view);
         start_at(&test, 0);
         press_key(&test, gdk::Key::Down, none);
@@ -602,8 +725,103 @@ fn arrows_cross_the_group_headings_in_tiles_and_content() {
     }
 }
 
+/// Home in a grouped grid goes back to the top of the list, with the
+/// first group's heading in view, as Windows 11 shows it; so does a key
+/// that lands on the first row of a group whose heading is above the
+/// view. Before, the first item was scrolled to the top edge and its
+/// heading stayed hidden above it.
+///
+/// parity: VIEW-022, VIEW-071, SEL-008
+#[gtk::test]
+fn home_shows_the_first_groups_heading_in_a_grouped_grid() {
+    use crate::folder_view::cells::FileCell;
+    use crate::folder_view::grid::SlotKind;
+    let fixture = Fixture::empty();
+    for number in 0..40 {
+        for extension in ["mp3", "jpg", "pdf"] {
+            fixture.write(&format!("Track {number:02}.{extension}"));
+        }
+    }
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    let none = gdk::ModifierType::empty();
+    for view in ["tiles", "content", "medium", "large"] {
+        show_view(&test, view);
+        start_at(&test, 0);
+        press_key(&test, gdk::Key::End, none);
+        press_key(&test, gdk::Key::Home, none);
+        assert_eq!(selected(&test), [0], "{view}: Home");
+        let pane = test.window.folder_pane();
+        let grid = pane.view_widget();
+        wait_until("the first heading in view", || {
+            descendants::<FileCell>(&grid).into_iter().any(|cell| {
+                cell.is_mapped()
+                    && cell
+                        .slot()
+                        .is_some_and(|slot| slot.kind() == SlotKind::Heading && slot.group_index() == Some(0))
+                    && cell.compute_bounds(&grid).is_some_and(|bounds| bounds.y() >= 0.0)
+            })
+        });
+        let adjustment = pane.icon_view().scroll_adjustment();
+        assert!(
+            adjustment.value() <= adjustment.lower() + 1.0,
+            "{view}: scrolled to the top, not {}",
+            adjustment.value()
+        );
+    }
+}
+
+/// Home and End in grouped Details go to the first and last item, as
+/// in Windows 11, not to the first group's heading: GTK's own keys moved
+/// to the list's first row, the heading, which selected the whole first
+/// group and left the keyboard on the heading. Home shows the heading
+/// above the first item too.
+///
+/// parity: VIEW-022, SEL-008
+#[gtk::test]
+fn home_and_end_in_grouped_details_go_to_the_first_and_last_item() {
+    let fixture = Fixture::empty();
+    for name in [
+        "Album art.jpg",
+        "Beach.jpg",
+        "Cove.jpg",
+        "Harbor report.pdf",
+        "Morning tide.mp3",
+        "Tide tables.pdf",
+    ] {
+        fixture.write(name);
+    }
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    let none = gdk::ModifierType::empty();
+    let last = test.window.folder_pane().model().n_items() - 1;
+    show_view(&test, "details");
+    start_at(&test, 3);
+    press_key(&test, gdk::Key::Home, none);
+    assert!(
+        test.window.focused_heading().is_none(),
+        "Home leaves no heading focused"
+    );
+    assert_eq!(selected(&test), [0], "Home selects the first item alone");
+    assert_eq!(test.window.folder_pane().focused_position(), Some(0));
+    press_key(&test, gdk::Key::Down, none);
+    assert_eq!(selected(&test), [1], "Down goes on from the first item");
+    press_key(&test, gdk::Key::End, none);
+    assert!(
+        test.window.focused_heading().is_none(),
+        "End leaves no heading focused"
+    );
+    assert_eq!(selected(&test), [last], "End selects the last item alone");
+    press_key(&test, gdk::Key::Home, gdk::ModifierType::SHIFT_MASK);
+    assert_eq!(
+        selected(&test),
+        (0..=last).collect::<Vec<u32>>(),
+        "Shift+Home extends to the first item"
+    );
+}
+
 /// A group collapses under its heading and expands again, in Details,
-/// Tiles and Content, as in Windows 11: with the keyboard on the heading,
+/// Tiles, Content and the icon sizes, as in Windows 11: with the keyboard on the heading,
 /// Left collapses it, Right expands it, and Space and Enter select its
 /// items. Its items
 /// stay selected while hidden; the arrows, a Shift range and
@@ -623,7 +841,7 @@ fn a_group_collapses_under_its_heading_and_its_items_are_passed_by() {
         let grouped = test.window.folder_pane().grouped().expect("a grouped view");
         grouped.layout().expect("laid out").shows(position)
     };
-    for view in ["details", "tiles", "content"] {
+    for view in ["details", "tiles", "content", "large", "medium"] {
         show_view(&test, view);
         start_at(&test, 0);
         press_key(&test, gdk::Key::Up, none);
@@ -772,7 +990,7 @@ fn a_click_on_a_heading_selects_its_group_and_the_chevron_folds_it() {
     test.activate("group-by", Some("type"));
     let last = test.window.folder_pane().model().n_items() - 1;
     let group: Vec<u32> = (2..=last).collect();
-    for view in ["details", "tiles", "content"] {
+    for view in ["details", "tiles", "content", "large", "medium"] {
         show_view(&test, view);
         start_at(&test, 0);
         let heading = test
