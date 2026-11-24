@@ -39,7 +39,7 @@ use std::sync::Arc;
 use gtk::gdk_pixbuf::{Pixbuf, PixbufFormat};
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
-use ox_core::entry::{cached_thumbnail, CachedThumbnail, Entry, ThumbnailFlavor, THUMBNAIL_ATTRIBUTES};
+use ox_core::entry::{cached_thumbnail_for, CachedThumbnail, Entry, ThumbnailFlavor, THUMBNAIL_ATTRIBUTES};
 use ox_core::settings::{ViewOptions, PREVIEW_SIZE_LIMIT};
 
 pub(crate) use network_fs::is_on_network_filesystem;
@@ -422,7 +422,10 @@ async fn thumbnail_of(request: &PreviewRequest) -> Option<PathBuf> {
         )
         .await
         .ok();
-    match info.as_ref().map(cached_thumbnail) {
+    // A thumbnail smaller than the one asked for is made again larger, as
+    // GIO reports whichever size it found.
+    let wanted = ThumbnailFlavor::for_pixels(request.pixels);
+    match info.as_ref().map(|info| cached_thumbnail_for(info, wanted)) {
         Some(CachedThumbnail::Valid(path)) => return Some(path),
         Some(CachedThumbnail::Failed) => return None,
         Some(CachedThumbnail::Missing) | None => {}
@@ -482,7 +485,7 @@ async fn make_thumbnail(request: &PreviewRequest) -> Result<PathBuf, Missing> {
         return Ok(path);
     }
     if let Some(service) = service::service().await {
-        if service.supports(&request.uri, &request.content_type) {
+        if service.supports(&request.uri, &request.content_type) && service.makes(flavor) {
             let _slot = making(request).take().await;
             let made = service.make(&request.uri, &request.content_type, flavor).await;
             let path = ox_core::entry::thumbnail_file(&cache_dir, &request.uri, flavor);
@@ -786,6 +789,55 @@ mod tests {
             local_only: false,
             target_uri: None,
             on_network: false,
+        }
+    }
+
+    /// A picture shown in Details first gets a 128-pixel thumbnail; shown
+    /// at Extra large icons next (256 pixels), or at Large icons on a
+    /// screen at 200 %, it gets one made at that size, never the small one
+    /// stretched and blurred, which GIO reports as the item's thumbnail.
+    ///
+    /// parity: VIEW-057
+    #[gtk::test]
+    fn a_larger_view_does_not_stretch_a_smaller_thumbnail() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let item = folder.path().join("photo.png");
+        let picture = Pixbuf::new(Colorspace::Rgb, false, 8, 1200, 900).expect("a picture");
+        picture.fill(0x3366_99ff);
+        picture.savev(&item, "png", &[]).expect("the picture");
+        let modified = fs::metadata(&item)
+            .and_then(|metadata| metadata.modified())
+            .expect("its time")
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("after 1970")
+            .as_secs();
+        let request = |pixels| PreviewRequest {
+            modified: Some(modified),
+            pixels,
+            ..request_of(&item, "image/png")
+        };
+        let context = glib::MainContext::default();
+        let cache = glib::user_cache_dir();
+        let details = context
+            .block_on(thumbnail_of(&request(16)))
+            .expect("a thumbnail for Details");
+        assert_eq!(
+            details,
+            thumbnail_file(&cache, &request(16).uri, ThumbnailFlavor::Normal)
+        );
+        for (pixels, flavor) in [(256, ThumbnailFlavor::Large), (512, ThumbnailFlavor::XLarge)] {
+            let shown = context
+                .block_on(thumbnail_of(&request(pixels)))
+                .expect("a larger thumbnail");
+            assert_eq!(
+                shown,
+                thumbnail_file(&cache, &request(pixels).uri, flavor),
+                "{pixels} pixels"
+            );
+            let texture = context
+                .block_on(preview(request(pixels)))
+                .expect("the larger preview");
+            assert_eq!(texture.width(), pixels, "drawn from a {pixels}-pixel thumbnail");
         }
     }
 

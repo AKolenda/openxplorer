@@ -193,7 +193,10 @@ fn add_folder_field() -> gtk::Entry {
             "Add a folder: /home/you/Projects or \\\\nas\\share",
         ))
         .hexpand(true)
-        .width_chars(36)
+        // 36 characters when there is room, down to 12 at a large text
+        // size in a narrow window, rather than widening the page.
+        .width_chars(12)
+        .max_width_chars(36)
         .build();
     field.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
         "Folder to cache",

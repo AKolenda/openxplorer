@@ -40,18 +40,18 @@ pub(super) fn control_name(control: &gtk::Widget) -> Option<String> {
     tooltip.lines().next().map(str::to_owned)
 }
 
-/// The command bar's shown controls in order, the scrolling file commands
-/// included.
+/// The command bar's shown controls in order, the file commands
+/// included, without those that moved into "…" for lack of room.
 pub(super) fn command_bar_controls(test: &TestWindow) -> Vec<gtk::Widget> {
     let bar = test.window.command_bar();
     let mut controls = Vec::new();
     for child in children(bar) {
-        let group = descendants::<gtk::Box>(&child)
-            .into_iter()
-            .find(|widget| widget.has_css_class("command-group"));
+        let group = child.has_css_class("command-group").then(|| child.clone());
         match group {
             // Extract all shows only inside a ZIP opened like a folder.
-            Some(group) => controls.extend(children(&group).filter(WidgetExt::is_visible)),
+            Some(group) => controls.extend(
+                children(&group).filter(|control| control.is_visible() && control.is_child_visible()),
+            ),
             // The appearance toggle is hidden, as Settings › Appearance
             // chooses the theme; Update shows only while a release waits
             // and Settings › About leaves it on.

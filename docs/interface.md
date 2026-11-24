@@ -142,6 +142,8 @@ Ctrl + (or Ctrl =) on the main keyboard increases text, Ctrl − decreases it, a
 
 Only the application text and needed row spacing change; desktop scaling and file data remain unchanged. Sidebar and column widths remain resizable.
 
+In a narrow window or at a large text size, the command bar commands that do not fit move into See more (…), from the right, as in Windows 11; Sort and View open there as submenus. The navigation pane narrows to leave your files room and widens back as the window grows, without changing the width you chose. Settings rows put their buttons under each other instead of widening the window.
+
 ## Use your desktop's window frame
 
 Settings → Appearance → Layout → Use system window decorations uses your desktop's title bar and window buttons, with the tabs in a separate row below. It is off by default, preserving the integrated Explorer-style title bar. On desktops without system decorations, GTK provides a standard title bar instead.

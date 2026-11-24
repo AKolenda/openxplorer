@@ -244,3 +244,174 @@ fn a_split_tab_beside_the_details_pane_at_1366_pixels_reaches_every_column() {
         }
     }
 }
+
+/// The widest the window's least width may be at any text size: its
+/// least size (`window_size.rs`), so a window at that size, or a laptop
+/// screen, is never pushed wider.
+const LEAST_WINDOW_WIDTH: i32 = 670;
+
+/// Text at 200 %, as Ctrl+plus five times from 100 % makes it.
+fn largest_text(test: &TestWindow) {
+    larger_text(test, 5);
+}
+
+/// Text `steps` levels larger, as Ctrl+plus that many times from 100 %
+/// makes it: 3 for 150 %.
+fn larger_text(test: &TestWindow, steps: usize) {
+    for _ in 0..steps {
+        test.activate("text-larger", None);
+    }
+    wait_for_frames(&test.window, 3);
+}
+
+/// The leaves under `widget` that ask for more than `limit` pixels of
+/// width on their own, for a failure message.
+fn widest_leaves(widget: &gtk::Widget, limit: i32) -> Vec<String> {
+    descendants(widget)
+        .into_iter()
+        .filter(|leaf: &gtk::Widget| {
+            leaf.is_visible() && leaf.measure(gtk::Orientation::Horizontal, -1).0 > limit
+        })
+        .filter(|leaf: &gtk::Widget| {
+            descendants(leaf).into_iter().skip(1).all(|child: gtk::Widget| {
+                !child.is_visible() || child.measure(gtk::Orientation::Horizontal, -1).0 <= limit
+            })
+        })
+        .map(|leaf: gtk::Widget| {
+            let text = leaf
+                .downcast_ref::<gtk::Label>()
+                .map(|label| label.text().to_string());
+            format!("{} {:?} {:?}", leaf.type_(), leaf.css_classes(), text)
+        })
+        .collect()
+}
+
+/// Opening Settings at the largest text size in a window at its least
+/// width leaves the window as it is: every row wraps or narrows within
+/// it rather than pushing the window wider, off a small screen.
+///
+/// parity: LOOK-022
+#[gtk::test]
+fn settings_at_the_largest_text_size_fit_the_least_window_width() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    resize(&test, 672);
+    largest_text(&test);
+    test.activate("settings", None);
+    wait_for_frames(&test.window, 6);
+    let least = test.window.measure(gtk::Orientation::Horizontal, -1).0;
+    let leaves = widest_leaves(test.window.upcast_ref(), LEAST_WINDOW_WIDTH / 2);
+    test.activate("text-reset", None);
+    assert!(
+        least <= LEAST_WINDOW_WIDTH,
+        "the window needs {least} pixels with Settings open: {leaves:#?}"
+    );
+}
+
+/// The navigation pane gives way to the files as the window narrows, as
+/// Windows' does, and takes its width back as the window widens; nothing
+/// is saved. At 200 % text its default width is 420 pixels, which in a
+/// 672-pixel window would leave the files 250.
+///
+/// parity: LOOK-022
+#[gtk::test]
+fn the_navigation_pane_narrows_with_the_window_and_widens_back() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    largest_text(&test);
+    let workspace = test.window.workspace().clone();
+    wait_until("the wider default", || workspace.position() == 420);
+    resize(&test, 672);
+    wait_until("the pane to give way", || {
+        let files = workspace.width() - workspace.position();
+        files >= 300
+    });
+    resize(&test, 1320);
+    wait_until("the pane to widen back", || workspace.position() == 420);
+    let saved = test.context.settings_data().preferences.sidebar_width;
+    test.activate("text-reset", None);
+    assert_eq!(saved, None, "the window's own changes are not saved");
+}
+
+/// The "…" button and the labels of the items its menu lists.
+fn see_more(test: &TestWindow) -> (gtk::MenuButton, Vec<String>) {
+    let more = descendants::<gtk::MenuButton>(test.window.upcast_ref::<gtk::Widget>())
+        .into_iter()
+        .find(|button| button.has_css_class("more-command"))
+        .expect("the See more button");
+    let labels = more
+        .popover()
+        .and_downcast::<crate::window::menu_popover::MenuPopover>()
+        .expect("its menu")
+        .items()
+        .into_iter()
+        .map(|item| item.label)
+        .collect();
+    (more, labels)
+}
+
+/// Whether `command` shows whole in the command bar, left of Settings.
+fn shows_whole_in_the_bar(test: &TestWindow, command: &impl IsA<gtk::Widget>) -> bool {
+    let bar = descendants::<gtk::Widget>(test.window.upcast_ref::<gtk::Widget>())
+        .into_iter()
+        .find(|widget| widget.has_css_class("commandbar"))
+        .expect("the command bar");
+    let settings = descendants::<gtk::Widget>(&bar)
+        .into_iter()
+        .find(|widget| widget.has_css_class("settings-button"))
+        .expect("Settings");
+    let (Some(shown), Some(settings)) = (command.compute_bounds(&bar), settings.compute_bounds(&bar)) else {
+        return false;
+    };
+    command.is_mapped() && shown.x() >= 0.0 && shown.x() + shown.width() <= settings.x() + 0.5
+}
+
+/// As in Windows 11, the commands that do not fit move into "…", from
+/// the right, instead of being cut off with "…" itself: at 200 % text in
+/// a 700-pixel window View and Sort are listed at the top of "…", which
+/// stays in the bar; in a wide window they are back in the bar.
+///
+/// parity: LOOK-022
+#[gtk::test]
+fn commands_that_do_not_fit_move_into_see_more() {
+    let fixture = Fixture::standard();
+    let test = laid_out(&fixture.uri());
+    largest_text(&test);
+    resize(&test, 700);
+    wait_for_frames(&test.window, 4);
+    let (more, labels) = see_more(&test);
+    let more_shows = shows_whole_in_the_bar(&test, &more);
+    // Tab from the last command shown goes to "…", never to one that
+    // moved into it.
+    let left_out = test.window.command_bar().commands_left_out();
+    let sort = descendants::<gtk::MenuButton>(test.window.upcast_ref::<gtk::Widget>())
+        .into_iter()
+        .find(|button| button.has_css_class("sort-command"))
+        .expect("Sort");
+    sort.grab_focus();
+    test.window.emit_move_focus(gtk::DirectionType::TabForward);
+    let focus = gtk::prelude::GtkWindowExt::focus(&test.window).expect("a focus");
+    let tab_reaches_left_out = left_out
+        .iter()
+        .any(|command| focus.is_ancestor(command) || &focus == command);
+    let tab_reaches_more = focus.is_ancestor(&more) || focus == more.clone().upcast::<gtk::Widget>();
+    let wide = || {
+        resize(&test, 1320);
+        wait_for_frames(&test.window, 4);
+        see_more(&test).1
+    };
+    let view_in_menu = labels.iter().any(|label| label == "View");
+    let labels_wide = wide();
+    test.activate("text-reset", None);
+    assert!(more_shows, "See more shows whole beside the commands");
+    assert!(
+        !tab_reaches_left_out,
+        "Tab skips the commands in See more, reaching {focus:?}"
+    );
+    assert!(tab_reaches_more, "Tab goes from Sort to See more, not {focus:?}");
+    assert!(view_in_menu, "View moved into See more: {labels:?}");
+    assert!(
+        !labels_wide.iter().any(|label| label == "View"),
+        "View is back in the bar: {labels_wide:?}"
+    );
+}

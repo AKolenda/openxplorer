@@ -96,8 +96,10 @@ impl SettingsPage {
     fn add_named_page(&self, name: &str, section: &SettingsSection) -> gtk::Box {
         let content = gtk::Box::builder().css_classes(["settings-content"]).build();
         content.append(section);
+        // A row that cannot narrow further, at a large text size in a
+        // narrow window, scrolls sideways rather than widening the window.
         let scrolled = gtk::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk::PolicyType::Never)
+            .hscrollbar_policy(gtk::PolicyType::Automatic)
             .child(&content)
             .build();
         self.imp().pages.add_named(&scrolled, Some(name));

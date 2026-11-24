@@ -182,6 +182,7 @@ impl BrowserWindow {
     /// start it again.
     pub(super) fn follow_width(&self, width: i32) {
         self.fit_details_pane_width(width);
+        self.fit_sidebar_to_window();
         let band = WindowWidth::for_width(width);
         if self.imp().window_width.replace(band) == band {
             return;

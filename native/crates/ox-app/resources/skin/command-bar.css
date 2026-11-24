@@ -10,7 +10,9 @@
   min-height: 47px;
   padding: 0 15px;
 }
-.commandbar, .commandbar .command-group { border-spacing: 4px; }
+.commandbar { border-spacing: 4px; }
+/* The commands from New to "…" are 4px apart too, 1px in a window 1190px
+   or narrower: src/window/command_bar/overflow.rs places them. */
 /* 34px high; icon-only commands are 38px wide, their 16px glyph (I01)
    centred where the web's 18px one was. */
 .commandbar button.command, .commandbar menubutton.command > button {

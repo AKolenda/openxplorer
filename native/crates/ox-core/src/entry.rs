@@ -43,7 +43,8 @@ pub use info::entry_from_info;
 pub use inspect::{inspect, pin_target, verify_pin, PinTarget};
 pub use meta::EntryMeta;
 pub use thumbnail::{
-    cached_thumbnail, thumbnail_file, thumbnail_path, CachedThumbnail, ThumbnailFlavor, THUMBNAIL_ATTRIBUTES,
+    cached_thumbnail, cached_thumbnail_for, thumbnail_file, thumbnail_path, CachedThumbnail, ThumbnailFlavor,
+    THUMBNAIL_ATTRIBUTES,
 };
 
 use std::path::PathBuf;

@@ -309,7 +309,11 @@ impl CommandBar {
     /// "See more"), as a click on it does; false when the bar shows none.
     fn open_menu_named(&self, name: &str) -> bool {
         let named = self.menu_buttons().into_iter().find(|button| {
-            button.is_visible() && button.is_sensitive() && button_name(button).as_deref() == Some(name)
+            // A command that did not fit is in "…" instead.
+            button.is_visible()
+                && button.is_child_visible()
+                && button.is_sensitive()
+                && button_name(button).as_deref() == Some(name)
         });
         named.inspect(gtk::MenuButton::popup).is_some()
     }

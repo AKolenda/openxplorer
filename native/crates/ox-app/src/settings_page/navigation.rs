@@ -64,8 +64,10 @@ impl SettingsPage {
             .build();
         content.append(&match_count);
         content.append(&results);
+        // A row that cannot narrow further, at a large text size in a
+        // narrow window, scrolls sideways rather than widening the window.
         let scrolled = gtk::ScrolledWindow::builder()
-            .hscrollbar_policy(gtk::PolicyType::Never)
+            .hscrollbar_policy(gtk::PolicyType::Automatic)
             .child(&content)
             .build();
         imp.pages.add_named(&scrolled, Some(RESULTS_PAGE));

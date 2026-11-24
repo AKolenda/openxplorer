@@ -548,7 +548,8 @@
         "title": "Make text easier to read",
         "paragraphs": [
           "Ctrl + (or Ctrl =) on the main keyboard increases text, Ctrl − decreases it, and Ctrl 0 resets to 100%. Settings → Appearance → Text size offers 80% through 200%. The preference is saved across restarts and applied to open windows.",
-          "Only the application text and needed row spacing change; desktop scaling and file data remain unchanged. Sidebar and column widths remain resizable."
+          "Only the application text and needed row spacing change; desktop scaling and file data remain unchanged. Sidebar and column widths remain resizable.",
+          "In a narrow window or at a large text size, the command bar commands that do not fit move into See more (…), from the right, as in Windows 11; Sort and View open there as submenus. The navigation pane narrows to leave your files room and widens back as the window grows, without changing the width you chose. Settings rows put their buttons under each other instead of widening the window."
         ]
       },
       {

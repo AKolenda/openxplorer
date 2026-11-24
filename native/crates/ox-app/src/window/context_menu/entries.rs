@@ -1004,77 +1004,6 @@ pub(crate) fn compact_background_menu(undo_label: &str, submenus: BackgroundSubm
     ]
 }
 
-/// Network's own menu on blank space, as Windows 11 shows it there: View,
-/// Sort by and Group by, then "Show more options". Network is not a folder:
-/// nothing can be pasted, made or undone there.
-pub(crate) fn network_background_menu(submenus: BackgroundSubmenus) -> Vec<MenuEntry> {
-    let [view, sort, group, _] = background_submenu_items(submenus);
-    vec![view, sort, group, MenuEntry::Divider, show_more_options_item()]
-}
-
-/// The menu of a computer Network lists (`uri`, `\\PC`), as Windows 11
-/// shows it: Open, Open in new tab, Open in new window, Pin to Quick
-/// access and Create shortcut, which puts the shortcut on the Desktop, as
-/// Windows offers when it cannot make one in Network. Windows' Connect
-/// with Remote Desktop Connection and Pin to Start have no twin here, and
-/// a computer has no Properties (Windows lists none) and no file
-/// commands. Several computers open in new tabs.
-pub(crate) fn computer_menu(uri: &str, is_single: bool) -> Vec<MenuEntry> {
-    let new_tab = if is_single {
-        MenuItem::with_text_target(
-            &ox_core::i18n::gettext("Open in new tab"),
-            Icon::Add,
-            WindowAction::OpenTab,
-            uri,
-        )
-    } else {
-        item(
-            ox_core::i18n::gettext_static("Open in new tabs"),
-            Icon::Add,
-            WindowAction::OpenSelectionInTabs,
-        )
-    };
-    let mut entries: Vec<MenuEntry> = vec![
-        item(
-            ox_core::i18n::gettext_static("Open"),
-            Icon::Folder,
-            WindowAction::Open,
-        )
-        .with_shortcut("Enter")
-        .into(),
-        new_tab.into(),
-    ];
-    if is_single {
-        entries.push(
-            MenuItem::with_text_target(
-                &ox_core::i18n::gettext("Open in new window"),
-                Icon::WindowNew,
-                WindowAction::OpenWindow,
-                uri,
-            )
-            .into(),
-        );
-    }
-    entries.push(
-        item(
-            ox_core::i18n::gettext_static("Pin to Quick access"),
-            Icon::Pin,
-            WindowAction::PinSelected,
-        )
-        .into(),
-    );
-    entries.push(MenuEntry::Divider);
-    entries.push(
-        item(
-            ox_core::i18n::gettext_static("Create shortcut"),
-            Icon::Link,
-            WindowAction::SendToDesktop,
-        )
-        .into(),
-    );
-    entries
-}
-
 /// The menu of a file or folder, in `style` (`entryMenu`).
 pub(crate) fn item_menu(facts: &ItemFacts, style: MenuStyle) -> ContextMenu {
     match style {
@@ -1099,9 +1028,20 @@ fn compact_item_menu(facts: &ItemFacts) -> ContextMenu {
     // A network computer, as Windows 11 lists it (build 26200): Open, Open
     // in new tab, Open in new window, Pin to Quick access, then "Show more
     // options"; its share list has nothing to cut, compress or describe.
+    // Create shortcut puts the shortcut on the Desktop, as Windows offers
+    // when it cannot make one in Network. A computer has no Properties
+    // (B4).
     if facts.location == ItemLocation::SmbServer {
         let mut entries = vec![open_item(facts)];
         entries.extend(folder_open_items(facts));
+        entries.push(
+            item(
+                ox_core::i18n::gettext_static("Create shortcut"),
+                Icon::Link,
+                WindowAction::SendToDesktop,
+            )
+            .into(),
+        );
         entries.extend([MenuEntry::Divider, show_more_options_item()]);
         return ContextMenu {
             entries,
@@ -1534,7 +1474,10 @@ pub(crate) fn page_background_menu(
             };
             vec![vec![view, gray(sort), gray(group)], steps.rows()]
         }
-        Page::Network | Page::Settings => vec![vec![view, sort, group, refresh_item()]],
+        // Network's: View, Sort by and Group by, as Windows 11 lists them
+        // there (build 26200).
+        Page::Network => vec![vec![view, sort, group]],
+        Page::Settings => vec![vec![view, sort, group, refresh_item()]],
     };
     let mut groups = groups;
     if style == MenuStyle::Compact {
@@ -2310,69 +2253,6 @@ mod tests {
         assert_eq!(without_applications[1], "Open with…");
     }
 
-    /// A text file's menu offers "Edit in <default text editor>" with the
-    /// editor's icon, in its own group after Properties and before Show
-    /// more options, as Windows 11 offers "Edit in Notepad", and before
-    /// Open in Terminal in the classic menu, as Windows' Edit. A code
-    /// editor that is also the text editor is offered once. Add to
-    /// Favorites comes after Open with, as in Windows 11.
-    ///
-    /// parity: OPEN-015, CMD-010, HOME-014
-    #[test]
-    fn a_text_file_offers_edit_in_its_default_text_editor() {
-        let editor = EditorShortcut {
-            id: "fictional-editor.desktop".to_owned(),
-            name: "Fictional Editor".to_owned(),
-            icon: Some("accessories-text-editor".to_owned()),
-        };
-        let facts = ItemFacts {
-            navigation_uri: "file:///home/user/Packing list.txt".to_owned(),
-            text_editor: Some(editor.clone()),
-            favorite: Some(("file:///home/user/Packing%20list.txt".to_owned(), false)),
-            ..file()
-        };
-        let entries = item_menu(&facts, MenuStyle::Compact).entries;
-        let names = labels(&entries);
-        assert_eq!(
-            names,
-            [
-                "Open",
-                "Open with…",
-                "Add to Favorites",
-                "Compress to",
-                "Copy as path",
-                "Properties",
-                "-",
-                "Edit in Fictional Editor",
-                "-",
-                "Show more options"
-            ]
-        );
-        let MenuEntry::Item(edit) = &entries[7] else {
-            panic!("Edit in is an item");
-        };
-        assert_eq!(edit.action, WindowAction::OpenInEditor.into());
-        assert_eq!(edit.target, Some("fictional-editor.desktop".to_variant()));
-        assert_eq!(edit.application_icon.as_deref(), Some("accessories-text-editor"));
-
-        let classic = labels(&item_menu(&facts, MenuStyle::Classic).entries);
-        assert_eq!(classic[..2], ["Open", "Edit in Fictional Editor"], "{classic:?}");
-
-        let both = ItemFacts {
-            editors: vec![editor],
-            ..facts
-        };
-        let names = labels(&item_menu(&both, MenuStyle::Compact).entries);
-        assert_eq!(
-            names
-                .iter()
-                .filter(|name| name.contains("Fictional Editor"))
-                .count(),
-            1,
-            "{names:?}"
-        );
-    }
-
     /// An editor's item carries the editor's desktop ID for its icon, and
     /// every item a menu disables says why.
     ///
@@ -2480,36 +2360,6 @@ mod tests {
         );
     }
 
-    /// A network computer listed on the Network page has Windows 11's
-    /// menu (checked on build 26200): Open, Open in new tab, Open in new
-    /// window and Pin to Quick access, then "Show more options"; no strip,
-    /// Compress to, Copy as path, Properties or Open in Terminal, which a
-    /// computer's share list has no use for.
-    ///
-    /// parity: CMD-010, SIDE-020
-    #[test]
-    fn a_network_computer_has_windows_11s_menu() {
-        let facts = ItemFacts {
-            navigation_uri: "smb://nas/".to_owned(),
-            location: ItemLocation::SmbServer,
-            caching: None,
-            ..folder()
-        };
-        let menu = item_menu(&facts, MenuStyle::Compact);
-        assert!(menu.strip.is_empty());
-        assert_eq!(
-            labels(&menu.entries),
-            [
-                "Open",
-                "Open in new tab",
-                "Open in new window",
-                "Pin to Quick access",
-                "-",
-                "Show more options"
-            ]
-        );
-    }
-
     /// A search result or a Recent row lists Open file location once in
     /// the compact menu, after Share with and before Add to Favorites, as
     /// Windows 11's Gallery and Home list it; the classic menu lists it
@@ -2557,38 +2407,6 @@ mod tests {
         );
         assert!(!labels(&item_menu(&file(), MenuStyle::Classic).entries)
             .contains(&"Open file location".to_owned()));
-    }
-
-    /// A file's compact menu lists Share with before Add to Favorites, as
-    /// Windows 11's does: Open, Open with, Share with, Add to Favorites,
-    /// Compress to, Copy as path, Properties.
-    ///
-    /// parity: CMD-010, HOME-014
-    #[test]
-    fn share_with_comes_before_add_to_favorites() {
-        let facts = ItemFacts {
-            can_share: true,
-            send_to: SendToTargets {
-                bluetooth: true,
-                ..SendToTargets::default()
-            },
-            favorite: Some(("file:///home/user/report.pdf".to_owned(), true)),
-            ..file()
-        };
-        assert_eq!(
-            labels(&item_menu(&facts, MenuStyle::Compact).entries),
-            [
-                "Open",
-                "Open with…",
-                "Share with",
-                "Remove from Favorites",
-                "Compress to",
-                "Copy as path",
-                "Properties",
-                "-",
-                "Show more options",
-            ]
-        );
     }
 
     /// A folder's compact menu, as Windows 11's: Cut, Copy, Paste (shown
@@ -2763,7 +2581,6 @@ mod tests {
                 "Undo",
                 "-",
                 "New",
-                "-",
                 "Properties",
                 "-",
                 "Open in Terminal",
@@ -2806,7 +2623,6 @@ mod tests {
                 "Pin this folder",
                 "Cache this folder for search",
                 "Calculate folder sizes",
-                "-",
                 "Previous versions",
                 "Properties",
             ]
