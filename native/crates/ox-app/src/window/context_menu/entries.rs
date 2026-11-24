@@ -2619,7 +2619,6 @@ mod tests {
                 "Pin this folder",
                 "Cache this folder for search",
                 "Calculate folder sizes",
-                "-",
                 "Previous versions",
                 "Properties",
             ]

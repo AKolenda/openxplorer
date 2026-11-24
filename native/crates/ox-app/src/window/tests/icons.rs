@@ -103,7 +103,7 @@ pub(super) fn pixel_rows(texture: &gdk::Texture) -> Vec<Vec<Pixel>> {
 
 /// The colour `image` paints its icon in: the average of its inked
 /// pixels.
-fn painted_ink(image: &gtk::Image) -> gdk::RGBA {
+pub(super) fn painted_ink(image: &gtk::Image) -> gdk::RGBA {
     let pixels = pixel_rows(&painted(image)).concat();
     average_inked_colour(&pixels)
 }

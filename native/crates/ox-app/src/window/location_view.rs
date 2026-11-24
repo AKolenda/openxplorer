@@ -202,7 +202,7 @@ fn standard_folder_at(uri: &str, known_folders: &[Place]) -> Option<KnownFolder>
 /// devices, the colour folder everywhere else, and for a network location
 /// (SMB, or a folder under a kernel CIFS/SMB3 mount, NET-006) the location
 /// on the network bar as its row of `network` shows it in the sidebar.
-fn tab_icon(
+pub(in crate::window) fn tab_icon(
     uri: &str,
     locations: &LocationContext,
     network: &[NetworkLocation],

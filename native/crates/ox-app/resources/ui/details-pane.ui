@@ -93,7 +93,7 @@
                       </object>
                     </child>
                     <child>
-                      <!-- With nothing selected, Windows' hint in a rounded box,
+                      <!-- With nothing or several selected, Windows' hint in a rounded box,
                            where a selection's Details rows go. -->
                       <object class="GtkBox" id="hint_row">
                         <property name="spacing">8</property>

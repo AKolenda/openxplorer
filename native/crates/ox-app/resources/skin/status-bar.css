@@ -5,22 +5,31 @@
   background-color: @ox_bg;
   border-top: 1px solid @ox_border;
   min-height: 29px;
-  padding: 0 13px 0 19px;
+  /* The view buttons end 4px from the window's edge, as Windows 11's
+     do (reference ref-01). */
+  padding: 0 4px 0 19px;
   color: @ox_muted;
 }
 /* The 11px texts and the 24px buttons are centred on half pixels, which
    Chromium draws one pixel down; the 10px build text is not. */
 .statusbar > label:not(.status-mode) { margin-top: 1px; }
 .statusbar .status-mode { letter-spacing: .01em; }
-/* 24px buttons 3px apart: the bar's 18px gap less `margin-left:-15px`.
-   Their 16px glyphs (I09) sit on whole pixels. */
+/* 24px buttons side by side, as Windows 11 draws them (reference ref-01):
+   the bar's 18px gap less `margin-left:-18px`. Flat and borderless; the
+   current view's sits on a square gray box with a 1px edge, its glyph in
+   the text color. Their 16px glyphs (I09) sit on whole pixels. */
 window.ox .statusbar button {
   min-width: 24px;
   min-height: 24px;
-  margin: 1px 0 0 -15px;
+  margin: 1px 0 0 -18px;
+  border-radius: 0;
   color: @ox_muted;
 }
-window.ox .statusbar button.active { background-color: @ox_selected; color: @ox_accent; }
+window.ox .statusbar button.active {
+  background-color: @ox_view_toggle_fill;
+  box-shadow: inset 0 0 0 1px @ox_view_toggle_stroke;
+  color: @ox_text;
+}
 /* Explorer's thin line between the item count and the selection: 1px,
    as tall as the text, 10px from each (status-bar.ui). */
 .statusbar .status-counts > label { margin-top: 1px; }

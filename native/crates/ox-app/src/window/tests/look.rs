@@ -308,8 +308,30 @@ fn the_command_bar_keeps_its_right_group_and_shows_details_as_selected() {
         "the commands are not in a scroller"
     );
     assert!(details.is_active(), "the details pane is open");
-    let colour = painted_colour(&details, 2, details.height() / 2);
-    assert_same_colour(colour, css_colour("#e8f1fb"), "the selected colour");
+    // As Windows 11 draws it with the pane open (reference ref-18, dark,
+    // measured: no fill, the bar's own color behind the button, and the
+    // pane glyph in the accent blue), not filled with the selection color.
+    show_theme(&test, "dark");
+    // GTK crops a drawn widget to what it paints: with no fill, the
+    // button paints only its glyph and label, less tall than itself.
+    let drawn = painted(&details);
+    assert!(
+        drawn.height() < details.height(),
+        "no fill behind the open pane's button: {}x{} of {}x{}",
+        drawn.width(),
+        drawn.height(),
+        details.width(),
+        details.height()
+    );
+    let glyph = descendants::<gtk::Image>(&details)
+        .into_iter()
+        .next()
+        .expect("the Details glyph");
+    assert_same_colour(
+        super::icons::painted_ink(&glyph),
+        css_colour("#74beff"),
+        "the glyph in the accent",
+    );
 }
 
 /// Classic menus are 264 pixels with Windows 11's 32-pixel rows at 100%

@@ -93,6 +93,7 @@ pub(crate) use item_window::{open_item_properties, PropertiesContext};
 pub(crate) use location_panel::LocationPanel;
 #[cfg(test)]
 pub(crate) use metadata::is_mount_point;
+pub(crate) use metadata::mount_at;
 pub(crate) use restore::RestoreRequest;
 pub(crate) use selection_view::open_selection_properties;
 pub(crate) use sharing_panel::system_usershares;

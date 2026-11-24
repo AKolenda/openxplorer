@@ -49,5 +49,9 @@
    is open, as in the current app. */
 .commandbar menubutton > button:checked { background: none; }
 .commandbar menubutton > button:checked:hover { background-color: @ox_hover; }
-.commandbar button.details-toggle:checked,
-.commandbar button.details-toggle:checked:hover { background-color: @ox_selected; }
+/* Details while the pane is open, as Windows 11 draws it (reference
+   ref-18): no fill, the pane glyph in the accent; hovered, the bar's
+   hover. */
+.commandbar button.details-toggle:checked { background: none; }
+.commandbar button.details-toggle:checked:hover { background-color: @ox_hover; }
+.commandbar button.details-toggle:checked image { color: @ox_accent; }

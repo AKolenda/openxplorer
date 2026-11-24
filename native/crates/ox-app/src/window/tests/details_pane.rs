@@ -109,12 +109,14 @@ fn a_selection_moved_on_drops_the_photos_reading() {
     assert_eq!(pane.shown_name(), "Notes 2", "named as the file list names it");
 }
 
-/// Several items show "N items selected" and their total size; nothing
-/// selected shows the folder's item count again.
+/// Several items show "N items selected" over Windows' hint to select a
+/// single file, with no Details rows, as Windows 11's pane does (their
+/// size is in the status bar); nothing selected shows the folder's item
+/// count again.
 ///
 /// parity: PROP-009
 #[gtk::test]
-fn several_items_show_their_count_and_total_size() {
+fn several_items_show_their_count_and_windows_hint() {
     let fixture = Fixture::standard();
     fs::write(fixture.path("Plan.txt"), [b'x'; 1500]).expect("a file");
     fs::write(fixture.path("Agenda.txt"), [b'y'; 500]).expect("a file");
@@ -131,9 +133,14 @@ fn several_items_show_their_count_and_total_size() {
 
     model.select_positions(&positions);
     assert_eq!(pane.shown_name(), "2 items selected");
-    assert_eq!(
-        value(&pane.shown_properties(), "Size"),
-        Some(ox_core::format::short_size(2000).as_str())
+    assert!(pane.shows_hint(), "Windows' hint");
+    assert_eq!(pane.hint_text(), "Select a single file to get more information.");
+    assert!(!pane.shows_properties(), "no Details rows");
+    assert!(pane.shows_properties_button(), "Properties of the selection");
+    model.select_positions(&positions[..1]);
+    assert!(
+        !pane.shows_hint() && pane.shows_properties(),
+        "one file has its rows"
     );
     model.select_positions(&[]);
     assert!(pane.shown_name().ends_with(" items)"));
@@ -159,7 +166,7 @@ fn nothing_selected_shows_windows_hint_alone() {
     assert_eq!(
         pane.hint_text(),
         "Select a single file to get more information.",
-        "Windows' hint without its cloud content, which the app has none of"
+        "Windows' hint without its cloud wording: there is no cloud here"
     );
     assert!(!pane.shows_properties(), "no Details rows");
     assert!(!pane.shows_properties_button() && !pane.shows_share());

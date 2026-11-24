@@ -6,7 +6,10 @@
 //! dimensions and a recording's length join the Properties rows
 //! (PROP-013).
 //!
-//! Everything is read off the main thread, and a preview that arrives
+//! Everything is read off the main thread, once the selection has rested
+//! for [`MEDIA_SETTLE`], so arrowing through a folder of photos decodes
+//! only the one it stops on; a new selection stops the wait and cancels
+//! the decoding for the one before, and a preview that still arrives
 //! after the selection changed is dropped. Pictures are decoded through
 //! [`picture_guard`]: one over its pixel limit, damaged, slow or
 //! animated keeps the type icon (an animation shows its first frame), as
@@ -25,6 +28,23 @@ use super::DetailsPane;
 use crate::folder_view::cells::CUSTOM_ICON;
 use crate::icons::Art;
 use crate::picture_guard::{self, Limits, Refusal};
+
+/// How long the selection rests before its content preview is read: as
+/// long as the Preview pane's pages wait, short enough not to be seen.
+const MEDIA_SETTLE: std::time::Duration = std::time::Duration::from_millis(90);
+
+/// A picture the pane decodes for its preview area: the image at `path`,
+/// else the cached thumbnail of the item at `uri`, else the picture at
+/// `fallback`; an image's own size joins the rows with
+/// `names_dimensions`, and `cancellation` stops the decoding once the
+/// selection moved on.
+struct PictureRequest {
+    path: Option<PathBuf>,
+    uri: Option<String>,
+    fallback: Option<PathBuf>,
+    names_dimensions: bool,
+    cancellation: gio::Cancellable,
+}
 
 /// Images larger than this are not decoded for the pane.
 const MAX_IMAGE_BYTES: u64 = 64 * 1024 * 1024;
@@ -56,28 +76,59 @@ impl DetailsPane {
         let generation = imp.media_generation.get().wrapping_add(1);
         imp.media_generation.set(generation);
         // The selection changed: the player of the last recording is
-        // stopped and dropped before anything else is shown.
+        // stopped and dropped before anything else is shown, and what was
+        // being read for it stops.
+        self.stop_media_reading();
         self.stop_player();
         self.set_preview_widget(None);
-        let Some(media) = media else {
+        let Some(media) = media.cloned() else {
             return;
+        };
+        // Read only once the selection rests, as the Preview pane's pages
+        // are: arrowing through a folder of large photos decodes only the
+        // one it stops on, not each one passed on the way.
+        let cancellation = gio::Cancellable::new();
+        imp.media_cancellation.replace(Some(cancellation.clone()));
+        let pane = self.downgrade();
+        let timer = glib::timeout_add_local_once(MEDIA_SETTLE, move || {
+            let Some(pane) = pane.upgrade() else {
+                return;
+            };
+            pane.imp().media_timer.replace(None);
+            if pane.imp().media_generation.get() == generation {
+                pane.read_media(generation, &media, &cancellation);
+            }
+        });
+        imp.media_timer.replace(Some(timer));
+    }
+
+    /// Reads `media`, the content preview of `generation`'s selection.
+    fn read_media(&self, generation: u64, media: &MediaPreview, cancellation: &gio::Cancellable) {
+        #[cfg(test)]
+        self.imp().media_reads.set(self.imp().media_reads.get() + 1);
+        let picture = |path, uri, fallback, names_dimensions| PictureRequest {
+            path,
+            uri,
+            fallback,
+            names_dimensions,
+            cancellation: cancellation.clone(),
         };
         match media {
             MediaPreview::Image { path, size } if *size <= MAX_IMAGE_BYTES => {
-                self.load_picture(generation, Some(path.clone()), None, None, true);
+                self.load_picture(generation, picture(Some(path.clone()), None, None, true));
             }
             // Too many bytes to decode for the pane: the thumbnail the
             // views made of it, when there is one, as for a document.
             MediaPreview::Image { path, .. } => {
                 let uri = gio::File::for_path(path).uri().to_string();
-                self.load_picture(generation, None, Some(uri), None, false);
+                self.load_picture(generation, picture(None, Some(uri), None, false));
             }
             MediaPreview::Document { uri, chosen } => {
                 let chosen = chosen.as_deref().and_then(local_picture_path);
-                self.load_picture(generation, None, Some(uri.clone()), chosen, false);
+                self.load_picture(generation, picture(None, Some(uri.clone()), chosen, false));
             }
             MediaPreview::Folder { uri, chosen } => {
-                self.load_folder_picture(generation, uri.clone(), chosen.clone());
+                self.load_folder_picture(generation, uri.clone(), chosen.clone(), cancellation.clone());
             }
             MediaPreview::Recording {
                 uri,
@@ -86,6 +137,35 @@ impl DetailsPane {
                 art,
             } => self.load_player(generation, uri.clone(), *local_only, *is_video, *art),
         }
+    }
+
+    /// Stops the wait for the selection to rest and the read of the
+    /// content preview shown.
+    pub(super) fn stop_media_reading(&self) {
+        let imp = self.imp();
+        if let Some(timer) = imp.media_timer.take() {
+            timer.remove();
+        }
+        if let Some(cancellation) = imp.media_cancellation.take() {
+            cancellation.cancel();
+        }
+    }
+
+    /// Whether the pane shows the content preview of the item at `uri`,
+    /// for tests.
+    #[cfg(test)]
+    pub(in crate::window) fn shows_media_of(&self, uri: &str) -> bool {
+        self.imp()
+            .shown_media
+            .borrow()
+            .as_ref()
+            .is_some_and(|media| media.is_of(uri))
+    }
+
+    /// How many content previews the pane has read, for tests.
+    #[cfg(test)]
+    pub(in crate::window) fn media_reads(&self) -> u32 {
+        self.imp().media_reads.get()
     }
 
     /// Puts `widget` in the preview area in place of the art, or the art
@@ -107,7 +187,13 @@ impl DetailsPane {
     /// shows it, or else the picture `chosen` for folders in File icons
     /// (LOOK-029), if the selection is still `generation`'s; the folder
     /// keeps its art without either.
-    fn load_folder_picture(&self, generation: u64, uri: String, chosen: Option<String>) {
+    fn load_folder_picture(
+        &self,
+        generation: u64,
+        uri: String,
+        chosen: Option<String>,
+        cancellation: gio::Cancellable,
+    ) {
         let pane = self.downgrade();
         glib::spawn_future_local(async move {
             let picture = folder_picture(&uri).await;
@@ -118,7 +204,16 @@ impl DetailsPane {
                 .and_then(|picture| local_picture_path(&picture))
                 .or_else(|| chosen.as_deref().and_then(local_picture_path));
             if pane.imp().media_generation.get() == generation && path.is_some() {
-                pane.load_picture(generation, path, None, None, false);
+                pane.load_picture(
+                    generation,
+                    PictureRequest {
+                        path,
+                        uri: None,
+                        fallback: None,
+                        names_dimensions: false,
+                        cancellation,
+                    },
+                );
             }
         });
     }
@@ -136,19 +231,17 @@ impl DetailsPane {
         true
     }
 
-    /// Decodes the image at `path`, or the cached thumbnail of the item at
-    /// `uri` or else the picture at `fallback`, scaled to the preview
-    /// area, and shows it if the selection is still `generation`'s; an
-    /// image's own size, from its header, joins the rows when
-    /// `names_dimensions`.
-    fn load_picture(
-        &self,
-        generation: u64,
-        path: Option<PathBuf>,
-        uri: Option<String>,
-        fallback: Option<PathBuf>,
-        names_dimensions: bool,
-    ) {
+    /// Decodes `request`'s picture scaled to the preview area, and shows
+    /// it if the selection is still `generation`'s; an image's own size,
+    /// from its header, joins the rows when the request names it.
+    fn load_picture(&self, generation: u64, request: PictureRequest) {
+        let PictureRequest {
+            path,
+            uri,
+            fallback,
+            names_dimensions,
+            cancellation,
+        } = request;
         let pane = self.downgrade();
         let is_image = names_dimensions;
         let scale = self.scale_factor().max(1);
@@ -166,7 +259,7 @@ impl DetailsPane {
                 };
                 let preview = (PREVIEW_WIDTH * scale, PREVIEW_HEIGHT * scale);
                 let file = gio::File::for_path(&path);
-                match picture_guard::decode_to_fit(&file, preview.0, preview.1, limits, None) {
+                match picture_guard::decode_to_fit(&file, preview.0, preview.1, limits, Some(&cancellation)) {
                     Ok(picture) => Some((
                         Some(gdk::Texture::for_pixbuf(&picture.pixbuf)),
                         (picture.width, picture.height),
@@ -183,7 +276,7 @@ impl DetailsPane {
                                 preview.0,
                                 preview.1,
                                 Limits::THUMBNAIL_FILE,
-                                None,
+                                Some(&cancellation),
                             )
                             .ok()
                         });

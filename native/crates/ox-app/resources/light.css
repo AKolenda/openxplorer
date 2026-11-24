@@ -44,6 +44,8 @@
 @define-color ox_hover #f0f0f0;                    /* C17 */
 @define-color ox_pressed #f3f3f3;                  /* C18 */
 @define-color ox_selected #e8f1fb;                 /* C19 */
+@define-color ox_view_toggle_fill #e0e0e0;         /* the status bar's current view; dark measured from ref-01, light not (VM check) */
+@define-color ox_view_toggle_stroke #c4c4c4;
 @define-color ox_selected_edge alpha(#80b4e0, .16);        /* C21 */
 @define-color ox_focus_outer @ox_accent;           /* C29 visible: alpha(black, .89) */
 /* The file list and the navigation pane, as Windows 11 File Explorer draws

@@ -261,6 +261,13 @@ impl BrowserWindow {
         } else {
             Vec::new()
         };
+        // Only the folder's own picture, with nothing selected, needs the
+        // standard folders.
+        let known_folders = if selection.is_empty() {
+            self.context().known_folders()
+        } else {
+            Vec::new()
+        };
         let locations = self.imp().locations.borrow();
         let mut content = details_pane::pane_content(&PaneFacts {
             selection,
@@ -268,6 +275,7 @@ impl BrowserWindow {
             folder_item_count,
             locations: &locations,
             network: &network,
+            known_folders: &known_folders,
             condensed_dates: pane.options().condensed_dates,
             preview_rules: PreviewRules {
                 // A recent item or a search result is judged by its own

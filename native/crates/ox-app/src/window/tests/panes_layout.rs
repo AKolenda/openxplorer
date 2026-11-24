@@ -10,7 +10,7 @@ use super::icons::{pixel_rows, Pixel};
 use crate::folder_view::column_widths;
 use crate::folder_view::sorting::SortColumn;
 use crate::test_support::harness::{
-    descendants, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
+    descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow, ThemeGuard,
 };
 use crate::window::widget_tree::children;
 
@@ -411,11 +411,22 @@ fn large_text_widens_the_details_pane_and_keeps_names_and_values_whole() {
     assert_eq!(count, 1, "{text:?} on one line");
 }
 
+/// The view buttons at the status bar's right end, as Windows 11 draws
+/// them (reference ref-01, dark, measured): 24 pixels square, side by
+/// side with no gap, 4 pixels from the window's right edge, flat and
+/// borderless but for the current view's, which sits on a square gray
+/// box (#4d4d4d inside a 1-pixel #636363 edge) with its glyph in the
+/// text color, not the accent.
+///
 /// parity: VIEW-006
 #[gtk::test]
-fn the_status_bar_view_buttons_are_24_pixels_3_apart_with_the_view_highlighted() {
+fn the_status_bar_view_buttons_are_flat_side_by_side_with_the_view_on_a_gray_square() {
+    let _theme = crate::test_support::harness::ThemeGuard::keep();
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
+    test.activate("theme", Some("dark"));
+    wait_for(super::icons::TRANSITION_TIME);
+    wait_for_frames(&test.window, 2);
     // "Check for updates" shows only while an update needs the user.
     let status_buttons: Vec<gtk::Button> = descendants::<gtk::Button>(test.window.status_bar())
         .into_iter()
@@ -432,9 +443,37 @@ fn the_status_bar_view_buttons_are_24_pixels_3_apart_with_the_view_highlighted()
         "{placed:?}"
     );
     for pair in placed.windows(2) {
-        assert_eq!(pair[1].x - pair[0].right(), 3, "3 pixels apart");
+        assert_eq!(pair[1].x - pair[0].right(), 0, "side by side: {placed:?}");
     }
+    let last = placed.last().expect("the view buttons");
+    assert_eq!(
+        bounds(&test, test.window.status_bar()).right() - last.right(),
+        4,
+        "4 pixels from the edge"
+    );
     assert_eq!(test.window.status_bar().active_view_buttons(), ["Details view"]);
+    let colour = super::icons::painted_colour;
+    let same = super::icons::assert_same_colour;
+    let css = super::icons::css_colour;
+    let (details, icons) = (&status_buttons[0], &status_buttons[1]);
+    same(colour(details, 0, 0), css("#636363"), "the gray square's edge");
+    same(colour(details, 2, 2), css("#4d4d4d"), "the gray square");
+    // GTK crops a drawn widget to what it paints: the flat button paints
+    // only its 16-pixel glyph.
+    let flat = super::icons::painted(icons);
+    assert!(
+        flat.width() <= 16 && flat.height() <= 16,
+        "the other button is flat"
+    );
+    let glyph = descendants::<gtk::Image>(details)
+        .into_iter()
+        .next()
+        .expect("a glyph");
+    same(
+        super::icons::painted_ink(&glyph),
+        css("#f1f1f1"),
+        "the glyph in the text color",
+    );
     test.activate("view", Some("large"));
     wait_for_frames(&test.window, 2);
     assert_eq!(test.window.status_bar().active_view_buttons(), ["Large icons"]);
