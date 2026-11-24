@@ -16,7 +16,9 @@ use std::rc::Rc;
 use gtk::glib;
 use gtk::subclass::prelude::*;
 use ox_core::entry::Entry;
-use ox_core::location::{is_archive_location, is_smb_share_root, parent_location, scheme, LocationContext};
+use ox_core::location::{
+    is_archive_location, is_cloud_location, is_smb_share_root, parent_location, scheme, LocationContext,
+};
 use ox_core::search::display_path;
 
 use crate::folder_view::filter::Visibility;
@@ -56,8 +58,9 @@ pub(crate) struct AddressFacts {
     /// trashed.
     pub smb_share_root: bool,
     /// Read-only by its path alone: a snapshot component (`.snapshot`,
-    /// `@GMT-…`) or inside a ZIP. A configured snapshot root is the
-    /// window's to check, as it can change while the item is listed.
+    /// `@GMT-…`), inside a ZIP or on Google Drive or `OneDrive` (DEV-013).
+    /// A configured snapshot root is the window's to check, as it can
+    /// change while the item is listed.
     pub read_only_by_path: bool,
     /// A row of Recent files.
     pub recent_row: bool,
@@ -72,7 +75,8 @@ impl AddressFacts {
             smb_share_root: is_smb_share_root(uri),
             // With no snapshot roots configured, only the path decides.
             read_only_by_path: LocationContext::default().is_snapshot_location(uri)
-                || is_archive_location(uri),
+                || is_archive_location(uri)
+                || is_cloud_location(uri),
             recent_row: scheme(uri).as_deref() == Some("recent"),
         }
     }

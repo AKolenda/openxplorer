@@ -110,7 +110,11 @@ pub(super) fn activation_for(entry: &Entry) -> Activation {
     ) {
         return Activation::Refused(ox_core::i18n::gettext_static(NOT_OPENABLE));
     }
-    if integration::Activation::for_entry(entry) == Ok(integration::Activation::BrowseArchive) {
+    // A Google Docs, Sheets or Slides file opens in the browser whatever
+    // its title ends in (DEV-013).
+    if entry.meta.web_target.is_none()
+        && integration::Activation::for_entry(entry) == Ok(integration::Activation::BrowseArchive)
+    {
         return Activation::Archive;
     }
     Activation::File
@@ -387,6 +391,11 @@ impl BrowserWindow {
             Activation::Archive => Ok(Resolved::Archive(Box::new(fresh))),
             Activation::Refused(message) => Err(message.to_owned()),
             Activation::File => {
+                // A Google Docs, Sheets or Slides file lives on the web
+                // only; the browser opens it, as GNOME Files does (DEV-013).
+                if let Some(url) = fresh.meta.web_target.clone() {
+                    return self.follow_link(LinkTarget::Web(url)).await;
+                }
                 if let Some(target) = desktop_link(&fresh) {
                     return self.follow_link(target?).await;
                 }
@@ -480,8 +489,13 @@ impl BrowserWindow {
     }
 
     /// Opens a file in its default application and records it among the
-    /// recent files; a failure is shown in a dialog.
+    /// recent files, or a Google Docs, Sheets or Slides file in the browser
+    /// (DEV-013); a failure is shown in a dialog.
     pub(super) fn open_file(&self, entry: &Entry) {
+        if let Some(url) = &entry.meta.web_target {
+            self.follow_link_in_background(entry, Ok(LinkTarget::Web(url.clone())));
+            return;
+        }
         let entry = entry.clone();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]

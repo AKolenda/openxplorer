@@ -30,6 +30,12 @@ const DEVICE_SCHEMES: [&str; 3] = ["mtp", "gphoto2", "afc"];
 /// canonicalised to these by [`canonical_remote_scheme`].
 pub const REMOTE_SCHEMES: [&str; 6] = ["sftp", "ftp", "ftps", "dav", "davs", "nfs"];
 
+/// The `GVfs` schemes of online-account drives (DEV-013): Google Drive
+/// and Microsoft `OneDrive`, which GNOME Online Accounts offers as
+/// `google-drive://alice@example.com/` and `onedrive://alice@example.com/`.
+/// Their authority is the account, which the address cannot do without.
+pub const CLOUD_SCHEMES: [&str; 2] = ["google-drive", "onedrive"];
+
 /// The canonical scheme of a remote-protocol alias: `ssh` is `sftp`,
 /// `webdav` is `dav` and `webdavs` is `davs`, as Dolphin and Files accept
 /// them. Other schemes are returned unchanged.
@@ -55,6 +61,8 @@ pub enum LocationKind {
     /// `sftp:`, `ftp:`, `ftps:`, `dav:`, `davs:` or `nfs:`: a server
     /// reached over another network protocol (NET-029).
     Remote,
+    /// `google-drive:` or `onedrive:`: an online-account drive (DEV-013).
+    Cloud,
     /// Any other scheme, or a plain path without one.
     Other,
 }
@@ -67,6 +75,7 @@ impl LocationKind {
             "smb" => Self::Smb,
             _ if DEVICE_SCHEMES.contains(&scheme) => Self::Device,
             _ if REMOTE_SCHEMES.contains(&canonical_remote_scheme(scheme)) => Self::Remote,
+            _ if CLOUD_SCHEMES.contains(&scheme) => Self::Cloud,
             _ => Self::Other,
         }
     }
@@ -153,6 +162,11 @@ impl LocationParts {
     /// True for SFTP, FTP, WebDAV and NFS locations.
     pub(crate) fn is_remote(&self) -> bool {
         self.kind() == LocationKind::Remote
+    }
+
+    /// True for online-account drives: `google-drive:` and `onedrive:`.
+    pub(crate) fn is_cloud(&self) -> bool {
+        self.kind() == LocationKind::Cloud
     }
 
     /// True for phones, cameras and iOS devices: `mtp:`, `gphoto2:` and

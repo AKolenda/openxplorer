@@ -152,7 +152,7 @@ fn is_remote_item(entry: &Entry) -> bool {
         .any(|uri| {
             matches!(
                 location_kind(uri),
-                LocationKind::Smb | LocationKind::Remote | LocationKind::Device
+                LocationKind::Smb | LocationKind::Remote | LocationKind::Cloud | LocationKind::Device
             )
         })
 }

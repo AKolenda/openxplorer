@@ -298,7 +298,7 @@ impl BrowserWindow {
     pub(super) fn zip_extractor(&self) -> ZipExtractor {
         let factory: NodeFactory = Arc::new(|uri: &str| Ok(Box::new(GioNode::new(uri)) as Box<dyn Node>));
         ZipExtractor::new(Arc::new(GioArchiveOpener), factory, Arc::new(GioExtractionOutput))
-            .with_write_guard(self.context().previous_versions().write_guard())
+            .with_write_guard(self.context().write_guard())
     }
 
     /// Extract here: into a new folder beside the archive, named after it,
@@ -474,7 +474,7 @@ impl BrowserWindow {
                 archive_name,
             };
             let compressor = ZipCompressor::new()
-                .with_write_guard(self.context().previous_versions().write_guard())
+                .with_write_guard(self.context().write_guard())
                 .with_progress(self.progress_reporter(cancel));
             self.describe_compression(cancel, &request);
             match compressor.compress_in_background(request, cancel.clone()).await {
@@ -518,7 +518,8 @@ fn archive_target(entry: &Entry) -> Option<ArchiveTarget> {
 }
 
 /// True for a location the user may extract into (`writableLocation`):
-/// not a page, a server listing or a previous version.
+/// not a page, a server listing, a previous version or a cloud drive,
+/// which is read-only for now (DEV-013).
 fn is_writable_location(uri: &str, snapshot_roots: &[String]) -> bool {
     if is_archive_location(uri) {
         // A ZIP opened like a folder is read-only (ARC-026).
@@ -526,5 +527,5 @@ fn is_writable_location(uri: &str, snapshot_roots: &[String]) -> bool {
     }
     let is_page = Page::from_uri(uri).is_some();
     let is_previous_version = snapshot_location(uri, snapshot_roots).is_some();
-    !is_page && !is_smb_server(uri) && !is_previous_version
+    !is_page && !is_smb_server(uri) && !is_previous_version && !ox_core::location::is_cloud_location(uri)
 }

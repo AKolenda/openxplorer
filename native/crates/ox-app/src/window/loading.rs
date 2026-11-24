@@ -46,7 +46,8 @@ use gtk::{gio, glib};
 use ox_core::entry::{Entry, EntryError};
 use ox_core::integration::FOLDER_CONTENT_TYPE;
 use ox_core::location::{
-    is_archive_location, is_smb_location, parent_location, ArchiveLocation, GALLERY_URI, RECENT_LOCATIONS_URI,
+    is_archive_location, is_smb_location, parent_location, remember_cloud_name, unnamed_cloud_folders,
+    ArchiveLocation, GALLERY_URI, RECENT_LOCATIONS_URI,
 };
 use ox_core::search::HiddenItems;
 
@@ -487,6 +488,9 @@ impl BrowserWindow {
             if run.mode == LoadMode::Navigate && self.imp().session.borrow().is_active(id) {
                 self.context().search_cache().folder_opened(&run.uri);
             }
+            if run.mode == LoadMode::Navigate {
+                self.name_cloud_folders(&run.uri);
+            }
         }
         let end = self.imp().session.borrow_mut().end_listing(id);
         if end == ListingEnd::TabClosed {
@@ -515,6 +519,34 @@ impl BrowserWindow {
         if end == ListingEnd::ListAgain {
             self.folder_changed(id);
         }
+    }
+
+    /// Looks up the names of the Google Drive folders on the way to `uri`
+    /// that no listing gave, as when a tab is restored or an address is
+    /// typed, and shows them in the titles and breadcrumbs (DEV-013).
+    fn name_cloud_folders(&self, uri: &str) {
+        let unnamed = unnamed_cloud_folders(uri);
+        if unnamed.is_empty() {
+            return;
+        }
+        let window = self.downgrade();
+        glib::spawn_future_local(async move {
+            for folder in unnamed {
+                let info = gio::File::for_uri(&folder)
+                    .query_info_future(
+                        "standard::display-name",
+                        gio::FileQueryInfoFlags::NONE,
+                        glib::Priority::DEFAULT_IDLE,
+                    )
+                    .await;
+                if let Ok(info) = info {
+                    remember_cloud_name(&folder, &info.display_name());
+                }
+            }
+            if let Some(window) = window.upgrade() {
+                window.render_location();
+            }
+        });
     }
 
     /// Ends a listing of Network: `problem` says why discovery could not

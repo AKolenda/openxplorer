@@ -62,7 +62,9 @@ impl Removal {
     pub(crate) fn label(self, kind: VolumeKind) -> &'static str {
         match (self, kind) {
             (Removal::Disconnect, VolumeKind::Device) => ox_core::i18n::gettext_static("Disconnect device"),
-            (Removal::Disconnect, VolumeKind::Drive) => ox_core::i18n::gettext_static("Disconnect"),
+            (Removal::Disconnect, VolumeKind::Drive | VolumeKind::Cloud) => {
+                ox_core::i18n::gettext_static("Disconnect")
+            }
             (Removal::Eject, _) => ox_core::i18n::gettext_static("Eject"),
             (Removal::SafelyRemove, _) => ox_core::i18n::gettext_static("Safely remove"),
         }

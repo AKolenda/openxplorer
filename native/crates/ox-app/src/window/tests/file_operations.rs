@@ -1060,3 +1060,19 @@ fn running_operations_show_their_progress_on_the_dock_icon() {
         *updates.borrow() == [true, false, true, false]
     });
 }
+
+/// Google Drive and `OneDrive` stay read-only for now: every file and
+/// archive operation asks the shared write guard, which refuses them, so
+/// moving, renaming or deleting items there, or writing into a drive, is
+/// refused however it was started. Local folders stay writable.
+///
+/// parity: DEV-013
+#[gtk::test]
+fn the_write_guard_keeps_cloud_drives_read_only() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let guard = test.window.context().write_guard();
+    assert!(guard("google-drive://alice@example.com/0AIbcd/1x9Kq").is_err());
+    assert!(guard("onedrive://alice@example.com/Documents/Q3%20report.xlsx").is_err());
+    assert!(guard(&fixture.uri()).is_ok());
+}

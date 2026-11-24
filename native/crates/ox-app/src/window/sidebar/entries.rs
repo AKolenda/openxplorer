@@ -195,6 +195,7 @@ fn drive_entry(row: &VolumeRow, locations: &LocationContext) -> SidebarEntry {
     let glyph = match row.kind {
         VolumeKind::Device => Icon::Phone,
         VolumeKind::Drive => Icon::HardDrive,
+        VolumeKind::Cloud => Icon::Cloud,
     };
     let (target, tooltip) = match &row.state {
         VolumeState::Mounted { uri, .. } => {

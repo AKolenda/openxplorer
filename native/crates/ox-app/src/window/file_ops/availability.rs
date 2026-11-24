@@ -28,7 +28,7 @@
 //! restored or deleted.
 
 use gtk::subclass::prelude::*;
-use ox_core::location::{is_archive_location, same_location, LocationContext, TRASH_URI};
+use ox_core::location::{is_archive_location, is_cloud_location, same_location, LocationContext, TRASH_URI};
 use ox_core::ops::JournalDirection;
 
 use crate::folder_view::item::FileItem;
@@ -158,6 +158,8 @@ pub(crate) struct FolderFacts {
     pub(crate) has_items: bool,
     /// It is inside a ZIP opened like a folder, read-only (ARC-026).
     pub(crate) is_zip: bool,
+    /// It is on Google Drive or `OneDrive`, read-only for now (DEV-013).
+    pub(crate) is_cloud: bool,
 }
 
 /// Everything the rules read.
@@ -260,6 +262,9 @@ impl CommandFacts {
             FileCommand::New | FileCommand::Paste if folder.is_zip => {
                 ox_core::i18n::gettext_static("An archive is read-only. Extract it to add items.")
             }
+            FileCommand::New | FileCommand::Paste if folder.is_cloud => ox_core::i18n::gettext_static(
+                "Google Drive and OneDrive are read-only for now. Copy items to this PC to change them.",
+            ),
             FileCommand::New => ox_core::i18n::gettext_static("This folder is read-only."),
             FileCommand::Paste if !selection.has_inoperable => {
                 ox_core::i18n::gettext_static("This folder is read-only.")
@@ -287,6 +292,9 @@ impl CommandFacts {
             }
             _ if selection.has_read_only && folder.is_zip => ox_core::i18n::gettext_static(
                 "Items in an archive are read-only. Copy them out or use Extract all.",
+            ),
+            _ if selection.has_read_only && folder.is_cloud => ox_core::i18n::gettext_static(
+                "Google Drive and OneDrive are read-only for now. Copy items to this PC to change them.",
             ),
             _ if selection.has_read_only => ox_core::i18n::gettext_static("A previous version is read-only."),
             _ => ox_core::i18n::gettext_static("Rename one item at a time."),
@@ -384,6 +392,7 @@ impl BrowserWindow {
             has_items: model.n_items() > 0
                 || (is_recycle_bin && self.is_searching() && self.imp().trash_items.get() > 0),
             is_zip: is_archive_location(&folder_uri),
+            is_cloud: is_cloud_location(&folder_uri),
         };
         let operations = self.imp().file_operations.borrow();
         let context = self.context();
