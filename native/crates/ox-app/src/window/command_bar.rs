@@ -627,6 +627,7 @@ impl CommandBar {
     fn finish_appearance_button(&self) {
         let appearance_menu = MenuPopover::new(appearance_items().to_vec());
         self.imp().appearance_button.set_popover(Some(&appearance_menu));
+        crate::accessible_names::describe_menu_button(&self.imp().appearance_button, None);
         self.show_appearance_glyph(Appearance::Light);
     }
 
@@ -654,8 +655,9 @@ impl CommandBar {
     fn show_appearance_glyph(&self, appearance: Appearance) {
         let imp = self.imp();
         icons::set_icon(&imp.appearance_glyph, appearance.icon(), TEXT_COMMAND_GLYPH);
-        imp.appearance_label
-            .set_text(&ox_core::i18n::gettext(appearance.label()));
+        let label = ox_core::i18n::gettext(appearance.label());
+        imp.appearance_label.set_text(&label);
+        crate::accessible_names::name_menu_button(&imp.appearance_button, &label);
     }
 
     /// Shows the drawn appearance on the theme button: a sun and "Light"
@@ -1081,12 +1083,14 @@ fn text_menu_content(label: &str, glyph: Icon) -> gtk::Box {
 /// A command with a label that opens `entries`; `css_class` names it for
 /// the stylesheet and the tests.
 fn text_menu_button(label: &str, glyph: Icon, css_class: &str, entries: Vec<MenuEntry>) -> gtk::MenuButton {
-    gtk::MenuButton::builder()
+    let button = gtk::MenuButton::builder()
         .child(&text_menu_content(label, glyph))
         .popover(&MenuPopover::new(entries))
         .valign(gtk::Align::Center)
         .css_classes(["command", "text-command", css_class])
-        .build()
+        .build();
+    crate::accessible_names::describe_menu_button(&button, Some(label));
+    button
 }
 
 /// A command with a glyph and `label` that runs `action`; `css_class`

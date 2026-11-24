@@ -102,6 +102,7 @@ mod renaming_several;
 mod resize_edges;
 mod restore_conflicts;
 mod right_drag;
+mod screen_reader;
 mod search;
 mod search_history;
 mod search_layout;

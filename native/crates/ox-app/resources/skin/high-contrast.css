@@ -1,15 +1,25 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
-/* Higher contrast, loaded only while GNOME's accessibility setting asks
-   for it (src/theme/contrast.rs): the `@media (prefers-contrast: more)`
+/* Higher contrast, loaded only while the desktop asks for it (GNOME's
+   setting, the portal's contrast or a HighContrast GTK theme,
+   src/theme/contrast.rs): the `@media (prefers-contrast: more)`
    rules of style.css and ui-spec.md §4.13. The current location in the
    sidebar gets an accent outline, drop targets draw 3px instead of 2px
    (`.quick-access.pin-drop-active{border-width:2px}`), keyboard focus
    inside menus draws 2px instead of 1px, the focused row's or tile's
-   outline is 2px in the text colour, and the two-tone ring of rows,
+   outline is 2px in the text colour, a selected item is ringed 1px in
+   the text color, and the two-tone ring of rows,
    tiles and the navigation pane is drawn opaque in the text and
    background colours. */
 
 .sidebar list.places > row:selected { outline: 1px solid @ox_accent; outline-offset: -1px; }
+/* A selected item is ringed 1px in the text color: Windows 11's
+   selection fill alone is #3d3d3d on #202020 in dark (1.5 to 1) and
+   #cce8ff on white in light (1.2 to 1), close to the fill under the
+   pointer. The keyboard's ring below draws over it on the focused item. */
+columnview.files > listview > row:selected,
+gridview.files > child:selected,
+gridview.files.tiles > child:selected > .item-cell:not(.group-slot),
+gridview.files.content > child:selected > .item-cell:not(.group-slot) { box-shadow: inset 0 0 0 1px @ox_text; }
 popover.ox-menu list.address-suggestions > row:selected { outline: 1px solid @ox_accent; outline-offset: -1px; }
 .sidebar list.places > row.file-drop-active { box-shadow: inset 0 0 0 3px @ox_accent; }
 .folder-tree listview > row.file-drop-active { box-shadow: inset 0 0 0 3px @ox_accent; }

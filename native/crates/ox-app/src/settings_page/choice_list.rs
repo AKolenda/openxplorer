@@ -166,6 +166,7 @@ impl ChoiceList {
             .valign(gtk::Align::Center)
             .css_classes(["choice-button"])
             .build();
+        crate::accessible_names::describe_menu_button(&button, None);
         self.imp().button.set(Some(&button));
         button
     }
@@ -207,7 +208,18 @@ impl ChoiceList {
             label.set_text(&chosen);
         }
         if let Some(button) = self.imp().button.upgrade() {
-            button.update_property(&[gtk::accessible::Property::Description(&chosen)]);
+            // The toggle inside takes the keyboard, so it says the choice
+            // too. Named after the choice unless a row's title names it,
+            // never after the open list inside the button.
+            let toggle = crate::accessible_names::menu_button_toggle(&button);
+            let named = [Some(button.upcast()), toggle.map(Cast::upcast)];
+            for widget in named.iter().flatten() {
+                let widget: &gtk::Widget = widget;
+                widget.update_property(&[
+                    gtk::accessible::Property::Label(&chosen),
+                    gtk::accessible::Property::Description(&chosen),
+                ]);
+            }
         }
         let selected = self.selected();
         let mut position = 0;

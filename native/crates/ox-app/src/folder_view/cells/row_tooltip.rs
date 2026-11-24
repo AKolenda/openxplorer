@@ -75,6 +75,23 @@ fn infotip(item: &FileItem) -> Option<String> {
     (!lines.is_empty()).then(|| lines.join("\n"))
 }
 
+/// What a screen reader hears after a tile's name: its type, then its
+/// infotip ("Type: Text Document, Size: 1 KB, Date modified: ..."). A
+/// folder's infotip names no type, so "Type: File folder" comes first.
+pub(crate) fn spoken_infotip(item: &FileItem) -> String {
+    let entry = item.entry();
+    let mut parts = Vec::new();
+    if entry.is_dir && !entry.type_label.is_empty() {
+        parts.push(format_message("Type: {type}", &[("type", &entry.type_label)]));
+    }
+    parts.extend(
+        infotip(item)
+            .into_iter()
+            .flat_map(|tip| tip.lines().map(str::to_owned).collect::<Vec<_>>()),
+    );
+    parts.join(", ")
+}
+
 /// A cell's own tooltip for `item`, which takes the place of the row's,
 /// or `None` to show the row's.
 pub(crate) type CellTooltip = fn(&FileItem) -> Option<String>;

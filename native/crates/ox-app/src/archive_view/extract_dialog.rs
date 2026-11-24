@@ -191,9 +191,7 @@ fn info_button(frame: &DialogFrame, open_externally: &Rc<dyn Fn()>) -> (gtk::Men
         .valign(gtk::Align::Center)
         .css_classes(["extract-info", ButtonStyle::Bordered.css_class()])
         .build();
-    button.update_property(&[gtk::accessible::Property::Label(ox_core::i18n::gettext_static(
-        INFO_LABEL,
-    ))]);
+    crate::accessible_names::describe_menu_button(&button, Some(ox_core::i18n::gettext_static(INFO_LABEL)));
     (button, summary)
 }
 

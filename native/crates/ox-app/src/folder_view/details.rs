@@ -556,6 +556,15 @@ impl DetailsView {
     fn describe_rows(&self, model: &FolderModel) {
         let column_view = self.column_view();
         cells::label_view(column_view.upcast_ref());
+        // Its list of rows takes the keyboard while there is no row, and a
+        // screen reader reads it on its own: it is named the same.
+        let rows = std::iter::successors(column_view.first_child(), WidgetExt::next_sibling)
+            .find(ObjectExt::is::<gtk::ListView>);
+        if let Some(rows) = rows {
+            rows.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
+                cells::ITEMS_VIEW_NAME,
+            ))]);
+        }
         let rows = gtk::SignalListItemFactory::new();
         // A heading row's name follows its heading's title: the grouped
         // model retitles a heading in place when the groups change, and GTK
@@ -563,6 +572,7 @@ impl DetailsView {
         let titles: HeadingTitles = Rc::default();
         let unbind_titles = Rc::clone(&titles);
         let owners = Rc::clone(&self.cells().owners);
+        let view = self.downgrade();
         rows.connect_bind(move |_, object| {
             if let Some(row) = object.downcast_ref::<gtk::ColumnViewRow>() {
                 forget_heading_title(&titles, row);
@@ -571,6 +581,9 @@ impl DetailsView {
                     // Named as the Name column shows it, without a hidden
                     // extension.
                     owners.name_detail_row(row, item);
+                    if let Some(view) = view.upgrade() {
+                        row.set_accessible_description(&view.row_description(item));
+                    }
                     row.set_selectable(true);
                     row.set_activatable(true);
                 } else if let Some(heading) = item.and_downcast_ref::<GroupSlot>() {
@@ -620,6 +633,34 @@ impl DetailsView {
     /// The adjustment of the vertical scroll position.
     pub(crate) fn vadjustment(&self) -> gtk::Adjustment {
         self.imp().scroller.vadjustment()
+    }
+
+    /// What a screen reader hears after an item's name: the other columns
+    /// shown, in the order shown, each after its title ("Date modified:
+    /// 9/14/2026 09:30, Type: Text Document, Size: 1 KB"), leaving out
+    /// empty cells. Orca heard only the name, while the list shows its
+    /// type, size and date beside it.
+    pub(crate) fn row_description(&self, item: &FileItem) -> String {
+        let dates = self.date_style();
+        let counts = self.counts_items();
+        self.column_order()
+            .into_iter()
+            .filter(|column| *column != SortColumn::Name)
+            .filter_map(|column| {
+                let view_column = self.column(column).filter(gtk::ColumnViewColumn::is_visible)?;
+                let text = shown_cell_text(column, item, dates, counts);
+                let text = text.trim();
+                if text.is_empty() {
+                    return None;
+                }
+                let title = view_column.title().unwrap_or_default();
+                Some(ox_core::i18n::format_message(
+                    "{column}: {value}",
+                    &[("column", title.as_str()), ("value", text)],
+                ))
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     /// What `column` shows for the first `limit` items the view lists.

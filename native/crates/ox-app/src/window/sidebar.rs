@@ -166,10 +166,14 @@ impl Sidebar {
         ))]);
         // Its own class: the sidebar's row rules must not reach the rows
         // of its right-click menu, which the file list's menu rules draw.
+        // A tree, as Narrator reads Windows 11's "Navigation pane tree":
+        // This PC and Network hold their drives and computers a level
+        // down, and expand and collapse.
         let list = gtk::ListBox::builder()
             .selection_mode(gtk::SelectionMode::Single)
             .activate_on_single_click(true)
             .css_classes(["places"])
+            .accessible_role(gtk::AccessibleRole::Tree)
             .build();
         list.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext(
             "Navigation pane",

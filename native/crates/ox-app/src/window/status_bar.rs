@@ -337,6 +337,12 @@ impl StatusBar {
             } else {
                 button.remove_css_class("active");
             }
+            let pressed = if active {
+                gtk::AccessibleTristate::True
+            } else {
+                gtk::AccessibleTristate::False
+            };
+            button.update_state(&[gtk::accessible::State::Pressed(pressed)]);
         }
     }
 

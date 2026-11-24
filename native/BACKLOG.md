@@ -93,8 +93,9 @@ is missing.
   as "Space" in the Details pane, not checked against Windows (HOME-001).
 - **Checks this environment cannot run.** LOOK-028 (fractional scales and a
   window moving between monitors of different scales need a Wayland
-  compositor), ACC-003 (nobody has checked the file list with Orca; the icon
-  view exposes no item count or position for undrawn tiles) and PERF-008
+  compositor), ACC-003 (Orca 46 has read the file list headless with a
+  speech log, not on a real desktop with speech; GTK 4.14 sends no row
+  count, position or level, so Orca cannot say "3 of 12") and PERF-008
   (the supported desktops, see below).
 - **View coverage.** Ctrl+plus/minus/0 keep their existing text-size bindings;
   icon zoom uses Ctrl+wheel, the slider and named view shortcuts. Media, rating,

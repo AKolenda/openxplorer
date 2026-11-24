@@ -273,11 +273,19 @@ pub(super) fn sidebar_row(entry: &SidebarEntry, look: RowLook, collapsed: bool) 
         .child(&overlay)
         .tooltip_text(&entry.tooltip)
         .css_classes(placement_classes(entry))
+        .accessible_role(gtk::AccessibleRole::TreeItem)
         .build();
     // The visible label names the row; the address is its description.
+    // GTK 4.16 and later send the level to screen readers; 4.14 does not.
+    let level = match entry.level {
+        RowLevel::Place | RowLevel::Group => 1,
+        RowLevel::Child => 2,
+        RowLevel::Grandchild => 3,
+    };
     row.update_property(&[
         gtk::accessible::Property::Label(&entry.label),
         gtk::accessible::Property::Description(&entry.tooltip),
+        gtk::accessible::Property::Level(level),
     ]);
     match entry.level {
         RowLevel::Place => {}

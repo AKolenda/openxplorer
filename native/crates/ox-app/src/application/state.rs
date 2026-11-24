@@ -539,11 +539,14 @@ fn follow_system_scheme(skin: &Skin, gtk_preference: Appearance) -> Rc<SystemSch
 
 /// Applies the desktop's contrast to `skin` now and on every change.
 fn follow_contrast(skin: &Skin) -> ContrastSetting {
-    let setting = ContrastSetting::watch(glib::clone!(
-        #[weak]
-        skin,
-        move |contrast| skin.set_contrast(contrast)
-    ));
+    let setting = ContrastSetting::watch(
+        skin.theme_contrast(),
+        glib::clone!(
+            #[weak]
+            skin,
+            move |contrast| skin.set_contrast(contrast)
+        ),
+    );
     skin.set_contrast(setting.contrast());
     setting
 }

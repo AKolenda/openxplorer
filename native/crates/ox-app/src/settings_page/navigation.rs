@@ -82,6 +82,7 @@ impl SettingsPage {
 
     fn connect_category_list(&self) {
         let list = &self.imp().category_list;
+        self.leave_the_list_with_tab();
         list.connect_row_selected(glib::clone!(
             #[weak(rename_to = page)]
             self,
@@ -112,6 +113,46 @@ impl SettingsPage {
             self,
             move |_, _| page.focus_page()
         ));
+    }
+
+    /// Makes the category list one Tab stop, as Windows 11 Settings'
+    /// list is: GTK's list box takes Tab as Down, so every category was a
+    /// stop of its own and each Tab opened the next page. Tab goes on to
+    /// "Back to files" and Shift+Tab back to the search; the arrow keys
+    /// still move through the categories.
+    fn leave_the_list_with_tab(&self) {
+        let keys = gtk::EventControllerKey::new();
+        keys.set_propagation_phase(gtk::PropagationPhase::Capture);
+        keys.connect_key_pressed(glib::clone!(
+            #[weak(rename_to = page)]
+            self,
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_, key, _, modifiers| {
+                let others = modifiers - gdk::ModifierType::SHIFT_MASK;
+                if !others.is_empty() {
+                    return glib::Propagation::Proceed;
+                }
+                let imp = page.imp();
+                match key {
+                    gdk::Key::ISO_Left_Tab => {
+                        imp.search_entry.grab_focus();
+                    }
+                    gdk::Key::Tab | gdk::Key::KP_Tab if modifiers.contains(gdk::ModifierType::SHIFT_MASK) => {
+                        imp.search_entry.grab_focus();
+                    }
+                    gdk::Key::Tab | gdk::Key::KP_Tab => {
+                        let back = &*imp.back_button;
+                        if !(back.is_visible() && back.is_sensitive() && back.grab_focus()) {
+                            page.focus_page();
+                        }
+                    }
+                    _ => return glib::Propagation::Proceed,
+                }
+                glib::Propagation::Stop
+            }
+        ));
+        self.imp().category_list.add_controller(keys);
     }
 
     fn connect_search_entry(&self) {

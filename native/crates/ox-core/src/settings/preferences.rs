@@ -267,6 +267,12 @@ pub struct Preferences {
     /// Stored only when on.
     #[serde(rename = "shiftF10Classic", skip_serializing_if = "std::ops::Not::not")]
     pub shift_f10_classic: bool,
+    /// F6 visits only the regions Windows 11's F6 does (the tabs, the
+    /// navigation pane, the file list, the Details pane and the status
+    /// bar), leaving the address bar, search box and command bar to Tab.
+    /// Off, F6 visits those too. Stored only when on.
+    #[serde(rename = "f6LikeWindows", skip_serializing_if = "std::ops::Not::not")]
+    pub f6_like_windows: bool,
     /// Folder item counts were turned on in this app. Files of older
     /// releases store `viewOptions.countFolderItems: true`, then the
     /// default, whenever any view option changed, so without this mark
@@ -653,6 +659,7 @@ impl Default for Preferences {
             context_menu: ContextMenu::default(),
             strip_position: StripPosition::Pointer,
             shift_f10_classic: false,
+            f6_like_windows: false,
             classic_menu_chosen: false,
             item_counts_chosen: false,
             network_interval: DEFAULT_NETWORK_INTERVAL,
@@ -901,6 +908,7 @@ impl Preferences {
         self.apply_confirmations(update);
         self.apply_service_actions(update.enabled_service_actions.as_ref());
         self.apply_appearance(update);
+        replace_if_some(&mut self.f6_like_windows, update.f6_like_windows);
         replace_if_some(&mut self.progress_details, update.progress_details);
         replace_if_some(&mut self.hide_sidebar, update.hide_sidebar);
         replace_if_some(&mut self.hide_expand_arrows, update.hide_expand_arrows);
@@ -1110,6 +1118,8 @@ pub struct PreferencesUpdate {
     pub strip_position: Option<StripPosition>,
     /// Whether Shift+F10 opens the classic menu.
     pub shift_f10_classic: Option<bool>,
+    /// Whether F6 visits only the regions Windows 11's F6 does.
+    pub f6_like_windows: Option<bool>,
     /// New network refresh interval in seconds.
     pub network_interval: Option<u32>,
     /// The size new windows open at.
@@ -1285,6 +1295,7 @@ impl PreferencesUpdate {
             context_menu: text("contextMenu").and_then(ContextMenu::from_key),
             strip_position: text("menuStripPosition").and_then(StripPosition::from_key),
             shift_f10_classic: flag("shiftF10Classic"),
+            f6_like_windows: flag("f6LikeWindows"),
             network_interval: values.get("networkInterval").and_then(read_network_interval),
             window_size: values.get("windowSize").and_then(WindowSize::from_json),
             dialog_size: values.get("dialogSize").and_then(WindowSize::from_json),
