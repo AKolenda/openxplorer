@@ -32,13 +32,19 @@
 //! - The content is local and every format is storable, so GTK hands it
 //!   to a clipboard manager when the application quits (`gtk_main_sync`
 //!   stores the display's clipboard at shutdown), as
-//!   `gtk_clipboard_set_can_store` did in Python (CLIP-010).
+//!   `gtk_clipboard_set_can_store` did in Python (CLIP-010). Without a
+//!   manager that keeps file lists, closing the last window does not end
+//!   the application while it owns the clipboard: it keeps serving it, as
+//!   Windows Explorer's process does, until another application copies
+//!   something (`crate::app_context`'s clipboard keeper).
 
-use std::collections::HashSet;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use gtk::{gdk, glib};
+use gtk::{gdk, gio, glib};
 use ox_core::clipboard::{
     decode, ClipboardFiles, ClipboardMode, FileListFormat, PastedImage, CUSTOM, IMAGE_MIME_TYPES, KDE_CUT,
     MAX_BYTES, TEXT, TEXTURE_EXTENSION,
@@ -181,11 +187,13 @@ async fn read_file_list(clipboard: &gdk::Clipboard, format: FileListFormat<'_>) 
     decode(with_marker, &payload)
 }
 
-/// The file list on `clipboard`, in the first format that holds one.
-async fn read_files(clipboard: &gdk::Clipboard) -> Option<ClipboardFiles> {
+/// The file list on `clipboard`, in the first format that holds one, and
+/// whether that format is another application's: not this app's own
+/// ([`CUSTOM`]), which only its windows publish.
+async fn read_files(clipboard: &gdk::Clipboard) -> Option<(ClipboardFiles, bool)> {
     for format in FILE_LIST_FORMATS {
         if let Some(files) = read_file_list(clipboard, format).await {
-            return Some(files);
+            return Some((files, format != FileListFormat::Custom));
         }
     }
     None
@@ -253,11 +261,15 @@ fn offers_a_picture(clipboard: &gdk::Clipboard) -> bool {
 /// picture is not read at all, so a picture-only clipboard is no data:
 /// Paste stays disabled and Ctrl+V does nothing, as in Windows 11 File
 /// Explorer.
-async fn read_clipboard_content(clipboard: &gdk::Clipboard, pictures: bool) -> ClipboardContent {
+///
+/// The second value is true for a file list in another application's
+/// format, which may be a cut a clipboard manager put back
+/// ([`AppContext::is_moved_cut`](crate::app_context::AppContext::is_moved_cut)).
+async fn read_clipboard_content(clipboard: &gdk::Clipboard, pictures: bool) -> (ClipboardContent, bool) {
     match read_files(clipboard).await {
-        Some(files) => ClipboardContent::Files(files),
-        None if pictures => read_image(clipboard).await,
-        None => ClipboardContent::Nothing,
+        Some((files, from_another_app)) => (ClipboardContent::Files(files), from_another_app),
+        None if pictures => (read_image(clipboard).await, false),
+        None => (ClipboardContent::Nothing, false),
     }
 }
 
@@ -290,7 +302,7 @@ fn publish(
     with_drives: bool,
 ) -> Result<(), glib::BoolError> {
     let providers: Vec<gdk::ContentProvider> = files
-        .encode(locations)
+        .encode_exporting(locations, share_paths())
         .into_iter()
         .filter(|payload| paths_as_text || payload.mime_type != TEXT)
         .filter(|payload| !with_drives || is_for_this_app_or_text(payload.mime_type))
@@ -300,6 +312,27 @@ fn publish(
         .collect();
     let content = gdk::ContentProvider::new_union(&providers);
     clipboard.set_content(Some(&content))
+}
+
+/// Finds the local file of a mounted share's item for the URI list other
+/// applications read (CLIP-004, NET-026), as a drag does (DND-004): in a
+/// kernel CIFS mount or `GVfs`'s FUSE export, never mounting anything.
+///
+/// The selection of one folder asks about that folder once, whatever the
+/// number of items, since each answer reads the mount table and the
+/// export's folder; the item's own name is then joined to it.
+fn share_paths() -> impl Fn(&str) -> Option<PathBuf> {
+    let folders: RefCell<HashMap<String, Option<PathBuf>>> = RefCell::default();
+    move |uri| {
+        let file = gio::File::for_uri(uri);
+        let name = file.basename()?;
+        let folder = file.parent()?.uri().to_string();
+        let mut folders = folders.borrow_mut();
+        let path = folders
+            .entry(folder)
+            .or_insert_with_key(|folder| ox_core::network::local_path(folder));
+        path.as_ref().map(|path| path.join(name))
+    }
 }
 
 /// Whether `mime_type` is this app's own format or text, which no file
@@ -426,6 +459,7 @@ impl BrowserWindow {
             ));
             return;
         }
+        self.serve_clipboard();
         self.remember_clipboard(&ClipboardContent::Files(files));
         if let Some(note) = note {
             self.show_message(note);
@@ -439,7 +473,7 @@ impl BrowserWindow {
         let generation = self.clipboard_generation();
         let pictures = self.pastes_pictures_as_files();
         self.imp().file_operations.borrow_mut().pictures_read = pictures;
-        let content = read_clipboard_content(&clipboard, pictures).await;
+        let (content, from_another_app) = read_clipboard_content(&clipboard, pictures).await;
         // Safety rule (one owner per read, CLIP-006, CLIP-016): formats
         // read before and after an owner change could mix two clipboards,
         // such as one owner's URI list with another's cut marker, so such a
@@ -453,8 +487,41 @@ impl BrowserWindow {
         if self.clipboard_generation() != generation || self.pastes_pictures_as_files() != pictures {
             return ClipboardContent::Nothing;
         }
+        let content = self.without_a_moved_cut(content, from_another_app);
         self.remember_clipboard(&content);
         content
+    }
+
+    /// `content`, unless it is a cut this application's pastes already
+    /// moved in full, which a clipboard manager put back (CLIP-008).
+    ///
+    /// A paste that moves the last items of a cut empties the clipboard,
+    /// as Windows leaves nothing to paste after a cut is pasted. KDE's
+    /// Klipper, with its default "Prevent empty clipboard", answers an
+    /// empty clipboard by putting its newest entry back: the cut just
+    /// pasted, as a URI list with KDE's cut marker, naming items that are
+    /// not there any more. Pasting it again would ask whether to replace
+    /// the moved files with themselves, then find nothing to move. Such a
+    /// cut is no data: Paste stays disabled and nothing is dimmed. Only
+    /// another application's format can be one, and only when every item
+    /// is one a paste moved; any other file list or picture is new and
+    /// makes the application forget the moved items.
+    fn without_a_moved_cut(&self, content: ClipboardContent, from_another_app: bool) -> ClipboardContent {
+        let context = self.context();
+        match &content {
+            ClipboardContent::Files(files) if from_another_app && context.is_moved_cut(files) => {
+                ClipboardContent::Nothing
+            }
+            ClipboardContent::Files(_) if from_another_app => {
+                context.forget_moved_cut();
+                content
+            }
+            ClipboardContent::Image(_) => {
+                context.forget_moved_cut();
+                content
+            }
+            _ => content,
+        }
     }
 
     /// Removes the items a move-paste of `pasted` moved from the clipboard,
@@ -469,6 +536,7 @@ impl BrowserWindow {
         if !current.consume(pasted.token(), moved) {
             return;
         }
+        self.context().remember_moved_cut(pasted.token(), moved);
         let clipboard = self.clipboard();
         if current.uris().is_empty() {
             // Clearing fails only when another owner took the clipboard
@@ -484,7 +552,16 @@ impl BrowserWindow {
         )
         .is_ok()
         {
+            self.serve_clipboard();
             self.remember_clipboard(&ClipboardContent::Files(current));
+        }
+    }
+
+    /// Keeps the application running while it owns the clipboard this
+    /// window has just filled, so it outlives the last window (CLIP-010).
+    pub(crate) fn serve_clipboard(&self) {
+        if let Some(application) = self.application() {
+            self.context().serve_clipboard(&application, &self.clipboard());
         }
     }
 

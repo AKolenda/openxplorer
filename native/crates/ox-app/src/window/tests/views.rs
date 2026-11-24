@@ -712,8 +712,8 @@ fn ctrl_h_shows_hidden_files_outside_text_fields() {
         owners.is_shown_hidden(test.position_of("Notes 2.txt")),
         Some(false)
     );
-    // A cut hidden item carries both classes; the stylesheet fades it
-    // further (`.hidden-item.cut`), so the cut still shows.
+    // A cut hidden item carries both classes; its icon fades further
+    // (`.cut .item-art` inside `.hidden-item`), so the cut still shows.
     let private = test.position_of(".private");
     test.window.folder_pane().model().select_only(private);
     test.activate("cut", None);

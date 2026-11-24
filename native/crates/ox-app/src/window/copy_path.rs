@@ -100,6 +100,9 @@ impl BrowserWindow {
             CopiedPath::NoFolder => self.show_message(&ox_core::i18n::gettext("Open a folder first.")),
             CopiedPath::Address(address) => {
                 self.clipboard().set_text(&address);
+                // The path outlives the last window, as copied files do
+                // (CLIP-010).
+                self.serve_clipboard();
             }
         }
     }

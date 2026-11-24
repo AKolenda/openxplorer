@@ -510,7 +510,7 @@ pub fn describe_io(error: &std::io::Error) -> String {
 /// The file GIO's message names, as a path when it is a local one: GIO
 /// quotes the path or URI it failed on (“/home/…”), or, in some of the
 /// local backend's messages, writes the path and then its URI in brackets
-/// ("Error opening file /home/… (file:///home/…): Permission denied").
+/// (`Error opening file /home/… (file:///home/…): Permission denied`).
 fn quoted_location(message: &str) -> Option<String> {
     if !message.contains('“') {
         let (named, _) = message.rsplit_once(": ")?;

@@ -145,16 +145,17 @@ columnview.files > listview > row > cell:last-child { padding-right: 26px; }
 columnview.files .row-icon { margin-top: 1px; }
 .files .cell-dim { color: @ox_muted; }
 /* Items a cut put on the clipboard, until they are pasted or the
-   clipboard changes (`.file-row.cut`, `.file-tile.cut`; ui-spec.md §4.5
-   row states, CLIP-002). GTK gives no per-item class to its rows and
-   tiles, so their contents fade and the selection behind them stays
-   clear. */
-.files .cut { opacity: 0.5; }
+   clipboard changes (ui-spec.md §4.5 row states, CLIP-002): only the
+   icon fades, as in Windows 11 File Explorer, whose cut items keep their
+   name, Date modified, Type and Size at full strength. GTK gives no
+   per-item class to its rows and tiles, so the cells carry .cut and their
+   art (.item-art: the icon, a custom icon or preview, a folder's
+   picture) fades; the selection behind them stays clear. */
+.files .cut .item-art { opacity: 0.5; }
 /* Hidden items, while "Show hidden files" shows them: faded, as Windows
-   Explorer and Dolphin draw them (VIEW-026). */
+   Explorer and Dolphin draw them (VIEW-026). A cut hidden item's icon
+   fades further (0.6 x 0.5), so the cut still shows. */
 .files .hidden-item { opacity: 0.6; }
-/* A cut hidden item fades further, so the cut still shows (0.6 x 0.5). */
-.files .hidden-item.cut { opacity: 0.3; }
 
 /* The rubber band the window draws over the views (SEL-012). */
 .folder-pane-overlay > .rubber-band {
