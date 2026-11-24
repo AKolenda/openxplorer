@@ -71,6 +71,7 @@ mod containment;
 mod copy;
 mod engine;
 mod error;
+mod gone_drive;
 mod guard;
 mod item_failure;
 mod labels;
@@ -104,6 +105,7 @@ pub(crate) use modes::{
     keep_without_modes, open_local_staging, secure_local_staging, PRIVATE_DIRECTORY_MODE,
 };
 pub use move_by_copying::{MoveByCopyingItem, MoveByCopyingQuestion};
+pub(crate) use names::staging_name;
 pub use names::{is_own_backup_name, is_own_staging_name};
 pub use node::{ItemIdentity, Node, NodeFactory, NodeInfo, NodeKind, WriteGuard};
 pub use request::MAX_ITEMS;

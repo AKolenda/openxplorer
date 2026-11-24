@@ -13,6 +13,9 @@
 //! to Home, as Dolphin does, so the window's own listings and folder
 //! monitors never keep the drive busy (DEV-009).
 
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
+
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
@@ -20,6 +23,7 @@ use ox_core::location::file_uri;
 use ox_core::network::{mount_volume, NetworkError, WriteActivity};
 
 use crate::devices::Removal;
+use crate::dialog::DialogButton;
 use crate::locations::Page;
 use crate::window::{ButtonStyle, Dialog};
 
@@ -29,7 +33,7 @@ use super::BrowserWindow;
 /// The tabs a removal moved to Home before it ran, to put back where they
 /// were when the drive could not be removed.
 #[derive(Debug)]
-struct MovedTabs {
+pub(super) struct MovedTabs {
     /// The home folder they were moved to.
     home: String,
     /// The tabs behind the one in front that were on the drive.
@@ -49,6 +53,44 @@ pub(super) fn is_inside(uri: &str, root: &str) -> bool {
     let file = gio::File::for_uri(uri);
     let root = gio::File::for_uri(root);
     file.equal(&root) || file.has_prefix(&root)
+}
+
+thread_local! {
+    /// The roots of the drives the app is unmounting on purpose, to mount
+    /// them again ([`unmount_on_purpose`]).
+    static UNMOUNTED_ON_PURPOSE: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// While the returned guard lives, the drive at `root` going away is the
+/// app's own doing (Rename unmounts an exFAT or NTFS drive to relabel
+/// it), so its tabs stay to follow it rather than go to the Desktop.
+pub(in crate::window) fn unmount_on_purpose(root: &str) -> UnmountedOnPurpose {
+    UNMOUNTED_ON_PURPOSE.with(|roots| roots.borrow_mut().push(root.to_owned()));
+    UnmountedOnPurpose(root.to_owned())
+}
+
+/// Whether the drive at `root` is being unmounted on purpose.
+pub(in crate::window) fn is_unmounted_on_purpose(root: &str) -> bool {
+    UNMOUNTED_ON_PURPOSE.with(|roots| {
+        roots
+            .borrow()
+            .iter()
+            .any(|own| is_inside(root, own) || is_inside(own, root))
+    })
+}
+
+/// See [`unmount_on_purpose`].
+pub(in crate::window) struct UnmountedOnPurpose(String);
+
+impl Drop for UnmountedOnPurpose {
+    fn drop(&mut self) {
+        UNMOUNTED_ON_PURPOSE.with(|roots| {
+            let mut roots = roots.borrow_mut();
+            if let Some(index) = roots.iter().position(|root| *root == self.0) {
+                roots.remove(index);
+            }
+        });
+    }
 }
 
 impl BrowserWindow {
@@ -140,12 +182,86 @@ impl BrowserWindow {
         dialog.open_on_primary_button();
     }
 
+    /// The mount operation of a removal of the drive `label`: GTK's, for
+    /// passwords, but a drive a program still uses asks in Windows' words
+    /// ([`Self::ask_about_busy_drive`]); Try Again sets `retry`.
+    pub(super) fn removal_operation(&self, label: &str, retry: Rc<Cell<bool>>) -> gtk::MountOperation {
+        let operation = gtk::MountOperation::new(Some(self));
+        // The box that asks, while it shows: GIO asks again every few
+        // seconds while the drive stays busy.
+        let asking: Rc<RefCell<Option<Dialog>>> = Rc::default();
+        let (window, label_text) = (self.downgrade(), label.to_owned());
+        let shown = Rc::clone(&asking);
+        operation.connect_local("show-processes", false, move |values| {
+            let operation = values.first()?.get::<gio::MountOperation>().ok()?;
+            operation.stop_signal_emission_by_name("show-processes");
+            if shown.borrow().is_some() {
+                return None;
+            }
+            let Some(window) = window.upgrade() else {
+                operation.reply(gio::MountOperationResult::Aborted);
+                return None;
+            };
+            let (dialog, again, carry_on) = window.busy_drive_box(&label_text);
+            shown.replace(Some(dialog.clone()));
+            let (shown, retry) = (Rc::clone(&shown), Rc::clone(&retry));
+            glib::spawn_future_local(async move {
+                let pressed = dialog.next_response().await;
+                dialog.finish();
+                // GIO went on by itself, the programs having let go.
+                if shown.take().is_none() {
+                    return;
+                }
+                if pressed == Some(carry_on) {
+                    // GIO's first choice: "Unmount Anyway", "Eject Anyway".
+                    operation.set_choice(0);
+                    operation.reply(gio::MountOperationResult::Handled);
+                } else {
+                    retry.set(pressed == Some(again));
+                    operation.reply(gio::MountOperationResult::Aborted);
+                }
+            });
+            None
+        });
+        operation.connect_aborted(move |_| {
+            if let Some(dialog) = asking.take() {
+                dialog.finish();
+            }
+        });
+        operation
+    }
+
+    /// Windows 11's box about the drive `label` a program still uses
+    /// (checked in the VM on 2026-11-22): the warning icon, the drive in
+    /// use, what to do, and that Continue closes the files, with Cancel,
+    /// which has the keyboard, Try Again and Continue.
+    fn busy_drive_box(&self, label: &str) -> (Dialog, DialogButton, DialogButton) {
+        let text = [
+            ox_core::i18n::format_message("'{drive}' is currently in use.", &[("drive", label)]),
+            ox_core::i18n::gettext(
+                "Save any open files on this disc, and then close the files or programs using the files \
+                 before trying again.",
+            ),
+            ox_core::i18n::gettext(
+                "If you choose to continue, the files will be closed, which might cause data to be lost.",
+            ),
+        ]
+        .join("\n\n");
+        let dialog = Dialog::message_box(self, ox_core::i18n::gettext_static("OpenXplorer"), &text);
+        dialog.add_cancel_button();
+        let again = dialog.add_button(ox_core::i18n::gettext_static("Try Again"), ButtonStyle::Bordered);
+        let carry_on = dialog.add_button(ox_core::i18n::gettext_static("Continue"), ButtonStyle::Bordered);
+        dialog.open();
+        (dialog, again, carry_on)
+    }
+
     /// Stops reading the tabs on the drive, then removes it.
     fn run_removal(&self, uri: &str, removal: Removal) {
         let label = self.drive_label(uri);
         let moved = self.move_tabs_home_from(uri);
         let mounts = self.volume_monitor().mounts();
-        let operation = gtk::MountOperation::new(Some(self));
+        let retry = Rc::new(Cell::new(false));
+        let operation = self.removal_operation(&label, Rc::clone(&retry));
         let activity = self.write_activity();
         let uri = uri.to_owned();
         let window = self.downgrade();
@@ -155,6 +271,10 @@ impl BrowserWindow {
                 .await;
             if let Some(window) = window.upgrade() {
                 window.finish_removal(&uri, &label, removal, removed, &moved);
+                // Try Again in the box about a drive still in use.
+                if retry.get() {
+                    window.run_removal(&uri, removal);
+                }
             }
         });
     }
@@ -175,7 +295,7 @@ impl BrowserWindow {
         if let Err(error) = removed {
             self.return_moved_tabs(moved);
             if !Removal::is_reported_by_desktop(&error) {
-                self.show_failure(removal.failure_title(), &Removal::failure_detail(&error));
+                self.show_failure(removal.failure_title(), &Removal::failure_detail(&error, label));
             }
             return;
         }
@@ -230,7 +350,13 @@ impl BrowserWindow {
     /// there, and a tab behind it stops reading the drive and lists Home
     /// when it is next shown. Returns the tabs it moved.
     fn move_tabs_home_from(&self, root: &str) -> MovedTabs {
-        let home = file_uri(&glib::home_dir());
+        self.move_tabs_from(root, &file_uri(&glib::home_dir()))
+    }
+
+    /// Moves every tab inside `root` to `home`, as
+    /// [`Self::move_tabs_home_from`] moves them to Home.
+    pub(super) fn move_tabs_from(&self, root: &str, home: &str) -> MovedTabs {
+        let home = home.to_owned();
         let mut behind = Vec::new();
         let (stale, is_active_inside): (Vec<gio::ListStore>, bool) = {
             let mut session = self.imp().session.borrow_mut();
@@ -285,6 +411,49 @@ impl BrowserWindow {
         let front_at_home = self.current_uri().is_some_and(|uri| uri == moved.home);
         if moved.front && front_at_home {
             self.go_history(Direction::Backward);
+        }
+        self.render_tabs();
+    }
+
+    /// Moves every tab inside `old_root` to the same place below
+    /// `new_root`, where the same drive is mounted again after it was
+    /// renamed: the tab in front navigates there, and a tab behind it
+    /// lists it when it is next shown.
+    pub(super) fn move_tabs_to_new_root(&self, old_root: &str, new_root: &str) {
+        let (from, to) = (gio::File::for_uri(old_root), gio::File::for_uri(new_root));
+        let moved = |uri: &str| -> Option<String> {
+            let file = gio::File::for_uri(uri);
+            let target = if file.equal(&from) {
+                to.clone()
+            } else {
+                to.resolve_relative_path(from.relative_path(&file)?)
+            };
+            ox_core::location::normalise(&target.uri()).ok()
+        };
+        let (stale, active_to): (Vec<gio::ListStore>, Option<String>) = {
+            let mut session = self.imp().session.borrow_mut();
+            let active = session.active_id();
+            let active_to = session.active().and_then(|tab| moved(tab.uri()));
+            let mut stale = Vec::new();
+            session.change_panes(|tab| {
+                if Some(tab.id) == active {
+                    return;
+                }
+                if let Some(target) = moved(tab.uri()) {
+                    tab.history.push(&target);
+                    tab.forget_location_state();
+                    stale.push(tab.mark_stale());
+                }
+            });
+            (stale, active_to)
+        };
+        self.change_model(|| {
+            for items in &stale {
+                items.remove_all();
+            }
+        });
+        if let Some(target) = active_to {
+            self.navigate_or_report(&target);
         }
         self.render_tabs();
     }

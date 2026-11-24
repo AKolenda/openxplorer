@@ -472,10 +472,31 @@ impl TransferPanel {
         self.stop_asking();
         imp.cancel.replace(None);
         imp.session.replace(None);
+        self.release_keyboard_from(self);
         self.set_visible(false);
         self.remove_css_class("paused");
         if let Some(window) = imp.window.upgrade() {
             window.remove(self);
+        }
+    }
+
+    /// Lets go of the progress window's keyboard when it is on `part`, which
+    /// is about to be hidden or taken away, so nothing in the window has
+    /// it, as when the window opens.
+    ///
+    /// GTK leaves the keyboard on a widget taken out of its window and
+    /// moves it on by itself after the next paint, walking the window's
+    /// widgets; the answered question was freed during that walk, which
+    /// then read it (Gtk-CRITICAL `gtk_widget_is_ancestor`, a read after
+    /// free).
+    pub(super) fn release_keyboard_from(&self, part: &impl IsA<gtk::Widget>) {
+        let Some(window) = self.imp().window.upgrade() else {
+            return;
+        };
+        let focus = gtk::prelude::GtkWindowExt::focus(&window);
+        let part = part.as_ref();
+        if focus.is_some_and(|focus| focus == *part || focus.is_ancestor(part)) {
+            gtk::prelude::GtkWindowExt::set_focus(&window, None::<&gtk::Widget>);
         }
     }
 

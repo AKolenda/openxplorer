@@ -56,11 +56,12 @@ mod local_paths;
 mod probe;
 
 /// The window commands that make no sense while choosing a file: more tabs,
-/// windows or panes, Settings, Format…, as a dialog closes on its own
-/// once answered, leaving no window to report the format in, Full
+/// windows or panes, Settings, Format… and a drive's Rename, as a dialog
+/// closes on its own once answered, leaving no window to report the
+/// format or the rename in, Full
 /// screen, as a Windows Open or Save dialog keeps its size, and Share,
 /// which Windows' file dialogs do not have.
-const DISABLED_ACTIONS: [WindowAction; 17] = [
+const DISABLED_ACTIONS: [WindowAction; 18] = [
     WindowAction::NewTab,
     WindowAction::OpenTab,
     WindowAction::OpenTabBackground,
@@ -76,6 +77,7 @@ const DISABLED_ACTIONS: [WindowAction; 17] = [
     WindowAction::OpenFileLocationInWindow,
     WindowAction::SplitView,
     WindowAction::FormatDrive,
+    WindowAction::RenameDrive,
     WindowAction::FullScreen,
     WindowAction::Share,
 ];

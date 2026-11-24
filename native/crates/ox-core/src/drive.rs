@@ -278,7 +278,7 @@ fn refuses_folder_renames(filesystem: &str, options: &str) -> bool {
 /// True for the filesystem types of network places: kernel network
 /// filesystems, and FUSE mounts other than a local disk's (`fuseblk`),
 /// such as SSHFS, rclone or `GVfs`.
-fn is_network_filesystem(filesystem: &str) -> bool {
+pub(crate) fn is_network_filesystem(filesystem: &str) -> bool {
     const NETWORK: &[&str] = &[
         "cifs",
         "smb3",

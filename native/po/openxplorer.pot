@@ -520,6 +520,11 @@ msgstr ""
 msgid "{error}\n\nThe archive is unchanged. Existing files were not overwritten."
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/devices.rs crates/ox-app/src/window/mounting.rs
+msgid "'{drive}' is currently in use."
+msgstr ""
+
 #: crates/ox-app/src/devices.rs
 msgid "Could not disconnect"
 msgstr ""
@@ -552,13 +557,13 @@ msgstr ""
 msgid "Safely remove"
 msgstr ""
 
+#: crates/ox-app/src/devices.rs crates/ox-app/src/window/mounting.rs
+msgid "Save any open files on this disc, and then close the files or programs using the files before trying again."
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/devices.rs
 msgid "The '{label}' device can now be safely removed from the computer."
-msgstr ""
-
-#: crates/ox-app/src/devices.rs
-msgid "This device is currently in use. Close any programs or windows that might be using the device, and then try again."
 msgstr ""
 
 #: crates/ox-app/src/dialog/fields.rs crates/ox-core/src/format.rs
@@ -596,6 +601,15 @@ msgstr ""
 
 #: crates/ox-app/src/dialogs/format_drive.rs
 msgid "Quick format"
+msgstr ""
+
+#: crates/ox-app/src/dialogs/format_drive.rs crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/extension_confirm.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
+msgid "Rename"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/dialogs/format_drive.rs
+msgid "Rename {drive}"
 msgstr ""
 
 #: crates/ox-app/src/dialogs/format_drive.rs
@@ -1408,7 +1422,7 @@ msgstr ""
 msgid "Not set"
 msgstr ""
 
-#: crates/ox-app/resources/ui/window.ui crates/ox-app/src/integration/status.rs crates/ox-app/src/window/activation.rs crates/ox-app/src/window/title_bar.rs packaging/data/io.winspace.Development.desktop packaging/data/io.winspace.Development.metainfo.xml
+#: crates/ox-app/resources/ui/window.ui crates/ox-app/src/integration/status.rs crates/ox-app/src/window/activation.rs crates/ox-app/src/window/mounting.rs crates/ox-app/src/window/title_bar.rs packaging/data/io.winspace.Development.desktop packaging/data/io.winspace.Development.metainfo.xml
 msgid "OpenXplorer"
 msgstr ""
 
@@ -3854,6 +3868,18 @@ msgid "Copying and moving"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Delete files on removable drives permanently (like Windows)"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Delete on a USB stick or SD card asks, then deletes for good. Off: the items go to the drive's own Recycle Bin and keep using its space until it is emptied."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Deleting"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Documents and other files"
 msgstr ""
 
@@ -4015,6 +4041,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "copy cut paths text clipboard terminal editor plain ctrl+c paste location"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "delete permanently removable drive usb stick sd card memory card recycle bin trash space windows erase"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -5242,10 +5272,6 @@ msgstr ""
 msgid "Paste files (Ctrl+V)"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/batch_rename.rs crates/ox-app/src/window/file_ops/extension_confirm.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs crates/ox-app/src/window/home_page.rs crates/ox-app/src/window/place_menus.rs crates/ox-app/src/window/shortcuts_window.rs crates/ox-core/src/ops/undo.rs
-msgid "Rename"
-msgstr ""
-
 #: crates/ox-app/src/window/command_bar.rs
 msgid "Rename (F2)"
 msgstr ""
@@ -5499,7 +5525,7 @@ msgstr ""
 msgid "Smaller"
 msgstr ""
 
-#: crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
+#: crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/mounting.rs
 msgid "Continue"
 msgstr ""
 
@@ -5863,6 +5889,11 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/disk_tools.rs
+msgid "Could not rename the drive: {error}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/disk_tools.rs
 msgid "Could not start {display}: {error}"
 msgstr ""
 
@@ -5883,6 +5914,23 @@ msgid "No program to make a file system is installed on this computer."
 msgstr ""
 
 #: crates/ox-app/src/window/disk_tools.rs
+msgid "Renaming a drive needs the UDisks service, which is not available."
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "Renaming…"
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "The drive was not renamed."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "The drive was renamed, but it could not be mounted again: {reason}"
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
 msgid "The tool is not installed."
 msgstr ""
 
@@ -5891,11 +5939,19 @@ msgid "This drive cannot be formatted."
 msgstr ""
 
 #: crates/ox-app/src/window/disk_tools.rs
+msgid "This drive cannot be renamed."
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
 msgid "This tool needs a location on this computer."
 msgstr ""
 
 #: crates/ox-app/src/window/disk_tools.rs crates/ox-app/src/window/file_ops/running.rs
 msgid "Wait until the drive is formatted, then try again."
+msgstr ""
+
+#: crates/ox-app/src/window/disk_tools.rs
+msgid "You are not allowed to rename this drive."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -5951,6 +6007,11 @@ msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
 msgid "Try again"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/empty_page.rs
+msgid "{location} is not accessible. The device is not ready."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6298,6 +6359,10 @@ msgstr ""
 msgid "Interrupted Action"
 msgstr ""
 
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/loading/denied_folder.rs
+msgid "Location is not available"
+msgstr ""
+
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Remove the write-protection or use another disk."
 msgstr ""
@@ -6349,7 +6414,7 @@ msgstr ""
 msgid "Total size: {size}"
 msgstr ""
 
-#: crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/window/file_ops/failure_dialog.rs
+#: crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/mounting.rs
 msgid "Try Again"
 msgstr ""
 
@@ -6371,6 +6436,11 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "You'll need to provide administrator permission to move to this folder"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "{location} is unavailable. If the location is on this PC, make sure the device or drive is connected or the disc is inserted, and then try again. If the location is on a network, make sure you're connected to the network or Internet, and then try again. If the location still can't be found, it might have been moved or deleted."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -7061,10 +7131,6 @@ msgstr ""
 msgid "“{name}” is not a link."
 msgstr ""
 
-#: crates/ox-app/src/window/loading/denied_folder.rs
-msgid "Location is not available"
-msgstr ""
-
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/loading/denied_folder.rs
 msgid "{path} is not accessible.\n\nAccess is denied."
@@ -7149,6 +7215,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/mounting.rs
 msgid "Finish the current operation before disconnecting."
+msgstr ""
+
+#: crates/ox-app/src/window/mounting.rs
+msgid "If you choose to continue, the files will be closed, which might cause data to be lost."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -7349,10 +7419,6 @@ msgid "Clear recent locations"
 msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs
-msgid "Drive names cannot be changed here."
-msgstr ""
-
-#: crates/ox-app/src/window/place_menus.rs
 msgid "Format…"
 msgstr ""
 
@@ -7362,6 +7428,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs
 msgid "Mount volume"
+msgstr ""
+
+#: crates/ox-app/src/window/place_menus.rs
+msgid "Only a removable drive can be renamed here."
 msgstr ""
 
 #: crates/ox-app/src/window/place_menus.rs
@@ -10540,6 +10610,10 @@ msgstr ""
 
 #: crates/ox-core/src/sizes/result.rs
 msgid "Time limit reached"
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "A device which does not exist was specified."
 msgstr ""
 
 #: crates/ox-core/src/system_error.rs

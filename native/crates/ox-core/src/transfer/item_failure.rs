@@ -29,6 +29,7 @@
 use std::collections::HashSet;
 
 use super::error::TransferError;
+use super::gone_drive::DestinationDrive;
 use super::types::TransferMode;
 
 /// What kind of failure a [`FailedItem`] is, which picks Windows' question
@@ -50,6 +51,10 @@ pub enum FailureCause {
     InsideSource,
     /// Anything else; the question shows the system's error.
     Other,
+    /// The destination folder's drive is gone and the user skipped the
+    /// item it failed: Windows' "Location is not available", whose OK
+    /// ends the run.
+    LocationUnavailable,
     /// Something the user must sort out by hand, such as a backup kept
     /// after a replacement or staging left behind: the question says what
     /// and where, and only lets the run go on (OPS-023).
@@ -165,6 +170,10 @@ pub(crate) struct ItemFailures {
     /// The answer about an entry inside the running item that asked for
     /// the whole item to run again as administrator.
     elevation: Option<FailureAnswer>,
+    /// The drive the run writes to, which may go away while it runs.
+    destination: DestinationDrive,
+    /// The user skipped an item that failed because that drive went away.
+    skipped_gone_drive: bool,
 }
 
 /// The top-level item of a run that is running.
@@ -221,6 +230,40 @@ impl ItemFailures {
         self.elevation = None;
     }
 
+    /// After Skip on an item whose drive went away: whether the run ends
+    /// now, the user told once that the destination folder `destination`
+    /// is not available. True only while `more_items` remain and the
+    /// drive is still gone; a run of `mode`.
+    pub(crate) fn stops_for_gone_drive(
+        &mut self,
+        mode: TransferMode,
+        destination: Option<&str>,
+        more_items: bool,
+    ) -> bool {
+        if !std::mem::take(&mut self.skipped_gone_drive) || !more_items || !self.destination.is_gone() {
+            return false;
+        }
+        let uri = destination.unwrap_or_default();
+        let item = FailedItem {
+            more_items: false,
+            cause: FailureCause::LocationUnavailable,
+            ..FailedItem::new(
+                mode,
+                String::new(),
+                uri,
+                destination,
+                &super::gone_drive::device_not_ready(),
+            )
+        };
+        self.tell(&item);
+        true
+    }
+
+    /// Watches `destination`, the drive the run that starts writes to.
+    pub(crate) fn watch_destination(&mut self, destination: DestinationDrive) {
+        self.destination = destination;
+    }
+
     /// Continue or Continue for all, when the user answered it about an
     /// entry inside the running item, which then failed as a whole.
     pub(crate) fn take_elevation(&mut self) -> Option<FailureAnswer> {
@@ -250,6 +293,11 @@ impl ItemFailures {
                 | TransferError::NotMounted(_)
         );
         if !per_entry {
+            return EntryDecision::Fail;
+        }
+        // The drive written to went away: every later entry would fail
+        // too, and the item says so once (see `gone_drive`).
+        if self.destination.is_gone() {
             return EntryDecision::Fail;
         }
         let running = self.current.clone().unwrap_or(RunningItem {
@@ -302,6 +350,12 @@ impl ItemFailures {
         &self.left_out_sources
     }
 
+    /// `error`, the failure of an item of the run, in the words of a
+    /// drive that went away when the destination's has.
+    pub(crate) fn explain(&self, error: TransferError) -> TransferError {
+        self.destination.explain(error)
+    }
+
     /// Whether an item that failed with `error` is asked about. A name
     /// conflict, a cancellation, a problem that needs recovery by hand and
     /// something the location cannot do at all (which has questions of its
@@ -322,6 +376,8 @@ impl ItemFailures {
     pub(crate) fn answer(&mut self, item: &FailedItem) -> Option<FailureAnswer> {
         let answer = (self.question.as_mut()?)(item);
         self.skip_all = answer == FailureAnswer::SkipAll;
+        let skipped = matches!(answer, FailureAnswer::Skip | FailureAnswer::SkipAll);
+        self.skipped_gone_drive = skipped && super::gone_drive::is_device_gone_message(&item.error);
         Some(answer)
     }
 
@@ -337,6 +393,19 @@ impl ItemFailures {
         question(item);
         true
     }
+
+    /// Tells `item`, staging the run could not remove from the drive it
+    /// writes to, as [`Self::tell`] does; unless that drive went away.
+    /// Windows 11 asks nothing between Skip on such an item and "Location
+    /// is not available", and the drive is not there to look at; the
+    /// question about the item said the drive is gone, so `item` counts
+    /// as told (true). It stays among the run's errors and recovery notes.
+    pub(crate) fn tell_leftover(&mut self, item: &FailedItem) -> bool {
+        if self.destination.is_gone() {
+            return true;
+        }
+        self.tell(item)
+    }
 }
 
 /// Whether an item that failed with `error` may be asked about: not a name
@@ -351,4 +420,63 @@ fn askable(error: &TransferError) -> bool {
             | TransferError::NotSupported(_)
             | TransferError::ReplaceUnsupported(_)
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex};
+
+    use super::*;
+
+    /// A USB stick mounted at /media/demo/STICK.
+    const WITH_STICK: &str = "\
+22 1 8:2 / / rw,relatime shared:1 - ext4 /dev/sda2 rw
+95 22 8:17 / /media/demo/STICK rw,nosuid,nodev shared:50 - vfat /dev/sdb1 rw
+";
+
+    /// The stick pulled out.
+    const WITHOUT_STICK: &str = "22 1 8:2 / / rw,relatime shared:1 - ext4 /dev/sda2 rw\n";
+
+    /// "No such file or directory".
+    const ENOENT: i32 = 2;
+
+    /// Failures asked about with Skip, and the names asked about.
+    fn skipping() -> (ItemFailures, Arc<Mutex<Vec<String>>>) {
+        let asked = Arc::new(Mutex::new(Vec::new()));
+        let heard = Arc::clone(&asked);
+        let failures = ItemFailures::with_question(Box::new(move |item: &FailedItem| {
+            heard.lock().expect("the names").push(item.name.clone());
+            FailureAnswer::Skip
+        }));
+        (failures, asked)
+    }
+
+    /// An entry of a folder copied onto a stick that was pulled out fails
+    /// the whole item at once, as for a share that went away, instead of
+    /// asking "Item Not Found" about every entry of the folder.
+    ///
+    /// parity: OPS-047
+    #[test]
+    fn an_entry_on_a_drive_that_went_away_fails_its_item_without_asking() {
+        let stick = "file:///media/demo/STICK";
+        let missing = TransferError::NotFound("No such file or directory".into());
+        let (mut failures, asked) = skipping();
+        failures.start_item(TransferMode::Copy, "Photos".into(), Some(stick.into()));
+        failures.watch_destination(
+            DestinationDrive::fixed(stick, WITH_STICK, None).now(WITHOUT_STICK, Some(ENOENT)),
+        );
+
+        let decision = failures.entry_failed("beach.jpg", "file:///home/demo/Photos/beach.jpg", &missing);
+
+        assert_eq!(decision, EntryDecision::Fail);
+        assert!(asked.lock().expect("the names").is_empty(), "nothing asked");
+
+        // With the stick still there, the entry is asked about as before.
+        let (mut failures, asked) = skipping();
+        failures.start_item(TransferMode::Copy, "Photos".into(), Some(stick.into()));
+        failures.watch_destination(DestinationDrive::fixed(stick, WITH_STICK, Some(ENOENT)));
+        let decision = failures.entry_failed("beach.jpg", "file:///home/demo/Photos/beach.jpg", &missing);
+        assert_eq!(decision, EntryDecision::Skip);
+        assert_eq!(*asked.lock().expect("the names"), ["Photos/beach.jpg"]);
+    }
 }

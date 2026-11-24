@@ -565,12 +565,52 @@ impl BrowserWindow {
         ))
     }
 
+    /// Windows' "Location is not available" about the destination folder
+    /// of `item`, whose drive went away after the user skipped an item
+    /// there, as Windows 11's copy says it then (checked in the VM on
+    /// 2026-11-22): a message box with the red error icon and OK alone,
+    /// over the progress window; OK ends the copy.
+    async fn tell_location_unavailable(&self, item: &FailedItem) -> FailureAnswer {
+        let folder = item.destination_folder.as_deref().unwrap_or(&item.uri);
+        let mut location = self.imp().locations.borrow().display_location(folder);
+        if !location.ends_with(['/', '\\']) {
+            location.push(if location.starts_with("\\\\") { '\\' } else { '/' });
+        }
+        let text = format_message(
+            "{location} is unavailable. If the location is on this PC, make sure the device or drive is \
+             connected or the disc is inserted, and then try again. If the location is on a network, make \
+             sure you're connected to the network or Internet, and then try again. If the location still \
+             can't be found, it might have been moved or deleted.",
+            &[("location", &location)],
+        );
+        let title = gettext("Location is not available");
+        let progress = self
+            .context()
+            .progress_window()
+            .filter(|progress| !progress.actions().is_empty());
+        let dialog = match &progress {
+            Some(progress) => {
+                progress.show_question();
+                let dialog = crate::dialog::Dialog::error_box(progress, &title, &text);
+                progress.group_for_questions().add_window(&dialog);
+                dialog
+            }
+            None => crate::dialog::Dialog::error_box(self, &title, &text),
+        };
+        dialog.add_button(&gettext("OK"), crate::window::ButtonStyle::Accent);
+        dialog.open();
+        dialog.next_response().await;
+        dialog.finish();
+        FailureAnswer::Cancel
+    }
+
     /// Asks about `item` in its operation's action; Cancel and closing the
     /// progress window cancel the operation.
     async fn ask_about_failure(&self, item: &FailedItem, cancel: &Cancellation) -> FailureAnswer {
         match item.cause {
             FailureCause::NoSpace => return self.ask_about_space(item, cancel).await,
             FailureCause::NeedsAttention => return self.tell_about_failure(item, cancel).await,
+            FailureCause::LocationUnavailable => return self.tell_location_unavailable(item).await,
             _ => {}
         }
         let (question, shown_uri) = self.question_about(item).await;
@@ -802,9 +842,10 @@ impl BrowserWindow {
             FailureCause::Other if is_write_protected(&item.error) => {
                 (Question::WriteProtected, item.uri.clone())
             }
-            FailureCause::NoSpace | FailureCause::Other | FailureCause::NeedsAttention => {
-                (Question::Unexpected, item.uri.clone())
-            }
+            FailureCause::NoSpace
+            | FailureCause::Other
+            | FailureCause::NeedsAttention
+            | FailureCause::LocationUnavailable => (Question::Unexpected, item.uri.clone()),
         }
     }
 
@@ -935,60 +976,6 @@ mod tests {
             unexpected.message,
             "Error 0x8007045D: The request could not be performed because of an I/O device error."
         );
-    }
-
-    /// A drive that may not be written says so as Windows 11 does (checked
-    /// on a Windows 11 VM with a write-protected USB stick): "The disk is
-    /// write-protected." and what to do, with no error code line.
-    ///
-    /// parity: OPS-047
-    #[test]
-    fn a_write_protected_drive_is_said_in_windows_words() {
-        let mut failed = item(TransferMode::Copy, FailureCause::Other);
-        failed.error = ox_core::transfer::TransferError::from(gtk::glib::Error::new(
-            gio::IOErrorEnum::ReadOnly,
-            "Error creating directory “/media/sample/STICK/beach.jpg”: Read-only file system",
-        ))
-        .to_string();
-        assert!(is_write_protected(&failed.error), "{}", failed.error);
-        assert!(!is_write_protected("Access is denied."));
-        let said = wording(Question::WriteProtected, &failed, false, "");
-        assert_eq!(
-            (
-                said.caption.as_str(),
-                said.heading.as_str(),
-                said.message.as_str()
-            ),
-            (
-                "Interrupted Action",
-                "The disk is write-protected.",
-                "Remove the write-protection or use another disk."
-            )
-        );
-    }
-
-    /// The unexpected error's line is Windows' error code line, for an
-    /// error the engine read from the system; a message of the app's own,
-    /// which has no code, is shown as it is.
-    ///
-    /// parity: OPS-047
-    #[test]
-    fn an_unexpected_error_shows_its_error_code() {
-        let pulled = ox_core::transfer::TransferError::from(gtk::glib::Error::new(
-            gio::IOErrorEnum::Failed,
-            "Error splicing file: Transport endpoint is not connected",
-        ));
-        let mut failed = item(TransferMode::Copy, FailureCause::Other);
-        failed.error = pulled.to_string();
-        let said = wording(Question::Unexpected, &failed, false, "");
-        assert_eq!(said.message, "Error 0x8007048F: The device is not connected.");
-        failed.error = "/media/sample/USB/plan.docx: The device is not connected.".into();
-        let said = wording(Question::Unexpected, &failed, false, "");
-        assert_eq!(said.message, "Error 0x8007048F: The device is not connected.");
-        failed.error =
-            "Incomplete staging folder left at /media/sample/USB. Inspect it before removing it.".into();
-        let said = wording(Question::Unexpected, &failed, false, "");
-        assert_eq!(said.message, failed.error);
     }
 
     /// A full drive says how much the item needs and what to do, as

@@ -17,6 +17,7 @@ use super::commit::commit_replace;
 use super::conflicts::Placement;
 use super::containment::guard_destination;
 use super::error::TransferError;
+use super::gone_drive::DestinationDrive;
 use super::guard::{check_write_tree, check_write_tree_reading, SourceChange, Unreadable};
 use super::item_failure::{FailedItem, FailureAnswer, FailureCause, ItemFailures};
 use super::labels::{completed_label, item_label, CHECKING_SPACE_LABEL};
@@ -508,12 +509,27 @@ impl TransferEngine {
             total: uris.len(),
         };
         let mut state = RunState::default();
+        // The drive written to, which may be pulled out while the run goes
+        // on (see `gone_drive`).
+        self.failures
+            .watch_destination(DestinationDrive::of(batch.destination_uri().as_deref()));
         // The destination under `admin://` once the user answered Continue
         // for all current items (OPS-047).
         let mut elevated: Option<Box<dyn Node>> = None;
+        let destination = batch.destination_uri();
         for (index, uri) in uris.iter().enumerate() {
             self.run_item(&batch, index, uri, &mut state, &mut elevated);
             if state.result.cancelled {
+                break;
+            }
+            // Skipped because the drive written to went away: Windows'
+            // "Location is not available", and the run ends.
+            let more_items = index + 1 < batch.total;
+            if self
+                .failures
+                .stops_for_gone_drive(batch.mode(), destination.as_deref(), more_items)
+            {
+                state.result.cancelled = true;
                 break;
             }
         }
@@ -731,12 +747,13 @@ impl TransferEngine {
         staging: &mut ItemStaging,
     ) -> Result<ItemOutcome, TransferError> {
         let Some(elevated_batch) = elevated.and_then(|folder| batch.writing_into(folder)) else {
-            return self.process_item(batch, index, uri, state, staging);
+            let outcome = self.process_item(batch, index, uri, state, staging);
+            return outcome.map_err(|error| self.failures.explain(error));
         };
         self.move_by_copying.set_elevated(true);
         let outcome = self.process_item(&elevated_batch, index, uri, state, staging);
         self.move_by_copying.set_elevated(false);
-        outcome
+        outcome.map_err(|error| self.failures.explain(error))
     }
 
     /// Deletes the item at `uri` of the Recycle Bin or delete run `batch`
@@ -1144,6 +1161,7 @@ impl TransferEngine {
         };
         let root = stage.root();
         if let Err(problem) = discard_stage(root, staging.created, staging.place, &*self.sleep) {
+            let problem = self.failures.explain(problem);
             let message = leftover_report(root, staging.place, &problem);
             let item = FailedItem {
                 more_items: false,
@@ -1156,7 +1174,7 @@ impl TransferEngine {
                     &TransferError::RecoveryRequired(message.clone()),
                 )
             };
-            if self.failures.tell(&item) {
+            if self.failures.tell_leftover(&item) {
                 result.presented.push(message.clone());
             }
             result.recovery.push(message.clone());

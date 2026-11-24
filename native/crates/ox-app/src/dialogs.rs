@@ -8,7 +8,7 @@
 //!
 //! | Module | Dialog | Ports |
 //! |---|---|---|
-//! | `format_drive` | Format a removable drive | Windows' Format dialog |
+//! | `format_drive` | Format or rename a removable drive | Windows' Format dialog |
 //! | `network_sign_in` | Enter network credentials, and a server's questions | `renderAuth` in `app.js` |
 //! | `network_map` | Map network drive and Add a network location | `connectDialog` in `app.js` |
 //! | `network_protocol` | The protocols Add a network location offers | Dolphin and Files |
@@ -20,7 +20,7 @@ mod network_protocol;
 mod network_sign_in;
 mod network_sign_out;
 
-pub(crate) use format_drive::{confirm_erase, format_drive_dialog};
+pub(crate) use format_drive::{confirm_erase, format_drive_dialog, rename_drive_dialog};
 pub(crate) use network_map::{
     drive_letter, map_network_dialog, network_location_dialog, MapRequest, ShareKeeping,
 };

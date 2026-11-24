@@ -9,6 +9,8 @@
 //! (XFER-020); and the item is renamed by a native move within its folder
 //! that never overwrites (`set_display_name` on a phone, XFER-024).
 
+use std::ffi::{OsStr, OsString};
+
 use gio::prelude::*;
 
 use super::context::{on_worker, OperationContext};
@@ -17,7 +19,7 @@ use super::error::OpsError;
 use super::undo::UndoRecord;
 use crate::gio_node::GioNode;
 use crate::location::{require_item_uri, validate_name};
-use crate::transfer::{Node, SourceChange};
+use crate::transfer::{staging_name, Cancellation, Node, SourceChange, TransferError};
 
 /// A finished rename.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,6 +162,177 @@ fn move_within_folder(
     // `rename_item` in `v2.0.0:desktop/gio_backend.py` runs.
     let protection = &context.protection;
     protection.check_tree(source, destination, &context.cancel, SourceChange::Changed)?;
-    source.move_native(destination, Some(&context.cancel))?;
+    let (Some(folder), old_name, new_name) = (source.parent(), source.name(), destination.name()) else {
+        source.move_native(destination, Some(&context.cancel))?;
+        return Ok(());
+    };
+    let cancel = &context.cancel;
+    rename_keeping_case(
+        &old_name,
+        &new_name,
+        |from, to| {
+            folder
+                .child(from)
+                .move_native(folder.child(to).as_ref(), Some(cancel))
+        },
+        || names_in(folder.as_ref(), cancel),
+        || staging_name().map(OsString::from),
+    )?;
     Ok(())
+}
+
+/// Renames `old` to `new` in one folder with `move_named`, as
+/// [`Node::move_native`] does.
+///
+/// A folder on a FAT32 or exFAT drive ignores case, so it says `new` is
+/// taken when it differs from `old` only in case: the only item by that
+/// name is the one being renamed. Windows 11 then leaves the name as it
+/// was, without a word. Here, a case-only change that no other item in
+/// the folder's `names` matches goes through the temporary name
+/// `temporary` gives (a private staging name, which OPS-038 reports and
+/// never deletes) and then to `new`; when that second step fails, the
+/// item is given `old` back. It never tries `new` first: a FUSE driver
+/// (exfat-fuse) keeps the answer that `new` exists for a second, and the
+/// second step would be refused too. When the names cannot be read, the
+/// item is renamed directly.
+fn rename_keeping_case(
+    old: &OsStr,
+    new: &OsStr,
+    mut move_named: impl FnMut(&OsStr, &OsStr) -> Result<(), TransferError>,
+    names: impl FnOnce() -> Result<Vec<OsString>, TransferError>,
+    temporary: impl FnOnce() -> Result<OsString, TransferError>,
+) -> Result<(), TransferError> {
+    let is_own_case_change =
+        differs_only_in_case(old, new) && names().is_ok_and(|names| is_taken_only_by(old, new, &names));
+    if !is_own_case_change {
+        return move_named(old, new);
+    }
+    let temporary = temporary()?;
+    move_named(old, &temporary)?;
+    move_named(&temporary, new).inspect_err(|_| {
+        let _ = move_named(&temporary, old);
+    })
+}
+
+/// The name `name` as a folder that ignores case compares it, or `None`
+/// for a name that is not text.
+fn folded(name: &OsStr) -> Option<String> {
+    name.to_str().map(str::to_lowercase)
+}
+
+/// Whether `new` is `old` in other case.
+fn differs_only_in_case(old: &OsStr, new: &OsStr) -> bool {
+    old != new && folded(old).is_some_and(|old| folded(new) == Some(old))
+}
+
+/// Whether, among the folder's `names`, the only item that matches `new`
+/// in any case is `old` itself.
+fn is_taken_only_by(old: &OsStr, new: &OsStr, names: &[OsString]) -> bool {
+    let matching: Vec<&OsString> = names
+        .iter()
+        .filter(|name| folded(name).is_some_and(|name| Some(name) == folded(new)))
+        .collect();
+    matching == [old]
+}
+
+/// The names of the items directly in `folder`.
+fn names_in(folder: &dyn Node, cancel: &Cancellation) -> Result<Vec<OsString>, TransferError> {
+    Ok(folder
+        .children(Some(cancel))?
+        .iter()
+        .map(|child| child.name())
+        .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A folder that ignores case, as on a FAT32 or exFAT drive: a name is
+    /// taken when any item's name matches it in any case.
+    struct CaseBlindFolder {
+        names: Vec<OsString>,
+        /// The rename that fails, by its destination name.
+        failing: Option<OsString>,
+        /// Names it said were taken, which it keeps saying for a while, as
+        /// exfat-fuse does.
+        remembered: Vec<OsString>,
+    }
+
+    impl CaseBlindFolder {
+        fn new(names: &[&str]) -> Self {
+            Self {
+                names: names.iter().map(OsString::from).collect(),
+                failing: None,
+                remembered: Vec::new(),
+            }
+        }
+
+        fn rename(&mut self, from: &OsStr, to: &OsStr) -> Result<(), TransferError> {
+            let folded = |name: &OsStr| name.to_string_lossy().to_lowercase();
+            if self.remembered.iter().any(|name| name == to)
+                || self.names.iter().any(|name| folded(name) == folded(to))
+            {
+                self.remembered.push(to.to_owned());
+                return Err(TransferError::Exists(String::new()));
+            }
+            if self.failing.as_deref() == Some(to) {
+                return Err(TransferError::failed("Input/output error"));
+            }
+            let item = self.names.iter_mut().find(|name| name.as_os_str() == from);
+            *item.ok_or_else(|| TransferError::NotFound(String::new()))? = to.to_owned();
+            Ok(())
+        }
+
+        fn rename_keeping_case(&mut self, old: &str, new: &str) -> Result<(), TransferError> {
+            let names = self.names.clone();
+            let folder = std::cell::RefCell::new(self);
+            rename_keeping_case(
+                OsStr::new(old),
+                OsStr::new(new),
+                |from, to| folder.borrow_mut().rename(from, to),
+                || Ok(names),
+                || Ok(OsString::from(".winspace-transfer-0123.part")),
+            )
+        }
+    }
+
+    /// A case-only rename on a drive that ignores case (photo.txt to
+    /// Photo.txt on FAT32 or exFAT) goes through a temporary name, where
+    /// Windows 11 keeps the old name without a word. The new name is never
+    /// tried first, which exfat-fuse would remember as taken. Another item
+    /// by the new name, in any case, still refuses it, and an item that
+    /// cannot take its new name gets its old one back.
+    ///
+    /// parity: OPS-008
+    #[test]
+    fn a_case_only_rename_works_on_a_drive_that_ignores_case() {
+        let mut folder = CaseBlindFolder::new(&["photo.txt", "notes.txt"]);
+        folder
+            .rename_keeping_case("photo.txt", "Photo.txt")
+            .expect("renamed");
+        assert_eq!(folder.names, [OsString::from("Photo.txt"), "notes.txt".into()]);
+
+        let mut taken = CaseBlindFolder::new(&["photo.txt", "PHOTO.TXT"]);
+        assert_eq!(
+            taken.rename_keeping_case("photo.txt", "Photo.txt"),
+            Err(TransferError::Exists(String::new()))
+        );
+        assert_eq!(taken.names, [OsString::from("photo.txt"), "PHOTO.TXT".into()]);
+
+        let mut other = CaseBlindFolder::new(&["photo.txt", "notes.txt"]);
+        assert_eq!(
+            other.rename_keeping_case("photo.txt", "Notes.txt"),
+            Err(TransferError::Exists(String::new())),
+            "not a case-only change"
+        );
+
+        let mut failing = CaseBlindFolder::new(&["photo.txt"]);
+        failing.failing = Some("Photo.txt".into());
+        assert_eq!(
+            failing.rename_keeping_case("photo.txt", "Photo.txt"),
+            Err(TransferError::failed("Input/output error"))
+        );
+        assert_eq!(failing.names, [OsString::from("photo.txt")]);
+    }
 }

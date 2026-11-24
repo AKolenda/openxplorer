@@ -73,6 +73,9 @@ pub const NOT_SAME_DEVICE: SystemError = win32(
 pub const WRITE_PROTECT: SystemError = win32(19, message_id("The media is write protected."));
 /// `ERROR_NOT_READY`.
 pub const NOT_READY: SystemError = win32(21, message_id("The device is not ready."));
+/// `ERROR_DEV_NOT_EXIST`, which Windows' copy reports for a drive pulled
+/// out while it is written to.
+pub const DEV_NOT_EXIST: SystemError = win32(433, message_id("A device which does not exist was specified."));
 /// `ERROR_SHARING_VIOLATION`.
 pub const SHARING_VIOLATION: SystemError = win32(
     32,
@@ -189,7 +192,7 @@ pub const UNSPECIFIED: SystemError = SystemError {
 };
 
 /// Every error, for finding one by its words.
-const ALL: [SystemError; 41] = [
+const ALL: [SystemError; 42] = [
     INVALID_FUNCTION,
     FILE_NOT_FOUND,
     PATH_NOT_FOUND,
@@ -201,6 +204,7 @@ const ALL: [SystemError; 41] = [
     NOT_SAME_DEVICE,
     WRITE_PROTECT,
     NOT_READY,
+    DEV_NOT_EXIST,
     SHARING_VIOLATION,
     NOT_SUPPORTED,
     BAD_NETPATH,

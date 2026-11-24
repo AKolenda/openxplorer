@@ -112,8 +112,8 @@ pub use dialog_folders::{
 };
 pub use disk_tools::{is_disk_image, DiskTool};
 pub use drive_format::{
-    available_file_systems, default_file_system, drive_facts, format_drive, DriveFacts, FileSystem,
-    FormatError, FormatRequest, Formatted, UDISKS_NAME,
+    available_file_systems, default_file_system, drive_facts, format_drive, set_drive_label, DriveFacts,
+    FileSystem, FormatError, FormatRequest, Formatted, Relabelled, UDISKS_NAME,
 };
 pub use email_portal::{
     compose_email, email_portal_version, open_attachments, EmailError, ATTACHMENTS_VERSION, EMAIL_INTERFACE,
