@@ -144,6 +144,18 @@ mod imp {
         pub(super) strip_items: RefCell<Vec<MenuItem>>,
         /// The classic or compact look.
         pub(super) style: Cell<MenuStyle>,
+        /// Whether the menu is a classic right-click menu drawn as
+        /// Windows 11 draws its Win32 menu (`legacy`).
+        pub(super) legacy: Cell<bool>,
+        /// Whether a legacy menu underlines its access keys: it was
+        /// opened from the keyboard.
+        pub(super) keyboard_cues: Cell<bool>,
+        /// Whether the keyboard was used in the menu since it opened,
+        /// rather than the pointer, so a menu it opens in its place
+        /// underlines its access keys too.
+        pub(super) keyboard_last: Cell<bool>,
+        /// Each row's access key in a legacy menu, by item index.
+        pub(super) access_keys: RefCell<Vec<Option<char>>>,
         /// Whether an item was chosen, so the menu closed for it.
         pub(super) chose: Cell<bool>,
         /// The submenu open beside a row, and that row's item index.
@@ -414,6 +426,7 @@ fn item_list(popover: &MenuPopover) -> gtk::ListBox {
     ));
     follow_hover(popover, &list);
     follow_the_keyboard(popover, &list);
+    follow_access_keys(popover, &list);
     open_submenus_by_keyboard(popover, &list);
     // Up on the first item and Down on the last wrap around, as `openMenu`
     // moves between enabled items.
@@ -483,6 +496,53 @@ fn follow_hover(popover: &MenuPopover, list: &gtk::ListBox) {
         }
     ));
     list.add_controller(motion);
+}
+
+/// A legacy menu's access keys: a letter (with Alt or without) chooses
+/// the row it is underlined in, or opens its submenu with the keyboard in
+/// it, as Windows' Win32 menus do; a letter that several rows share moves
+/// the keyboard to the next of them instead. The menu also notes whether
+/// the keyboard or the pointer was used last
+/// ([`MenuPopover::keyboard_used_last`]).
+fn follow_access_keys(popover: &MenuPopover, list: &gtk::ListBox) {
+    let keys = gtk::EventControllerKey::new();
+    keys.connect_key_pressed(glib::clone!(
+        #[weak]
+        popover,
+        #[upgrade_or]
+        glib::Propagation::Proceed,
+        move |_, key, _, modifiers| {
+            popover.imp().keyboard_last.set(true);
+            let plain = !modifiers.intersects(
+                gdk::ModifierType::CONTROL_MASK
+                    | gdk::ModifierType::SUPER_MASK
+                    | gdk::ModifierType::META_MASK,
+            );
+            match key.to_unicode().filter(|_| plain && popover.imp().legacy.get()) {
+                Some(letter) if letter.is_alphanumeric() => {
+                    if popover.press_access_key(letter) {
+                        glib::Propagation::Stop
+                    } else {
+                        glib::Propagation::Proceed
+                    }
+                }
+                _ => glib::Propagation::Proceed,
+            }
+        }
+    ));
+    list.add_controller(keys);
+    let press = gtk::GestureClick::new();
+    press.set_button(0);
+    press.set_propagation_phase(gtk::PropagationPhase::Capture);
+    press.connect_pressed(glib::clone!(
+        #[weak]
+        popover,
+        move |gesture, _, _, _| {
+            gesture.set_state(gtk::EventSequenceState::Denied);
+            popover.imp().keyboard_last.set(false);
+        }
+    ));
+    list.add_controller(press);
 }
 
 /// The keyboard moving between rows, with the arrow keys, Home, End or
@@ -600,15 +660,17 @@ impl MenuPopover {
     /// another menu: to its right, its first item level with the row, or
     /// to its left where there is no room on the right. It takes no
     /// pointer grab: the menu it opens from holds the only one.
-    fn new_submenu(entries: Vec<MenuEntry>, style: MenuStyle) -> Self {
+    fn new_submenu(entries: Vec<MenuEntry>, style: MenuStyle, parent: &MenuPopover) -> Self {
         let menu: Self = glib::Object::new();
         menu.imp().is_submenu.set(true);
+        menu.set_legacy_look(parent.imp().legacy.get(), parent.imp().keyboard_cues.get());
         menu.set_autohide(false);
         menu.set_position(gtk::PositionType::Right);
         menu.set_valign(gtk::Align::Start);
         // Up by the menu's border and padding, and a compact row's margin,
         // so the first item's top is level with the row's.
         let inset = match style {
+            _ if parent.imp().legacy.get() => 4,
             MenuStyle::Classic => 4,
             MenuStyle::Compact => 5,
         };
@@ -622,6 +684,29 @@ impl MenuPopover {
     /// Whether the menu has the classic look.
     pub(super) fn is_classic(&self) -> bool {
         self.imp().style.get() == MenuStyle::Classic
+    }
+
+    /// Draws the menu as Windows 11 draws its classic right-click menu, a
+    /// Win32 menu, when `legacy`: compact rows, square corners, access keys
+    /// (resources/skin/menus.css). With `keyboard_cues`, as when the
+    /// keyboard opened it, the access keys are underlined; they work
+    /// either way. Set before the entries, which it draws.
+    pub(super) fn set_legacy_look(&self, legacy: bool, keyboard_cues: bool) {
+        self.imp().legacy.set(legacy);
+        self.imp().keyboard_cues.set(legacy && keyboard_cues);
+        self.imp().keyboard_last.set(keyboard_cues);
+        if legacy {
+            self.add_css_class("legacy");
+        } else {
+            self.remove_css_class("legacy");
+        }
+    }
+
+    /// Whether the keyboard, not the pointer, was used last in the menu,
+    /// or opened it: a menu opening in its place, such as the classic menu
+    /// from "Show more options", then underlines its access keys.
+    pub(super) fn keyboard_used_last(&self) -> bool {
+        self.imp().keyboard_last.get()
     }
 
     /// Replaces the menu's entries.
@@ -826,13 +911,32 @@ impl MenuPopover {
             GlyphColumn::None
         };
         let more_options_key = self.shift_f10_opens_classic_menu().then_some(SHIFT_F10_TEXT);
+        let legacy = self.imp().legacy.get();
+        let keys = if legacy {
+            access_keys(items_of(&entries).map(|item| item.label.as_str()))
+        } else {
+            Vec::new()
+        };
+        self.imp()
+            .access_keys
+            .replace(keys.iter().map(|key| key.map(|(_, key)| key)).collect());
+        let mut keys = keys.into_iter();
         let mut rows = Vec::new();
         for entry in &entries {
             let MenuEntry::Item(item) = entry else {
                 after_divider = true;
                 continue;
             };
-            rows.push((with_more_options_key(item, more_options_key), after_divider));
+            let look = RowLook {
+                legacy,
+                submenu: self.imp().is_submenu.get(),
+                access_key: keys
+                    .next()
+                    .flatten()
+                    .map(|(at, _)| at)
+                    .filter(|_| self.imp().keyboard_cues.get()),
+            };
+            rows.push((with_more_options_key(item, more_options_key), after_divider, look));
             after_divider = false;
         }
         let mut rows = rows.into_iter();
@@ -847,14 +951,14 @@ impl MenuPopover {
     /// before it.
     fn append_rows(
         &self,
-        rows: impl Iterator<Item = (MenuItem, bool)>,
+        rows: impl Iterator<Item = (MenuItem, bool, RowLook)>,
         marks: MarkColumn,
         glyphs: GlyphColumn,
     ) {
         let list = self.list();
-        for (item, after_divider) in rows {
+        for (item, after_divider, look) in rows {
             let can_choose = self.can_choose(&item);
-            let row = item_row(&item, self.check_mark(&item), marks, glyphs);
+            let row = item_row(&item, self.check_mark(&item), marks, glyphs, look);
             row.set_sensitive(can_choose);
             describe_unavailable_row(self, &row, &item, can_choose);
             if after_divider {
@@ -868,7 +972,7 @@ impl MenuPopover {
     /// is idle, after the frames GTK has to draw.
     fn fill_rows_later(
         &self,
-        mut rows: std::vec::IntoIter<(MenuItem, bool)>,
+        mut rows: std::vec::IntoIter<(MenuItem, bool, RowLook)>,
         marks: MarkColumn,
         glyphs: GlyphColumn,
     ) {
@@ -1150,7 +1254,7 @@ impl MenuPopover {
         let (Some(item), Some(row)) = (self.items().into_iter().nth(index), self.row_at(index)) else {
             return;
         };
-        let menu = MenuPopover::new_submenu(item.submenu.clone(), self.imp().style.get());
+        let menu = MenuPopover::new_submenu(item.submenu.clone(), self.imp().style.get(), self);
         menu.set_parent(self);
         // Escape, or GTK closing it otherwise, lets go of it once GTK is
         // done closing it.
@@ -1489,6 +1593,51 @@ impl MenuPopover {
         self.cancel_hover();
         self.imp().hover.borrow_mut().0 = None;
         self.imp().pointer.set(None);
+    }
+
+    /// Runs the access key `letter` in a legacy menu: chooses the one row
+    /// it belongs to, or opens that row's submenu with the keyboard in it,
+    /// or moves the keyboard to the next of the rows sharing it. False
+    /// when no row that can be chosen has it.
+    pub(in crate::window) fn press_access_key(&self, letter: char) -> bool {
+        let letter = letter.to_lowercase().next().unwrap_or(letter);
+        let matching: Vec<usize> = self
+            .imp()
+            .access_keys
+            .borrow()
+            .iter()
+            .enumerate()
+            .filter(|(_, key)| **key == Some(letter))
+            .map(|(index, _)| index)
+            .filter(|index| self.row_at(*index).is_some_and(|row| row.is_sensitive()))
+            .collect();
+        match matching.as_slice() {
+            [] => false,
+            [index] => {
+                if self.opens_submenu(*index) {
+                    self.open_submenu(*index, true);
+                } else if let Some(item) = self.items().into_iter().nth(*index) {
+                    self.choose(&item);
+                }
+                true
+            }
+            several => {
+                let focused = self
+                    .list()
+                    .focus_child()
+                    .and_downcast::<gtk::ListBoxRow>()
+                    .and_then(|row| usize::try_from(row.index()).ok());
+                let next = several
+                    .iter()
+                    .find(|index| focused.is_some_and(|focused| **index > focused))
+                    .unwrap_or(&several[0]);
+                if let Some(row) = self.row_at(*next) {
+                    row.grab_focus();
+                    self.keyboard_moved();
+                }
+                true
+            }
+        }
     }
 
     /// The check mark `item` shows now.
@@ -1851,15 +2000,230 @@ fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: Gl
     content
 }
 
+/// How a row of a legacy menu is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct RowLook {
+    /// Whether the menu is a legacy (Win32 style) menu.
+    legacy: bool,
+    /// Whether the legacy menu is a submenu, which keeps every row's icon,
+    /// as Windows' Send to and New draw them.
+    submenu: bool,
+    /// The byte offset of the access key the row underlines, if it shows
+    /// one.
+    access_key: Option<usize>,
+}
+
+/// Whether a legacy menu's row draws its own glyph. Windows 11's classic
+/// menu draws an icon only on a few rows (reference/ref-05): an
+/// application's own icon, as on "Edit in Notepad", which rows with an
+/// application icon show anyway, and Share's glyph. Every other row is
+/// text alone, its icon column kept empty so the text lines up. A
+/// submenu, such as Send to or New, keeps its icons, as Windows draws
+/// them.
+fn legacy_row_shows_glyph(item: &MenuItem) -> bool {
+    item.action == MenuAction::Window(super::window_action::WindowAction::Share)
+}
+
+/// A legacy menu's row, as Windows 11 lays out its Win32 menu: one 16px
+/// column for the check mark or the icon (empty for a text-only row), the
+/// label with its access key underlined when `access_key` says where, and
+/// a column at the right for a submenu's arrow, which every row keeps, so
+/// the menu is as wide as its longest label and Windows' room after it.
+fn legacy_item_content(item: &MenuItem, check: CheckMark, look: RowLook) -> gtk::Box {
+    let access_key = look.access_key;
+    let content = gtk::Box::new(gtk::Orientation::Horizontal, 0);
+    let edge = ROW_GLYPH;
+    let glyph: gtk::Widget = if check == CheckMark::Checked {
+        mark_slot(item, check)
+    } else if let Some(image) = item
+        .application_icon
+        .as_deref()
+        .and_then(|icon| integration::application_image(Some(icon), edge))
+    {
+        image.upcast()
+    } else if item.shows_glyph && (look.submenu || legacy_row_shows_glyph(item)) {
+        let image = icons::image(item.glyph, ROW_GLYPH);
+        if item.glyph_look.mirrored {
+            image.add_css_class("mirrored");
+        }
+        if item.glyph_look.accent {
+            image.add_css_class("accent-glyph");
+        }
+        image.upcast()
+    } else {
+        // An empty column of the icon's width: an empty box is drawn
+        // narrower than it asks to be.
+        gtk::DrawingArea::builder()
+            .content_width(edge)
+            .content_height(edge)
+            .build()
+            .upcast()
+    };
+    glyph.set_size_request(edge, edge);
+    glyph.set_valign(gtk::Align::Center);
+    glyph.add_css_class("legacy-glyph");
+    content.append(&glyph);
+    let label = gtk::Label::builder()
+        .label(&item.label)
+        .xalign(0.0)
+        .hexpand(true)
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .build();
+    let attributes = gtk::pango::AttrList::new();
+    if item.emphasised {
+        attributes.insert(gtk::pango::AttrInt::new_weight(gtk::pango::Weight::Bold));
+    }
+    if let Some(start) = access_key {
+        let end = item.label[start..]
+            .chars()
+            .next()
+            .map_or(start, |key| start + key.len_utf8());
+        let mut underline = gtk::pango::AttrInt::new_underline(gtk::pango::Underline::Single);
+        #[expect(clippy::cast_possible_truncation, reason = "menu labels are short")]
+        {
+            underline.set_start_index(start as u32);
+            underline.set_end_index(end as u32);
+        }
+        attributes.insert(underline);
+    }
+    label.set_attributes(Some(&attributes));
+    content.append(&label);
+    if let Some(shortcut) = item.shortcut {
+        let shortcut = gtk::Label::builder()
+            .label(shortcut)
+            .css_classes(["shortcut"])
+            .build();
+        content.append(&shortcut);
+    }
+    let arrow_slot = gtk::Box::builder()
+        .css_classes(["legacy-arrow-slot"])
+        .halign(gtk::Align::End)
+        .build();
+    if !item.submenu.is_empty() {
+        let chevron = icons::image(Icon::ChevronRight16, ROW_GLYPH);
+        chevron.add_css_class("submenu-arrow");
+        arrow_slot.append(&chevron);
+    }
+    content.append(&arrow_slot);
+    content
+}
+
+/// Windows' own access keys for the labels its classic menus share with
+/// the app's (in English), as the character to underline counted from
+/// the start; other labels, and labels in other languages, take the
+/// first letter not taken yet in their menu.
+const WINDOWS_ACCESS_KEYS: [(&str, usize); 40] = [
+    ("Open", 0),
+    ("Edit", 0),
+    ("Print", 0),
+    ("Open with…", 8),
+    ("Open with", 8),
+    ("Open folder with…", 15),
+    ("Give access to", 0),
+    ("Copy as path", 5),
+    ("Share", 1),
+    ("Restore previous versions", 17),
+    ("Send to", 2),
+    ("Cut", 2),
+    ("Copy", 0),
+    ("Paste", 0),
+    ("Create shortcut", 7),
+    ("Delete", 0),
+    ("Rename", 4),
+    ("Properties", 1),
+    ("Open in new window", 12),
+    ("Open in new tab", 12),
+    ("Pin to Quick access", 7),
+    ("Unpin from Quick access", 11),
+    ("Open in Terminal", 8),
+    ("View", 0),
+    ("Sort by", 1),
+    ("Group by", 4),
+    ("New", 2),
+    ("Refresh", 1),
+    ("Extract all…", 4),
+    ("Restore", 1),
+    ("Empty Recycle Bin", 14),
+    ("Delete permanently", 7),
+    ("Eject", 1),
+    ("Format…", 1),
+    ("Disconnect", 3),
+    ("Open file location", 10),
+    ("Open as administrator…", 8),
+    ("Mount disk image", 0),
+    ("Add a network location", 6),
+    ("Previous versions", 9),
+];
+
+/// Each label's access key in a menu of `labels`: the byte offset of its
+/// character and the character in lower case. Windows' own come first;
+/// an "Undo …" or "Redo …" step takes its first letter, as Windows' "Undo
+/// Rename"; any other label the first letter of its words not taken yet,
+/// then any letter not taken yet. Two labels may share one, as Windows
+/// lets them; the key then moves between them.
+fn access_keys<'a>(labels: impl Iterator<Item = &'a str>) -> Vec<Option<(usize, char)>> {
+    let labels: Vec<&str> = labels.collect();
+    let at_char = |label: &str, nth: usize| {
+        label
+            .char_indices()
+            .nth(nth)
+            .filter(|(_, key)| key.is_alphanumeric())
+            .map(|(at, key)| (at, key.to_lowercase().next().unwrap_or(key)))
+    };
+    let mut keys: Vec<Option<(usize, char)>> = labels
+        .iter()
+        .map(|label| {
+            WINDOWS_ACCESS_KEYS
+                .iter()
+                .find(|(known, _)| known == label)
+                .and_then(|(_, nth)| at_char(label, *nth))
+                .or_else(|| {
+                    (label.starts_with("Undo ") || label.starts_with("Redo "))
+                        .then(|| at_char(label, 0))
+                        .flatten()
+                })
+        })
+        .collect();
+    let mut taken: Vec<char> = keys.iter().flatten().map(|(_, key)| *key).collect();
+    for (label, key) in labels.iter().zip(keys.iter_mut()) {
+        if key.is_some() {
+            continue;
+        }
+        let word_starts = label
+            .char_indices()
+            .filter(|(at, _)| *at == 0 || label[..*at].ends_with(' '));
+        let letters = word_starts.chain(label.char_indices());
+        let free = letters
+            .filter(|(_, letter)| letter.is_alphanumeric())
+            .map(|(at, letter)| (at, letter.to_lowercase().next().unwrap_or(letter)))
+            .find(|(_, letter)| !taken.contains(letter));
+        if let Some((_, letter)) = free {
+            taken.push(letter);
+        }
+        *key = free;
+    }
+    keys
+}
+
 /// The row for `item`, showing `check` in the menu's `marks` column, and
 /// its glyph, or an empty slot, in the `glyphs` column.
-fn item_row(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: GlyphColumn) -> gtk::ListBoxRow {
+fn item_row(
+    item: &MenuItem,
+    check: CheckMark,
+    marks: MarkColumn,
+    glyphs: GlyphColumn,
+    look: RowLook,
+) -> gtk::ListBoxRow {
     let role = match check {
         CheckMark::NotCheckable => gtk::AccessibleRole::MenuItem,
         CheckMark::Unchecked | CheckMark::Checked => gtk::AccessibleRole::MenuItemCheckbox,
     };
     let row = gtk::ListBoxRow::builder()
-        .child(&item_content(item, check, marks, glyphs))
+        .child(&if look.legacy {
+            legacy_item_content(item, check, look)
+        } else {
+            item_content(item, check, marks, glyphs)
+        })
         .accessible_role(role)
         .build();
     row.update_property(&[gtk::accessible::Property::Label(&item.label)]);

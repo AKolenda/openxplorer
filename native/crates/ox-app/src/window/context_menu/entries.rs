@@ -400,12 +400,19 @@ fn open_with_chooser(facts: &ItemFacts) -> MenuItem {
     for_one_item(item(label, Icon::Apps, WindowAction::OpenWith), facts, true)
 }
 
-/// The classic menu's applications. For a file, the "Open with" submenu
-/// of Windows' "Show more options", as the compact menu has it; for a
+/// The classic menu's applications. For a file, "Open with…", or with
+/// several applications the "Open with" submenu, as the compact menu has
+/// it; for a
 /// folder, which Windows offers no apps for, one "Open with <app>" each,
 /// then Open folder with… (OPEN-013).
 fn classic_application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     if facts.shape != ItemShape::Folder {
+        // Windows' classic menu shows "Open with..." (the chooser) for a
+        // file with one application, as for a text file, and the submenu
+        // only where there are several to choose from.
+        if facts.applications.len() < 2 {
+            return vec![open_with_chooser(facts).into()];
+        }
         return vec![open_with_submenu(facts)];
     }
     let mut entries: Vec<MenuEntry> = facts
@@ -834,12 +841,15 @@ pub(crate) fn more_options_item(action: WindowAction) -> MenuEntry {
 /// Restore previous versions, Extract All…, Mount, View, Sort by, Group
 /// by, New, Refresh, Undo, Redo, Open file location (and the app's Open
 /// file location in a new tab or window, as Open in new tab and window)
-/// and the Recycle Bin's Restore and Empty Recycle Bin. The rows Windows draws with an icon keep
-/// their glyph: Open in Terminal, Open with and the applications' own
-/// icons, Send to, Properties and Open as administrator's shield; so do
-/// the app's own commands, which Windows does not have.
-const TEXT_ONLY_IN_CLASSIC: [WindowAction; 34] = [
+/// and the Recycle Bin's Restore and Empty Recycle Bin. The other rows
+/// keep their glyph here, for the classic style's drop-down menus; the
+/// classic right-click menu (`legacy` in `menu_popover.rs`) draws only an
+/// application's own icon and Share's glyph, as Windows 11's does
+/// (reference/ref-05).
+const TEXT_ONLY_IN_CLASSIC: [WindowAction; 35] = [
     WindowAction::Open,
+    // A drive's or place's Open in the navigation pane and This PC.
+    WindowAction::GoTo,
     WindowAction::OpenTab,
     WindowAction::OpenSelectionInTabs,
     WindowAction::OpenWindow,
@@ -889,7 +899,10 @@ pub(crate) fn classic_look(entries: Vec<MenuEntry>) -> Vec<MenuEntry> {
         .map(|entry| match entry {
             MenuEntry::Item(item) => {
                 let text_only = matches!(item.action, MenuAction::Window(action) if TEXT_ONLY_IN_CLASSIC.contains(&action));
-                let is_default = item.action == MenuAction::Window(WindowAction::Open);
+                // Open, and a drive's or place's Open (Go to), in bold.
+                let is_default = item.action == MenuAction::Window(WindowAction::Open)
+                    || (item.action == MenuAction::Window(WindowAction::GoTo)
+                        && item.label == ox_core::i18n::gettext_static("Open"));
                 MenuEntry::Item(MenuItem {
                     shows_glyph: item.shows_glyph && !text_only,
                     emphasised: item.emphasised || is_default,
@@ -1154,11 +1167,12 @@ fn rename_items_item(facts: &ItemFacts) -> Option<MenuEntry> {
 
 /// The Windows 10 style ("Show more options", Shift+F10), in the order of
 /// Explorer's classic menu: Open (in bold), the editors (as "Edit in
-/// Notepad"), a folder's tab, window and pin commands, Open in Terminal
-/// and Open with; Copy as path, Share and Restore previous versions; Send
+/// Notepad"), a folder's tab, window and pin commands, Open in Terminal,
+/// the app's Compare files and Show target, and Open with last; Copy as path, Share and Restore previous versions; Send
 /// to (CMD-038); Cut, Copy and Paste; Create shortcut (CMD-040), Delete,
-/// Rename and Rename items… for several (OPS-014), then Duplicate; the
-/// app's own tools; and Properties.
+/// Rename and Rename items… for several (OPS-014); the app's own
+/// commands (Duplicate, a file's "Open containing folder in Terminal" and
+/// the tools); and Properties.
 fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
     let [cut, copy, paste, rename, delete] = edit_items(facts);
     let mut entries = vec![open_item(facts)];
@@ -1168,9 +1182,15 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
     entries.extend(editor_items(facts));
     entries.extend(folder_open_items(facts));
     entries.extend(favorite_item(facts));
-    entries.push(terminal_item(facts));
-    entries.extend(classic_application_items(facts));
+    // A folder's Open in Terminal, where Windows lists it; a file's "Open
+    // containing folder in Terminal", which Windows has no slot for, goes
+    // with the app's own tools at the end.
+    if facts.shape == ItemShape::Folder {
+        entries.push(terminal_item(facts));
+    }
     entries.extend(other_open_items(facts));
+    // Open with last in its group, as Windows lists "Open with...".
+    entries.extend(classic_application_items(facts));
     entries.push(MenuEntry::Divider);
     entries.push(copy_path_item());
     entries.extend(share_item(facts).map(MenuEntry::from));
@@ -1188,8 +1208,13 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
         rename.into(),
     ]);
     entries.extend(rename_items_item(facts));
-    entries.push(duplicate_item());
+    // The app's own commands, which Windows does not have, above
+    // Properties: Duplicate, a file's Terminal entry and the tools.
     entries.push(MenuEntry::Divider);
+    entries.push(duplicate_item());
+    if facts.shape != ItemShape::Folder {
+        entries.push(terminal_item(facts));
+    }
     entries.extend(tool_items(facts));
     entries.push(MenuEntry::Divider);
     // Properties describe several items together (PROP-002).
@@ -1201,9 +1226,13 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
 }
 
 /// The menu of blank space in a folder, acting on the folder
-/// (`backgroundMenu`, CMD-011, CMD-012). `undo_label` and `redo_label` name what
-/// Undo and Redo would do, such as "Undo Rename". View, Sort by, Group by
-/// and New open `submenus` beside the menu, as in Windows 10's.
+/// (`backgroundMenu`, CMD-011, CMD-012), in the groups of Windows'
+/// classic menu: View, Sort by, Group by and Refresh; Paste, Undo and
+/// Redo; Open in Terminal and the folder's applications; New; the app's
+/// own folder tools (Windows' Customize this folder and Give access to
+/// have no counterpart here); Properties. `undo_label` and `redo_label`
+/// name what Undo and Redo would do, such as "Undo Rename". View, Sort
+/// by, Group by and New open `submenus` beside the menu, as in Windows'.
 pub(crate) fn background_menu(
     undo_label: &str,
     redo_label: &str,
@@ -1213,46 +1242,22 @@ pub(crate) fn background_menu(
     // Explorer's and Dolphin's View and Sort by (CMD-012), as the command
     // bar's menus.
     let [view, sort, group, new] = background_submenu_items(submenus);
-    let mut entries: Vec<MenuEntry> = vec![
-        view,
-        sort,
-        group,
-        MenuEntry::Divider,
-        new,
-        item(
-            ox_core::i18n::gettext_static("Paste"),
-            Icon::ClipboardPaste,
-            WindowAction::Paste,
-        )
-        .with_shortcut("Ctrl+V")
-        .into(),
-        item(undo_label, Icon::ArrowUndo, WindowAction::Undo)
-            .with_shortcut("Ctrl+Z")
-            .into(),
-        item(redo_label, Icon::ArrowRedo, WindowAction::Redo)
-            .with_shortcut("Ctrl+Y")
-            .into(),
-        item(
-            ox_core::i18n::gettext_static("Refresh"),
-            Icon::ArrowClockwise,
-            WindowAction::Refresh,
-        )
-        .with_shortcut("F5")
-        .into(),
-        item(
-            ox_core::i18n::gettext_static("Open in Terminal"),
-            Icon::WindowConsole,
-            WindowAction::OpenInTerminal,
-        )
-        .into(),
-    ];
+    // Windows' groups: View, Sort by, Group by and Refresh; Paste and the
+    // steps to undo and redo; Open in Terminal and the folder's
+    // applications; New; the app's own folder tools; Properties.
+    let mut open_group: Vec<MenuEntry> = vec![item(
+        ox_core::i18n::gettext_static("Open in Terminal"),
+        Icon::WindowConsole,
+        WindowAction::OpenInTerminal,
+    )
+    .into()];
     // The folder's applications and Open folder with… (OPEN-013).
-    entries.extend(
+    open_group.extend(
         applications
             .iter()
             .map(|application| open_with_application(application).into()),
     );
-    entries.push(
+    open_group.push(
         item(
             ox_core::i18n::gettext_static("Open folder with…"),
             Icon::Apps,
@@ -1260,42 +1265,59 @@ pub(crate) fn background_menu(
         )
         .into(),
     );
-    entries.extend([
-        MenuEntry::Divider,
-        item(
-            ox_core::i18n::gettext_static("Pin this folder"),
-            Icon::Pin,
-            WindowAction::PinFolder,
-        )
-        .into(),
-        MenuItem::toggle(
-            &ox_core::i18n::gettext("Cache this folder for search"),
-            Icon::Search,
-            WindowAction::CacheFolder,
-        )
-        .into(),
-        item(
-            ox_core::i18n::gettext_static("Calculate folder sizes"),
-            Icon::HardDrive,
-            WindowAction::CalculateFolderSizes,
-        )
-        .into(),
-        MenuEntry::Divider,
-        item(
-            ox_core::i18n::gettext_static("Previous versions"),
-            Icon::History,
-            WindowAction::PreviousVersions,
-        )
-        .into(),
-        item(
+    grouped(vec![
+        vec![view, sort, group, refresh_item()],
+        vec![
+            item(
+                ox_core::i18n::gettext_static("Paste"),
+                Icon::ClipboardPaste,
+                WindowAction::Paste,
+            )
+            .with_shortcut("Ctrl+V")
+            .into(),
+            item(undo_label, Icon::ArrowUndo, WindowAction::Undo)
+                .with_shortcut("Ctrl+Z")
+                .into(),
+            item(redo_label, Icon::ArrowRedo, WindowAction::Redo)
+                .with_shortcut("Ctrl+Y")
+                .into(),
+        ],
+        open_group,
+        vec![new],
+        vec![
+            item(
+                ox_core::i18n::gettext_static("Pin this folder"),
+                Icon::Pin,
+                WindowAction::PinFolder,
+            )
+            .into(),
+            MenuItem::toggle(
+                &ox_core::i18n::gettext("Cache this folder for search"),
+                Icon::Search,
+                WindowAction::CacheFolder,
+            )
+            .into(),
+            item(
+                ox_core::i18n::gettext_static("Calculate folder sizes"),
+                Icon::HardDrive,
+                WindowAction::CalculateFolderSizes,
+            )
+            .into(),
+            item(
+                ox_core::i18n::gettext_static("Previous versions"),
+                Icon::History,
+                WindowAction::PreviousVersions,
+            )
+            .into(),
+        ],
+        vec![item(
             ox_core::i18n::gettext_static("Properties"),
             Icon::Info,
             WindowAction::Properties,
         )
         .with_shortcut("Alt+Enter")
-        .into(),
-    ]);
-    entries
+        .into()],
+    ])
 }
 
 /// An app of the "Open with" submenu, named as Windows names it, which
@@ -1586,8 +1608,8 @@ pub(crate) fn zip_background_menu() -> Vec<MenuEntry> {
     ]
 }
 
-/// The menu of items in the Recycle Bin: Restore, Delete permanently and
-/// Properties (OPS-040).
+/// The classic menu of items in the Recycle Bin, as Windows' (OPS-040):
+/// Restore; Cut; Delete, which deletes for good; Properties.
 pub(crate) fn recycle_bin_item_menu(is_single: bool) -> Vec<MenuEntry> {
     let properties = item(
         ox_core::i18n::gettext_static("Properties"),
@@ -1602,8 +1624,14 @@ pub(crate) fn recycle_bin_item_menu(is_single: bool) -> Vec<MenuEntry> {
             WindowAction::Restore,
         )
         .into(),
+        MenuEntry::Divider,
+        item(ox_core::i18n::gettext_static("Cut"), Icon::Cut, WindowAction::Cut)
+            .with_shortcut("Ctrl+X")
+            .into(),
+        MenuEntry::Divider,
+        // "Delete", as Windows names it there, which deletes for good.
         item(
-            ox_core::i18n::gettext_static("Delete permanently"),
+            ox_core::i18n::gettext_static("Delete"),
             Icon::Delete,
             WindowAction::Trash,
         )
@@ -1616,24 +1644,23 @@ pub(crate) fn recycle_bin_item_menu(is_single: bool) -> Vec<MenuEntry> {
     ]
 }
 
-/// The menu of blank space in the Recycle Bin: Empty Recycle Bin and
-/// Refresh (OPS-040, OPS-042).
-pub(crate) fn recycle_bin_background_menu() -> Vec<MenuEntry> {
-    vec![
-        item(
-            ox_core::i18n::gettext_static("Empty Recycle Bin"),
-            Icon::DeleteDismiss,
-            WindowAction::EmptyRecycleBin,
-        )
-        .into(),
-        item(
-            ox_core::i18n::gettext_static("Refresh"),
-            Icon::ArrowClockwise,
-            WindowAction::Refresh,
-        )
-        .with_shortcut("F5")
-        .into(),
-    ]
+/// The classic menu of blank space in the Recycle Bin (OPS-040,
+/// OPS-042), in Windows' groups: View, Sort by, Group by and Refresh;
+/// Empty Recycle Bin, and Undo and Redo while they can run; Properties.
+pub(crate) fn recycle_bin_background_menu(steps: &UndoRedo, submenus: BackgroundSubmenus) -> Vec<MenuEntry> {
+    let [view, sort, group, _] = background_submenu_items(submenus);
+    let mut second = vec![item(
+        ox_core::i18n::gettext_static("Empty Recycle Bin"),
+        Icon::DeleteDismiss,
+        WindowAction::EmptyRecycleBin,
+    )
+    .into()];
+    second.extend(steps.rows());
+    grouped(vec![
+        vec![view, sort, group, refresh_item()],
+        second,
+        vec![properties_item()],
+    ])
 }
 
 #[cfg(test)]
@@ -1994,8 +2021,8 @@ mod tests {
                 "Create shortcut",
                 "Delete",
                 "Rename",
-                "Duplicate",
                 "-",
+                "Duplicate",
                 "Compress to…",
                 "Calculate folder size",
                 "Cache this folder for search",
@@ -2109,8 +2136,8 @@ mod tests {
 
         assert_eq!(entries[1], "Extract all…");
         assert_eq!(entries[2], "Extract here");
-        assert_eq!(entries[3], "Open containing folder in Terminal");
-        assert_eq!(entries[4], "Open with…");
+        assert_eq!(entries[3], "Open with…");
+        assert!(entries.contains(&"Open containing folder in Terminal".to_owned()));
         assert!(entries.contains(&"Delete permanently".to_owned()));
         assert!(entries.contains(&"Sign out of server…".to_owned()));
         assert!(!entries.contains(&"Calculate folder size".to_owned()));
@@ -2325,8 +2352,23 @@ mod tests {
             is_available: true,
             icon: None,
         };
+        let editor = ApplicationChoice {
+            id: "org.gnome.TextEditor.desktop".to_owned(),
+            name: "Text Editor".to_owned(),
+            is_default: false,
+            is_recommended: true,
+            is_available: true,
+            icon: None,
+        };
+        let one = ItemFacts {
+            applications: vec![viewer.clone()],
+            ..file()
+        };
+        let one = labels(&item_menu(&one, MenuStyle::Classic).entries);
+        assert!(one.contains(&"Open with…".to_owned()), "{one:?}");
+        assert!(!one.contains(&"Open with".to_owned()), "{one:?}");
         let facts = ItemFacts {
-            applications: vec![viewer],
+            applications: vec![viewer, editor],
             ..file()
         };
 
@@ -2337,15 +2379,14 @@ mod tests {
             .iter()
             .position(|name| name == "Open with")
             .expect("Open with");
-        assert_eq!(
-            names[open_with - 1],
-            "Open containing folder in Terminal",
-            "{names:?}"
-        );
+        assert_eq!(names[open_with + 1], "-", "{names:?}");
         let MenuEntry::Item(submenu) = &entries[open_with] else {
             panic!("Open with is an item");
         };
-        assert_eq!(labels(&submenu.submenu), ["Papers", "-", "Choose another app"]);
+        assert_eq!(
+            labels(&submenu.submenu),
+            ["Papers", "Text Editor", "-", "Choose another app"]
+        );
         let MenuEntry::Item(open) = &submenu.submenu[0] else {
             panic!("an application is an item");
         };
@@ -2540,7 +2581,6 @@ mod tests {
             labels(&menu.entries),
             [
                 "Open",
-                "Open containing folder in Terminal",
                 "Open with…",
                 "-",
                 "Copy as path",
@@ -2555,8 +2595,9 @@ mod tests {
                 "Create shortcut",
                 "Delete",
                 "Rename",
-                "Duplicate",
                 "-",
+                "Duplicate",
+                "Open containing folder in Terminal",
                 "Compress to…",
                 "-",
                 "Properties",
@@ -2627,21 +2668,23 @@ mod tests {
                 "View",
                 "Sort by",
                 "Group by",
+                "Refresh",
                 "-",
-                "New",
                 "Paste",
                 "Undo Rename",
                 "Redo",
-                "Refresh",
+                "-",
                 "Open in Terminal",
                 "Open with Files",
                 "Open folder with…",
                 "-",
+                "New",
+                "-",
                 "Pin this folder",
                 "Cache this folder for search",
                 "Calculate folder sizes",
-                "-",
                 "Previous versions",
+                "-",
                 "Properties",
             ]
         );
@@ -2652,11 +2695,25 @@ mod tests {
     fn the_recycle_bin_menus_restore_delete_and_empty() {
         assert_eq!(
             labels(&recycle_bin_item_menu(true)),
-            ["Restore", "Delete permanently", "-", "Properties"]
+            ["Restore", "-", "Cut", "-", "Delete", "-", "Properties"]
         );
+        let steps = UndoRedo {
+            undo: Some("Undo Delete".to_owned()),
+            redo: None,
+        };
         assert_eq!(
-            labels(&recycle_bin_background_menu()),
-            ["Empty Recycle Bin", "Refresh"]
+            labels(&recycle_bin_background_menu(&steps, submenus())),
+            [
+                "View",
+                "Sort by",
+                "Group by",
+                "Refresh",
+                "-",
+                "Empty Recycle Bin",
+                "Undo Delete",
+                "-",
+                "Properties"
+            ]
         );
     }
 }

@@ -151,3 +151,13 @@
 @define-color ox_text_preview_selection_bg #0078d4;
 @define-color ox_text_preview_selection_fg #ffffff;
 @define-color ox_document_page #ffffff;
+
+/* The classic right-click menu ("Show more options", Shift+right-click),
+   drawn as Windows 11 draws its Win32 menu: measured on Windows 11 build 26200, dark, 100 %: background, 1 px border and separator; the hover is Windows 10's immersive dark menu (the reference shows none)
+   (resources/skin/menus.css, popover.ox-menu.legacy). */
+@define-color ox_legacy_menu #2c2c2c;
+@define-color ox_legacy_menu_border #a0a0a0;
+@define-color ox_legacy_menu_separator #3e3e3e;
+@define-color ox_legacy_menu_hover #414141;
+@define-color ox_legacy_menu_text #ffffff;
+@define-color ox_legacy_menu_text_disabled #6d6d6d;

@@ -23,6 +23,11 @@
 //!   (`New`, `Sort`, `View`, `See more`), as a click on its button does;
 //!   a menu of the bar open already closes, as when that click is made
 //!   while it is open;
+//! - `right-click=<name>`: selects the item called `<name>` and opens its
+//!   menu as a right-click on it does, without the keyboard's underlined
+//!   access keys; `right-click=blank` opens the folder's own menu so;
+//! - `place-menu=<label>`: opens the menu of the navigation pane's row
+//!   `<label>` as a right-click on it does;
 //! - `submenu=<label>`: opens the submenu of the open context menu's
 //!   item `<label>`, such as `Send to`, as Right on its row does;
 //! - `hover=<label>`: rests the pointer on the row `<label>` of the open
@@ -104,6 +109,12 @@ pub(crate) enum SceneStep {
     TitlesMenu(String),
     /// Open the command bar's menu with this name.
     CommandMenu(String),
+    /// Open the menu of the item with this name, or of the folder for
+    /// `blank`, as a right-click does.
+    RightClick(String),
+    /// Open the navigation pane's menu of the row with this label, as a
+    /// right-click does.
+    PlaceMenu(String),
     /// Open the submenu of the open context menu's item with this label.
     Submenu(String),
     /// Rest the pointer on the open menu's row with this label.
@@ -165,6 +176,8 @@ impl SceneStep {
         match verb.trim() {
             "select" => Some(Self::Select(argument.to_owned())),
             "submenu" => Some(Self::Submenu(argument.to_owned())),
+            "right-click" => Some(Self::RightClick(argument.to_owned())),
+            "place-menu" => Some(Self::PlaceMenu(argument.to_owned())),
             "hover" => Some(Self::Hover(argument.to_owned())),
             "tab-menu" => argument
                 .parse()
@@ -241,6 +254,7 @@ impl SceneStep {
                 .open_command_bar_menu(name)
                 .then_some(crate::window::MENU_OPENING_MOTION)
                 .ok_or_else(|| format!("the command bar shows no menu “{name}”")),
+            Self::RightClick(_) | Self::PlaceMenu(_) => self.open_menu_as_pointer(window),
             Self::Submenu(label) => (window.open_context_submenu(label)
                 || window.open_search_options_submenu(label))
             .then_some(crate::window::MENU_OPENING_MOTION)
@@ -314,6 +328,28 @@ impl SceneStep {
                 .then_some(Duration::ZERO)
                 .ok_or_else(|| format!("the search list “{list}” has no option “{label}”")),
         }
+    }
+}
+
+impl SceneStep {
+    /// Runs a `right-click=` or `place-menu=` step: opens the menu as a
+    /// right-click does.
+    fn open_menu_as_pointer(&self, window: &BrowserWindow) -> Result<Duration, String> {
+        let opened = match self {
+            Self::RightClick(name) => {
+                let item = (name != "blank").then_some(name.as_str());
+                window
+                    .open_context_menu_as_pointer(item)
+                    .then_some(())
+                    .ok_or_else(|| format!("no item called “{name}” is listed"))
+            }
+            Self::PlaceMenu(label) => window
+                .open_place_menu_as_pointer(label)
+                .then_some(())
+                .ok_or_else(|| format!("the navigation pane has no row “{label}” with a menu")),
+            _ => Err("not a menu step".to_owned()),
+        };
+        opened.map(|()| crate::window::MENU_OPENING_MOTION)
     }
 }
 

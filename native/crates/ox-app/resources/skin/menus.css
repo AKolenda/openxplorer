@@ -94,6 +94,52 @@ popover.ox-menu list > row.submenu-open { background-color: @ox_hover; }
 popover.ox-menu list > row .submenu-arrow { color: @ox_muted; margin-left: 12px; }
 popover.ox-menu list > row:disabled .submenu-arrow { color: @ox_text_disabled; }
 
+/* ---- The classic right-click menu (src/window/menu_popover.rs, legacy) ----
+   "Show more options", Shift+right-click and the classic menus of the
+   navigation pane and the landing pages, as Windows 11 draws its Win32
+   menu (measured on reference/ref-05-menu-file-classic.png, 100 %, dark):
+   square corners, a 1px border, no shadow and no motion; 3px inside the
+   border at the top, 5px at the bottom and 4px at the sides; 24px rows
+   (src/theme/fonts.rs) whose hover fills the row edge to edge; a 1px
+   separator 4px below the row above and 2px above the next; the icon 10px
+   in from the menu's edge, the text 36px in, and a submenu's ">" 14px in
+   from the right edge, the longest label ending 76px before it. */
+popover.ox-menu.legacy > contents {
+  background-color: @ox_legacy_menu;
+  color: @ox_legacy_menu_text;
+  border: 1px solid @ox_legacy_menu_border;
+  border-radius: 0;
+  padding: 3px 4px 5px 4px;
+  box-shadow: none;
+}
+/* Shown at once, without Windows 11's slide (after the slide rules, which
+   it outranks by coming later). */
+popover.ox-menu.legacy.opening-a > contents,
+popover.ox-menu.legacy.opening-b > contents { animation-name: none; }
+popover.ox-menu.legacy list { color: @ox_legacy_menu_text; }
+popover.ox-menu.legacy list > row {
+  padding: 0 0 0 5px;
+  transition: none;
+}
+popover.ox-menu.legacy list > row:hover,
+popover.ox-menu.legacy list > row:focus-visible,
+popover.ox-menu.legacy list > row.submenu-open { background-color: @ox_legacy_menu_hover; box-shadow: none; }
+popover.ox-menu.legacy list > row:active { background-color: @ox_legacy_menu_hover; }
+popover.ox-menu.legacy list > row:disabled { color: @ox_legacy_menu_text_disabled; }
+popover.ox-menu.legacy list > row:disabled:hover { background-color: @ox_legacy_menu_hover; }
+popover.ox-menu.legacy list > separator {
+  min-height: 1px;
+  margin: 4px 0 2px 0;
+  background-color: @ox_legacy_menu_separator;
+}
+popover.ox-menu.legacy list > row .legacy-glyph { margin-right: 10px; }
+/* The text 1px lower than GTK centres it, where Segoe UI sits in
+   Windows' row: its capitals 8px below the row's top. */
+popover.ox-menu.legacy list > row label { margin-top: 2px; }
+popover.ox-menu.legacy list > row .submenu-arrow { color: @ox_legacy_menu_text; margin-left: 0; }
+popover.ox-menu.legacy list > row:disabled .submenu-arrow { color: @ox_legacy_menu_text_disabled; }
+popover.ox-menu.legacy list > row .legacy-arrow-slot { min-width: 16px; margin-left: 49px; margin-right: 4px; }
+
 /* ---- The address bar's suggestions (src/window/address_bar/suggestions.rs) ----
    Windows 11's address bar drop-down lists its rows as its list views
    do: 40px rows (src/theme/fonts.rs) with rounded 4px corners, 4px in

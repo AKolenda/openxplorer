@@ -537,6 +537,10 @@ fn popup_heading_menu(page: &gtk::Box, group: Group, point: gtk::graphene::Point
     // The pane keeps one heading menu and shows it again each time
     // ([`MenuPopover::kept_by`]).
     let popover = MenuPopover::kept_by(&owner, "heading-menu");
+    popover.set_legacy_look(
+        style == MenuStyle::Classic,
+        super::place_menus::opened_by_keyboard(&owner, &popover),
+    );
     popover.set_entries(classic_or_compact(entries, style));
     popover.set_style_and_strip(style, Vec::new());
     popover.set_offset(0, 0);

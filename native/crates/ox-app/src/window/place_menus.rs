@@ -750,6 +750,7 @@ pub(super) fn popup_place_menu_in(
     // The pane keeps one place menu and shows it again each time
     // ([`MenuPopover::kept_by`]).
     let popover = MenuPopover::kept_by(owner, PLACE_MENU);
+    popover.set_legacy_look(style == MenuStyle::Classic, opened_by_keyboard(owner, &popover));
     popover.set_entries(entries);
     popover.set_style_and_strip(style, strip);
     popover.set_offset(0, 0);
@@ -881,3 +882,18 @@ pub(super) fn facts_in(menu: &PlaceMenu, widget: &impl IsA<gtk::Widget>) -> Plac
 
 #[cfg(test)]
 mod tests;
+
+/// Whether the keyboard opened the classic menu `popover` is about to show
+/// in `owner`'s window, for its underlined access keys: the keyboard was
+/// used last in the menu it opens in place of ("Show more options"), or,
+/// opening afresh, the window shows where the keyboard is, as it does
+/// after a key and not after the pointer rested on a menu.
+pub(super) fn opened_by_keyboard(owner: &gtk::Widget, popover: &MenuPopover) -> bool {
+    if popover.is_visible() {
+        return popover.keyboard_used_last();
+    }
+    owner
+        .root()
+        .and_downcast::<gtk::Window>()
+        .is_some_and(|window| GtkWindowExt::gets_focus_visible(&window))
+}
