@@ -98,6 +98,25 @@ impl Removal {
         }
     }
 
+    /// What the message says when the removal failed with `error`: a
+    /// drive still in use is refused in the words of Windows' "Problem
+    /// Ejecting" message, which say what to do; anything else in the
+    /// system's words.
+    pub(crate) fn failure_detail(error: &NetworkError) -> String {
+        let is_busy = matches!(
+            error,
+            NetworkError::Gio(error) if error.matches(gio::IOErrorEnum::Busy)
+        );
+        if is_busy {
+            ox_core::i18n::gettext(
+                "This device is currently in use. \
+                 Close any programs or windows that might be using the device, and then try again.",
+            )
+        } else {
+            error.to_string()
+        }
+    }
+
     /// Whether the user already heard about `error`: they cancelled, or
     /// GTK's dialog showed why (`G_IO_ERROR_FAILED_HANDLED`, which GIO asks
     /// never to report again).
@@ -221,5 +240,19 @@ mod tests {
         );
         assert_eq!(Removal::Eject.done_message("USB stick"), None);
         assert_eq!(Removal::Disconnect.done_message("USB stick"), None);
+    }
+
+    /// A drive a program still uses is refused in Windows' words, which
+    /// say what to do; any other refusal keeps the system's message.
+    ///
+    /// parity: DEV-006, DEV-007
+    #[test]
+    fn a_busy_drive_is_refused_in_windows_words() {
+        let busy = NetworkError::Gio(gtk::glib::Error::new(gio::IOErrorEnum::Busy, "target is busy"));
+        let other = NetworkError::Gio(gtk::glib::Error::new(gio::IOErrorEnum::Failed, "No medium found"));
+        let in_use = "This device is currently in use. \
+                      Close any programs or windows that might be using the device, and then try again.";
+        assert_eq!(Removal::failure_detail(&busy), in_use);
+        assert_eq!(Removal::failure_detail(&other), "No medium found");
     }
 }

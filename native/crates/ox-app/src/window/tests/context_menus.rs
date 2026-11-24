@@ -1228,9 +1228,11 @@ fn a_pinned_folder_menu_is_windows_11_and_keeps_its_strip_nearest_the_pointer() 
         test.activate("theme", Some(theme));
         for position in StripPosition::ALL {
             choose_strip_position(&test, position);
-            // Alpha, high in the pane, opens its menu downward; Downloads,
-            // below the user's pins, opens it upward.
-            for (label, slide, direction) in [("Alpha", Slide::Down, "down"), ("Downloads", Slide::Up, "up")]
+            // Downloads, high in the pane, opens its menu downward;
+            // Juliett, low among the user's pins, which follow the
+            // standard folders, opens it upward.
+            for (label, slide, direction) in
+                [("Downloads", Slide::Down, "down"), ("Juliett", Slide::Up, "up")]
             {
                 let menu = open_menu(label);
                 wait_until("the menu placed", || menu.slide() == Some(slide));

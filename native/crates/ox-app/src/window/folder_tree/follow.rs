@@ -11,7 +11,7 @@ use super::{model, FolderTree};
 
 impl FolderTree {
     /// The tree's options.
-    pub(super) fn options(&self) -> FolderTreeOptions {
+    pub(in crate::window) fn options(&self) -> FolderTreeOptions {
         self.imp().options.get()
     }
 
@@ -48,11 +48,27 @@ impl FolderTree {
         }
         let walk = imp.walk.get() + 1;
         imp.walk.set(walk);
+        // With "Expand to current folder" off, as in Windows' navigation pane,
+        // the folder shown is selected only where the tree already shows
+        // it; no folder opens on the way.
+        if !options.expand_to_current {
+            let position = self.shown_position(&shown);
+            selection.set_selected(position.unwrap_or(gtk::INVALID_LIST_POSITION));
+            return;
+        }
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = tree)]
             self,
             async move { tree.walk_to(&shown, walk).await }
         ));
+    }
+
+    /// The position of the row of `folder` among the rows shown now.
+    fn shown_position(&self, folder: &gio::File) -> Option<u32> {
+        (0..)
+            .map_while(|position| self.row(position).map(|row| (position, row)))
+            .find(|(_, row)| model::row_file(row).is_some_and(|file| file.equal(folder)))
+            .map(|(position, _)| position)
     }
 
     /// Ctrl+Shift+E (CMD-039): opens the folders from the top down to the

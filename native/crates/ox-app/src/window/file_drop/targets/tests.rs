@@ -892,6 +892,8 @@ fn a_folder_of_the_folder_tree_takes_drops_and_opens_under_a_held_drag() {
     let test = TestWindow::open(&file_uri(&reports));
     test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
     test.activate("folder-tree", None);
+    // The tree follows the folder shown (Windows' "Expand to current folder").
+    test.activate("folder-tree-option", Some("expand-to-current"));
     let tree = test.window.folder_tree();
     let shown = file_uri(&reports);
     wait_until("the tree selects the folder shown", || {
@@ -958,6 +960,8 @@ fn the_folder_tree_drop_outline_and_the_open_zip_note_are_captured() {
     let test = TestWindow::open(&fixture.uri_of("Documents"));
     test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
     test.activate("folder-tree", None);
+    // The tree follows the folder shown (Windows' "Expand to current folder").
+    test.activate("folder-tree-option", Some("expand-to-current"));
     let tree = test.window.folder_tree();
     let shown = fixture.uri_of("Documents");
     wait_until("the tree selects the folder shown", || {

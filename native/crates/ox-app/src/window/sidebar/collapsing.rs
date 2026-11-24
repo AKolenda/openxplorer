@@ -72,6 +72,51 @@ impl Sidebar {
         self.highlight_location();
     }
 
+    /// A double-click on the row of This PC or Network collapses its
+    /// section, or expands it, as a double-click on a node of Windows
+    /// Explorer's navigation pane does; the first click opened the place.
+    pub(super) fn toggle_sections_on_double_click(&self, list: &gtk::ListBox) {
+        let click = gtk::GestureClick::new();
+        click.set_button(gdk::BUTTON_PRIMARY);
+        click.connect_pressed(glib::clone!(
+            #[weak(rename_to = sidebar)]
+            self,
+            move |gesture, presses, x, y| {
+                if presses != 2 || !super::gestures::held_modifiers(gesture).is_empty() {
+                    return;
+                }
+                let picked = sidebar.list().pick(x, y, gtk::PickFlags::DEFAULT);
+                // The chevron takes each click itself.
+                if picked.is_some_and(|widget| row::is_on_chevron(&widget)) {
+                    return;
+                }
+                #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+                let Some(row) = sidebar.list().row_at_y(y as i32) else {
+                    return;
+                };
+                let head = {
+                    let entries = sidebar.imp().entries.borrow();
+                    usize::try_from(row.index())
+                        .ok()
+                        .and_then(|index| entries.get(index))
+                        .filter(|entry| entry.level == RowLevel::Group)
+                        .map(|entry| entry.section)
+                };
+                // Once GTK has handled the press: hiding rows while the
+                // list still handles it corrupts GTK's memory, which
+                // crashed the app later.
+                if let Some(section) = head {
+                    glib::idle_add_local_once(glib::clone!(
+                        #[weak]
+                        sidebar,
+                        move || sidebar.collapse_section(section, !sidebar.is_collapsed(section))
+                    ));
+                }
+            }
+        ));
+        list.add_controller(click);
+    }
+
     /// A drag is at `y` of the list, or left it with `None`: held over the
     /// head of a collapsed section for [`DRAG_EXPAND_DELAY`], the section
     /// expands, as Windows Explorer's navigation pane expands a collapsed

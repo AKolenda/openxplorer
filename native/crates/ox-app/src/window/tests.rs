@@ -73,6 +73,7 @@ mod middle_click;
 mod more_explorer_keys;
 pub(super) mod name_conflicts;
 mod narrow_windows;
+mod nav_pane;
 mod network;
 mod network_captures;
 mod network_shares;

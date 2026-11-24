@@ -504,10 +504,12 @@ fn add_entry_pins_a_typed_location_and_edit_changes_it_in_place() {
         .sidebar()
         .menu_entries_at(100_000.0)
         .expect("a menu on empty space");
-    let MenuEntry::Item(add) = &menu[0] else {
-        panic!("Add entry… comes first");
-    };
-    assert_eq!(add.label, "Add entry…");
+    // After Windows' own items (Show This PC … Expand to current folder).
+    let add = menu.iter().find_map(|entry| match entry {
+        MenuEntry::Item(item) if item.action == WindowAction::AddPlace.into() => Some(item),
+        _ => None,
+    });
+    assert_eq!(add.map(|item| item.label.as_str()), Some("Add entry…"));
 
     test.activate("add-place", None);
     answer_place_dialog(&test, "Docs", &fixture.path("Documents").to_string_lossy());

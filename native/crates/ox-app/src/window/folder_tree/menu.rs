@@ -4,7 +4,8 @@
 //! Cut, Copy, Paste into it, Rename…, Delete, Delete permanently,
 //! Open in Terminal and Properties, each acting on the folder clicked;
 //! then the tree's own options with check marks: Show hidden folders,
-//! Limit to home folder and Scroll to the folder shown.
+//! Limit to home folder, Scroll to the folder shown and Windows' Expand
+//! to open folder.
 
 use gtk::prelude::*;
 use ox_core::i18n::gettext;
@@ -21,6 +22,9 @@ use crate::window::BrowserWindow;
 const SHOW_HIDDEN: &str = "show-hidden";
 const LIMIT_TO_HOME: &str = "limit-to-home";
 const AUTO_SCROLL: &str = "auto-scroll";
+/// Windows' "Expand to current folder", which the navigation pane's own
+/// menu offers too.
+pub(in crate::window) const EXPAND_TO_CURRENT: &str = "expand-to-current";
 
 /// What the menu of a folder may offer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +45,7 @@ pub(super) fn toggled(mut options: FolderTreeOptions, name: &str) -> Option<Fold
         SHOW_HIDDEN => options.show_hidden = !options.show_hidden,
         LIMIT_TO_HOME => options.limit_to_home = !options.limit_to_home,
         AUTO_SCROLL => options.auto_scroll = !options.auto_scroll,
+        EXPAND_TO_CURRENT => options.expand_to_current = !options.expand_to_current,
         _ => return None,
     }
     Some(options)
@@ -55,7 +60,7 @@ fn folder_item(label: &str, glyph: Icon, action: WindowAction, uri: &str, allowe
 }
 
 /// A checkable item for the option `name`.
-fn option_item(label: &str, glyph: Icon, name: &str, is_on: bool) -> MenuEntry {
+pub(in crate::window) fn option_item(label: &str, glyph: Icon, name: &str, is_on: bool) -> MenuEntry {
     let item = MenuItem::with_text_target(label, glyph, WindowAction::FolderTreeOption, name);
     MenuEntry::Item(MenuItem {
         check: ItemCheck::Fixed(is_on),
@@ -151,7 +156,19 @@ fn entries(uri: &str, facts: FolderFacts, options: FolderTreeOptions) -> Vec<Men
             AUTO_SCROLL,
             options.auto_scroll,
         ),
+        expand_to_current_item(options),
     ]
+}
+
+/// Windows' "Expand to current folder", checked while the tree opens down to
+/// the folder shown.
+pub(in crate::window) fn expand_to_current_item(options: FolderTreeOptions) -> MenuEntry {
+    option_item(
+        &gettext("Expand to current folder"),
+        Icon::ChevronDown16,
+        EXPAND_TO_CURRENT,
+        options.expand_to_current,
+    )
 }
 
 impl FolderTree {

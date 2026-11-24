@@ -61,6 +61,8 @@ fn a_drag_over_the_navigation_pane_or_the_address_bar_draws_no_frame_round_it() 
     // starts there and never lists the real disk.
     test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
     test.activate("folder-tree", None);
+    // The tree follows the folder shown (Windows' "Expand to current folder").
+    test.activate("folder-tree-option", Some("expand-to-current"));
     let tree = test.window.folder_tree();
     wait_until("the tree shows a folder", || tree.selected_uri().is_some());
     let widgets: [(&str, gtk::Widget); 3] = [
@@ -99,6 +101,8 @@ fn the_navigation_pane_under_a_drag_is_captured() {
     let test = TestWindow::open(&fixture.uri_of("Documents"));
     test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
     test.activate("folder-tree", None);
+    // The tree follows the folder shown (Windows' "Expand to current folder").
+    test.activate("folder-tree-option", Some("expand-to-current"));
     let tree = test.window.folder_tree();
     wait_until("the tree shows a folder", || tree.selected_uri().is_some());
     let list: gtk::Widget = test.window.sidebar().list().clone().upcast();
