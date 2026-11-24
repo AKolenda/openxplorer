@@ -35,6 +35,7 @@ mod devices;
 mod dialog_focus;
 mod dialog_keys;
 mod disconnected;
+mod document_previews;
 mod drag_and_drop;
 mod drag_escape;
 mod drop_frames;

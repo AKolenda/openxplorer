@@ -17,6 +17,7 @@ pub(crate) mod desktop_setting;
 pub(crate) mod gtk_log;
 pub(crate) mod harness;
 pub(crate) mod held;
+pub(crate) mod office_documents;
 pub(crate) mod pictures;
 pub(crate) mod pointer;
 pub(crate) mod portal;
