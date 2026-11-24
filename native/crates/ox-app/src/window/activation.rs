@@ -110,7 +110,11 @@ pub(super) fn activation_for(entry: &Entry) -> Activation {
     ) {
         return Activation::Refused(ox_core::i18n::gettext_static(NOT_OPENABLE));
     }
-    if integration::Activation::for_entry(entry) == Ok(integration::Activation::BrowseArchive) {
+    // A Google Docs, Sheets or Slides file opens in the browser whatever
+    // its title ends in (DEV-013).
+    if entry.meta.web_target.is_none()
+        && integration::Activation::for_entry(entry) == Ok(integration::Activation::BrowseArchive)
+    {
         return Activation::Archive;
     }
     Activation::File
@@ -485,8 +489,13 @@ impl BrowserWindow {
     }
 
     /// Opens a file in its default application and records it among the
-    /// recent files; a failure is shown in a dialog.
+    /// recent files, or a Google Docs, Sheets or Slides file in the browser
+    /// (DEV-013); a failure is shown in a dialog.
     pub(super) fn open_file(&self, entry: &Entry) {
+        if let Some(url) = &entry.meta.web_target {
+            self.follow_link_in_background(entry, Ok(LinkTarget::Web(url.clone())));
+            return;
+        }
         let entry = entry.clone();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]

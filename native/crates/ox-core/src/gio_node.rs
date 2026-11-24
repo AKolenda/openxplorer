@@ -82,8 +82,9 @@ impl GioNode {
     /// The name `GVfs` gives a copy of an item whose address names it by
     /// ID (DEV-013): Google Drive's `standard::copy-name`, the item's
     /// title with any `/` made `-`, and its ID added when another item in
-    /// its folder has the same title. `None` for every other item, which
-    /// is named by its address, or when the backend does not say.
+    /// its folder has the same title; its sanitised title for the drive's
+    /// top folders, which have no copy name. `None` for every other item,
+    /// which is named by its address, or when the backend does not say.
     ///
     /// Blocks on the first call for a Google Drive item, as every query
     /// of this adapter does.
@@ -96,12 +97,18 @@ impl GioNode {
             let info = self
                 .file
                 .query_info(
-                    "standard::copy-name",
+                    "standard::copy-name,standard::display-name",
                     gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
                     gio::Cancellable::NONE,
                 )
                 .ok()?;
-            let name = info.attribute_as_string("standard::copy-name")?;
+            // GVfs gives My Drive, Shared with me and Shared drives no copy
+            // name; their titles are the name, with any "/" made "-" as
+            // copy names have it.
+            let name = info.attribute_as_string("standard::copy-name").or_else(|| {
+                info.attribute_as_string("standard::display-name")
+                    .map(|title| title.replace('/', "-").into())
+            })?;
             let is_one_component = !name.is_empty() && !name.contains('/') && name != "." && name != "..";
             is_one_component.then(|| OsString::from(name.as_str()))
         };

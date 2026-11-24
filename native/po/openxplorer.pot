@@ -301,6 +301,10 @@ msgstr ""
 msgid "The application did not accept this file."
 msgstr ""
 
+#: crates/ox-app/src/app_context/previous_versions.rs crates/ox-app/src/window/file_ops/availability.rs
+msgid "Google Drive and OneDrive are read-only for now. Copy items to this PC to change them."
+msgstr ""
+
 #: crates/ox-app/src/application.rs
 msgid "OpenXplorer is already running with hardware rendering. To use software rendering, run: openxplorer --restart --software-rendering"
 msgstr ""
@@ -5977,10 +5981,6 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs
 msgid "Drives, shares and virtual items cannot be changed here."
-msgstr ""
-
-#: crates/ox-app/src/window/file_ops/availability.rs
-msgid "Google Drive and OneDrive are read-only for now. Copy items to this PC to change them."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/availability.rs

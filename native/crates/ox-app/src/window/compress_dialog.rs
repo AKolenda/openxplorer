@@ -211,7 +211,7 @@ impl BrowserWindow {
         self.update_archive_actions();
         let compressor = ZipCompressor::new()
             .with_level(level)
-            .with_write_guard(self.context().previous_versions().write_guard())
+            .with_write_guard(self.context().write_guard())
             .with_progress(self.progress_reporter(&cancel));
         self.describe_compression(&cancel, &request);
         let folder = request.destination_uri.clone();
