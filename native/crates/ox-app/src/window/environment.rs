@@ -216,25 +216,20 @@ impl BrowserWindow {
         // Windows 11's navigation pane has neither capacity bars nor
         // Recent files, Recent locations and the Recycle Bin; Settings'
         // "Show more items in the navigation pane" adds them (SIDE-034).
-        let more_items = self
-            .context()
-            .settings_data()
-            .preferences
-            .more_navigation_pane_items;
+        let preferences = self.context().settings_data().preferences;
+        let more_items = preferences.more_navigation_pane_items;
         if more_items {
             // Recent files hides while the desktop remembers no history
-            // (SAFE-022), as in Nautilus.
+            // (SAFE-022), as in Nautilus, and while Settings' "Show Recent
+            // files in the navigation pane" is off, as in Windows 11.
             let remembers = self.context().recent_policy().remember;
+            let shows_recent_files = preferences.recent_files_in_navigation_pane;
             let fixed = sidebar::recent_and_bin_entries(self.imp().trash_items.get());
             entries.extend(fixed.into_iter().filter(|entry| {
-                remembers
-                    || !matches!(
-                        entry.menu,
-                        Some(
-                            super::place_menus::PlaceMenu::RecentFiles
-                                | super::place_menus::PlaceMenu::RecentLocations
-                        )
-                    )
+                let is_recent_files = matches!(entry.menu, Some(super::place_menus::PlaceMenu::RecentFiles));
+                let is_recent = is_recent_files
+                    || matches!(entry.menu, Some(super::place_menus::PlaceMenu::RecentLocations));
+                (remembers || !is_recent) && (shows_recent_files || !is_recent_files)
             }));
         }
         let (rows, anything_hidden) = self.shown_sidebar_rows(entries);

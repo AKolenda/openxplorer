@@ -28,7 +28,9 @@ mod view;
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use ox_core::settings::PreferencesUpdate;
 
+use super::bindings::PreferenceBinding;
 use super::group::SettingsGroup;
 use super::pages::{Category, SettingsView, Subpage};
 use super::parts;
@@ -68,6 +70,24 @@ const ALSO_ZIP_FILES: RowText = RowText {
     title: "Also open ZIP files",
     description: "Make default also opens ZIP archives in OpenXplorer (changes the archive association).",
     keywords: "also open zip files in openxplorer (changes the archive association) make default option",
+};
+
+const CONNECT_EXTERNAL_SHARES: RowText = RowText {
+    title: "Connect to shares opened by other apps right away (like Windows)",
+    description: "When another app opens a folder or item on a network share that is not connected, \
+                  OpenXplorer connects to it at once, as Windows does. Off, the tab waits until you \
+                  click Try again.",
+    keywords: "connect share smb network mount other apps show folders show items d-bus request \
+               automatically windows",
+};
+
+const MODAL_DIALOGS_ON_GNOME: RowText = RowText {
+    title: "Keep Open/Save dialogs modal on GNOME (like Windows)",
+    description: "On GNOME, another app's Open or Save dialog stays modal, so that app waits until \
+                  the dialog closes, as in Windows. GNOME then moves the dialog with that app's \
+                  window. Off, the dialog moves on its own and the app stays usable.",
+    keywords: "open save dialog file picker modal attached gnome mutter zorin wayland move window \
+               windows",
 };
 
 const FOLDERS: RowText = RowText {
@@ -196,10 +216,11 @@ impl Controls {
             card,
             make_default,
             // Show in folder on and ZIP files off, as the Python check
-            // boxes started (INT-009); Open and Save dialogs on, so Make
-            // default covers every route a browser takes (INT-032).
+            // boxes started (INT-009); Open and Save dialogs off, as the
+            // project keeps native actions opt-in (INT-032, #132): Make
+            // default takes them only when asked.
             include_show_in_folder: switch_starting(true),
-            include_file_dialogs: switch_starting(true),
+            include_file_dialogs: switch_starting(false),
             include_zip: switch_starting(false),
             folders: parts::value_label(ox_core::i18n::gettext_static(CHECKING)),
             smb_links: parts::value_label(ox_core::i18n::gettext_static(CHECKING)),
@@ -261,6 +282,7 @@ pub(super) fn build(page: &SettingsPage) -> (SettingsSection, SettingsGroup) {
     section.append_group(&options_group(&controls));
     let routes = routes_group(&controls);
     section.append_group(&routes);
+    section.append_group(&requests_group(page));
     section.append_group(&super_e_group(&controls));
     section.append_group(&browsers_group(page));
     section.append_group(&undo_group(page, &controls));
@@ -319,6 +341,41 @@ fn routes_group(controls: &Controls) -> SettingsGroup {
     dialogs.add_control(&controls.apply_file_dialogs, ControlName::OwnLabel);
     dialogs.add_control(&controls.enable_file_dialogs, ControlName::OwnLabel);
     group.add_row(dialogs);
+    group
+}
+
+/// What another app's request does: whether a share it opens is
+/// connected to at once (#191), and whether its Open or Save dialog stays
+/// modal on GNOME (#382). Both are off by default, the owner's choices.
+fn requests_group(page: &SettingsPage) -> SettingsGroup {
+    let group = SettingsGroup::new(&ox_core::i18n::gettext("Requests from other apps"));
+    let bindings = [
+        (
+            CONNECT_EXTERNAL_SHARES,
+            PreferenceBinding {
+                read: |preferences| preferences.connect_external_shares,
+                write: |on| PreferencesUpdate {
+                    connect_external_shares: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+        (
+            MODAL_DIALOGS_ON_GNOME,
+            PreferenceBinding {
+                read: |preferences| preferences.modal_dialogs_on_gnome,
+                write: |on| PreferencesUpdate {
+                    modal_dialogs_on_gnome: Some(on),
+                    ..PreferencesUpdate::default()
+                },
+            },
+        ),
+    ];
+    for (text, binding) in bindings {
+        let row = SettingRow::new(text);
+        row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+        group.add_row(&row);
+    }
     group
 }
 

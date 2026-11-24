@@ -132,7 +132,7 @@ const DOS_DATE_1980: u16 = (1 << 5) | 1;
 /// A ZIP of `entries`, in their order, each stored uncompressed with its
 /// CRC-32 and sizes in its local header. The entries are a few kilobytes
 /// of fixed text, far below every 16- and 32-bit limit of the format.
-fn stored_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
+pub(crate) fn stored_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
     let mut zip = Vec::new();
     let mut directory = Vec::new();
     for &(name, data) in entries {

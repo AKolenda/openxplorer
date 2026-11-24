@@ -164,14 +164,6 @@ impl SessionCredentials {
         locked(&self.memory).retain(|key, _| key.host() != host);
     }
 
-    /// Forgets every endpoint of a host after any in-flight saves finish.
-    pub(super) fn forget_host(&self, host: &str, scope: ForgetScope) -> Result<bool, KeyringError> {
-        self.forget_host_memory(host);
-        let host_lock = self.store.host_lock(host);
-        let _serialised = locked(&host_lock);
-        self.store.clear_host(host, scope)
-    }
-
     /// Forgets every credential in this window's memory, when the window
     /// closes.
     pub fn clear_memory(&self) {

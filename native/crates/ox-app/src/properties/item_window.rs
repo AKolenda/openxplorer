@@ -448,7 +448,12 @@ impl ItemPages {
         if let Some(mount) = properties.mount.as_ref().filter(|_| self.target.as_drive) {
             window.set_art(DRIVE_ART);
             clear(&self.general);
-            let general = drive_general_tab(&properties.entry.uri, mount, &self.context.locations);
+            let general = drive_general_tab(
+                &properties.entry.uri,
+                mount,
+                &self.context.locations,
+                Some(window),
+            );
             self.general.append(&general);
             if let Some(hardware) = &self.hardware {
                 hardware.append(&hardware_rows(mount));

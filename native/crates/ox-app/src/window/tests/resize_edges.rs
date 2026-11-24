@@ -94,11 +94,11 @@ fn the_window_edges_and_corners_resize_with_their_cursor() {
     );
 }
 
-/// A scroll bar's thumb at the window's right edge scrolls: the edge's
-/// band stands aside over it, though it still resizes above and below the
-/// thumb, and the corner still resizes.
+/// A scroll bar at the window's right edge scrolls: the edge's band
+/// stands aside over its thumb and its trough, and the corner still
+/// resizes.
 #[gtk::test]
-fn the_right_edge_leaves_the_file_lists_scroll_thumb_to_the_scroll_bar() {
+fn the_right_edge_leaves_the_file_lists_scroll_bar_to_the_scroll_bar() {
     let fixture = Fixture::with_files(300);
     let test = laid_out(&fixture.uri());
     let window = &test.window;
@@ -134,12 +134,71 @@ fn the_right_edge_leaves_the_file_lists_scroll_thumb_to_the_scroll_bar() {
     );
     let below_thumb = f64::from(bounds.y() + bounds.height()) + 20.0;
     assert!(below_thumb < height - 20.0, "room below the thumb");
+    let trough = window
+        .pick(width - 1.0, below_thumb, gtk::PickFlags::DEFAULT)
+        .expect("something under the trough");
     assert!(
-        handle_at(window, width - 1.0, below_thumb).is_some(),
-        "the edge resizes beside the trough"
+        trough.ancestor(gtk::Scrollbar::static_type()).is_some(),
+        "the trough below the thumb takes the press, not {trough:?}"
     );
     assert!(
         handle_at(window, width - 1.0, height - 1.0).is_some(),
         "the corner resizes"
     );
+}
+
+/// A control at a window's edge takes presses all the way to the edge,
+/// as in Windows: the band stands aside over a button, a check box and a
+/// text field, and still resizes over what takes no press, such as a
+/// label, and in the corners.
+#[gtk::test]
+fn controls_at_the_edge_take_their_own_presses() {
+    let window = gtk::Window::new();
+    let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
+    let button = gtk::Button::with_label("Browse...");
+    let check = gtk::CheckButton::with_label("Read-only");
+    let field = gtk::Entry::new();
+    let label = gtk::Label::new(Some("Folder:"));
+    for widget in [
+        button.upcast_ref::<gtk::Widget>(),
+        check.upcast_ref(),
+        field.upcast_ref(),
+        label.upcast_ref(),
+    ] {
+        widget.set_hexpand(true);
+        widget.set_size_request(-1, 40);
+        column.append(widget);
+    }
+    window.set_child(Some(&column));
+    window.set_default_size(300, 160);
+    resize_edges::install(&window);
+    window.present();
+    crate::test_support::harness::settle();
+    // A plain window does not place the handles itself, as the app's
+    // windows do after their own allocation.
+    resize_edges::allocate(&window, window.width(), window.height());
+    resize_edges::turn_on_for_test(&window);
+    let width = f64::from(window.width());
+    let left = 1.0;
+    let right = width - 1.0;
+    for (control, name) in [
+        (button.upcast_ref::<gtk::Widget>(), "button"),
+        (check.upcast_ref(), "check box"),
+        (field.upcast_ref(), "text field"),
+    ] {
+        let bounds = control.compute_bounds(&window).expect("laid out");
+        let y = f64::from(bounds.y() + bounds.height() / 2.0);
+        for x in [left, right] {
+            let picked = window.pick(x, y, gtk::PickFlags::DEFAULT).expect("a widget");
+            assert!(
+                picked == *control || picked.is_ancestor(control),
+                "the {name} takes the press at {x}, {y}, not {picked:?}"
+            );
+        }
+    }
+    let bounds = label.compute_bounds(&window).expect("laid out");
+    let y = f64::from(bounds.y() + bounds.height() / 2.0);
+    assert!(handle_at(&window, left, y).is_some(), "a label resizes");
+    assert!(handle_at(&window, 1.0, 1.0).is_some(), "the corner resizes");
+    window.destroy();
 }

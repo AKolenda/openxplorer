@@ -8,14 +8,22 @@
 //! the live original nor the snapshot is replaced. As for every copy, a
 //! failure is asked about in the progress window (OPS-047) and nothing is
 //! said once it ends.
+//!
+//! With "Restore over the original (Windows)" on in Settings, Restore
+//! copies the version back into the item's own folder instead, as Windows
+//! 11's Restore does, and the item it meets there is asked about in
+//! "Replace or Skip Files", as a paste is ([`BrowserWindow::restore_over_original`]).
+//! The setting is off by default.
 
 use gtk::glib;
 use gtk::subclass::prelude::*;
+use ox_core::location::parent_location;
 use ox_core::ops::{run_transfer, starting_label, OperationContext, TransferRequest, STOPPED_TITLE};
 use ox_core::transfer::{ConflictPolicy, TransferMode};
 
 use crate::properties::RestoreRequest;
 
+use super::file_ops::IncomingItems;
 use super::transfer_panel::TransferKind;
 use super::BrowserWindow;
 
@@ -40,6 +48,39 @@ impl BrowserWindow {
             ),
         );
         self.present_window_dialog(&frame);
+    }
+
+    /// Whether Restore copies a version back over its item, as "Restore
+    /// over the original (Windows)" in Settings says.
+    pub(crate) fn restores_over_original(&self) -> bool {
+        self.context().settings_data().preferences.restore_over_original
+    }
+
+    /// Restores the version `request` asks for over the live item at
+    /// `original`, as Windows 11's Restore does: the version is copied
+    /// into the item's folder, and "Replace or Skip Files" asks about the
+    /// item of the same name there, as for a paste. Where the item's
+    /// folder may not take it, such as inside a snapshot, Restore asks
+    /// for another folder as usual.
+    pub(crate) fn restore_over_original(&self, request: &RestoreRequest, original: &str) {
+        let versions = self.context().previous_versions().clone();
+        let folder = parent_location(original).and_then(|folder| versions.restore_destination(&folder).ok());
+        let Some(folder) = folder else {
+            self.ask_restore_destination(request);
+            return;
+        };
+        let incoming = IncomingItems {
+            mode: TransferMode::Copy,
+            uris: vec![request.version_uri.clone()],
+            destination_folder: folder,
+        };
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                window.transfer_with_conflicts(incoming).await;
+            }
+        ));
     }
 
     /// Copies the version at `source` into `destination` with Keep both,

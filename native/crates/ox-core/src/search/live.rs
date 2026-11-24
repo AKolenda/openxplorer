@@ -18,6 +18,12 @@
 //! default: [`walks_subfolders`] tells the caller, and a walk of one reads
 //! the folder itself only, by name. The caller runs it off the main
 //! thread and cancels it when the search changes.
+//!
+//! As Folder Options' Search tab says (as Windows' does for non-indexed
+//! locations): with "Include system directories" off, the system's own
+//! folders, such as `/usr` and `/etc`, are not entered either; with
+//! "Include compressed files" on, the files and folders inside a ZIP, 7Z
+//! or TAR archive the walk passes are found by name too.
 
 use std::collections::VecDeque;
 use std::mem;
@@ -31,11 +37,19 @@ use super::mounts::read_mounts;
 use super::pattern::NamePattern;
 use super::policy::{IndexScope, RootStorage};
 use super::root::HiddenItems;
+use crate::archive::{is_supported_archive, ArchiveBrowser};
 use crate::entry::{entry_from_info, Entry, EntryError, EntryKind, ATTRIBUTES};
-use crate::location::normalise;
+use crate::location::{normalise, ArchiveLocation};
+use crate::transfer::Cancellation;
 
 /// Deepest level walked below the searched folder (`MAX_DEPTH` of a scan).
 const MAX_DEPTH: usize = 128;
+
+/// The system's own folders, which a walk with "Include system
+/// directories" off does not enter, as Windows leaves its own out.
+const OS_FOLDERS: [&str; 12] = [
+    "/bin", "/boot", "/etc", "/lib", "/lib32", "/lib64", "/libx32", "/opt", "/sbin", "/snap", "/usr", "/var",
+];
 
 /// Matches handed over at once, at most; a folder's matches are handed
 /// over when it has been read, so they appear as the walk goes.
@@ -60,6 +74,19 @@ pub struct LiveSearch {
     /// Whether subfolders are walked too; false reads the folder itself
     /// only, as Search options > Current folder asks (SRCH-046).
     pub subfolders: bool,
+    /// Whether the system's own folders ([`OS_FOLDERS`]) are entered.
+    pub system_directories: bool,
+    /// What reads the archives the walk passes, to find what they hold
+    /// by name; `None` leaves archives closed.
+    pub archives: Option<ArchiveBrowser>,
+}
+
+/// Whether `uri` is one of the system's own folders or inside one.
+fn is_os_folder(uri: &str) -> bool {
+    let Some(path) = gio::File::for_uri(uri).path() else {
+        return false;
+    };
+    OS_FOLDERS.iter().any(|folder| path.starts_with(folder))
 }
 
 /// Whether `entry` matches `pattern` by its name and its text together,
@@ -175,7 +202,11 @@ impl Walk<'_> {
                     depth: folder.depth + 1,
                 });
             }
+            let members = self.archive_matches(&entry);
             if self.matches(&entry) && !self.keep(entry) {
+                break Ok(None);
+            }
+            if !members.into_iter().all(|member| self.keep(member)) {
                 break Ok(None);
             }
         };
@@ -188,7 +219,41 @@ impl Walk<'_> {
     /// or shortcut, inside what a scan would index.
     fn enters(&self, entry: &Entry) -> bool {
         let is_real_folder = entry.kind == EntryKind::Directory && !entry.is_symlink && !entry.is_virtual;
-        self.is_local && is_real_folder && self.scope.admits(&entry.uri)
+        let is_left_out = !self.search.system_directories && is_os_folder(&entry.uri);
+        self.is_local && is_real_folder && !is_left_out && self.scope.admits(&entry.uri)
+    }
+
+    /// The members of the archive `entry` whose names match, when the walk
+    /// opens archives: only a local file it would enter the folder of.
+    /// An archive that cannot be read holds nothing.
+    fn archive_matches(&self, entry: &Entry) -> Vec<Entry> {
+        let Some(browser) = &self.search.archives else {
+            return Vec::new();
+        };
+        let is_archive = entry.kind == EntryKind::File
+            && !entry.is_symlink
+            && is_supported_archive(&entry.name, entry.content_type.as_deref());
+        if !self.is_local || !is_archive {
+            return Vec::new();
+        }
+        let pattern = &self.search.pattern;
+        let matches = |name: &str| pattern.matches_lowercase(name, "");
+        let Ok(members) = browser.matching_members(&entry.uri, &matches, &Cancellation::new()) else {
+            return Vec::new();
+        };
+        let root = ArchiveLocation::root(&entry.uri);
+        members
+            .into_iter()
+            .map(|member| {
+                let (is_dir, size) = match member.kind {
+                    crate::archive::ArchiveEntryKind::Folder => (true, None),
+                    crate::archive::ArchiveEntryKind::File { size, .. } => (false, Some(size)),
+                };
+                let uri = root.member(&member.member).uri();
+                Entry::archive_member(uri, member.name, is_dir, size, member.modified)
+            })
+            .filter(|member| self.search.filter.matches(member))
+            .collect()
     }
 
     /// Whether `entry` matches: by name, or, in a search of contents, by
@@ -249,6 +314,8 @@ mod tests {
             search_in: SearchIn::Names,
             filter: FacetMatcher::default(),
             subfolders: true,
+            system_directories: true,
+            archives: None,
         }
     }
 
@@ -309,6 +376,53 @@ mod tests {
         assert_eq!(by_name, ["budget.ods"]);
         assert_eq!(by_contents, ["budget.ods", "minutes.txt"]);
         assert!(with_wildcard.is_empty(), "a wildcard word still matches the name");
+    }
+
+    /// "Include compressed files": the files and folders inside a ZIP the
+    /// walk passes are found by name, at any depth, and open inside it;
+    /// off, the ZIP stays closed (#231).
+    #[test]
+    fn compressed_files_are_searched_only_when_asked() {
+        let base = tempfile::tempdir().unwrap();
+        let zip = crate::ops::stored_zip(&[
+            ("Budget 2026.txt", b"x".as_slice()),
+            ("Plans/Budget draft.txt", b"y".as_slice()),
+            ("Plans/notes.txt", b"z".as_slice()),
+        ]);
+        fs::write(base.path().join("Archive.zip"), zip).unwrap();
+        let mut search = search_of(base.path(), "budget", 500);
+
+        let (closed, _) = names_found(&search);
+        search.archives = Some(ArchiveBrowser::new(
+            std::sync::Arc::new(crate::archive::GioArchiveOpener),
+            base.path().join("previews"),
+        ));
+        let mut uris = Vec::new();
+        walk_search(&search, &gio::Cancellable::new(), &mut |batch| {
+            uris.extend(batch.into_iter().map(|entry| (entry.name, entry.uri)));
+        })
+        .expect("the folder can be walked");
+        uris.sort();
+
+        assert!(closed.is_empty(), "{closed:?}");
+        let names: Vec<&str> = uris.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(names, ["Budget 2026.txt", "Budget draft.txt"]);
+        assert!(
+            uris.iter()
+                .all(|(_, uri)| ArchiveLocation::from_uri(uri).is_some()),
+            "{uris:?}"
+        );
+    }
+
+    /// "Include system directories" off: the walk leaves the system's own
+    /// folders out, as Windows leaves its own (#231).
+    #[test]
+    fn system_folders_are_known_by_their_paths() {
+        assert!(is_os_folder("file:///usr/share/doc"));
+        assert!(is_os_folder("file:///etc"));
+        assert!(!is_os_folder("file:///home/demo/usr"));
+        assert!(!is_os_folder("file:///srv/projects"));
+        assert!(!is_os_folder("file:///usrlocal"));
     }
 
     #[test]

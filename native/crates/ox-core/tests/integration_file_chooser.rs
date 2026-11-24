@@ -857,66 +857,61 @@ fn gnome_registration(fixture: &OptInFixture) -> FileDialogRegistration {
     )
 }
 
-/// What systemd's environment.d generator makes of the user's
-/// environment files in `config_home`; `None` where the generator is not
-/// installed.
-fn environment_from(config_home: &Path) -> Option<String> {
-    let generator =
-        Path::new("/usr/lib/systemd/user-environment-generators/30-systemd-environment-d-generator");
-    if !generator.is_file() {
-        return None;
+/// What the packages' environment generator
+/// (`native/packaging/data/file-dialogs-generator`) prints at login for a
+/// user whose settings folder is `settings`, as the systemd user manager
+/// runs it: with `$XDG_CONFIG_HOME` the folder that holds `winspace`.
+fn environment_from(settings: &Path) -> String {
+    let generator = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../packaging/data/file-dialogs-generator");
+    let config_home = settings.parent().expect("the settings folder's folder");
+    let winspace = config_home.join("winspace");
+    if settings != winspace {
+        let _ = fs::remove_file(&winspace);
+        symlink(settings, &winspace).expect("the settings folder under its real name");
     }
-    let output = Command::new(generator)
+    let output = Command::new("sh")
+        .arg(&generator)
         .env_clear()
         .env("HOME", config_home)
         .env("XDG_CONFIG_HOME", config_home)
         .output()
         .expect("the generator runs");
     assert!(output.status.success(), "{output:?}");
-    Some(String::from_utf8(output.stdout).expect("text"))
+    String::from_utf8(output.stdout).expect("text")
 }
 
-/// Enabling also writes the environment file that makes GTK 3 apps ask
-/// the portal from the next login, on every desktop, as systemd reads it.
-/// Disabling removes it; a file of the user's with that name, or a
-/// symlink, is never replaced; one enabled by an earlier version gets it
-/// from Enable.
+/// Enabling also writes the opt-in mark for which the packages'
+/// environment generator makes GTK 3 apps ask the portal from the next
+/// login; without it the generator prints nothing. Disabling removes it;
+/// a file of the user's with that name, or a symlink, is never replaced;
+/// one enabled by an earlier version gets it from Enable. No file is
+/// written in `environment.d`, so uninstalling the package, which removes
+/// the generator, leaves nothing behind (#143).
 ///
 /// parity: INT-032
 #[test]
-fn gtk_apps_are_covered_by_an_environment_file() {
+fn gtk_apps_are_covered_by_an_opt_in_mark_the_generator_reads() {
     let fixture = OptInFixture::new();
     let registration = gnome_registration(&fixture);
     let file = registration.gtk_env_file();
-    assert_eq!(
-        file,
-        fixture
-            .root
-            .path()
-            .join("config/environment.d/60-openxplorer-file-dialogs.conf")
-    );
+    let settings = fixture.root.path().join("settings");
+    assert_eq!(file, settings.join("file-dialogs/gtk-apps"));
     assert!(!registration.covers_gtk_apps());
+    assert_eq!(environment_from(&settings), "");
 
     registration.enable().expect("enable");
-    let written = fs::read_to_string(&file).expect("the environment file");
-    assert!(
-        written.contains(&format!("\n{GTK_PORTAL_VARIABLE}=1\n")),
-        "{written}"
-    );
+    assert!(file.is_file());
     assert!(registration.covers_gtk_apps());
     assert!(!registration.leaves_apps_out());
-    if let Some(environment) = environment_from(&fixture.root.path().join("config")) {
-        assert!(
-            environment.lines().any(|line| line == "GTK_USE_PORTAL=1"),
-            "{environment}"
-        );
-    }
+    assert_eq!(environment_from(&settings), format!("{GTK_PORTAL_VARIABLE}=1\n"));
+    assert!(!fixture.root.path().join("config/environment.d").exists());
     registration.disable().expect("disable");
     assert!(!file.exists());
     assert!(!registration.is_enabled());
+    assert_eq!(environment_from(&settings), "");
 
     // Enabled by an earlier version: the dialogs use the app but GTK 3 apps
-    // are left out, and enabling again adds the file.
+    // are left out, and enabling again adds the mark.
     registration.enable().expect("enable");
     fs::remove_file(&file).expect("an older version wrote none");
     assert!(registration.leaves_apps_out());
@@ -925,7 +920,7 @@ fn gtk_apps_are_covered_by_an_environment_file() {
     assert!(!registration.leaves_apps_out());
     registration.disable().expect("disable");
 
-    fs::write(&file, "GTK_THEME=Adwaita\n").expect("the user's own file");
+    fs::write(&file, "the user's own file\n").expect("the user's own file");
     registration.enable().expect("enable");
     assert!(registration.gtk_env_is_someone_elses());
     assert!(
@@ -933,7 +928,7 @@ fn gtk_apps_are_covered_by_an_environment_file() {
         "Enable leaves the user's file alone"
     );
     registration.disable().expect("disable");
-    assert_eq!(fs::read_to_string(&file).expect("kept"), "GTK_THEME=Adwaita\n");
+    assert_eq!(fs::read_to_string(&file).expect("kept"), "the user's own file\n");
     fs::remove_file(&file).expect("cleared");
 
     symlink(fixture.user_file(), &file).expect("a symlink");
@@ -945,6 +940,53 @@ fn gtk_apps_are_covered_by_an_environment_file() {
         .expect("kept")
         .file_type()
         .is_symlink());
+}
+
+/// The environment file an earlier version wrote is replaced by the mark,
+/// once, only while it holds exactly what the app wrote: a changed file
+/// or a link stays as it is, and Restore removes the old file too.
+///
+/// parity: INT-032
+#[test]
+fn the_old_environment_file_is_replaced_by_the_mark_only_when_unchanged() {
+    let fixture = OptInFixture::new();
+    let registration = gnome_registration(&fixture);
+    let old = registration.old_gtk_env_file();
+    assert_eq!(
+        old,
+        fixture
+            .root
+            .path()
+            .join("config/environment.d/60-openxplorer-file-dialogs.conf")
+    );
+    let written_before = "# Open and Save dialogs of GTK 3 apps go to the desktop portal, which sends them\n\
+                          # to OpenXplorer. Set by OpenXplorer (Settings > Default apps); Restore removes it.\n\
+                          GTK_USE_PORTAL=1\n";
+    assert!(!registration.replace_old_gtk_env_file().expect("nothing to do"));
+
+    fs::create_dir_all(old.parent().expect("its folder")).expect("the folder");
+    fs::write(&old, format!("{written_before}# mine\n")).expect("a changed file");
+    assert!(!registration.replace_old_gtk_env_file().expect("left alone"));
+    assert!(old.is_file());
+    assert!(!registration.gtk_env_file().exists());
+
+    fs::remove_file(&old).expect("cleared");
+    symlink(fixture.user_file(), &old).expect("a link");
+    assert!(!registration.replace_old_gtk_env_file().expect("left alone"));
+    assert!(fs::symlink_metadata(&old).expect("kept").file_type().is_symlink());
+
+    fs::remove_file(&old).expect("cleared");
+    fs::write(&old, written_before).expect("the app's own file");
+    assert!(registration.replace_old_gtk_env_file().expect("replaced"));
+    assert!(!old.exists());
+    assert!(registration.covers_gtk_apps());
+    assert!(!registration.replace_old_gtk_env_file().expect("once"));
+
+    fs::write(&old, written_before).expect("the app's own file again");
+    registration.enable().expect("enable");
+    registration.disable().expect("disable");
+    assert!(!old.exists(), "Restore removes the old file too");
+    assert!(!registration.gtk_env_file().exists());
 }
 
 /// Dialogs enabled by an earlier version whose environment file's folder

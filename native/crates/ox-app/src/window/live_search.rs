@@ -51,11 +51,25 @@ fn searched_entries(store: &gio::ListStore, shows_hidden: bool) -> impl Iterator
 }
 
 impl BrowserWindow {
+    /// How many matches a search shows: the first [`RESULT_LIMIT`], or
+    /// every one while Settings' "Show all search matches (like Windows)"
+    /// is on, as Windows 11 shows them.
+    pub(super) fn live_search_limit(&self) -> usize {
+        if self.context().settings_data().preferences.show_all_search_matches {
+            usize::MAX
+        } else {
+            RESULT_LIMIT
+        }
+    }
+
     /// Walks the folder of `run` and its subfolders off the main thread,
     /// adding the matches to the rows as they are found, after the
     /// listing's own (SRCH-035). A newer edit cancels the walk.
     pub(super) fn walk_folder(&self, run: SearchRun) {
         let filter = run.typed.matcher(&local_now());
+        let limit = self.live_search_limit();
+        // Folder Options' Search tab: system folders and archives.
+        let preferences = self.context().settings_data().preferences;
         let rows = gio::ListStore::new::<FileItem>();
         let mut shown = HashSet::new();
         let mut is_truncated = false;
@@ -75,7 +89,7 @@ impl BrowserWindow {
                 folder: &run.folder,
                 shows_hidden,
             };
-            let listed = listed_matches_passing(listing, &run.text, &filter);
+            let listed = listed_matches_passing(listing, &run.text, &filter, limit);
             is_truncated = listed.is_truncated;
             shown.extend(listed.items.iter().map(|item| item.entry().uri.clone()));
             rows.extend_from_slice(&listed.items);
@@ -95,10 +109,14 @@ impl BrowserWindow {
             folder: run.folder.clone(),
             pattern: NamePattern::new(&run.text),
             hidden_items: self.hidden_items(),
-            limit: RESULT_LIMIT,
+            limit,
             search_in: run.search_in,
             filter,
             subfolders: run.subfolders,
+            system_directories: preferences.search_system_directories,
+            archives: preferences
+                .search_compressed_files
+                .then(crate::archive_view::archive_browser),
         };
         let (sender, batches) = async_channel::unbounded::<Vec<Entry>>();
         let cancellable = run.cancellable.clone();
@@ -112,8 +130,8 @@ impl BrowserWindow {
         glib::spawn_future_local(async move {
             while let Ok(batch) = batches.recv().await {
                 let new = batch.into_iter().filter(|entry| shown.insert(entry.uri.clone()));
-                let room = RESULT_LIMIT.saturating_sub(rows.n_items() as usize);
-                let mut found: Vec<Entry> = new.take(room + 1).collect();
+                let room = limit.saturating_sub(rows.n_items() as usize);
+                let mut found: Vec<Entry> = new.take(room.saturating_add(1)).collect();
                 is_truncated |= found.len() > room;
                 found.truncate(room);
                 let items: Vec<FileItem> = found.into_iter().map(FileItem::new).collect();
@@ -127,6 +145,10 @@ impl BrowserWindow {
                     }
                     shows_rows = true;
                 }
+                // Batches that came in together are shown one main-loop
+                // turn apart, so a walk that finds thousands of matches
+                // never holds the window while they are added.
+                glib::timeout_future(std::time::Duration::ZERO).await;
             }
             let outcome = walk.await.unwrap_or(Err(SearchError::Cancelled));
             if let Some(window) = window.upgrade() {
@@ -166,7 +188,8 @@ impl BrowserWindow {
             folder: &folder,
             shows_hidden,
         };
-        let listed = listed_matches_passing(listing, &text, &filter).items;
+        let limit = self.live_search_limit();
+        let listed = listed_matches_passing(listing, &text, &filter, limit).items;
         let listed_uris: HashSet<String> = listed.iter().map(|item| item.entry().uri.clone()).collect();
         // A search of contents: the folder's files as listed now, for the
         // ones it found by their text.
@@ -204,7 +227,7 @@ impl BrowserWindow {
             .collect();
         let unlisted = self.contents_to_check(&folder, &still_listed, &shown, &listed_uris);
         self.recheck_contents(&rows, &text, changed, unlisted);
-        let room = RESULT_LIMIT.saturating_sub(rows.n_items() as usize);
+        let room = limit.saturating_sub(rows.n_items() as usize);
         let new: Vec<FileItem> = listed
             .into_iter()
             .filter(|item| !shown.contains(&item.entry().uri))
@@ -304,7 +327,7 @@ impl BrowserWindow {
                 .filter_map(Result::ok)
                 .map(|item| item.entry().uri.clone())
                 .collect();
-            let room = RESULT_LIMIT.saturating_sub(rows.n_items() as usize);
+            let room = window.live_search_limit().saturating_sub(rows.n_items() as usize);
             let found: Vec<FileItem> = matched
                 .into_iter()
                 .filter(|entry| !shown.contains(&entry.uri))

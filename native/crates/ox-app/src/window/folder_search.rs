@@ -20,7 +20,9 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use ox_core::location::{same_location, TRASH_URI};
-use ox_core::search::{HiddenItems, SearchFacets, SearchIn, SearchQuery, SearchResults};
+use ox_core::search::{
+    HiddenItems, SearchFacets, SearchHit, SearchIn, SearchQuery, SearchResults, UNLIMITED_RESULTS,
+};
 
 use crate::folder_view::cells::RowTooltip;
 use crate::folder_view::details::DetailsListing;
@@ -313,7 +315,12 @@ impl BrowserWindow {
         let query = SearchQuery {
             text: run.text.clone(),
             scope: (run.scope == SearchScope::ThisFolder).then(|| run.folder.clone()),
-            limit: RESULT_LIMIT,
+            // Settings' "Show all search matches (like Windows)": every hit.
+            limit: if self.shows_all_search_matches() {
+                UNLIMITED_RESULTS
+            } else {
+                RESULT_LIMIT
+            },
             hidden_items: self.hidden_items(),
         };
         let cache = self.context().search_cache().clone();
@@ -370,7 +377,7 @@ impl BrowserWindow {
     /// unchanged results stay the same items, selected and scrolled to as
     /// they were (as [`reconcile::update_in_place`] does for a reloaded
     /// folder); returns whether it did.
-    fn keep_search_results(&self, run: &SearchRun, found: SearchResults) -> bool {
+    fn keep_search_results(&self, run: &SearchRun, mut found: SearchResults) -> bool {
         let active = self.imp().session.borrow().active_id();
         let store = active.and_then(|id| self.tab_store(id));
         let shows_hidden = self.hidden_files_shown();
@@ -380,7 +387,16 @@ impl BrowserWindow {
             folder: &run.folder,
             shows_hidden,
         });
-        let merged = merge_results(listing, &run.text, found);
+        // Showing every match, the first [`RESULT_LIMIT`] hits show at once
+        // and the rest follow a batch at a time (`add_results_in_batches`).
+        let shows_all = self.shows_all_search_matches();
+        let later = if shows_all && found.hits.len() > RESULT_LIMIT {
+            found.hits.split_off(RESULT_LIMIT)
+        } else {
+            Vec::new()
+        };
+        let limit = if shows_all { usize::MAX } else { RESULT_LIMIT };
+        let merged = merge_results(listing, &run.text, found, limit);
         let shown = run
             .refreshes
             .then(|| self.imp().search.borrow().results().cloned())
@@ -395,11 +411,50 @@ impl BrowserWindow {
             rows.extend_from_slice(&merged.items);
             rows
         };
+        let kept = rows.clone();
         self.imp()
             .search
             .borrow_mut()
             .finish(run, rows, merged.is_truncated);
+        if !later.is_empty() {
+            self.add_results_in_batches(kept, later);
+        }
         updated_in_place
+    }
+
+    /// Whether Settings' "Show all search matches (like Windows)" is on.
+    fn shows_all_search_matches(&self) -> bool {
+        self.live_search_limit() == usize::MAX
+    }
+
+    /// Adds `hits` to the search's `rows` [`RESULT_LIMIT`] at a time, one
+    /// main-loop turn apart, so a search with many thousands of matches
+    /// never holds the window while its rows are made; stops once the
+    /// search shows other rows.
+    fn add_results_in_batches(&self, rows: gio::ListStore, mut hits: Vec<SearchHit>) {
+        let window = self.downgrade();
+        glib::spawn_future_local(async move {
+            let mut shown: std::collections::HashSet<String> = rows
+                .iter::<FileItem>()
+                .filter_map(Result::ok)
+                .map(|item| item.entry().uri.clone())
+                .collect();
+            while !hits.is_empty() {
+                glib::timeout_future(std::time::Duration::ZERO).await;
+                let Some(window) = window.upgrade() else { return };
+                if window.imp().search.borrow().results() != Some(&rows) {
+                    return;
+                }
+                let rest = hits.split_off(hits.len().min(RESULT_LIMIT));
+                let items: Vec<FileItem> = std::mem::replace(&mut hits, rest)
+                    .into_iter()
+                    .filter(|hit| shown.insert(hit.uri.clone()))
+                    .map(|hit| FileItem::new(hit.into_entry()))
+                    .collect();
+                rows.extend_from_slice(&items);
+                window.show_search_state();
+            }
+        });
     }
 
     /// Shows the search's rows: the cache's results, or else the listing

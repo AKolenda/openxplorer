@@ -346,6 +346,10 @@ pub(crate) struct BrowserWindow {
     pub(super) first_offer: RefCell<Option<FirstOffer>>,
     /// What the label on the drag icon says over the window (DND-028).
     pub(super) drop_labels: RefCell<DropLabels>,
+    /// Whether the items of this process's drag are all drives, with
+    /// the drag generation it was read at: read once per drag, not at
+    /// each motion (`file_drop/action.rs`).
+    pub(super) drags_drives: Cell<Option<(u64, bool)>>,
     /// The drag the window last said it refuses, so it says so once.
     pub(super) explained_drop: RefCell<Option<glib::WeakRef<glib::Object>>>,
     /// The drop menu, built when first needed.

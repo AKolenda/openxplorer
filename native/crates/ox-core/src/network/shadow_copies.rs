@@ -16,6 +16,13 @@
 //! Safety rule (NET-014): an account is only sent to the host name and port
 //! it was saved for, and a password the server refused is not sent again
 //! this session, so looking again cannot lock the account out.
+//!
+//! The exchange runs on a thread of its own, which a lookup stops waiting
+//! for after [`LOOKUP_DEADLINE`] or when its window closes; against a
+//! server that stopped answering, the thread can go on waiting. At most
+//! one such exchange runs per server ([`StalledExchanges`]): while it does,
+//! a new lookup of that server waits [`STALL_GRACE`] for it to end, then
+//! reports that the server did not answer instead of starting another.
 
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -53,6 +60,10 @@ const LOOKUP_DEADLINE: Duration = Duration::from_secs(30);
 
 /// How often a waiting lookup checks whether it was cancelled.
 const CANCEL_POLL: Duration = Duration::from_millis(250);
+
+/// How long a new lookup waits for an exchange with the same server that
+/// an earlier lookup stopped waiting for, which normally only signs off.
+const STALL_GRACE: Duration = Duration::from_secs(2);
 
 /// The first reply size asked for: room for about 1,200 shadow copies,
 /// which one credit covers.
@@ -100,6 +111,93 @@ pub struct SmbShadowCopies {
     /// One sign-in at a time per account, so lookups in two windows
     /// cannot both send a password the server is about to refuse.
     attempts: Mutex<HashMap<AccountKey, Arc<Mutex<()>>>>,
+    /// The exchanges that lookups stopped waiting for and still run.
+    stalled: Arc<StalledExchanges<ServerKey>>,
+}
+
+/// How one exchange ended, as its thread and the lookup waiting for it
+/// both see it.
+#[derive(Debug, Default)]
+struct ExchangeEnd {
+    /// The exchange's thread has finished.
+    ended: bool,
+    /// The lookup stopped waiting for the exchange before it finished.
+    abandoned: bool,
+}
+
+/// The exchanges, per server, whose lookup stopped waiting for them while
+/// they still run: a server that stopped answering can hold one forever,
+/// so a new lookup of it starts no other.
+#[derive(Debug)]
+struct StalledExchanges<K> {
+    servers: Mutex<HashMap<K, usize>>,
+}
+
+impl<K> Default for StalledExchanges<K> {
+    fn default() -> Self {
+        Self {
+            servers: Mutex::new(HashMap::new()),
+        }
+    }
+}
+
+impl<K: Eq + Hash + Clone> StalledExchanges<K> {
+    /// Whether an abandoned exchange with `key` still runs.
+    fn is_stalled(&self, key: &K) -> bool {
+        locked(&self.servers).contains_key(key)
+    }
+
+    /// Waits up to `grace` for the abandoned exchanges with `key` to end;
+    /// true when none runs then.
+    fn wait_until_free(&self, key: &K, grace: Duration, cancel: &Cancellation) -> bool {
+        let until = Instant::now() + grace;
+        while self.is_stalled(key) {
+            if Instant::now() >= until || cancel.is_cancelled() {
+                return false;
+            }
+            std::thread::sleep(TURN_POLL);
+        }
+        true
+    }
+
+    /// The lookup stopped waiting for the exchange `end` with `key`: it
+    /// counts as stalled until it ends.
+    fn abandon(&self, key: &K, end: &Mutex<ExchangeEnd>) {
+        let mut servers = locked(&self.servers);
+        let mut end = locked(end);
+        if !end.ended && !end.abandoned {
+            end.abandoned = true;
+            *servers.entry(key.clone()).or_default() += 1;
+        }
+    }
+
+    /// The exchange `end` with `key` finished.
+    fn end(&self, key: &K, end: &Mutex<ExchangeEnd>) {
+        let mut servers = locked(&self.servers);
+        let mut end = locked(end);
+        end.ended = true;
+        if end.abandoned {
+            if let Some(count) = servers.get_mut(key) {
+                *count -= 1;
+                if *count == 0 {
+                    servers.remove(key);
+                }
+            }
+        }
+    }
+}
+
+/// Marks an exchange ended when its thread finishes, however it does.
+struct EndsExchange<K: Eq + Hash + Clone> {
+    stalled: Arc<StalledExchanges<K>>,
+    key: K,
+    end: Arc<Mutex<ExchangeEnd>>,
+}
+
+impl<K: Eq + Hash + Clone> Drop for EndsExchange<K> {
+    fn drop(&mut self) {
+        self.stalled.end(&self.key, &self.end);
+    }
 }
 
 /// An account on a server: the server, the user and a hash of the
@@ -119,6 +217,7 @@ impl SmbShadowCopies {
             store,
             refused: Arc::default(),
             attempts: Mutex::default(),
+            stalled: Arc::default(),
         }
     }
 
@@ -144,13 +243,28 @@ impl ShadowCopyLister for SmbShadowCopies {
             return Err(ShadowCopyError::SignInRefused);
         }
         check_cancelled(cancel)?;
+        // A server that left an earlier exchange hanging gets no other.
+        if !self.stalled.wait_until_free(&target.key, STALL_GRACE, cancel) {
+            check_cancelled(cancel)?;
+            return Err(failed(
+                "an earlier exchange with the server has not ended".to_owned(),
+            ));
+        }
         let deadline = Instant::now() + LOOKUP_DEADLINE;
+        let end = Arc::new(Mutex::new(ExchangeEnd::default()));
+        let ends = EndsExchange {
+            stalled: Arc::clone(&self.stalled),
+            key: target.key.clone(),
+            end: Arc::clone(&end),
+        };
+        let server_key = target.key.clone();
         let gate = Arc::clone(locked(&self.attempts).entry(refusal.clone()).or_default());
         let refused = Arc::clone(&self.refused);
         let store = Arc::clone(&self.store);
         let (sender, receiver) = mpsc::channel();
         let exchange_cancel = cancel.clone();
         let exchange = move || {
+            let _ends = ends;
             // The name is looked up before the account's turn is taken, so
             // a resolver that never answers holds up no other lookup.
             let server = match resolve(target.key.host(), target.key.port()) {
@@ -192,7 +306,11 @@ impl ShadowCopyLister for SmbShadowCopies {
             .name("ox-shadow-copies".to_owned())
             .spawn(exchange)
             .map_err(|error| failed(format!("no thread for the SMB client: {error}")))?;
-        wait_for(&receiver, cancel, deadline)
+        let outcome = wait_for(&receiver, cancel, deadline);
+        // An exchange that has not ended yet, after its answer or without
+        // one, is left to end on its own thread and counts as stalled.
+        self.stalled.abandon(&server_key, &end);
+        outcome
     }
 }
 
@@ -743,6 +861,34 @@ fn failed(detail: String) -> ShadowCopyError {
 
 #[cfg(test)]
 mod tests {
+    /// An exchange the lookup stopped waiting for keeps its server
+    /// stalled until it ends; one that ended first never stalls it.
+    #[test]
+    fn a_server_stays_stalled_only_while_an_abandoned_exchange_runs() {
+        let stalled = StalledExchanges::<&str>::default();
+        let cancel = Cancellation::new();
+        let finished_first = Mutex::new(ExchangeEnd::default());
+        stalled.end(&"nas", &finished_first);
+        stalled.abandon(&"nas", &finished_first);
+        assert!(
+            !stalled.is_stalled(&"nas"),
+            "an exchange that ended is never stalled"
+        );
+
+        let hanging = Mutex::new(ExchangeEnd::default());
+        stalled.abandon(&"nas", &hanging);
+        stalled.abandon(&"nas", &hanging);
+        assert!(stalled.is_stalled(&"nas"));
+        assert!(!stalled.is_stalled(&"other"), "other servers are not held up");
+        assert!(
+            !stalled.wait_until_free(&"nas", Duration::from_millis(100), &cancel),
+            "a new lookup gives up instead of starting another exchange"
+        );
+        stalled.end(&"nas", &hanging);
+        assert!(!stalled.is_stalled(&"nas"), "counted once, ended once");
+        assert!(stalled.wait_until_free(&"nas", Duration::ZERO, &cancel));
+    }
+
     use super::*;
     use crate::network::test_support::MemoryKeyring;
     use crate::network::{Keyring, KeyringCollection, NewSecret, SessionCredentials};

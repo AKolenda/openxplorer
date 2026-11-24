@@ -69,6 +69,12 @@ const AFTER_DIVIDER: &str = "after-divider";
 /// delay (`SPI_GETMENUSHOWDELAY`, the `MenuShowDelay` setting), 400 ms.
 pub(crate) const SUBMENU_DELAY: Duration = Duration::from_millis(400);
 
+/// How many rows a menu builds at once. A longer menu builds the rest a
+/// batch at a time when the main loop is idle, so a menu of a thousand
+/// subfolders never holds up a frame, and the window keeps answering
+/// while it fills.
+const ROW_BATCH: usize = 100;
+
 /// The class of a row whose submenu is open, which stays highlighted.
 const SUBMENU_OPEN: &str = "submenu-open";
 
@@ -176,6 +182,9 @@ mod imp {
         /// The timer that lets the contents count as opaque again once
         /// the menu has faded in.
         pub(super) opaque_again: RefCell<Option<SourceId>>,
+        /// The idle source building the rows past the first batch, while
+        /// it runs.
+        pub(super) row_filler: RefCell<Option<SourceId>>,
         /// What a kept menu does once it has closed, for its current
         /// opening only ([`super::MenuPopover::after_close`]).
         pub(super) after_close: RefCell<AfterClose>,
@@ -290,6 +299,7 @@ mod imp {
         }
 
         fn dispose(&self) {
+            self.obj().stop_filling_rows();
             self.obj().forget_hover();
             self.obj().close_submenu();
         }
@@ -795,9 +805,9 @@ impl MenuPopover {
     fn redraw(&self) {
         // A submenu opens from a row, which is about to go.
         self.close_submenu();
+        self.stop_filling_rows();
         self.redraw_strip();
-        let list = self.list();
-        list.remove_all();
+        self.list().remove_all();
         let mut after_divider = false;
         let entries = self.imp().entries.borrow().clone();
         // A menu with a choice or toggle keeps a column for the marks, as
@@ -816,23 +826,81 @@ impl MenuPopover {
             GlyphColumn::None
         };
         let more_options_key = self.shift_f10_opens_classic_menu().then_some(SHIFT_F10_TEXT);
+        let mut rows = Vec::new();
         for entry in &entries {
             let MenuEntry::Item(item) = entry else {
                 after_divider = true;
                 continue;
             };
-            let item = &with_more_options_key(item, more_options_key);
-            let can_choose = self.can_choose(item);
-            let row = item_row(item, self.check_mark(item), marks, glyphs);
+            rows.push((with_more_options_key(item, more_options_key), after_divider));
+            after_divider = false;
+        }
+        let mut rows = rows.into_iter();
+        self.append_rows(rows.by_ref().take(ROW_BATCH), marks, glyphs);
+        if rows.len() > 0 {
+            self.fill_rows_later(rows, marks, glyphs);
+        }
+        self.refit_if_shown();
+    }
+
+    /// Appends a row per item of `rows`, each with whether a divider comes
+    /// before it.
+    fn append_rows(
+        &self,
+        rows: impl Iterator<Item = (MenuItem, bool)>,
+        marks: MarkColumn,
+        glyphs: GlyphColumn,
+    ) {
+        let list = self.list();
+        for (item, after_divider) in rows {
+            let can_choose = self.can_choose(&item);
+            let row = item_row(&item, self.check_mark(&item), marks, glyphs);
             row.set_sensitive(can_choose);
-            describe_unavailable_row(self, &row, item, can_choose);
+            describe_unavailable_row(self, &row, &item, can_choose);
             if after_divider {
                 row.add_css_class(AFTER_DIVIDER);
-                after_divider = false;
             }
             list.append(&row);
         }
-        self.refit_if_shown();
+    }
+
+    /// Builds the remaining `rows` a batch at a time while the main loop
+    /// is idle, after the frames GTK has to draw.
+    fn fill_rows_later(
+        &self,
+        mut rows: std::vec::IntoIter<(MenuItem, bool)>,
+        marks: MarkColumn,
+        glyphs: GlyphColumn,
+    ) {
+        let menu = self.downgrade();
+        let source = glib::idle_add_local(move || {
+            let Some(menu) = menu.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
+            menu.append_rows(rows.by_ref().take(ROW_BATCH), marks, glyphs);
+            menu.refit_if_shown();
+            if rows.len() > 0 {
+                return glib::ControlFlow::Continue;
+            }
+            // Finished: the source ends itself, so it is not removed.
+            menu.imp().row_filler.take();
+            glib::ControlFlow::Break
+        });
+        self.imp().row_filler.replace(Some(source));
+    }
+
+    /// Stops building rows a batch at a time, as when the rows are built
+    /// again.
+    fn stop_filling_rows(&self) {
+        if let Some(source) = self.imp().row_filler.take() {
+            source.remove();
+        }
+    }
+
+    /// Whether every row is built, for tests.
+    #[cfg(test)]
+    pub(crate) fn has_every_row(&self) -> bool {
+        self.imp().row_filler.borrow().is_none()
     }
 
     /// Whether Shift+F10 opens the classic menu in the window the menu is

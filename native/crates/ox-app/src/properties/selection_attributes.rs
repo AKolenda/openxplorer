@@ -11,7 +11,9 @@
 //! Read-only takes every write permission from the files (inside a
 //! folder) or gives their owner write again, and Hidden adds or removes
 //! each name's leading dot, which is how Linux hides an item, with the
-//! normal refusal when that name is taken. The boxes stay greyed until
+//! normal refusal when that name is taken. With a folder among the
+//! items, Read-only first asks whether it reaches inside the folders
+//! ([`super::attribute_confirm`]). The boxes stay greyed until
 //! every item is read, and each stays greyed unless every item may be
 //! changed that way. Once the Security tab changed the items'
 //! permissions, Read-only shows what the files have then, and a choice not
@@ -310,13 +312,30 @@ impl SelectionAttributes {
                 .check_writable(uri)
                 .map_err(|refusal| refusal.to_string())?;
         }
+        let submitted = self.read_only.wanted.get();
+        // With a folder among the items, the change reaches inside it only
+        // once the user said so, as Windows asks; Cancel makes no change.
+        let reaches_inside = if self.has_folder {
+            let Some(parent) = self.window.upgrade() else {
+                return Err(super::window::CANCELLED.to_owned());
+            };
+            super::attribute_confirm::ask_reach(&parent, read_only, items.len() > 1)
+                .await
+                .ok_or_else(|| super::window::CANCELLED.to_owned())?
+        } else {
+            false
+        };
         // No drive is formatted while the items change (DEV-012).
         let _writing = match opener {
             Some(opener) => Some(opener.hold_write()?),
             None => None,
         };
-        let submitted = self.read_only.wanted.get();
         for (uri, is_folder) in items {
+            // A folder's own bits stay whatever its Read-only says, so a
+            // folder the change stops at is left alone.
+            if is_folder && !reaches_inside {
+                continue;
+            }
             let request = PermissionRequest {
                 mode: ModeChange::ReadOnlyFiles(read_only),
                 owner: None,

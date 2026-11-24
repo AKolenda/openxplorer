@@ -23,6 +23,8 @@
 //! caller still waits for it: Chromium and GTK stop taking input in the
 //! window that asked while their dialog is open. A Qt app asking through
 //! the portal leaves that to the dialog, so there its window stays usable.
+//! Settings' "Keep Open/Save dialogs modal on GNOME (like Windows)", off by
+//! default, keeps the dialog modal there too, glued to the caller's window.
 //!
 //! GTK has no way to make an X11 window a child of another
 //! process's window, and a modal window without a parent could lock the
@@ -96,19 +98,27 @@ pub(super) fn desktop_attaches_modal_dialogs() -> bool {
         .is_some_and(|settings| settings.boolean(ATTACH_MODAL_DIALOGS))
 }
 
+/// Whether a dialog attached to its caller's window is modal: always
+/// with `keep_modal`, and otherwise only where the desktop does not glue
+/// modal dialogs to their parents (`desktop_attaches`).
+fn is_modal_child(keep_modal: bool, desktop_attaches: bool) -> bool {
+    keep_modal || !desktop_attaches
+}
+
 /// Gives the dialog `window` a window group of its own and, when the
 /// caller named a Wayland window, makes it a child of that window once it
 /// is realized: a modal one, unless the desktop would then glue it to that
-/// window ([`desktop_attaches_modal_dialogs`]). The flag returned turns
-/// true then.
-pub(super) fn attach_to_caller(window: &gtk::Window, parent: &str) -> Rc<Cell<bool>> {
+/// window ([`desktop_attaches_modal_dialogs`]) and `keep_modal` (Settings'
+/// "Keep Open/Save dialogs modal on GNOME (like Windows)") is false. The
+/// flag returned turns true then.
+pub(super) fn attach_to_caller(window: &gtk::Window, parent: &str, keep_modal: bool) -> Rc<Cell<bool>> {
     gtk::WindowGroup::new().add_window(window);
     let attached: Rc<Cell<bool>> = Rc::default();
     let CallerWindow::Wayland(handle) = CallerWindow::parse(parent) else {
         return attached;
     };
     let done = Rc::clone(&attached);
-    let modal = !desktop_attaches_modal_dialogs();
+    let modal = is_modal_child(keep_modal, desktop_attaches_modal_dialogs());
     let attach = move |window: &gtk::Window| {
         let Some(toplevel) = window.surface().and_downcast::<gdk_wayland::WaylandToplevel>() else {
             // Not on Wayland after all (GDK_BACKEND=x11 under a Wayland
@@ -148,6 +158,17 @@ pub(super) fn attach_to_caller(window: &gtk::Window, parent: &str) -> Rc<Cell<bo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// On GNOME the dialog is not modal by default, the owner's choice,
+    /// and modal with "Keep Open/Save dialogs modal on GNOME (like
+    /// Windows)" on; elsewhere it is modal either way (#382).
+    #[test]
+    fn the_dialog_stays_modal_on_gnome_only_when_asked() {
+        assert!(!is_modal_child(false, true));
+        assert!(is_modal_child(true, true));
+        assert!(is_modal_child(false, false));
+        assert!(is_modal_child(true, false));
+    }
 
     /// parity: INT-032
     #[test]

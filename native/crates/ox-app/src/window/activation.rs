@@ -151,16 +151,18 @@ fn is_web_address(typed: &str) -> bool {
 }
 
 /// Where the local `.desktop` link file `entry` points, if it is one.
-pub(super) fn desktop_link(entry: &Entry) -> Option<Result<LinkTarget, String>> {
+pub(super) async fn desktop_link(entry: &Entry) -> Option<Result<LinkTarget, String>> {
     if !may_be_link(entry.content_type.as_deref(), &entry.name) {
         return None;
     }
     let path = gio::File::for_uri(&entry.uri).path()?;
-    // Read on a worker thread for at most a moment: a link on a share that
-    // stopped answering is opened as the file it is.
-    let target = crate::bounded_io::wait_for(&entry.uri, crate::bounded_io::MAIN_THREAD_WAIT, move || {
+    // Read on a worker thread for at most a moment, while the window goes
+    // on drawing and answering: a link on a share that stopped answering
+    // is opened as the file it is.
+    let target = crate::bounded_io::look_for(&entry.uri, crate::bounded_io::MAIN_THREAD_WAIT, move || {
         link_target_of_file(&path)
     })
+    .await
     .flatten()?;
     Some(target.map_err(str::to_owned))
 }
@@ -422,7 +424,7 @@ impl BrowserWindow {
                 if let Some(url) = fresh.meta.web_target.clone() {
                     return self.follow_link(&fresh, LinkTarget::Web(url)).await;
                 }
-                if let Some(target) = desktop_link(&fresh) {
+                if let Some(target) = desktop_link(&fresh).await {
                     return self.follow_link(&fresh, target?).await;
                 }
                 match self.run_or_open(&fresh).await {
@@ -970,18 +972,44 @@ mod tests {
     }
 
     /// A `.desktop` link on a mount that stopped answering is not read on
-    /// the main thread: it is taken as no link, at once.
+    /// the main thread, and the main loop runs on while it is read: it is
+    /// taken as no link after a moment.
     #[test]
-    fn a_link_on_a_stalled_mount_is_given_up_at_once() {
+    fn a_link_on_a_stalled_mount_never_holds_the_main_loop() {
         let folder = tempfile::tempdir().expect("a temporary folder");
         let path = folder.path().join("Site.desktop");
         std::fs::write(&path, "[Desktop Entry]\nType=Link\nURL=https://example.com/\n").expect("written");
         let mut entry = file_entry("Site.desktop");
         entry.uri = gio::File::for_path(&path).uri().to_string();
-        assert!(matches!(desktop_link(&entry), Some(Ok(LinkTarget::Web(_)))));
+        let context = glib::MainContext::new();
+        assert!(matches!(
+            context.block_on(desktop_link(&entry)),
+            Some(Ok(LinkTarget::Web(_)))
+        ));
         let _stalled = crate::bounded_io::stall::stall(folder.path());
+        let ticks = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let source = glib::timeout_source_new(
+            std::time::Duration::from_millis(20),
+            None,
+            glib::Priority::DEFAULT,
+            glib::clone!(
+                #[strong]
+                ticks,
+                move || {
+                    std::sync::atomic::AtomicU32::fetch_add(&ticks, 1, std::sync::atomic::Ordering::Relaxed);
+                    glib::ControlFlow::Continue
+                }
+            ),
+        );
+        source.attach(Some(&context));
         let started = std::time::Instant::now();
-        assert_eq!(desktop_link(&entry), None);
+        assert_eq!(context.block_on(desktop_link(&entry)), None);
+        source.destroy();
         assert!(started.elapsed() < std::time::Duration::from_secs(2));
+        let ticks = std::sync::atomic::AtomicU32::load(&ticks, std::sync::atomic::Ordering::Relaxed);
+        assert!(
+            ticks >= 5,
+            "the main loop ran {ticks} times while the link was read"
+        );
     }
 }

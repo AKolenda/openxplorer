@@ -163,6 +163,8 @@ fn walk_folders(
             search_in: SearchIn::Names,
             filter,
             subfolders: true,
+            system_directories: true,
+            archives: None,
         };
         // A missing or unreadable folder lists nothing; a cancelled walk
         // ends here.

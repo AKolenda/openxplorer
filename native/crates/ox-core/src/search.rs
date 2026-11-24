@@ -123,10 +123,11 @@ pub use facets::{CalendarDay, DateFacet, FacetMatcher, KindFacet, SearchFacets, 
 pub use frequent::FrequentIndexing;
 pub use index::SearchIndex;
 pub use live::{matches_by_contents, walk_search, walks_subfolders, LiveSearch, LiveSearchEnd};
-pub use pattern::{is_wildcard, NamePattern};
+pub use pattern::{extension_words, is_wildcard, set_extension_words, ExtensionWords, NamePattern};
 pub use pins::PinIndexing;
 pub use query::{
     SearchHit, SearchQuery, SearchResults, DEFAULT_RESULT_LIMIT, MAX_QUERY_CHARS, MAX_RESULT_LIMIT,
+    UNLIMITED_RESULTS,
 };
 pub use reader::{FolderReader, GioFolderReader};
 pub use root::{

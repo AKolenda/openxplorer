@@ -7,6 +7,10 @@
 //! calls a null function and the app crashes. With `GTK_A11Y` set to
 //! `none` a widget has no context at all, and asking for it aborts the
 //! app. Nothing listens in either case, so [`announce`] skips both.
+//!
+//! Every message the app reads goes through [`announce`]: a drag that
+//! starts or ends, a refused character while renaming and the
+//! type-to-select hint in the status bar.
 
 use gtk::prelude::*;
 
@@ -93,5 +97,60 @@ mod tests {
         window.set_child(Some(&label));
         announce(&label, "Notes", gtk::AccessibleAnnouncementPriority::Medium);
         window.destroy();
+    }
+
+    /// The name of [`announcing_with_accessibility_off`], as the test
+    /// program takes it.
+    const CHILD_TEST: &str = "announcement::tests::announcing_with_accessibility_off";
+
+    /// Run only by [`announcing_never_crashes_with_gtk_a11y_none`], in a
+    /// test program started with `GTK_A11Y=none`. The widgets are the kinds
+    /// the app announces from: a window (a drag), a text field (renaming)
+    /// and a label (the status bar hint).
+    #[gtk::test]
+    #[ignore = "started by announcing_never_crashes_with_gtk_a11y_none with GTK_A11Y=none"]
+    fn announcing_with_accessibility_off() {
+        assert_eq!(std::env::var("GTK_A11Y").as_deref(), Ok("none"));
+        let window = gtk::Window::new();
+        let editor = gtk::Text::new();
+        let hint = gtk::Label::new(Some("Report"));
+        let column = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        column.append(&editor);
+        column.append(&hint);
+        window.set_child(Some(&column));
+        window.present();
+        let high = gtk::AccessibleAnnouncementPriority::High;
+        let medium = gtk::AccessibleAnnouncementPriority::Medium;
+        announce(&window, "Dragging Report 2026.odt", medium);
+        announce(
+            &editor,
+            "A file name can't contain any of the following characters:",
+            high,
+        );
+        announce(&hint, "Report", medium);
+        announce(&gtk::Label::new(None), "Drag ended", medium);
+        window.destroy();
+    }
+
+    /// With `GTK_A11Y=none`, announcing from a drag, a rename or the
+    /// status bar does not crash the app: the test program runs
+    /// [`announcing_with_accessibility_off`] in a process of its own with
+    /// that setting, and it must pass rather than die on a signal.
+    #[test]
+    fn announcing_never_crashes_with_gtk_a11y_none() {
+        let program = std::env::current_exe().expect("the test program");
+        let output = std::process::Command::new(program)
+            .args([CHILD_TEST, "--exact", "--ignored", "--test-threads=1"])
+            .env("GTK_A11Y", "none")
+            .output()
+            .expect("the test program starts");
+        let report = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success(),
+            "the announcements crashed or failed with GTK_A11Y=none ({:?}):\n{report}\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(report.contains("1 passed"), "the announcing test ran:\n{report}");
     }
 }

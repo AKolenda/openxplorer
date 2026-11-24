@@ -127,10 +127,19 @@ impl BrowserWindow {
         }
         match activation_for(entry) {
             Activation::Folder(uri) => self.open_tab_or_report(&uri, TabPlacement::Background),
-            Activation::File => match desktop_link(entry) {
-                Some(target) => self.follow_link_in_background(entry, target),
-                None => self.open_file(entry),
-            },
+            Activation::File => {
+                let entry = entry.clone();
+                glib::spawn_future_local(glib::clone!(
+                    #[weak(rename_to = window)]
+                    self,
+                    async move {
+                        match desktop_link(&entry).await {
+                            Some(target) => window.follow_link_in_background(&entry, target),
+                            None => window.open_file(&entry),
+                        }
+                    }
+                ));
+            }
             Activation::Archive => self.open_file(entry),
             Activation::Refused(_) => {}
         }

@@ -563,7 +563,11 @@ fn folder_options_has_the_general_view_and_search_tabs_of_windows() {
         .collect();
     assert_eq!(
         search_checks,
-        ["Always search file names and contents (this might take several minutes)"]
+        [
+            "Include system directories",
+            "Include compressed files (ZIP, 7Z, TAR...)",
+            "Always search file names and contents (this might take several minutes)",
+        ]
     );
     // Windows push buttons, as the Properties window draws them, not links.
     for (tab, label) in [

@@ -115,10 +115,11 @@ impl Providers {
         }
     }
 
-    /// Loads the tokens of `accent` in `appearance`.
-    pub(super) fn draw_accent(&self, accent: Accent, appearance: Appearance) {
+    /// Loads the tokens of `accent` in `appearance`; with `neutral_items`
+    /// the file list's items keep Windows' colors.
+    pub(super) fn draw_accent(&self, accent: Accent, appearance: Appearance, neutral_items: bool) {
         self.accent
-            .load_from_string(&accent::stylesheet(accent, appearance));
+            .load_from_string(&accent::stylesheet(accent, appearance, neutral_items));
     }
 
     /// Loads the font sizes and heights of `size`, and the font `family`

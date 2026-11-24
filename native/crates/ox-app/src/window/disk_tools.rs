@@ -347,40 +347,65 @@ impl BrowserWindow {
     /// shows the Rename dialog, which changes its volume label. Refused
     /// while a drive is formatted, which may be this one.
     fn open_rename_drive_dialog(&self, uri: &str) {
+        let window = self.downgrade();
+        let root = uri.to_owned();
+        glib::spawn_future_local(async move {
+            let Some(target) = window.upgrade() else {
+                return;
+            };
+            let found = target.rename_target(&root).await;
+            match found {
+                Ok((name, connection, facts)) => {
+                    target.show_rename_drive_dialog(&name, &root, connection, facts);
+                }
+                Err(message) => target.show_message(&message),
+            }
+        });
+    }
+
+    /// What renaming the drive mounted at `uri` needs: its name, the bus
+    /// UDisks answers on and what UDisks says of the drive, read again now;
+    /// or the message that says why it cannot be renamed, as while a drive
+    /// is formatted, which may be this one.
+    async fn rename_target(&self, uri: &str) -> Result<(String, gio::DBusConnection, DriveFacts), String> {
         if self.context().formats_a_drive() {
-            self.show_message(ox_core::i18n::gettext_static(FORMATTING_ANOTHER));
-            return;
+            return Err(ox_core::i18n::gettext(FORMATTING_ANOTHER));
         }
         let mounts = self.volume_monitor().mounts();
         let (Some(mount), Some(device)) = (mount_at(&mounts, uri), block_device_of(&mounts, uri)) else {
-            self.show_message(ox_core::i18n::gettext_static(NOT_RENAMABLE));
-            return;
+            return Err(ox_core::i18n::gettext(NOT_RENAMABLE));
         };
         let name = mount.name().to_string();
         let (mount, uuid) = (mount.clone(), mount.volume().and_then(|volume| volume.uuid()));
-        let root = uri.to_owned();
-        let window = self.downgrade();
-        glib::spawn_future_local(async move {
-            let target = async {
-                let connection = gio::bus_get_future(udisks_bus())
-                    .await
-                    .map_err(FormatError::Unavailable)?;
-                let facts = drive_facts(&connection, UDISKS_NAME, &device).await?;
-                Ok::<_, FormatError>((connection, facts))
+        let target = async {
+            let connection = gio::bus_get_future(udisks_bus())
+                .await
+                .map_err(FormatError::Unavailable)?;
+            let facts = drive_facts(&connection, UDISKS_NAME, &device).await?;
+            Ok::<_, FormatError>((connection, facts))
+        }
+        .await;
+        let mounted = self.volume_monitor().mounts().contains(&mount);
+        match target {
+            Ok((connection, facts)) if is_chosen_drive(mounted, uuid.as_deref(), &facts) => {
+                Ok((name, connection, facts))
             }
-            .await;
-            let Some(window) = window.upgrade() else {
-                return;
-            };
-            let mounted = window.volume_monitor().mounts().contains(&mount);
-            match target {
-                Ok((connection, facts)) if is_chosen_drive(mounted, uuid.as_deref(), &facts) => {
-                    window.show_rename_drive_dialog(&name, &root, connection, facts);
-                }
-                Ok(_) => window.show_message(&rename_error_text(&FormatError::NotFound)),
-                Err(error) => window.show_message(&rename_error_text(&error)),
-            }
-        });
+            Ok(_) => Err(rename_error_text(&FormatError::NotFound)),
+            Err(error) => Err(rename_error_text(&error)),
+        }
+    }
+
+    /// Gives the drive mounted at `uri` the volume label `label`, as
+    /// Rename does, for the label box on the drive's General tab
+    /// (Properties). The error is the message to show; an empty one means
+    /// the password prompt was dismissed, which says nothing.
+    pub(crate) async fn rename_drive_at(&self, uri: &str, label: &str) -> Result<(), String> {
+        let (_, connection, facts) = self.rename_target(uri).await?;
+        match relabel(&self.downgrade(), &connection, &facts, uri, label).await {
+            Ok(()) => Ok(()),
+            Err(FormatError::Cancelled) => Err(String::new()),
+            Err(error) => Err(rename_error_text(&error)),
+        }
     }
 
     /// Shows the Rename dialog for the drive `name` mounted at `root`
@@ -401,27 +426,12 @@ impl BrowserWindow {
             let (connection, facts) = (connection.clone(), facts.clone());
             let (form, window, root) = (dialog.downgrade(), window.clone(), root.clone());
             dialog.run(ox_core::i18n::gettext_static(RENAMING), async move {
-                let on_purpose = super::mounting::unmount_on_purpose(&root);
-                let renamed = set_drive_label(&connection, UDISKS_NAME, &facts, &label).await;
-                if let (Ok(relabelled), Some(window)) = (&renamed, window.upgrade()) {
-                    match &relabelled.remounted {
-                        Some(Ok(path)) => {
-                            let new_root = ox_core::location::file_uri(std::path::Path::new(path));
-                            window.move_tabs_to_new_root(&root, &new_root);
-                        }
-                        Some(Err(reason)) => window.show_message(&ox_core::i18n::format_message(
-                            "The drive was renamed, but it could not be mounted again: {reason}",
-                            &[("reason", reason.as_str())],
-                        )),
-                        None => {}
-                    }
-                }
-                drop(on_purpose);
+                let renamed = relabel(&window, &connection, &facts, &root, &label).await;
                 let Some(dialog) = form.upgrade() else {
                     return;
                 };
                 match renamed {
-                    Ok(_) => dialog.finish(),
+                    Ok(()) => dialog.finish(),
                     // A dismissed password prompt says nothing; Rename can
                     // be pressed again.
                     Err(FormatError::Cancelled) => dialog.show_error(""),
@@ -501,6 +511,37 @@ pub(in crate::window) fn report_format_result(
 
 /// Why a drive's label was not changed, in words about renaming where
 /// the format error's own are about formatting.
+/// Gives the drive mounted at `root`, which `facts` describe, the volume
+/// label `label` through UDisks on `connection`: Rename's and the General
+/// tab's one way to rename a drive. A drive mounted again to be renamed, at
+/// a folder named after its new label, takes the tabs of `window` that
+/// showed it there; one that could not be mounted again says so.
+async fn relabel(
+    window: &glib::WeakRef<BrowserWindow>,
+    connection: &gio::DBusConnection,
+    facts: &DriveFacts,
+    root: &str,
+    label: &str,
+) -> Result<(), FormatError> {
+    let on_purpose = super::mounting::unmount_on_purpose(root);
+    let renamed = set_drive_label(connection, UDISKS_NAME, facts, label).await;
+    if let (Ok(relabelled), Some(window)) = (&renamed, window.upgrade()) {
+        match &relabelled.remounted {
+            Some(Ok(path)) => {
+                let new_root = ox_core::location::file_uri(std::path::Path::new(path));
+                window.move_tabs_to_new_root(root, &new_root);
+            }
+            Some(Err(reason)) => window.show_message(&ox_core::i18n::format_message(
+                "The drive was renamed, but it could not be mounted again: {reason}",
+                &[("reason", reason.as_str())],
+            )),
+            None => {}
+        }
+    }
+    drop(on_purpose);
+    renamed.map(drop)
+}
+
 fn rename_error_text(error: &FormatError) -> String {
     match error {
         FormatError::Unavailable(_) => {

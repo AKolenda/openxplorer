@@ -532,7 +532,9 @@ impl BrowserWindow {
         let start_folders = self.start_folders(&request, caller.as_deref());
         let mut picker = self.build_picker_bar(request, reply.clone());
         picker.caller = caller;
-        picker.attached_to_caller = super::caller_window::attach_to_caller(self.upcast_ref(), &parent_window);
+        let keep_modal = self.context().settings_data().preferences.modal_dialogs_on_gnome;
+        picker.attached_to_caller =
+            super::caller_window::attach_to_caller(self.upcast_ref(), &parent_window, keep_modal);
         let picker = Rc::new(picker);
         self.imp().picker.replace(Some(Rc::clone(&picker)));
         reply.connect_closed(glib::clone!(

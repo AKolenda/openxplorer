@@ -108,7 +108,7 @@ Details lists what a file says about itself under Windows’ headings, Property 
 
 ## Previous versions
 
-Properties → Previous Versions lists existing, exposed snapshot collections under Name and Date modified, grouped by date as Windows 11 groups them. Select a version: Open shows it in a new tab, and Restore writes a copy to a separate destination, never over the live original. Snapshot source… sets where versions are looked for, and F5 looks again.
+Properties → Previous Versions lists existing, exposed snapshot collections under Name and Date modified, grouped by date as Windows 11 groups them. Select a version: Open shows it in a new tab, and Restore writes a copy to a separate destination, never over the live original. With Settings → Files & folders → Restore over the original (Windows) turned on, Restore instead copies the version back into the item's folder, as Windows does, and asks Replace or Skip before the live item is replaced. Snapshot source… sets where versions are looked for, and F5 looks again.
 
 This provider recognizes exposed filesystem directories. It does not implement the Windows SMB shadow-copy enumeration protocol, create snapshots, or make backup history exist on a server.
 

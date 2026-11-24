@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! The tooltip of an item: Windows Explorer's infotip (a file's type, size
-//! and date modified, a folder's date created), or its full path while
-//! searching.
+//! and date modified, a folder's date created, size, first folders and
+//! first files), or its full path while searching. A folder's contents
+//! are read off the main thread ([`super::folder_summary`]).
 //!
 //! Ports `row.title=state.query?displayUri(e.uri):e.name` of `renderRows`
 //! in `v2.0.0:desktop/ui/app.js` (VIEW-001, VIEW-042), with Explorer's
@@ -19,6 +20,7 @@ use ox_core::format;
 use ox_core::i18n::format_message;
 use ox_core::search::display_path;
 
+use super::folder_summary::{summary_or_read, FolderSummary};
 use super::CellOwners;
 use crate::folder_view::item::FileItem;
 
@@ -40,8 +42,14 @@ pub(crate) enum RowTooltip {
 impl RowTooltip {
     /// The tooltip of the item `item`, if it has one.
     pub(crate) fn text(self, item: &FileItem) -> Option<String> {
+        self.text_with(item, None)
+    }
+
+    /// [`Self::text`], a folder's infotip with what `summary` says it
+    /// holds.
+    fn text_with(self, item: &FileItem, summary: Option<&FolderSummary>) -> Option<String> {
         match self {
-            RowTooltip::Name => infotip(item),
+            RowTooltip::Name => infotip(item, summary),
             RowTooltip::FullPath => Some(display_path(&item.entry().uri)),
             RowTooltip::NameOnly => None,
         }
@@ -49,15 +57,19 @@ impl RowTooltip {
 }
 
 /// Explorer's infotip for `item`: "Type", "Size" and "Date modified" for
-/// a file, "Date created" for a folder, each line only when known; none
-/// when nothing is, as Explorer shows none then.
-fn infotip(item: &FileItem) -> Option<String> {
+/// a file, "Date created" for a folder, then what `summary` says the
+/// folder holds, each line only when known; none when nothing is, as
+/// Explorer shows none then.
+fn infotip(item: &FileItem, summary: Option<&FolderSummary>) -> Option<String> {
     let entry = item.entry();
     let mut lines = Vec::new();
     if entry.is_dir {
         if let Some(created) = entry.meta.created {
             let date = format::date_short_time_text(Some(created));
             lines.push(format_message("Date created: {date}", &[("date", &date)]));
+        }
+        if let Some(summary) = summary {
+            lines.extend(summary.lines());
         }
     } else {
         if !entry.type_label.is_empty() {
@@ -85,7 +97,7 @@ pub(crate) fn spoken_infotip(item: &FileItem) -> String {
         parts.push(format_message("Type: {type}", &[("type", &entry.type_label)]));
     }
     parts.extend(
-        infotip(item)
+        infotip(item, None)
             .into_iter()
             .flat_map(|tip| tip.lines().map(str::to_owned).collect::<Vec<_>>()),
     );
@@ -126,7 +138,14 @@ pub(crate) fn show_row_tooltip(
             RowTooltip::Name if owners.hides_infotips() => RowTooltip::NameOnly,
             row => row,
         };
-        let Some(text) = tooltip_text(row, kind, &item, own_tooltip(&item), cut_short) else {
+        // A folder's contents are read once, off the main thread; the
+        // tooltip is asked for again when they are.
+        let entry = item.entry();
+        let summary = (row == RowTooltip::Name && kind == TooltipCell::Item && entry.is_dir)
+            .then(|| summary_or_read(&entry.uri, cell.upcast_ref()))
+            .flatten();
+        let own = own_tooltip(&item);
+        let Some(text) = tooltip_text(row, kind, &item, own, cut_short, summary.as_ref()) else {
             return false;
         };
         tooltip.set_text(Some(&text));
@@ -136,25 +155,29 @@ pub(crate) fn show_row_tooltip(
 
 /// The tooltip of a `kind` cell showing `item`, or `None` for none: the
 /// cell's `own` tooltip, else the full path while searching, else the
-/// item's infotip under its full name when that is `cut_short`, or a
-/// column's full text when it is `cut_short`, as Explorer shows them.
+/// item's infotip (with a folder's `summary`) under its full name when
+/// that is `cut_short`, or a column's full text when it is `cut_short`,
+/// as Explorer shows them.
 fn tooltip_text(
     row: RowTooltip,
     kind: TooltipCell,
     item: &FileItem,
     own: Option<String>,
     cut_short: Option<String>,
+    summary: Option<&FolderSummary>,
 ) -> Option<String> {
     if own.is_some() {
         return own;
     }
     match (row, kind) {
         (RowTooltip::FullPath, _) => row.text(item),
-        (RowTooltip::Name | RowTooltip::NameOnly, TooltipCell::Item) => match (cut_short, row.text(item)) {
-            (Some(name), Some(tip)) => Some(format!("{name}\n{tip}")),
-            (name, None) => name,
-            (None, tip) => tip,
-        },
+        (RowTooltip::Name | RowTooltip::NameOnly, TooltipCell::Item) => {
+            match (cut_short, row.text_with(item, summary)) {
+                (Some(name), Some(tip)) => Some(format!("{name}\n{tip}")),
+                (name, None) => name,
+                (None, tip) => tip,
+            }
+        }
         (RowTooltip::Name | RowTooltip::NameOnly, TooltipCell::Column) => cut_short,
     }
 }
@@ -244,13 +267,14 @@ mod tests {
                 TooltipCell::Item,
                 &unknown,
                 None,
-                Some("Photos".to_owned())
+                Some("Photos".to_owned()),
+                None
             ),
             Some("Photos".to_owned()),
             "a name cut short is still read in full"
         );
         assert_eq!(
-            tooltip_text(RowTooltip::Name, TooltipCell::Item, &unknown, None, None),
+            tooltip_text(RowTooltip::Name, TooltipCell::Item, &unknown, None, None, None),
             None
         );
     }
@@ -269,7 +293,7 @@ mod tests {
         assert!(RowTooltip::Name.text(&file).is_some(), "an infotip by default");
         assert_eq!(RowTooltip::NameOnly.text(&file), None);
         assert_eq!(
-            tooltip_text(RowTooltip::NameOnly, TooltipCell::Item, &file, None, None),
+            tooltip_text(RowTooltip::NameOnly, TooltipCell::Item, &file, None, None, None),
             None
         );
         assert_eq!(
@@ -278,7 +302,8 @@ mod tests {
                 TooltipCell::Item,
                 &file,
                 None,
-                Some("Notes 2.txt".to_owned())
+                Some("Notes 2.txt".to_owned()),
+                None
             ),
             Some("Notes 2.txt".to_owned())
         );
@@ -288,6 +313,7 @@ mod tests {
                 TooltipCell::Column,
                 &file,
                 Some("Own".to_owned()),
+                None,
                 None
             ),
             Some("Own".to_owned())
@@ -308,7 +334,7 @@ mod tests {
         });
         let tip = RowTooltip::Name.text(&file).expect("a file's type is known");
         assert_eq!(
-            tooltip_text(RowTooltip::Name, TooltipCell::Item, &file, None, None),
+            tooltip_text(RowTooltip::Name, TooltipCell::Item, &file, None, None, None),
             Some(tip.clone())
         );
         assert_eq!(
@@ -317,13 +343,14 @@ mod tests {
                 TooltipCell::Item,
                 &file,
                 None,
-                Some("A long report name.txt".to_owned())
+                Some("A long report name.txt".to_owned()),
+                None
             ),
             Some(format!("A long report name.txt\n{tip}")),
             "a name cut short is read in full above the infotip"
         );
         assert_eq!(
-            tooltip_text(RowTooltip::Name, TooltipCell::Column, &file, None, None),
+            tooltip_text(RowTooltip::Name, TooltipCell::Column, &file, None, None, None),
             None,
             "other columns do not repeat the infotip"
         );
@@ -333,13 +360,14 @@ mod tests {
                 TooltipCell::Column,
                 &file,
                 None,
-                Some("Text document".to_owned())
+                Some("Text document".to_owned()),
+                None
             ),
             Some("Text document".to_owned()),
             "a column cut short shows its full text"
         );
         assert_eq!(
-            tooltip_text(RowTooltip::FullPath, TooltipCell::Column, &file, None, None),
+            tooltip_text(RowTooltip::FullPath, TooltipCell::Column, &file, None, None, None),
             Some("/tmp/ox-test/A long report name.txt".to_owned()),
             "every cell shows the path while searching"
         );
@@ -349,6 +377,7 @@ mod tests {
                 TooltipCell::Column,
                 &file,
                 Some("own".to_owned()),
+                None,
                 None
             ),
             Some("own".to_owned())

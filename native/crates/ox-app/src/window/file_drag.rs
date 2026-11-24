@@ -160,6 +160,31 @@ thread_local! {
     static DRAGGED_FILES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
+thread_local! {
+    /// Counts the changes to [`DRAGGED`], so what is read from the dragged
+    /// items once per drag can tell when they changed.
+    static DRAG_GENERATION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// A number that changes each time the items this process drags change:
+/// as a drag starts and as it ends.
+pub(crate) fn drag_generation() -> u64 {
+    DRAG_GENERATION.with(std::cell::Cell::get)
+}
+
+/// Replaces the items this process drags with `dragged`.
+fn set_dragged(dragged: HashSet<String>) {
+    DRAGGED.with(|now| now.replace(dragged));
+    DRAG_GENERATION.with(|generation| generation.set(generation.get().wrapping_add(1)));
+}
+
+/// Makes `uris` the items this process drags, as a drag's start does, for
+/// tests.
+#[cfg(test)]
+pub(crate) fn set_dragged_for_tests(uris: &[&str]) {
+    set_dragged(uris.iter().map(|uri| (*uri).to_owned()).collect());
+}
+
 /// Remembers `drag`, which just began from a folder view, the navigation
 /// pane or This PC's tiles, as the file drag Escape calls off.
 fn remember_file_drag(drag: &gdk::Drag) {
@@ -625,7 +650,7 @@ impl BrowserWindow {
         self.reset_typeahead();
         self.pause_item_clicks(CLICKS_PAUSE_AFTER_START);
         let dragged: HashSet<String> = outgoing.payload.uris.iter().cloned().collect();
-        DRAGGED.with(|now| now.replace(dragged.clone()));
+        set_dragged(dragged.clone());
         DRAGGED_FILES.with(|files| files.set(outgoing.has_files));
         self.quiet_tooltips_for_drag(true);
         self.folder_pane().owners().show_dragged_items(dragged);
@@ -649,7 +674,7 @@ impl BrowserWindow {
                 gtk::AccessibleAnnouncementPriority::Medium,
             );
         }
-        DRAGGED.with(|now| now.borrow_mut().clear());
+        set_dragged(HashSet::new());
         DRAGGED_FILES.with(|files| files.set(false));
         self.quiet_tooltips_for_drag(false);
         for pane in self.folder_panes() {

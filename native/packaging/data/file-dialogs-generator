@@ -1,0 +1,19 @@
+#!/bin/sh
+# SPDX-License-Identifier: AGPL-3.0-only
+# OpenXplorer's systemd user environment generator, installed by the
+# packages in /usr/lib/systemd/user-environment-generators/. The user
+# manager runs it at login and passes what it prints to the session.
+#
+# GTK 3 applications show GTK's own Open and Save dialogs unless
+# GTK_USE_PORTAL=1 is set. While the user has turned on OpenXplorer's Open
+# and Save dialogs (Settings > Default apps), the app keeps the opt-in mark
+# below; this prints the variable only while that mark is a regular file.
+# Uninstalling the package removes this generator, and with it the
+# variable: no maintainer script touches a home folder. It reads nothing
+# else and changes nothing (crates/ox-core/src/integration/file_dialogs.rs).
+config="${XDG_CONFIG_HOME:-$HOME/.config}"
+mark="$config/winspace/file-dialogs/gtk-apps"
+if [ -n "$HOME$XDG_CONFIG_HOME" ] && [ -f "$mark" ]; then
+    echo GTK_USE_PORTAL=1
+fi
+exit 0

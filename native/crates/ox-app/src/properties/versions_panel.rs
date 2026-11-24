@@ -29,6 +29,15 @@ use super::{PropertiesTarget, RestoreRequest, SnapshotTarget};
 use crate::dialog::quiet_text;
 use crate::icons::{self, Icon};
 
+/// What Restore does, as its tooltip says, by default.
+const RESTORE_COPY_TIP: &str = crate::i18n::message_id(
+    "Restore a copy of this version somewhere else; the live item is never overwritten.",
+);
+/// What Restore does with "Restore over the original (Windows)" on.
+const RESTORE_OVER_TIP: &str = crate::i18n::message_id(
+    "Copy this version back over the item; you are asked before anything is replaced.",
+);
+
 /// What the tab browses.
 const VERSIONS_INTRO: &str =
     crate::i18n::message_id("Previous versions come from snapshot and backup folders.");
@@ -251,9 +260,7 @@ impl VersionsPanel {
         ));
         let restore = push_button(&ox_core::i18n::gettext("Restore"));
         super::window::give_access_key(&restore, 'r');
-        restore.set_tooltip_text(Some(&ox_core::i18n::gettext(
-            "Restore a copy of this version somewhere else; the live item is never overwritten.",
-        )));
+        restore.set_tooltip_text(Some(&ox_core::i18n::gettext(RESTORE_COPY_TIP)));
         restore.connect_clicked(glib::clone!(
             #[weak(rename_to = panel)]
             self,
@@ -283,11 +290,21 @@ impl VersionsPanel {
         }
         if let Some(restore) = self.imp().restore.borrow().as_ref() {
             restore.set_sensitive(selected.is_some());
+            let over_original = super::window::PropertiesWindow::of(self)
+                .and_then(|window| window.opener())
+                .is_some_and(|opener| opener.restores_over_original());
+            let tip = if over_original {
+                RESTORE_OVER_TIP
+            } else {
+                RESTORE_COPY_TIP
+            };
+            restore.set_tooltip_text(Some(&ox_core::i18n::gettext(tip)));
         }
     }
 
     /// Open browses the selected folder version in a tab; Restore asks
-    /// where to put a copy of the selected version. Both happen in the
+    /// where to put a copy of the selected version, or, with "Restore over
+    /// the original (Windows)" on, copies it back over the item. Both happen in the
     /// browser window that opened Properties, which comes to the front
     /// first, so what they show is not hidden behind other windows.
     fn run_on_selected(&self, open: bool) {
@@ -299,10 +316,14 @@ impl VersionsPanel {
             return;
         };
         opener.present();
+        let request = RestoreRequest::of_version(&version);
         if open {
             opener.browse_snapshot(SnapshotTarget::of_version(&version));
+        } else if opener.restores_over_original() {
+            let original = self.imp().uri.borrow().clone();
+            opener.restore_over_original(&request, &original);
         } else {
-            opener.ask_restore_destination(&RestoreRequest::of_version(&version));
+            opener.ask_restore_destination(&request);
         }
     }
 

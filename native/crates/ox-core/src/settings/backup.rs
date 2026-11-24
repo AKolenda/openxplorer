@@ -1,0 +1,5 @@
+            "extensionWordStarts": true, "showAllSearchMatches": true,
+            "neutralSelectionColors": true, "recentFilesInNavigationPane": false,
+            "connectExternalShares": true, "modalDialogsOnGnome": true,
+            "allowLinuxNameCharacters": true, "searchSystemDirectories": false,
+            "searchCompressedFiles": true, "enabledServiceActions": ["0123abcd"],

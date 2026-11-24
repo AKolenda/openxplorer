@@ -66,6 +66,9 @@ mod imp {
         pub(super) appearance: Cell<Appearance>,
         /// The desktop's accent drawn over the palette.
         pub(super) accent: Cell<Accent>,
+        /// Whether hover and selection keep Windows' colors whatever the
+        /// accent ("Neutral selection colors (like Windows)").
+        pub(super) neutral_items: Cell<bool>,
         /// Whether the high-contrast rules are loaded.
         pub(super) contrast: Cell<Contrast>,
         /// The text size the user chose.
@@ -202,7 +205,8 @@ impl Skin {
             return;
         }
         self.providers().draw_palette(appearance);
-        self.providers().draw_accent(self.accent(), appearance);
+        self.providers()
+            .draw_accent(self.accent(), appearance, self.imp().neutral_items.get());
         self.emit_by_name::<()>(APPEARANCE_CHANGED, &[]);
     }
 
@@ -281,7 +285,18 @@ impl Skin {
         if self.imp().accent.replace(accent) == accent {
             return;
         }
-        self.providers().draw_accent(accent, self.appearance());
+        self.providers()
+            .draw_accent(accent, self.appearance(), self.imp().neutral_items.get());
+    }
+
+    /// Keeps hover and selection in Windows' colors whatever the accent
+    /// (`neutral`), or lets the accent tint them.
+    pub(crate) fn set_neutral_selection_colors(&self, neutral: bool) {
+        if self.imp().neutral_items.replace(neutral) == neutral {
+            return;
+        }
+        self.providers()
+            .draw_accent(self.accent(), self.appearance(), neutral);
     }
 
     /// The contrast drawn now, for tests that follow the desktop setting.

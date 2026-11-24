@@ -701,23 +701,39 @@ impl GeneralEdits {
             self.versions
                 .check_writable(&uri)
                 .map_err(|refusal| refusal.to_string())?;
+            let submitted = self.folder_read_only.get();
+            // A folder's change reaches its files only once the user said
+            // so, as Windows asks; Cancel makes no change at all.
+            let reaches_inside = if self.is_folder {
+                let Some(parent) = window.as_ref() else {
+                    return Err(super::window::CANCELLED.to_owned());
+                };
+                super::attribute_confirm::ask_reach(parent, read_only, false)
+                    .await
+                    .ok_or_else(|| super::window::CANCELLED.to_owned())?
+            } else {
+                false
+            };
             // No drive is formatted while the item changes (DEV-012).
             let _writing = match &opener {
                 Some(opener) => Some(opener.hold_write()?),
                 None => None,
             };
-            let request = PermissionRequest {
-                mode: ModeChange::ReadOnlyFiles(read_only),
-                owner: None,
-                group: None,
-                recursive: self.is_folder,
-            };
-            let submitted = self.folder_read_only.get();
-            // Backups inside a folder are left alone too.
-            let protected = self.versions.protected_locations();
-            apply_outside_in_background(uri, request, Cancellation::new(), protected)
-                .await
-                .map_err(|error| error.to_string())?;
+            // "This folder only" changes nothing: a folder keeps its own
+            // bits whatever its Read-only says.
+            if !self.is_folder || reaches_inside {
+                let request = PermissionRequest {
+                    mode: ModeChange::ReadOnlyFiles(read_only),
+                    owner: None,
+                    group: None,
+                    recursive: reaches_inside,
+                };
+                // Backups inside a folder are left alone too.
+                let protected = self.versions.protected_locations();
+                apply_outside_in_background(uri, request, Cancellation::new(), protected)
+                    .await
+                    .map_err(|error| error.to_string())?;
+            }
             if self.is_folder {
                 // A box changed while the change was made stays to apply.
                 if self.folder_read_only.get() == submitted {

@@ -393,9 +393,9 @@ fn forgetting_waits_for_a_save_in_flight() {
 }
 
 /// A save already inside the keyring on a custom port cannot restore
-/// the account after host-wide Sign out completes.
+/// the account after Sign out of that server completes.
 #[test]
-fn forgetting_a_host_waits_for_a_custom_port_save_in_flight() {
+fn forgetting_a_server_waits_for_a_custom_port_save_in_flight() {
     let (credentials, keyring) = window_with_keyring();
     let uri = "smb://security-test-nas:1445/Projects";
     let held = HeldSaves::on(&keyring);
@@ -409,16 +409,13 @@ fn forgetting_a_host_waits_for_a_custom_port_save_in_flight() {
         .expect("the save starts");
     let clearer = thread::spawn({
         let credentials = Arc::clone(&credentials);
-        move || credentials.forget_host("security-test-nas", ForgetScope::AllScopes)
+        move || credentials.forget(uri, ForgetScope::AllScopes)
     });
-    wait_until("host-wide invalidation", || {
+    wait_until("the server's invalidation", || {
         credentials.generation(uri) != generation
     });
     thread::sleep(Duration::from_millis(50));
-    assert!(
-        !clearer.is_finished(),
-        "host-wide clear waits for the port's save"
-    );
+    assert!(!clearer.is_finished(), "the clear waits for the port's save");
     held.release.send(()).expect("release the save");
     writer.join().unwrap().unwrap();
     assert!(clearer.join().unwrap().unwrap());

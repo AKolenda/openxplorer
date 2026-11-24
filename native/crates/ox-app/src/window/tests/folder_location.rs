@@ -203,6 +203,11 @@ fn read_only_reaches_the_files_before_location_moves_them() {
     check(&general(&window), "Read-only (Only applies to files in folder)").set_active(true);
 
     window.ok_button().emit_clicked();
+    super::item_dialogs::answer_attribute_changes(
+        &window,
+        "Apply changes to this folder, subfolders and files",
+        "OK",
+    );
 
     open_dialog(&test).press("Move files");
     super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);

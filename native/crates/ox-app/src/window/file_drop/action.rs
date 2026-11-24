@@ -42,7 +42,7 @@ use ox_core::transfer::stores_symbolic_links;
 use super::drive::{answer_or, answer_within, on_same_drive, DRIVE_PROBES};
 use super::DropDestination;
 use crate::icons::Icon;
-use crate::window::file_drag::{drag_button, dragged_now, DragButton};
+use crate::window::file_drag::{drag_button, drag_generation, dragged_now, DragButton};
 use crate::window::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use crate::window::window_action::WindowAction;
 use crate::window::zip_copies::is_zip_copy;
@@ -541,12 +541,27 @@ impl BrowserWindow {
             drop.offered(),
             self.held_drop_keys(),
         )?;
-        let drags_drives = drop.origin() == DragOrigin::ThisApp && self.are_all_drives(&dragged_now());
+        let drags_drives = drop.origin() == DragOrigin::ThisApp && self.drags_only_drives();
         Some(match run {
             DropRun::Run(DropAction::Ask(_)) => run,
             _ if drags_drives => DropRun::Run(DropAction::Link),
             _ => run,
         })
+    }
+
+    /// Whether the items this process drags are all drives, read once per
+    /// drag: a drag may carry 100,000 items, and this runs at every motion.
+    fn drags_only_drives(&self) -> bool {
+        let generation = drag_generation();
+        let known = &self.imp().drags_drives;
+        if let Some((read_at, all_drives)) = known.get() {
+            if read_at == generation {
+                return all_drives;
+            }
+        }
+        let all_drives = self.are_all_drives(&dragged_now());
+        known.set(Some((generation, all_drives)));
+        all_drives
     }
 
     /// The action `drop` shows now, or `None` when it is refused. For

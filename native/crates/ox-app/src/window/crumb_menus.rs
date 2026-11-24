@@ -5,8 +5,12 @@
 //! - A click on the divider after a crumb, or Down on a focused crumb,
 //!   opens a menu of that folder's subfolders. The folder the address
 //!   goes on to is bold and hidden folders show only while hidden files
-//!   do. As in Windows, the menu lists every subfolder, scrolling when it
-//!   is taller than the screen (NAV-020).
+//!   do. As in Windows, the menu lists the subfolders in one menu,
+//!   scrolling when it is taller than the screen (NAV-020). A folder with
+//!   more than [`MOST_LISTED_SUBFOLDERS`] lists that many, then "Show all
+//!   <n> folders", which opens the folder: the list is sorted off the main
+//!   thread and its rows are built a batch at a time (`menu_popover.rs`),
+//!   so a folder of 50,000 subfolders never holds up the window.
 //! - The chevron after the location icon lists the top-level places, the
 //!   one the crumbs start at in bold; the « that takes its place on a
 //!   long path lists the crumbs it hides, the nearest last, then those
@@ -26,6 +30,10 @@ use crate::locations::Page;
 use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
+
+/// The most subfolders a crumb's menu lists; past them, its last item
+/// opens the folder, whose file list shows them all.
+pub(super) const MOST_LISTED_SUBFOLDERS: usize = 1_000;
 
 /// A folder inside the folder of a crumb.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,7 +75,7 @@ pub(super) async fn list_subfolders(uri: &str, show_hidden: bool) -> Vec<Subfold
                     name: member.name,
                 }),
         );
-        return sorted_naturally(folders);
+        return sorted_off_the_main_thread(folders).await;
     }
     let listed = enumerate_folder(uri, |entries| {
         let visible = entries
@@ -82,7 +90,15 @@ pub(super) async fn list_subfolders(uri: &str, show_hidden: bool) -> Vec<Subfold
     if listed.is_err() {
         return Vec::new();
     }
-    sorted_naturally(folders)
+    sorted_off_the_main_thread(folders).await
+}
+
+/// `folders` in natural order, sorted on a worker thread: tens of
+/// thousands of names take long enough to hold up a frame.
+async fn sorted_off_the_main_thread(folders: Vec<Subfolder>) -> Vec<Subfolder> {
+    gio::spawn_blocking(move || sorted_naturally(folders))
+        .await
+        .unwrap_or_default()
 }
 
 /// `folders` in natural order of their names.
@@ -95,17 +111,29 @@ fn sorted_naturally(folders: Vec<Subfolder>) -> Vec<Subfolder> {
     keyed.into_iter().map(|(_, folder)| folder).collect()
 }
 
-/// The menu of `folders`, the one at `shown` in bold.
-pub(super) fn subfolder_menu(folders: &[Subfolder], shown: &str) -> Vec<MenuEntry> {
-    folders
+/// The menu of `folders`, the subfolders of `parent`, the one at `shown`
+/// in bold: at most [`MOST_LISTED_SUBFOLDERS`] of them, then, when there
+/// are more, "Show all <n> folders", which opens `parent`.
+pub(super) fn subfolder_menu(folders: &[Subfolder], parent: &str, shown: &str) -> Vec<MenuEntry> {
+    let mut entries: Vec<MenuEntry> = folders
         .iter()
+        .take(MOST_LISTED_SUBFOLDERS)
         .map(|folder| {
             let item =
                 MenuItem::with_text_target(&folder.name, Icon::Folder, WindowAction::GoTo, &folder.uri);
             let emphasised = same_location(&folder.uri, shown);
             MenuItem { emphasised, ..item }.into()
         })
-        .collect()
+        .collect();
+    if folders.len() > MOST_LISTED_SUBFOLDERS {
+        let count = folders.len().to_string();
+        let label = ox_core::i18n::format_message("Show all {count} folders", &[("count", &count)]);
+        entries.push(MenuEntry::Divider);
+        entries.push(
+            MenuItem::with_text_target(&label, Icon::MoreHorizontal, WindowAction::GoTo, parent).into(),
+        );
+    }
+    entries
 }
 
 /// The top-level places, as the chevron after the location icon lists
@@ -211,7 +239,7 @@ impl BrowserWindow {
             self,
             async move {
                 let folders = list_subfolders(&folder, show_hidden).await;
-                let entries = subfolder_menu(&folders, &shown);
+                let entries = subfolder_menu(&folders, &folder, &shown);
                 window.popup_crumb_menu(&folder, entries, true);
             }
         ));
@@ -359,7 +387,7 @@ mod tests {
     fn a_crumb_menu_lists_every_subfolder_with_the_shown_one_bold() {
         let many = folders(450);
 
-        let entries = subfolder_menu(&many, "file:///demo/Folder%20300");
+        let entries = subfolder_menu(&many, "file:///demo", "file:///demo/Folder%20300");
 
         let listed = items(&entries);
         assert_eq!(listed.len(), 450, "no page and no More, as in Windows");
@@ -371,7 +399,60 @@ mod tests {
         assert_eq!(bold, ["Folder 300"]);
         assert_eq!(listed[0].target, Some("file:///demo/Folder%200".to_variant()));
         assert_eq!(listed[449].target, Some("file:///demo/Folder%20449".to_variant()));
-        assert!(subfolder_menu(&[], "").is_empty());
+        assert!(subfolder_menu(&[], "file:///demo", "").is_empty());
+    }
+
+    /// A folder of 50,000 subfolders lists the first thousand, then an
+    /// item that opens the folder, so its menu is never built row by row
+    /// for all of them.
+    ///
+    /// parity: NAV-020
+    #[test]
+    fn a_crumb_menu_of_a_huge_folder_stops_at_a_thousand_and_opens_the_folder() {
+        let many = folders(50_000);
+
+        let entries = subfolder_menu(&many, "file:///demo", "file:///demo/Folder%20999");
+
+        let listed = items(&entries);
+        assert_eq!(listed.len(), MOST_LISTED_SUBFOLDERS + 1);
+        assert!(
+            listed[MOST_LISTED_SUBFOLDERS - 1].emphasised,
+            "the shown one is bold"
+        );
+        assert_eq!(entries[MOST_LISTED_SUBFOLDERS], MenuEntry::Divider);
+        let last = listed[MOST_LISTED_SUBFOLDERS];
+        assert_eq!(last.label, "Show all 50000 folders");
+        assert_eq!(last.target, Some("file:///demo".to_variant()));
+        let at_the_limit = subfolder_menu(&many[..MOST_LISTED_SUBFOLDERS], "file:///demo", "");
+        assert_eq!(
+            items(&at_the_limit).len(),
+            MOST_LISTED_SUBFOLDERS,
+            "no extra item"
+        );
+    }
+
+    /// A crumb menu of a thousand subfolders builds its first hundred rows
+    /// at once and the rest a batch at a time while the window is idle,
+    /// until every item has its row.
+    ///
+    /// parity: NAV-020
+    #[gtk::test]
+    fn a_long_crumb_menu_builds_its_rows_a_batch_at_a_time() {
+        let many = folders(5_000);
+        let entries = subfolder_menu(&many, "file:///demo", "");
+        let menu = MenuPopover::new(entries);
+        let rows = || {
+            (0..=1_001)
+                .take_while(|index| menu.row_list().row_at_index(*index).is_some())
+                .count()
+        };
+
+        assert_eq!(rows(), 100, "the first batch only");
+        assert!(!menu.has_every_row());
+        crate::test_support::harness::wait_until("every row", || menu.has_every_row());
+        assert_eq!(rows(), 1_001, "a thousand folders and Show all");
+        let last = menu.row_list().row_at_index(1_000).expect("a last row");
+        assert!(last.has_css_class("after-divider"), "Show all follows a divider");
     }
 
     /// parity: NAV-017, NAV-023
