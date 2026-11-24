@@ -35,7 +35,7 @@ use super::actions::{plain_action, text_action};
 use super::command_bar::{group_by_menu, new_menu, sort_menu};
 use super::disk_tools::is_installed;
 use super::group_headings::heading_at;
-use super::menu_popover::{MenuEntry, MenuPopover, MenuStyle};
+use super::menu_popover::{MenuAction, MenuEntry, MenuItem, MenuPopover, MenuStyle};
 use super::widget_tree::children;
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -267,22 +267,16 @@ impl BrowserWindow {
             };
         }
         let in_recycle_bin = facts.folder.is_recycle_bin;
+        let mut strip = Vec::new();
         let entries = match (items.first(), in_recycle_bin) {
             (None, true) if compact => {
                 compact_recycle_bin_background_menu(&self.undo_redo(), self.background_submenus())
             }
             (None, true) => recycle_bin_background_menu(),
             (None, false) if style == MenuStyle::Compact => {
-                self.refresh_template_menu();
-                compact_background_menu(
-                    &self.journal_label(JournalDirection::Undo),
-                    BackgroundSubmenus {
-                        view: self.background_view_menu(),
-                        sort: sort_menu(),
-                        group: group_by_menu(),
-                        new: new_menu(self.template_menu_entries()),
-                    },
-                )
+                let menu = compact_background_menu(&self.undo_redo(), self.background_submenus());
+                strip = menu.strip;
+                menu.entries
             }
             (None, false) => {
                 self.refresh_template_menu();
@@ -324,10 +318,7 @@ impl BrowserWindow {
         } else {
             entries
         };
-        ContextMenu {
-            entries,
-            strip: Vec::new(),
-        }
+        ContextMenu { entries, strip }
     }
 
     /// The widget whose context menu shows for the page shown: the
@@ -575,6 +566,26 @@ impl BrowserWindow {
         popover.popup();
     }
 
+    /// Gives the folder menus that are open the New menu `new`, read again
+    /// after they opened: the folder menu's New submenu, or the New menu
+    /// "New…" opened in place. Only a menu whose New changed is redrawn.
+    pub(super) fn update_open_new_menus(&self, new: &[MenuEntry]) {
+        for pane in self.folder_panes() {
+            let Some(popover) = context_menu_of(&pane.input_widget()) else {
+                continue;
+            };
+            if !popover.is_visible() {
+                continue;
+            }
+            let classic = popover.is_classic();
+            let entries = popover.entries();
+            let updated = with_new_menu(&entries, new, classic);
+            if updated != entries {
+                popover.set_entries(updated);
+            }
+        }
+    }
+
     /// Adds the actions the context menus run themselves: "Show more
     /// options", "New…", "Sort by", "View", "Unpin from Quick access",
     /// "Open windows…" and a group heading's collapse and expand commands.
@@ -746,6 +757,40 @@ fn gray_terminal(entries: Vec<MenuEntry>) -> Vec<MenuEntry> {
 }
 
 /// The context menu popover attached to `view`.
+/// `entries` of an open menu with `new` as its New menu: in place of the
+/// New submenu of a folder menu, or of the whole menu when it is the New
+/// menu itself; in the classic look, without shortcut text, as
+/// [`classic_look`] draws it.
+fn with_new_menu(entries: &[MenuEntry], new: &[MenuEntry], classic: bool) -> Vec<MenuEntry> {
+    let new = if classic {
+        classic_look(new.to_vec())
+    } else {
+        new.to_vec()
+    };
+    let is_new_menu = |entries: &[MenuEntry]| {
+        matches!(entries.first(), Some(MenuEntry::Item(item))
+            if item.action == MenuAction::Window(WindowAction::NewFolder))
+    };
+    if is_new_menu(entries) {
+        return new;
+    }
+    entries
+        .iter()
+        .map(|entry| match entry {
+            MenuEntry::Item(item)
+                if item.action == MenuAction::Window(WindowAction::ShowNewMenu)
+                    && is_new_menu(&item.submenu) =>
+            {
+                MenuEntry::Item(MenuItem {
+                    submenu: new.clone(),
+                    ..item.clone()
+                })
+            }
+            other => other.clone(),
+        })
+        .collect()
+}
+
 fn context_menu_of(view: &gtk::Widget) -> Option<MenuPopover> {
     children(view).find_map(|child| child.downcast::<MenuPopover>().ok())
 }

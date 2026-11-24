@@ -865,6 +865,37 @@ impl FolderPane {
         self.scroll_to(position, gtk::ListScrollFlags::FOCUS, None);
     }
 
+    /// Whether the row or tile of the item at `position` shows whole in
+    /// the visible view; always true on the Gallery page, which scrolls
+    /// its own canvas.
+    pub(super) fn shows_whole_item(&self, position: u32) -> bool {
+        if self.shows_gallery_page() {
+            return true;
+        }
+        let view = self.view_widget();
+        let Some(cell) = self.owners().file_cell_at(position, &view) else {
+            return false;
+        };
+        let Some(scroller) = view
+            .ancestor(gtk::ScrolledWindow::static_type())
+            .and_downcast::<gtk::ScrolledWindow>()
+        else {
+            return cell.is_drawable();
+        };
+        let Some(bounds) = cell.compute_bounds(&scroller) else {
+            return false;
+        };
+        #[expect(clippy::cast_precision_loss, reason = "a window's height is small")]
+        let height = scroller.height() as f32;
+        // A row the list bound but has not laid out yet has no height.
+        // Half a pixel of rounding is still whole.
+        let is_laid_out = bounds.height() > 0.0;
+        is_laid_out
+            && cell.is_drawable()
+            && bounds.y() >= -0.5
+            && bounds.y() + bounds.height() <= height + 0.5
+    }
+
     /// Scrolls `position` into view without moving keyboard focus or the
     /// selection.
     pub(super) fn scroll_into_view(&self, position: u32) {

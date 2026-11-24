@@ -959,49 +959,42 @@ fn background_submenu_items(submenus: BackgroundSubmenus) -> [MenuEntry; 4] {
     ]
 }
 
-/// The Windows 11 style of the folder's own menu, in the order of
-/// Explorer's compact menu on blank space: View, Sort by, Group by and
-/// Refresh; Paste and Undo; New; Properties; Open in Terminal; then "Show
-/// more options" for the rest (CMD-011, CMD-012). View, Sort by, Group by
-/// and New open `submenus` beside the menu.
-pub(crate) fn compact_background_menu(undo_label: &str, submenus: BackgroundSubmenus) -> Vec<MenuEntry> {
+/// The Windows 11 style of the folder's own menu, as Explorer's compact
+/// menu on blank space lists it (VM check 2026-11-22): View, Sort by and
+/// Group by; Undo of the last step while there is one, New and
+/// Properties; Open in Terminal; then "Show more options" for the rest
+/// (CMD-011, CMD-012), with Paste alone in the icon row. It has no
+/// Refresh; F5 refreshes. View, Sort by, Group by and New open `submenus`
+/// beside the menu.
+pub(crate) fn compact_background_menu(steps: &UndoRedo, submenus: BackgroundSubmenus) -> ContextMenu {
     let [view, sort, group, new] = background_submenu_items(submenus);
-    vec![
-        view,
-        sort,
-        group,
-        item(
-            ox_core::i18n::gettext_static("Refresh"),
-            Icon::ArrowClockwise,
-            WindowAction::Refresh,
-        )
-        .with_shortcut("F5")
-        .into(),
-        MenuEntry::Divider,
-        item(
-            ox_core::i18n::gettext_static("Paste"),
-            Icon::ClipboardPaste,
-            WindowAction::Paste,
-        )
-        .with_shortcut("Ctrl+V")
-        .into(),
-        item(undo_label, Icon::ArrowUndo, WindowAction::Undo)
-            .with_shortcut("Ctrl+Z")
-            .into(),
-        MenuEntry::Divider,
-        new,
-        MenuEntry::Divider,
-        properties_item(),
-        MenuEntry::Divider,
-        item(
-            ox_core::i18n::gettext_static("Open in Terminal"),
-            Icon::WindowConsole,
-            WindowAction::OpenInTerminal,
-        )
-        .into(),
-        MenuEntry::Divider,
-        show_more_options_item(),
-    ]
+    let undo = UndoRedo {
+        redo: None,
+        ..steps.clone()
+    };
+    let mut second = undo.rows();
+    second.extend([new, properties_item()]);
+    let terminal = item(
+        ox_core::i18n::gettext_static("Open in Terminal"),
+        Icon::WindowConsole,
+        WindowAction::OpenInTerminal,
+    )
+    .into();
+    let paste = item(
+        ox_core::i18n::gettext_static("Paste"),
+        Icon::ClipboardPaste,
+        WindowAction::Paste,
+    )
+    .with_shortcut("Ctrl+V");
+    ContextMenu {
+        entries: grouped(vec![
+            vec![view, sort, group],
+            second,
+            vec![terminal],
+            vec![show_more_options_item()],
+        ]),
+        strip: vec![paste],
+    }
 }
 
 /// The menu of a file or folder, in `style` (`entryMenu`).
@@ -2564,22 +2557,23 @@ mod tests {
             group: Vec::new(),
             new: Vec::new(),
         };
-        let menu = compact_background_menu("Undo", submenus);
-        let MenuEntry::Item(sort_by) = &menu[1] else {
+        let steps = UndoRedo {
+            undo: Some("Undo New".to_owned()),
+            redo: Some("Redo Rename".to_owned()),
+        };
+        let menu = compact_background_menu(&steps, submenus);
+        let MenuEntry::Item(sort_by) = &menu.entries[1] else {
             panic!("Sort by is an item");
         };
         assert_eq!(sort_by.submenu, sort, "Sort by opens the sort menu in place");
         assert_eq!(
-            labels(&menu),
+            labels(&menu.entries),
             [
                 "View",
                 "Sort by",
                 "Group by",
-                "Refresh",
                 "-",
-                "Paste",
-                "Undo",
-                "-",
+                "Undo New",
                 "New",
                 "Properties",
                 "-",
@@ -2588,6 +2582,8 @@ mod tests {
                 "Show more options",
             ]
         );
+        let strip: Vec<&str> = menu.strip.iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(strip, ["Paste"], "Paste alone in the icon row");
     }
 
     /// The folder's applications and Open folder with… follow Open in
@@ -2623,6 +2619,7 @@ mod tests {
                 "Pin this folder",
                 "Cache this folder for search",
                 "Calculate folder sizes",
+                "-",
                 "Previous versions",
                 "Properties",
             ]

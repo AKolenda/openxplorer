@@ -16,6 +16,7 @@ use ox_core::clipboard::ClipboardMode;
 use ox_core::ops::{JournalDirection, NewDocument, TemplateId};
 
 use super::new_items::NewFile;
+use super::opendocuments::is_offered;
 use crate::window::actions::{plain_action, text_action};
 use crate::window::window_action::WindowAction;
 use crate::window::BrowserWindow;
@@ -53,7 +54,10 @@ fn new_document_action(
     document: NewDocument,
 ) -> gio::ActionEntry<BrowserWindow> {
     task_action(window_action, move |window| async move {
-        window.create_new_file(NewFile::Document(document)).await;
+        // Rich Text Document only while an application opens RTF files.
+        if is_offered(document) {
+            window.create_new_file(NewFile::Document(document)).await;
+        }
     })
 }
 
@@ -100,6 +104,19 @@ impl BrowserWindow {
             new_document_action(WindowAction::NewRichTextDocument, NewDocument::RichTextDocument),
             new_document_action(WindowAction::NewTextDocument, NewDocument::TextDocument),
             new_document_action(WindowAction::NewCompressedFolder, NewDocument::CompressedFolder),
+            // Only a type New offers now, while an application opens it.
+            text_action(WindowAction::NewOpenDocument, |window, extension| {
+                let document =
+                    NewDocument::from_extension(extension).filter(|document| is_offered(*document));
+                let Some(document) = document else {
+                    return;
+                };
+                glib::spawn_future_local(glib::clone!(
+                    #[weak]
+                    window,
+                    async move { window.create_new_file(NewFile::Document(document)).await }
+                ));
+            }),
             text_action(WindowAction::NewFromUserTemplate, |window, id| {
                 let Ok(TemplateId::User(path)) = id.parse::<TemplateId>() else {
                     return;

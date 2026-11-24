@@ -26,7 +26,7 @@ msgid "- Deleted items go to the Recycle Bin of their drive. Restore puts them b
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
-msgid "- New in the command bar lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder, then the files in your Templates folder. A new item is made at once as, for example, \"New Text Document.txt\" (or \"New Text Document (2).txt\" when that name is taken), then renamed in place: type its name and press Enter.\n- Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.\n- Rename with F2. Select several items to rename them together. As in Windows, \\ / : * ? \" < > | can’t be typed in a name, and a file given a name that is taken is offered the next free number, such as Report (2).txt.\n- Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.\n- When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.\n- Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.\n- Copies and moves show processed bytes and speed; a total and estimated time remaining appear when the total is known. Pause, Resume and Cancel apply to each job; finished items stay finished.\n- Up to four copy, move or delete jobs can run while you browse. Wait for a job using overlapping source or destination folders to finish before starting another. Archive operations, renaming, restore and Undo remain exclusive."
+msgid "- New in the command bar lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Text Document and Compressed (zipped) Folder, with Rich Text Document while an app opens RTF files and OpenDocument Presentation, Spreadsheet and Text while an office suite such as LibreOffice is installed, then the files in your Templates folder. A new item is made at once as, for example, \"New Text Document.txt\" (or \"New Text Document (2).txt\" when that name is taken), then renamed in place: type its name and press Enter.\n- Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.\n- Rename with F2. Select several items to rename them together. As in Windows, \\ / : * ? \" < > | can’t be typed in a name, and a file given a name that is taken is offered the next free number, such as Report (2).txt.\n- Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.\n- When a name is already taken, OpenXplorer asks whether to replace, skip or keep both. Nothing is replaced without your answer.\n- Undo (Ctrl+Z) and Redo (Ctrl+Y) reverse the last operations.\n- Copies and moves show processed bytes and speed; a total and estimated time remaining appear when the total is known. Pause, Resume and Cancel apply to each job; finished items stay finished.\n- Up to four copy, move or delete jobs can run while you browse. Wait for a job using overlapping source or destination folders to finish before starting another. Archive operations, renaming, restore and Undo remain exclusive."
 msgstr ""
 
 #: crates/ox-app/resources/manual.md
@@ -5364,10 +5364,6 @@ msgid "Reset text size"
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar/menus.rs
-msgid "Rich Text Document"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar/menus.rs
 msgid "Select items matching…"
 msgstr ""
 
@@ -6429,6 +6425,10 @@ msgid "Creating a compressed (zipped) folder…"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "Creating a document…"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
 msgid "Creating a file…"
 msgstr ""
 
@@ -6449,6 +6449,18 @@ msgid "New Compressed (zipped) Folder"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "New OpenDocument Presentation"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "New OpenDocument Spreadsheet"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
+msgid "New OpenDocument Text"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/new_items.rs
 msgid "New Rich Text Document"
 msgstr ""
 
@@ -6458,6 +6470,22 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/new_items.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "New folder"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/opendocuments.rs crates/ox-core/src/entry/type_label.rs
+msgid "OpenDocument Presentation"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/opendocuments.rs crates/ox-core/src/entry/type_label.rs
+msgid "OpenDocument Spreadsheet"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/opendocuments.rs crates/ox-core/src/entry/type_label.rs
+msgid "OpenDocument Text"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/opendocuments.rs
+msgid "Rich Text Document"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/pasted_content.rs
@@ -8737,18 +8765,6 @@ msgstr ""
 
 #: crates/ox-core/src/entry/type_label.rs
 msgid "Microsoft Word Document"
-msgstr ""
-
-#: crates/ox-core/src/entry/type_label.rs
-msgid "OpenDocument Presentation"
-msgstr ""
-
-#: crates/ox-core/src/entry/type_label.rs
-msgid "OpenDocument Spreadsheet"
-msgstr ""
-
-#: crates/ox-core/src/entry/type_label.rs
-msgid "OpenDocument Text"
 msgstr ""
 
 #: crates/ox-core/src/entry/type_label.rs

@@ -101,6 +101,7 @@ impl Removal {
     /// What the message says when the removal failed with `error`: a
     /// drive still in use is refused in the words of Windows' "Problem
     /// Ejecting" message, which say what to do; anything else in the
+    /// system's words.
     pub(crate) fn failure_detail(error: &NetworkError) -> String {
         let is_busy = matches!(
             error,

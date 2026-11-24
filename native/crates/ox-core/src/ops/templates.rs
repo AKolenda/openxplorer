@@ -15,6 +15,7 @@
 //! chosen template against a fresh list and reads it under the same
 //! limits.
 
+use std::borrow::Cow;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -23,6 +24,7 @@ use gio::prelude::*;
 
 use super::context::{on_worker, unless_cancelled};
 use super::error::OpsError;
+use super::opendocument::{empty_document, OpenDocumentKind};
 use crate::transfer::Cancellation;
 
 /// How many user templates are listed at most.
@@ -124,14 +126,22 @@ impl BuiltinTemplate {
 }
 
 /// The documents New makes in place, as Windows 11 File Explorer's New
-/// menu lists its registered types on a stock system, in that order:
+/// menu lists its registered types, in the order of their extensions:
 /// "Bitmap image", "Rich Text Document", "Text Document" and "Compressed
-/// (zipped) Folder". Each is made as "New <type>.<extension>" with fixed
-/// content, then renamed in place.
+/// (zipped) Folder" on a stock system, and the OpenDocument types an
+/// office suite such as LibreOffice registers, offered only while an
+/// application opens them ([`NewDocument::content_type`]). Each is made as
+/// "New <type>.<extension>" with fixed content, then renamed in place.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NewDocument {
     /// A blank 1 × 1 white `.bmp`, so image programs can open it.
     BitmapImage,
+    /// An empty `.odp`: one blank 16:9 slide.
+    OpenDocumentPresentation,
+    /// An empty `.ods`: one sheet.
+    OpenDocumentSpreadsheet,
+    /// An empty `.odt`: one empty paragraph.
+    OpenDocumentText,
     /// A minimal `.rtf` with no text.
     RichTextDocument,
     /// An empty `.txt`.
@@ -158,9 +168,13 @@ const EMPTY_ZIP: [u8; 22] = [
 ];
 
 impl NewDocument {
-    /// Every document, in the order New lists them.
-    pub const ALL: [NewDocument; 4] = [
+    /// Every document, in the order New lists them: by extension, as
+    /// Windows sorts its New menu's file types.
+    pub const ALL: [NewDocument; 7] = [
         NewDocument::BitmapImage,
+        NewDocument::OpenDocumentPresentation,
+        NewDocument::OpenDocumentSpreadsheet,
+        NewDocument::OpenDocumentText,
         NewDocument::RichTextDocument,
         NewDocument::TextDocument,
         NewDocument::CompressedFolder,
@@ -170,22 +184,61 @@ impl NewDocument {
     pub fn extension(self) -> &'static str {
         match self {
             NewDocument::BitmapImage => "bmp",
+            NewDocument::OpenDocumentPresentation => "odp",
+            NewDocument::OpenDocumentSpreadsheet => "ods",
+            NewDocument::OpenDocumentText => "odt",
             NewDocument::RichTextDocument => "rtf",
             NewDocument::TextDocument => "txt",
             NewDocument::CompressedFolder => "zip",
         }
     }
 
-    /// The new file's content.
-    pub fn contents(self) -> &'static [u8] {
+    /// The document whose extension is `extension`.
+    pub fn from_extension(extension: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|document| document.extension() == extension)
+    }
+
+    /// The content type an installed application must open for New to
+    /// offer the document, as Windows lists a type only once a program
+    /// registers it; `None` for the documents a stock system always has.
+    pub fn content_type(self) -> Option<&'static str> {
         match self {
+            // WordPad registers it on Windows; Windows 11 24H2 and later,
+            // without WordPad, leave it out.
+            NewDocument::RichTextDocument => Some("application/rtf"),
+            _ => self.opendocument().map(OpenDocumentKind::media_type),
+        }
+    }
+
+    /// The OpenDocument file the document is.
+    fn opendocument(self) -> Option<OpenDocumentKind> {
+        match self {
+            NewDocument::OpenDocumentPresentation => Some(OpenDocumentKind::Presentation),
+            NewDocument::OpenDocumentSpreadsheet => Some(OpenDocumentKind::Spreadsheet),
+            NewDocument::OpenDocumentText => Some(OpenDocumentKind::Text),
+            NewDocument::BitmapImage
+            | NewDocument::RichTextDocument
+            | NewDocument::TextDocument
+            | NewDocument::CompressedFolder => None,
+        }
+    }
+
+    /// The new file's content.
+    pub fn contents(self) -> Cow<'static, [u8]> {
+        if let Some(kind) = self.opendocument() {
+            return Cow::Owned(empty_document(kind));
+        }
+        let fixed: &'static [u8] = match self {
             NewDocument::BitmapImage => &BLANK_BITMAP,
             NewDocument::RichTextDocument => {
                 b"{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Calibri;}}\\f0\\fs22\\par}\n"
             }
-            NewDocument::TextDocument => b"",
             NewDocument::CompressedFolder => &EMPTY_ZIP,
-        }
+            _ => b"",
+        };
+        Cow::Borrowed(fixed)
     }
 }
 
@@ -469,7 +522,25 @@ mod tests {
     fn each_new_document_has_its_windows_extension() {
         let extensions = NewDocument::ALL.map(NewDocument::extension);
 
-        assert_eq!(extensions, ["bmp", "rtf", "txt", "zip"]);
+        assert_eq!(extensions, ["bmp", "odp", "ods", "odt", "rtf", "txt", "zip"]);
+        let offered_by_an_application: Vec<_> = NewDocument::ALL
+            .into_iter()
+            .filter_map(NewDocument::content_type)
+            .collect();
+        assert_eq!(
+            offered_by_an_application,
+            [
+                "application/vnd.oasis.opendocument.presentation",
+                "application/vnd.oasis.opendocument.spreadsheet",
+                "application/vnd.oasis.opendocument.text",
+                "application/rtf",
+            ]
+        );
+        assert_eq!(
+            NewDocument::from_extension("odt"),
+            Some(NewDocument::OpenDocumentText)
+        );
+        assert_eq!(NewDocument::from_extension("docx"), None);
         assert!(NewDocument::TextDocument.contents().is_empty());
         assert!(NewDocument::RichTextDocument.contents().starts_with(b"{\\rtf1"));
         assert_eq!(&NewDocument::CompressedFolder.contents()[..4], b"PK\x05\x06");

@@ -144,6 +144,9 @@ fn detail_lines(entry: &Entry) -> Vec<String> {
     ]
 }
 
+/// The longest name a confirmation shows on one line, unwrapped.
+const SHORT_NAME_CHARS: usize = 40;
+
 /// The one item a confirmation asks about, under its question: its picture
 /// and name, then [`detail_lines`], as Windows shows them; only the name
 /// when the item could not be read.
@@ -160,11 +163,15 @@ fn item_details(item: &DeleteItem, entry: Option<&Entry>) -> gtk::Box {
     }
     let lines = gtk::Box::new(gtk::Orientation::Vertical, 2);
     let details = entry.map(detail_lines).unwrap_or_default();
-    for text in std::iter::once(&item.name).chain(&details) {
+    for (index, text) in std::iter::once(&item.name).chain(&details).enumerate() {
+        // A short name keeps its own line, also with no detail beside it
+        // to widen the dialog (a new folder on a share), so it never
+        // breaks inside a word; a long one wraps.
+        let is_short_name = index == 0 && text.chars().count() <= SHORT_NAME_CHARS;
         let line = gtk::Label::builder()
             .label(text)
             .xalign(0.0)
-            .wrap(true)
+            .wrap(!is_short_name)
             .wrap_mode(gtk::pango::WrapMode::WordChar)
             .max_width_chars(50)
             .build();
@@ -352,5 +359,42 @@ impl BrowserWindow {
     /// True while the tab shows the Recycle Bin itself.
     pub(crate) fn shows_recycle_bin(&self) -> bool {
         self.command_facts().folder.is_recycle_bin
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The name line of `details`, the first line beside the picture.
+    fn name_line(details: &gtk::Box) -> gtk::Label {
+        let lines = details.last_child().expect("the lines");
+        lines
+            .first_child()
+            .and_downcast::<gtk::Label>()
+            .expect("the name")
+    }
+
+    /// A short name with nothing under it, as a new folder on a share
+    /// that Undo deletes, stays on one line, as Windows shows it, instead
+    /// of breaking inside its words ("New / fold- / er"); a long one
+    /// still wraps.
+    #[gtk::test]
+    fn a_short_name_alone_stays_on_one_line() {
+        for (name, whole) in [
+            ("New folder", true),
+            (&*"Quarterly garden report ".repeat(6), false),
+        ] {
+            let item = DeleteItem {
+                uri: format!("smb://server/share/{name}"),
+                name: name.to_owned(),
+                can_trash: Some(false),
+            };
+            let label = name_line(&item_details(&item, None));
+
+            let (least, natural, _, _) = label.measure(gtk::Orientation::Horizontal, -1);
+
+            assert_eq!(least >= natural, whole, "{name}: {least} of {natural} pixels");
+        }
     }
 }

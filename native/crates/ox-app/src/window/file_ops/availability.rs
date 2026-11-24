@@ -103,6 +103,7 @@ impl FileCommand {
                 WindowAction::NewRichTextDocument,
                 WindowAction::NewTextDocument,
                 WindowAction::NewCompressedFolder,
+                WindowAction::NewOpenDocument,
                 WindowAction::NewFromUserTemplate,
                 WindowAction::ShowNewMenu,
             ],

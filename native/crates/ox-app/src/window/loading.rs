@@ -656,9 +656,70 @@ impl BrowserWindow {
             (true, [first, ..]) => self.folder_pane().reveal(*first),
             _ => {}
         }
-        if renames && !positions.is_empty() {
-            self.continue_renaming();
+        if let Some(&first) = positions.first().filter(|_| reveals || renames) {
+            self.finish_revealing(first, renames);
         }
+    }
+
+    /// Scrolls the item at `position`, just revealed, whole into view once
+    /// the list has laid its rows out, then renames it in place when
+    /// `renames`. A row just added at the end of a long list is past the
+    /// end the list measured before it, so the first scroll stops a row
+    /// short and its name field would take no keys (OPS-001, OPS-002).
+    /// Any input meanwhile drops the rename, as the user moved on.
+    fn finish_revealing(&self, position: u32, renames: bool) {
+        /// Frames to wait for the row to show whole before renaming anyway.
+        const MOST_FRAMES: u32 = 10;
+        let pane = self.folder_pane();
+        let view = pane.view_widget();
+        if pane.shows_whole_item(position) || !view.is_mapped() {
+            if renames {
+                self.continue_renaming();
+            }
+            return;
+        }
+        let Some(clock) = self.frame_clock() else {
+            if renames {
+                self.continue_renaming();
+            }
+            return;
+        };
+        let generation = self.imp().input_generation.get();
+        let frames = Rc::new(std::cell::Cell::new(0));
+        let handler: Rc<std::cell::Cell<Option<glib::SignalHandlerId>>> = Rc::default();
+        // After each frame is painted, so the rows are laid out: no motion,
+        // only a look at where the row ended up, as `keep_top` does.
+        let watch = Rc::clone(&handler);
+        let painted = clock.connect_after_paint(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |clock| {
+                let stop = || {
+                    if let Some(id) = watch.take() {
+                        clock.disconnect(id);
+                    }
+                };
+                frames.set(frames.get() + 1);
+                let pane = window.folder_pane();
+                let selected = pane.model().first_selected();
+                let Some(selected) = selected.filter(|_| window.imp().input_generation.get() == generation)
+                else {
+                    stop();
+                    return;
+                };
+                if !pane.shows_whole_item(selected) && frames.get() < MOST_FRAMES {
+                    pane.scroll_into_view(selected);
+                    clock.request_phase(gtk::gdk::FrameClockPhase::PAINT);
+                    return;
+                }
+                stop();
+                if renames {
+                    window.continue_renaming();
+                }
+            }
+        ));
+        handler.set(Some(painted));
+        clock.request_phase(gtk::gdk::FrameClockPhase::PAINT);
     }
 
     /// Puts the view back where a moved tab (TAB-039) or Back and Forward

@@ -68,7 +68,7 @@ fn new_text_document_makes_the_file_at_once_and_renames_its_name_in_place() {
     assert!(created.is_file(), "made before any name is typed");
     assert_eq!(
         fs::read(&created).expect("the new file"),
-        NewDocument::TextDocument.contents(),
+        &*NewDocument::TextDocument.contents(),
         "an empty text document"
     );
     assert_eq!(test.selected_names(), ["New Text Document.txt"]);
@@ -233,7 +233,7 @@ type NewMenuFile = (
     Option<&'static str>,
     &'static str,
     i32,
-    &'static [u8],
+    std::borrow::Cow<'static, [u8]>,
 );
 
 /// Bitmap image, Rich Text Document and Compressed (zipped) Folder, and a
@@ -245,6 +245,9 @@ type NewMenuFile = (
 /// parity: OPS-002, OPS-003, OPS-010, CMD-004
 #[gtk::test]
 fn the_other_new_files_are_made_at_once_and_renamed_in_place() {
+    // Windows lists Rich Text Document only with WordPad.
+    let _rtf =
+        crate::window::file_ops::pretend_document_applications(&[("application/rtf", "x-office-document")]);
     let _template = UserTemplate::add("Letter.odt", b"letter");
     let fixture = Fixture::standard();
     let test = TestWindow::open(&fixture.uri());
@@ -278,7 +281,7 @@ fn the_other_new_files_are_made_at_once_and_renamed_in_place() {
             Some("user:Letter.odt"),
             "Letter.odt",
             6,
-            b"letter",
+            std::borrow::Cow::Borrowed(b"letter"),
         ),
     ];
 
@@ -297,7 +300,7 @@ fn the_other_new_files_are_made_at_once_and_renamed_in_place() {
         escape(&test, &field);
         assert_eq!(
             fs::read(fixture.path(name)).expect("the new file"),
-            contents,
+            &*contents,
             "{action}"
         );
         assert_eq!(test.selected_names(), [name], "{action}");
@@ -1012,4 +1015,192 @@ fn a_slow_creates_progress_window_shows_with_its_action() {
     wait_until("the create to stop", || !test.window.has_running_write());
 
     assert!(shown, "the window shows with the action, not a second after it");
+}
+
+/// The labels of the template items `test`'s window lists in its New
+/// menus now.
+fn listed_templates(test: &TestWindow) -> Vec<String> {
+    test.window
+        .template_menu_entries()
+        .into_iter()
+        .filter_map(|entry| match entry {
+            crate::window::menu_popover::MenuEntry::Item(item) => Some(item.label),
+            crate::window::menu_popover::MenuEntry::Divider => None,
+        })
+        .collect()
+}
+
+/// A template put in the Templates folder while the window is open is in
+/// the folder menu's New the first time that menu opens, in both menu
+/// styles, as in the command bar's New: the menu that is open when the
+/// folder has been read again shows it. Before, the right-click menu
+/// kept the list it had when it opened, so the new template was missing
+/// until the menu opened again.
+///
+/// parity: OPS-003
+#[gtk::test]
+fn a_template_added_while_the_window_is_open_is_in_the_folder_menus_new_at_once() {
+    let _letter = UserTemplate::add("Letter.odt", b"letter");
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    wait_until("the templates to be read", || {
+        listed_templates(&test) == ["Letter"]
+    });
+
+    let styles = [
+        (ox_core::settings::ContextMenu::Win11, "Invoice.ods", "Invoice"),
+        (ox_core::settings::ContextMenu::Win10, "Memo.txt", "Memo"),
+    ];
+    let mut added = Vec::new();
+    for (style, file_name, label) in styles {
+        super::context_menus::choose_menu_style(&test, style);
+        added.push(UserTemplate::add(file_name, b"new template"));
+        test.window.right_click(None);
+        let menu = test.window.context_menu();
+        wait_until("the templates to be read again", || {
+            listed_templates(&test).iter().any(|listed| listed == label)
+        });
+        settle();
+
+        let new = menu.open_submenu_of("New");
+        assert!(
+            new.items_labels().iter().any(|listed| listed == label),
+            "{style:?}: {:?}",
+            new.items_labels()
+        );
+        menu.popdown();
+        settle();
+    }
+}
+
+/// As Windows lists a file type in New only once a program registers it,
+/// the OpenDocument types are offered only while an installed application
+/// opens them, LibreOffice above all: among the documents in the order of
+/// their extensions, with that application's icon. Each is made at once
+/// as "New OpenDocument Text.odt" and so on, an empty document of its
+/// type, and renamed in place.
+///
+/// parity: CMD-004, OPS-002
+#[gtk::test]
+fn the_opendocument_types_are_offered_while_an_application_opens_them() {
+    let _installed = crate::window::file_ops::pretend_document_applications(&[
+        (
+            "application/vnd.oasis.opendocument.spreadsheet",
+            "x-office-spreadsheet",
+        ),
+        ("application/vnd.oasis.opendocument.text", "x-office-document"),
+    ]);
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
+    super::context_menus::choose_menu_style(&test, ox_core::settings::ContextMenu::Win10);
+
+    test.window.right_click(None);
+    let menu = test.window.context_menu();
+    let new = menu.open_submenu_of("New");
+    assert_eq!(
+        new.row_labels(),
+        [
+            "Folder",
+            "Shortcut",
+            "Bitmap image",
+            "OpenDocument Spreadsheet",
+            "OpenDocument Text",
+            "Text Document",
+            "Compressed (zipped) Folder",
+        ]
+    );
+    let icons: Vec<Option<String>> = new
+        .items()
+        .into_iter()
+        .filter(|item| item.label.starts_with("OpenDocument"))
+        .map(|item| item.application_icon)
+        .collect();
+    assert_eq!(
+        icons,
+        [
+            Some("x-office-spreadsheet".to_owned()),
+            Some("x-office-document".to_owned())
+        ],
+        "each with its application's icon"
+    );
+    menu.popdown();
+    settle();
+
+    for (extension, name, name_end, document) in [
+        (
+            "odt",
+            "New OpenDocument Text.odt",
+            21,
+            NewDocument::OpenDocumentText,
+        ),
+        (
+            "ods",
+            "New OpenDocument Spreadsheet.ods",
+            28,
+            NewDocument::OpenDocumentSpreadsheet,
+        ),
+    ] {
+        test.activate("new-opendocument", Some(extension));
+        let field = name_editor(&test);
+        settle();
+
+        assert_eq!(field.text(), name);
+        assert_eq!(field.selection_bounds(), Some((0, name_end)), "{name}");
+        escape(&test, &field);
+        assert_eq!(
+            fs::read(fixture.path(name)).expect("the new document"),
+            &*document.contents(),
+            "{name}"
+        );
+    }
+    test.activate("new-opendocument", Some("odp"));
+    settle();
+    assert!(
+        !fixture.path("New OpenDocument Presentation.odp").exists(),
+        "a type no application opens is not made"
+    );
+}
+
+/// As in Windows 11 (VM check 2026-11-22): New Text Document made as
+/// "New Text Document (2).txt" and renamed "Garden plan.txt"; the first
+/// Undo gives it back its "(2)" name, the second moves it to the Recycle
+/// Bin without a question.
+///
+/// parity: OPS-029, OPS-002
+#[gtk::test]
+fn undo_after_new_and_rename_gives_back_the_name_then_the_file_goes_without_a_question() {
+    require_private_trash();
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("New Text Document.txt"), b"").expect("a taken name");
+    let test = TestWindow::open(&fixture.uri());
+    super::support::show_file_name_extensions(&test);
+    let field = make_new_text_document(&test);
+    assert_eq!(field.text(), "New Text Document (2).txt");
+    field.set_text("Garden plan.txt");
+    field.emit_activate();
+    // The rename has ended, been recorded and listed once the renamed
+    // file is selected and Undo can run.
+    wait_until("the rename", || {
+        test.selected_names() == ["Garden plan.txt"]
+            && !is_renaming_in_place(&test)
+            && is_enabled(&test, "undo")
+    });
+
+    test.activate("undo", None);
+    wait_until("the name to come back", || {
+        fixture.path("New Text Document (2).txt").exists()
+    });
+    assert!(!fixture.path("Garden plan.txt").exists());
+    wait_until("the next Undo", || is_enabled(&test, "undo"));
+    test.activate("undo", None);
+    wait_until("the file to go", || {
+        !fixture.path("New Text Document (2).txt").exists()
+    });
+    settle();
+    assert!(dialog_over(&test).is_none(), "no question");
+    assert!(
+        fixture.path("New Text Document.txt").exists(),
+        "the other file stays"
+    );
 }

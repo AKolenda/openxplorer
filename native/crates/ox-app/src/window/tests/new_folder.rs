@@ -203,3 +203,48 @@ fn a_new_folder_far_down_the_list_is_scrolled_to_and_renamed_in_place() {
     assert_eq!(field.text(), "New folder");
     assert!(dialog_over(&test).is_none(), "no Rename dialog either");
 }
+
+/// Whether all of `field` shows inside the scrolled list that holds it.
+fn shows_whole(field: &gtk::Entry) -> bool {
+    let Some(scroller) = field
+        .ancestor(gtk::ScrolledWindow::static_type())
+        .and_downcast::<gtk::ScrolledWindow>()
+    else {
+        return false;
+    };
+    let Some(bounds) = field.compute_bounds(&scroller) else {
+        return false;
+    };
+    #[expect(clippy::cast_precision_loss, reason = "a window's height is small")]
+    let height = scroller.height() as f32;
+    field.is_drawable() && bounds.y() >= 0.0 && bounds.y() + bounds.height() <= height
+}
+
+/// A new item that sorts last in a long folder, as "New Text Document"
+/// after "file 0399.txt" or a new folder with folders not kept first, is
+/// scrolled all the way into view, as in Windows, and its name field has
+/// the keyboard, so the name typed next goes into it. Before, the list
+/// stopped one row short of the new last row, and the typed name was lost.
+///
+/// parity: OPS-001, OPS-002, OPS-010
+#[gtk::test]
+fn a_new_item_that_sorts_last_in_a_long_folder_is_shown_with_the_keyboard() {
+    let fixture = Fixture::with_files(400);
+    let test = TestWindow::open(&fixture.uri());
+    test.window.folder_pane().model().set_folders_first(false);
+    settle();
+
+    for action in ["new-text-document", "new-folder"] {
+        test.activate(action, None);
+        let field = name_editor(&test);
+        wait_until(&format!("{action}: its name field on screen"), || {
+            shows_whole(&field)
+        });
+        wait_until(&format!("{action}: the keyboard in its field"), || {
+            let focus = field.root().and_then(|root| root.focus());
+            focus.is_some_and(|focus| focus.is_ancestor(&field))
+        });
+        press_in(&field, gdk::Key::Escape);
+        wait_until("the rename to end", || !is_renaming_in_place(&test));
+    }
+}
