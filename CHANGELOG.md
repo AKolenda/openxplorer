@@ -1,3 +1,26 @@
+# 2.0.25 — 2026-11-24
+
+Google Drive and OneDrive accounts signed in under GNOME Online Accounts now show as drives that can be browsed and copied from, read-only for now. The system's own window title bar can also be turned on instead of the app's.
+
+## What's Changed
+* feat(drives): Browse Google Drive and OneDrive read-only, as GNOME Files does by @AKolenda in https://github.com/AKolenda/openxplorer/pull/392
+* feat(appearance): Add opt-in system window decorations by @DurkaEbanaya in https://github.com/AKolenda/openxplorer/pull/389
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.25_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.25-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.25-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.25-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.25-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.24...v2.0.25
+
 # 2.0.24 — 2026-11-23
 
 An item's Properties window can now be made larger, and Previous Versions' list grows with it. Releases are also published in a signed Flatpak repository, so a Flatpak install updates like any other app.
