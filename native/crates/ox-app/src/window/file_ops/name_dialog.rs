@@ -124,6 +124,8 @@ where
     let hint = ox_core::i18n::gettext_static(NAME_HINT);
     let dialog = Dialog::new(window, request.title, hint);
     let field = dialog.add_text_field(ox_core::i18n::gettext_static("Name"), request.initial_name);
+    // As renaming in place refuses them (OPS-010).
+    super::name_balloon::refuse_forbidden_characters(&field);
     warn_while_typing(&dialog, &field, &request);
     dialog.add_cancel_button();
     dialog.add_button(ox_core::i18n::gettext_static("Save"), ButtonStyle::Accent);

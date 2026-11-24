@@ -14,12 +14,15 @@
 //! disabled, so a second commit cannot start it again. A name that would
 //! hide the item asks first ([`super::hide_confirm`]). No to the question
 //! about a changed extension ([`super::extension_confirm`]) ends the
-//! rename with the old name, as in Windows 11. As in Dolphin, Tab
-//! and Shift+Tab, and Down and Up in the details view, commit and go on
-//! to rename the next or previous item (OPS-012). With several items
+//! rename with the old name, as in Windows 11. As in Windows 11, Tab
+//! and Shift+Tab commit and go on to rename the next or previous item
+//! (OPS-012), while Down and Up only move the text cursor to the very end
+//! and the very start of the name, as End and Home do, as Windows 11's
+//! one-line name box does (checked in Windows 11 26200). The row keeps its
+//! look while the name is edited: no focus outline is drawn around it. With several items
 //! selected, the field edits one of them and Enter gives the typed name to
-//! all of them with a number (OPS-050, [`super::numbered_rename`]); Tab and
-//! the arrows are then the field's own keys. Ctrl+A selects the whole
+//! all of them with a number (OPS-050, [`super::numbered_rename`]); Tab is
+//! then the field's own key. Ctrl+A selects the whole
 //! name in the field and nothing else: GTK 4.14's text field selects its
 //! text but lets the key go on to the view, which selected every item too.
 //!
@@ -41,10 +44,9 @@ use super::name_balloon::refuse_forbidden_characters;
 use super::names::check_typed_name;
 use super::numbered_rename::numbered_batch_for;
 use super::rename::{has_no_extension, selected_name_length};
-use super::rename_conflict::TakenNameAnswer;
+use super::rename_conflict::{MergeAnswer, TakenNameAnswer};
 use crate::folder_view::cells::FileCell;
 use crate::folder_view::shown_name::{hidden_extension, shown_name, shows_whole};
-use crate::window::folder_pane::FolderView;
 use crate::window::BrowserWindow;
 
 /// The CSS class of the text field that edits a name in place.
@@ -72,11 +74,10 @@ struct RenameTarget {
     several: Option<Rc<[Entry]>>,
 }
 
-/// How many places Tab, Shift+Tab, Down or Up move the rename on from
-/// the item being renamed; Down and Up only `in_details`, where they
-/// move between rows. `None` for any other key, and with Ctrl or Alt,
-/// which keep Ctrl+Tab and Ctrl+Shift+Tab for switching tabs.
-fn rename_step(key: gdk::Key, modifiers: gdk::ModifierType, in_details: bool) -> Option<i32> {
+/// How many places Tab or Shift+Tab move the rename on from the item
+/// being renamed. `None` for any other key, and with Ctrl or Alt, which
+/// keep Ctrl+Tab and Ctrl+Shift+Tab for switching tabs.
+fn rename_step(key: gdk::Key, modifiers: gdk::ModifierType) -> Option<i32> {
     if modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK) {
         return None;
     }
@@ -84,8 +85,21 @@ fn rename_step(key: gdk::Key, modifiers: gdk::ModifierType, in_details: bool) ->
     match key {
         gdk::Key::Tab | gdk::Key::KP_Tab if !shift => Some(1),
         gdk::Key::ISO_Left_Tab | gdk::Key::Tab | gdk::Key::KP_Tab => Some(-1),
-        gdk::Key::Down if in_details => Some(1),
-        gdk::Key::Up if in_details => Some(-1),
+        _ => None,
+    }
+}
+
+/// Which end of the name Down (1, the end) or Up (-1, the start) moves
+/// the text cursor to, as End and Home do in a one-line name box in
+/// Windows; `None` for any other key, and with Ctrl or Alt. GTK's own Down
+/// and Up leave a one-line field.
+fn caret_step(key: gdk::Key, modifiers: gdk::ModifierType) -> Option<i32> {
+    if modifiers.intersects(gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::ALT_MASK) {
+        return None;
+    }
+    match key {
+        gdk::Key::Down | gdk::Key::KP_Down => Some(1),
+        gdk::Key::Up | gdk::Key::KP_Up => Some(-1),
         _ => None,
     }
 }
@@ -190,9 +204,9 @@ impl BrowserWindow {
     }
 
     /// Escape in the field ends the rename and leaves the name as it was;
-    /// Ctrl+A selects the whole name; Tab and Shift+Tab, and Down and Up
-    /// in the details view, commit and go on to rename the next or
-    /// previous item (OPS-012).
+    /// Ctrl+A selects the whole name; Down and Up move the text cursor to
+    /// the end and the start of the name; Tab and Shift+Tab commit and go on to rename the
+    /// next or previous item (OPS-012).
     fn rename_keys(
         &self,
         cell: &FileCell,
@@ -224,13 +238,22 @@ impl BrowserWindow {
                     editor.select_region(0, -1);
                     return glib::Propagation::Stop;
                 }
+                if let Some(step) = caret_step(key, modifiers) {
+                    if let Some(text) = editor.delegate().and_downcast::<gtk::Text>() {
+                        let extend = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
+                        text.emit_by_name::<()>(
+                            "move-cursor",
+                            &[&gtk::MovementStep::BufferEnds, &step, &extend],
+                        );
+                    }
+                    return glib::Propagation::Stop;
+                }
                 // Several items get one name: there is no next one to
                 // rename.
                 if target.several.is_some() {
                     return glib::Propagation::Proceed;
                 }
-                let in_details = window.folder_pane().view() == FolderView::Details;
-                let Some(step) = rename_step(key, modifiers, in_details) else {
+                let Some(step) = rename_step(key, modifiers) else {
                     return glib::Propagation::Proceed;
                 };
                 let next = window.neighbour_uri(&target.uri, step);
@@ -397,7 +420,7 @@ impl BrowserWindow {
                 self.close_name_editor(cell);
                 match self.take_rename_next() {
                     Some(next) => self.finish_rename_and_continue(&renamed, next),
-                    None => self.finish_rename(renamed),
+                    None => self.finish_rename_in_place(&renamed),
                 }
             }
             Err(error) => {
@@ -422,9 +445,26 @@ impl BrowserWindow {
     ) -> Option<Result<RenamedItem, OpsError>> {
         // A drive may have started formatting during the questions.
         let refusal = match self.admitted_rename(cell, &target.uri, name).await? {
-            Err(OpsError::Exists(refusal)) if !target.is_folder => refusal,
+            Err(OpsError::Exists(refusal)) => refusal,
             renamed => return Some(renamed),
         };
+        if target.is_folder {
+            return match self.ask_about_merging(&target.uri, name).await {
+                MergeAnswer::Merge(into) => {
+                    self.take_rename_next();
+                    self.close_name_editor(cell);
+                    self.merge_folder_into(&target.uri, &into).await;
+                    None
+                }
+                MergeAnswer::KeepEditing => {
+                    self.take_rename_next();
+                    editor.set_sensitive(true);
+                    editor.grab_focus();
+                    None
+                }
+                MergeAnswer::NotAsked => Some(Err(OpsError::Exists(refusal))),
+            };
+        }
         match self.ask_about_taken_name(&target.uri, name).await {
             TakenNameAnswer::Rename(numbered) => self.admitted_rename(cell, &target.uri, &numbered).await,
             TakenNameAnswer::KeepEditing => {
@@ -527,24 +567,22 @@ mod tests {
 
     /// parity: OPS-012
     #[test]
-    fn tab_and_the_arrows_in_details_move_the_rename_on() {
+    fn tab_moves_the_rename_on_and_the_arrows_move_the_cursor() {
         let none = gdk::ModifierType::empty();
         let shift = gdk::ModifierType::SHIFT_MASK;
-        assert_eq!(rename_step(gdk::Key::Tab, none, false), Some(1));
-        assert_eq!(rename_step(gdk::Key::ISO_Left_Tab, shift, false), Some(-1));
-        assert_eq!(rename_step(gdk::Key::Down, none, true), Some(1));
-        assert_eq!(rename_step(gdk::Key::Up, none, true), Some(-1));
-        assert_eq!(
-            rename_step(gdk::Key::Down, none, false),
-            None,
-            "icons move the text cursor"
-        );
-        assert_eq!(rename_step(gdk::Key::Return, none, true), None);
+        assert_eq!(rename_step(gdk::Key::Tab, none), Some(1));
+        assert_eq!(rename_step(gdk::Key::ISO_Left_Tab, shift), Some(-1));
+        assert_eq!(rename_step(gdk::Key::Down, none), None, "Down stays in the name");
+        assert_eq!(rename_step(gdk::Key::Return, none), None);
         let control = gdk::ModifierType::CONTROL_MASK;
         assert_eq!(
-            rename_step(gdk::Key::Tab, control, false),
+            rename_step(gdk::Key::Tab, control),
             None,
             "Ctrl+Tab switches tabs"
         );
+        assert_eq!(caret_step(gdk::Key::Down, none), Some(1));
+        assert_eq!(caret_step(gdk::Key::Up, shift), Some(-1));
+        assert_eq!(caret_step(gdk::Key::Left, none), None);
+        assert_eq!(caret_step(gdk::Key::Up, control), None);
     }
 }

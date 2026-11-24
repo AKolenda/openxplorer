@@ -2946,3 +2946,54 @@ fn a_link_renamed_in_properties_to_a_known_type_hides_its_extension_after() {
         window.title_text() == "memo Properties"
     });
 }
+
+/// Whether Windows' balloon about forbidden characters shows under
+/// `field`.
+fn shows_name_balloon(field: &gtk::Entry) -> bool {
+    descendants::<gtk::Popover>(field)
+        .iter()
+        .any(|balloon| balloon.has_css_class("name-balloon") && balloon.is_visible())
+}
+
+/// As in Windows 11's Properties, the name box refuses a character
+/// Windows forbids in names as it is typed, with the balloon renaming in
+/// place shows, so a name typed there can be copied to a Windows share
+/// or a USB stick; and a name ending in periods or spaces loses them, as
+/// a rename in place trims them: "Papers. " names the folder "Papers".
+/// The key is a real one on the private display.
+///
+/// parity: PROP-005
+#[gtk::test]
+fn the_name_in_properties_refuses_forbidden_characters_and_trims_its_end() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Album")).expect("a folder");
+    // Before the window opens, which a new pointer would put away.
+    let mut pointer = crate::test_support::pointer::Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Album");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Album Properties");
+    let name = name_field(&window);
+    name.grab_focus();
+    name.set_position(-1);
+    wait_until("the name box takes the keyboard", || {
+        name.has_focus() || name.first_child().is_some_and(|text| text.has_focus())
+    });
+    let (x, y) = crate::test_support::pointer::screen_point(&mut pointer, &name, (10.0, 10.0), (40, 40));
+    pointer.move_to(x, y);
+
+    pointer.tap_key(gtk::gdk::Key::slash);
+    wait_until("the balloon", || shows_name_balloon(&name));
+    let refused = name.text();
+    name.set_text("Papers. ");
+    press(&window, "Apply");
+    wait_until("the rename", || fixture.path("Papers").is_dir());
+
+    assert_eq!(refused, "Album", "the slash is refused");
+    assert!(
+        !fixture.path("Papers. ").exists(),
+        "the period and space are trimmed"
+    );
+    wait_until("the trimmed name in the box", || name.text() == "Papers");
+    window.close();
+}

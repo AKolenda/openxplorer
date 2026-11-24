@@ -422,6 +422,9 @@ impl GeneralEdits {
             .css_classes(["properties-name"])
             .build();
         name.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext("Name"))]);
+        // The characters Windows forbids in names are refused as they are
+        // typed, with Windows' balloon, as renaming in place refuses them.
+        crate::window::refuse_forbidden_characters(&name);
         let read_only_label = if entry.is_dir {
             ox_core::i18n::gettext("Read-only (Only applies to files in folder)")
         } else {
@@ -558,6 +561,14 @@ impl GeneralEdits {
             Some(_) if self.name.text().trim().is_empty() => self.name.text().to_string(),
             Some(extension) => format!("{}{extension}", self.name.text()),
             None => self.name.text().to_string(),
+        };
+        // A changed name loses the periods and spaces at its end, as a
+        // rename in place trims them: "Papers. " names a folder "Papers".
+        let original = self.original_name.borrow().clone();
+        let typed = if self.name.text() == self.shown(&original) {
+            typed
+        } else {
+            crate::window::trim_typed_name(&typed).to_owned()
         };
         let was_hidden = self.original_name.borrow().starts_with('.');
         let hide = self.hidden.is_active();

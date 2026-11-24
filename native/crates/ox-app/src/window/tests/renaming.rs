@@ -287,13 +287,13 @@ fn tab_commits_the_name_and_goes_on_to_rename_the_next_item() {
     wait_until("the previous item to be renamed in place", || {
         edited_name(&test).as_deref() == Some("Notes 3.txt")
     });
+    // Down stays in the name, as in Windows 11
+    // (renaming_by_pointer::down_and_up_while_renaming_move_the_text_cursor).
     press_in(&name_editor(&test), gdk::Key::Down, none);
-    wait_until("Down to move on in the details view", || {
-        edited_name(&test).as_deref() == Some("Notes 10.txt")
-    });
+    assert_eq!(edited_name(&test).as_deref(), Some("Notes 3.txt"));
     press_in(&name_editor(&test), gdk::Key::Escape, none);
     wait_until("the rename to end", || !is_renaming_in_place(&test));
-    assert!(fixture.path("Notes 10.txt").is_file());
+    assert!(fixture.path("Notes 3.txt").is_file());
 }
 
 /// parity: OPS-013

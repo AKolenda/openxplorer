@@ -10,18 +10,101 @@
 //! file to that numbered name, the first one free; No goes back to editing
 //! the typed name. Nothing is overwritten: the numbered rename never
 //! replaces anything either, and a numbered name taken meanwhile is
-//! refused with the toast. A folder renamed to a taken name, or a file
-//! renamed to a folder's name, is refused with the toast as before:
-//! Windows offers to merge two folders there, which a rename here does not
-//! do.
+//! refused with the toast. A file renamed to a folder's name, or a folder
+//! to a file's, is refused with the toast as before.
+//!
+//! A folder renamed to the name of another folder asks, as Windows 11 does
+//! (checked in Windows 11 26200), "Confirm Folder Replace": "This
+//! destination already contains a folder named 'Beta'.", "If any files
+//! have the same names, you will be asked if you want to replace those
+//! files.", "Do you still want to merge this folder", the folder already
+//! there with its icon, name and date created, "with this one?" and the
+//! renamed folder the same way, with Yes and No. Yes merges the renamed
+//! folder into the other ([`BrowserWindow::merge_folder_into`]); No goes
+//! back to editing the typed name.
 
 use gtk::gio::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::{entry_from_info, Entry, ATTRIBUTES};
 use ox_core::location::{name_with_copy_marker, ItemKind};
 
+use gtk::prelude::*;
+
 use crate::dialog::Dialog;
+use crate::folder_view::item::FileItem;
+use crate::icons::ArtImage;
 use crate::window::{BrowserWindow, ButtonStyle};
+
+/// The folder question's title, as Windows titles it.
+const MERGE_TITLE: &str = crate::i18n::message_id("Confirm Folder Replace");
+
+/// The size of each folder's icon in the folder question.
+const MERGE_ICON_SIZE: i32 = 48;
+
+/// How far the folder question's lines below its message start in, to
+/// line up with the message beside the warning icon.
+const MERGE_INDENT: i32 = 44;
+
+/// What the "Confirm Folder Replace" question answered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum MergeAnswer {
+    /// Yes: merge the renamed folder into the folder at this URI.
+    Merge(String),
+    /// No, Escape or closing it: go back to editing the name.
+    KeepEditing,
+    /// Not asked: the items are not two folders. The rename is refused as
+    /// before.
+    NotAsked,
+}
+
+/// The folder question's lines above the folder already there, in Windows
+/// 11's words: `name` is that folder's name.
+fn merge_question(name: &str) -> String {
+    ox_core::i18n::format_message(
+        "This destination already contains a folder named '{name}'.\n\nIf any files have the same \
+         names, you will be asked if you want to replace those files.\n\nDo you still want to merge \
+         this folder",
+        &[("name", name)],
+    )
+}
+
+/// One folder of the question: its icon, then its name and, under it,
+/// "Date created:" and when, as Windows shows them.
+fn folder_row(entry: &Entry, created: Option<u64>) -> gtk::Box {
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    row.set_margin_start(MERGE_INDENT);
+    let art = FileItem::new(entry.clone()).art();
+    row.append(&ArtImage::new(art, MERGE_ICON_SIZE));
+    let lines = gtk::Box::new(gtk::Orientation::Vertical, 2);
+    lines.set_valign(gtk::Align::Center);
+    let name = gtk::Label::builder()
+        .label(entry.name.as_str())
+        .xalign(0.0)
+        .build();
+    let date = ox_core::i18n::format_message(
+        "Date created: {date}",
+        &[("date", &ox_core::format::date_short_time_text(created))],
+    );
+    let date = gtk::Label::builder().label(date).xalign(0.0).build();
+    lines.append(&name);
+    lines.append(&date);
+    row.append(&lines);
+    row
+}
+
+/// When the item at `file` was created, if its file system says.
+async fn created_at(file: &gio::File) -> Option<u64> {
+    let info = file
+        .query_info_future(
+            gio::FILE_ATTRIBUTE_TIME_CREATED,
+            gio::FileQueryInfoFlags::NONE,
+            glib::Priority::DEFAULT,
+        )
+        .await
+        .ok()?;
+    info.has_attribute(gio::FILE_ATTRIBUTE_TIME_CREATED)
+        .then(|| info.attribute_uint64(gio::FILE_ATTRIBUTE_TIME_CREATED))
+}
 
 /// The question's title, as Windows titles it.
 const TITLE: &str = crate::i18n::message_id("Rename File");
@@ -144,6 +227,52 @@ impl BrowserWindow {
             TakenNameAnswer::Rename(numbered)
         } else {
             TakenNameAnswer::KeepEditing
+        }
+    }
+}
+
+impl BrowserWindow {
+    /// Asks, as Windows does, whether the folder at `uri`, renamed to the
+    /// name `name` of another folder in its folder, should be merged into
+    /// that folder.
+    pub(super) async fn ask_about_merging(&self, uri: &str, name: &str) -> MergeAnswer {
+        let item = gio::File::for_uri(uri);
+        let Some(folder) = item.parent() else {
+            return MergeAnswer::NotAsked;
+        };
+        let existing_file = folder.child(name);
+        let (Some(renamed), Some(existing)) = (entry_at(&item).await, entry_at(&existing_file).await) else {
+            return MergeAnswer::NotAsked;
+        };
+        let real_folder = |entry: &Entry| entry.is_dir && !entry.is_symlink;
+        if !real_folder(&renamed) || !real_folder(&existing) {
+            return MergeAnswer::NotAsked;
+        }
+        let (renamed_created, existing_created) = (created_at(&item).await, created_at(&existing_file).await);
+        let dialog = Dialog::message_box(
+            self,
+            ox_core::i18n::gettext_static(MERGE_TITLE),
+            &merge_question(&existing.name),
+        );
+        dialog.add_field(&folder_row(&existing, existing_created));
+        let with = gtk::Label::builder()
+            .label(ox_core::i18n::gettext("with this one?"))
+            .xalign(0.0)
+            .margin_start(MERGE_INDENT)
+            .build();
+        dialog.add_field(&with);
+        dialog.add_field(&folder_row(&renamed, renamed_created));
+        let yes = dialog.add_button(ox_core::i18n::gettext_static("Yes"), ButtonStyle::Accent);
+        let no = dialog.add_button(ox_core::i18n::gettext_static("No"), ButtonStyle::Bordered);
+        dialog.also_press_with(yes, 'y');
+        dialog.also_press_with(no, 'n');
+        dialog.open();
+        let answer = dialog.next_response().await;
+        dialog.finish();
+        if answer == Some(yes) {
+            MergeAnswer::Merge(existing.uri)
+        } else {
+            MergeAnswer::KeepEditing
         }
     }
 }

@@ -11,7 +11,9 @@
 //! yet they are refused on every drive, as Windows refuses them: a name
 //! with one cannot be copied to a Windows share, an NTFS or exFAT drive or
 //! a USB stick as it is (XFER-028). Names that already have one keep it
-//! while they are edited, and the Rename dialog still takes them.
+//! while they are edited. The Rename dialog and the name box of
+//! Properties refuse them the same way, so every place a name is typed
+//! agrees.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -174,7 +176,7 @@ impl Balloon {
 /// pasted or dropped into `editor`, with Windows' balloon. GTK runs the
 /// last key handler added first, so call it after the field's others: it
 /// then sees every key first.
-pub(super) fn refuse_forbidden_characters(editor: &gtk::Entry) {
+pub(crate) fn refuse_forbidden_characters(editor: &gtk::Entry) {
     let balloon = Balloon::new(editor);
     // The next key hides the balloon. Every key still reaches the field
     // and its input method, so Compose and dead-key sequences that start

@@ -222,6 +222,7 @@ pub(crate) use button_style::ButtonStyle;
 pub(crate) use closing::{QUIT_WHILE_WRITING, WAIT_FOR_FORMAT};
 pub(crate) use compact_density::DENSITY_CLASS as COMPACT_DENSITY_CLASS;
 pub(crate) use disk_tools::is_installed as is_disk_tool_installed;
+pub(crate) use file_ops::{refuse_forbidden_characters, trim_typed_name};
 pub(crate) use folder_pane::FolderView;
 pub(crate) use menu_popover::OPENING_MOTION as MENU_OPENING_MOTION;
 pub(crate) use menu_popover::SUBMENU_DELAY;

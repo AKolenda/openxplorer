@@ -93,8 +93,23 @@ pub(super) fn rename_item_blocking(
         return Ok(renamed);
     }
     move_within_folder(&source, destination.as_ref(), context)
-        .map_err(|error| name_taken_or(error, new_name))?;
+        .map_err(|error| rename_refusal(error, &source.display_name(), new_name))?;
     Ok(renamed)
+}
+
+/// The message for a rename the backend refused: a taken `new_name`
+/// says which name is taken, and a denied permission names the item,
+/// `old_name`, in place of GIO's "Error moving file" with the item's
+/// whole path, as Windows says it needs permission to rename it. Other
+/// refusals keep their messages.
+fn rename_refusal(error: OpsError, old_name: &str, new_name: &str) -> OpsError {
+    match name_taken_or(error, new_name) {
+        OpsError::PermissionDenied(_) => OpsError::PermissionDenied(crate::i18n::format_message(
+            "You don't have permission to rename “{name}” here.",
+            &[("name", old_name)],
+        )),
+        other => other,
+    }
 }
 
 /// Undoes a rename: gives the item at `renamed_uri` its name from
@@ -121,7 +136,7 @@ pub(crate) fn rename_back(
     }
     context.protection.check(renamed_uri)?;
     move_within_folder(&source, &original, context)
-        .map_err(|error| name_taken_or(error, &original.display_name()))
+        .map_err(|error| rename_refusal(error, &source.display_name(), &original.display_name()))
 }
 
 /// True when `first` and `second` have the same parent folder.

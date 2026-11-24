@@ -39,6 +39,13 @@ pub(super) fn check_typed_name(name: &str) -> Result<&str, InvalidName> {
     Ok(if trimmed.is_empty() { name } else { trimmed })
 }
 
+/// `name` as a typed name is taken: without the periods and spaces at its
+/// end ([`check_typed_name`]); a name it refuses comes back as it is, for
+/// the rename to refuse with its message.
+pub(crate) fn trim_typed_name(name: &str) -> &str {
+    check_typed_name(name).unwrap_or(name)
+}
+
 /// What the name dialogs say, while the user types, about a valid `name`
 /// that may surprise: that it is `taken` in the folder, that a leading
 /// dot hides the item, or that a leading space or tilde is unusual
