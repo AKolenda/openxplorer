@@ -370,6 +370,7 @@ impl BrowserWindow {
                     // A lone top-level folder becomes the output (ARC-025).
                     let lifted = gio::spawn_blocking(move || lift_single_folder(extracted)).await;
                     let lifted = lifted.unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+                    self.remember_extraction(&lifted.uri);
                     return Ok(extraction_success_text(&lifted));
                 }
                 Err(error) => return Err(error),
