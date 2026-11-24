@@ -126,6 +126,15 @@ const NEUTRAL_SELECTION_COLORS: RowText = RowText {
                windows look",
 };
 
+const DRIVE_LETTERS: RowText = RowText {
+    title: "Show letters on mapped network folders",
+    description: "Names a network folder mapped to a drive letter with its letter, as in Projects (Z:). \
+                  Off, it is just Projects everywhere, and Map network drive asks for no letter. \
+                  Typing a letter such as Z: in the address bar still opens its folder.",
+    keywords: "drive letter letters mapped network drive folder share smb z: navigation pane sidebar \
+               map network drive label",
+};
+
 const MORE_TAB_MENU_ITEMS: RowText = RowText {
     title: "Show more items in the tab menu",
     description: "Adds Move tab to new window, Move tab to window… and Open windows… to the menu you \
@@ -866,7 +875,8 @@ fn choose_text_size(page: &SettingsPage, size: TextSize) {
 }
 
 /// The compact view, the column header style and line, Name's width, the navigation pane's
-/// arrows, the app's extra navigation pane rows and tab menu items, the
+/// arrows, the app's extra navigation pane rows, the letters of mapped
+/// network folders, the app's extra tab menu items, the
 /// right-click menu, Shift+F10's menu and the pane widths.
 fn layout_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Layout"));
@@ -924,6 +934,16 @@ fn layout_group(page: &SettingsPage) -> SettingsGroup {
     };
     recent_files.add_control(&page.preference_switch(binding), ControlName::RowTitle);
     group.add_row(&recent_files);
+    let letters = SettingRow::new(DRIVE_LETTERS);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.show_drive_letters,
+        write: |on| PreferencesUpdate {
+            show_drive_letters: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    letters.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    group.add_row(&letters);
     let tab_menu_items = SettingRow::new(MORE_TAB_MENU_ITEMS);
     let binding = PreferenceBinding {
         read: |preferences| preferences.more_tab_menu_items,

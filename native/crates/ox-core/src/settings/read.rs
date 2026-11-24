@@ -92,7 +92,7 @@ fn read_warning(error: &impl Display) -> String {
 
 /// Validates a parsed file into `settings`, section by section in the
 /// order Python reads them.
-fn read_sections(source: &Value, settings: &mut SettingsData) -> Result<(), SettingsError> {
+pub(super) fn read_sections(source: &Value, settings: &mut SettingsData) -> Result<(), SettingsError> {
     let Some(sections) = source.as_object() else {
         return Err(SettingsError::invalid(crate::i18n::gettext(
             "Settings must be a JSON object.",

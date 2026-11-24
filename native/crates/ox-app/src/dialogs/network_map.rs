@@ -24,6 +24,11 @@ const MAP_MESSAGE: &str = crate::i18n::message_id(
     "Specify the drive letter for the connection and the folder that you want to connect to:",
 );
 
+/// What Map network drive asks for while Settings shows no letters on
+/// mapped network folders, so it has no Drive list.
+const MAP_MESSAGE_WITHOUT_LETTER: &str =
+    crate::i18n::message_id("Specify the folder that you want to connect to:");
+
 /// The link that opens Add a network location, in Windows' words.
 const WEB_SITE_LINK: &str =
     crate::i18n::message_id("Connect to a Web site that you can use to store your documents and pictures.");
@@ -112,21 +117,45 @@ fn free_letters(taken: &[&str]) -> Vec<&'static str> {
 /// using different credentials" and the link to Add a network location.
 /// Its Finish button calls `on_connect` with the dialog, to run the
 /// connection in, and what was chosen.
+#[cfg(test)]
 pub(crate) fn map_network_dialog(
     parent: &impl IsA<gtk::Window>,
     taken: &[&str],
     on_connect: impl Fn(&Dialog, MapRequest) + 'static,
 ) -> Dialog {
+    map_network_dialog_with(parent, taken, true, on_connect)
+}
+
+/// [`map_network_dialog`], without the Drive list and its words when
+/// `with_letters` is off (Settings' "Show letters on mapped network
+/// folders"): the folder is then mapped without a letter.
+pub(crate) fn map_network_dialog_with(
+    parent: &impl IsA<gtk::Window>,
+    taken: &[&str],
+    with_letters: bool,
+    on_connect: impl Fn(&Dialog, MapRequest) + 'static,
+) -> Dialog {
+    let asks = if with_letters {
+        MAP_MESSAGE
+    } else {
+        MAP_MESSAGE_WITHOUT_LETTER
+    };
     let message = format!(
         "{}\n{}",
         ox_core::i18n::gettext_static(MAP_QUESTION),
-        ox_core::i18n::gettext_static(MAP_MESSAGE)
+        ox_core::i18n::gettext_static(asks)
     );
     let dialog = Dialog::with_title_bar(parent, &ox_core::i18n::gettext("Map network drive"), &message);
-    let letters = free_letters(taken);
+    let letters = if with_letters {
+        free_letters(taken)
+    } else {
+        Vec::new()
+    };
     let drive = gtk::DropDown::from_strings(&letters);
     drive.set_halign(gtk::Align::Start);
-    dialog.add_labelled(ox_core::i18n::gettext_static("Drive:"), &drive);
+    if with_letters {
+        dialog.add_labelled(ox_core::i18n::gettext_static("Drive:"), &drive);
+    }
     let folder = folder_field(&dialog);
     dialog.add_hint(&ox_core::i18n::format_message(
         "Example: {address}",
@@ -459,6 +488,39 @@ mod tests {
             "the letter fits the label's limit"
         );
         assert!(long.ends_with("é (Z:)"));
+        dialog.close();
+        parent.close();
+    }
+
+    /// With the letters off in Settings, Map network drive has no Drive
+    /// list and asks only for the folder, which is mapped without a
+    /// letter.
+    ///
+    /// parity: SET-022
+    #[gtk::test]
+    fn without_letters_map_network_drive_asks_only_for_the_folder() {
+        let parent = gtk::Window::new();
+        let requests = Heard::default();
+        let dialog = map_network_dialog_with(&parent, &[], false, recorder(&requests));
+        dialog.open();
+        settle();
+
+        assert_eq!(
+            dialog.message_text(),
+            format!("{MAP_QUESTION}\n{MAP_MESSAGE_WITHOUT_LETTER}")
+        );
+        let texts = dialog.texts();
+        assert!(!texts.iter().any(|text| text == "Drive:"), "{texts:?}");
+        assert!(descendants::<gtk::DropDown>(&dialog).is_empty());
+        let entries = descendants::<gtk::Entry>(&dialog);
+        entries[0].set_text("\\\\nas\\Projects");
+        dialog.press("Finish");
+        settle();
+        let heard = requests.borrow();
+        assert_eq!(heard.len(), 1);
+        assert_eq!(heard[0].drive, None);
+        assert_eq!(heard[0].label_for("Projects"), "Projects");
+        drop(heard);
         dialog.close();
         parent.close();
     }

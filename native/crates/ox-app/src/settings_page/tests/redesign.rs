@@ -281,6 +281,11 @@ fn every_setting_of_the_earlier_layout_is_on_one_of_the_new_pages() {
         "Run installed apps' launchers on double-click",
         // The choice of Windows 11's F6 order (ACC-015).
         "F6 moves like Windows",
+        // The letters of mapped network folders, which can be turned off.
+        "Show letters on mapped network folders",
+        // Carrying the settings to another computer.
+        "Export settings",
+        "Import settings",
     ];
     for title in added_since {
         settings.row(title);

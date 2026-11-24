@@ -15304,6 +15304,34 @@ native = "done"
 native_note = "user-dirs.dirs is read as text of at most 128 KiB and parsed line by line; only $HOME and ${HOME} expand, and shell syntax, control characters and relative paths fall back to ~/<Name> (native/crates/ox-core/src/places/user_dirs.rs). Test: native/crates/ox-core/src/places/user_dirs.rs (shell_syntax_control_characters_and_relative_paths_are_refused)."
 
 [[feature]]
+id = "SET-021"
+area = "SET"
+title = "Settings are exported to one file and imported on another computer"
+behaviour = "Settings > General > Back up settings has Export settings… and Import settings…. Export saves, in one readable JSON file chosen in the desktop's Save dialog, every preference the user chooses in Settings (views and layout, the confirmations, the settings with a Windows behavior, the column header style, the icon file paths) with the Quick access pins, their order and the saved network folders. It leaves out what belongs to the computer or is private: passwords and other keyring entries, recent files, recent and typed locations, window sizes, the thumbnail cache, the daily update check and the passwordless-update opt-in. Import asks \"Replace your OpenXplorer settings with the ones in <file>?\" with Replace and Cancel, applies the file and redraws every window; unknown keys are ignored, folders and files not on the computer are kept and named, a file of a newer format gives what this version knows, and a broken or foreign file is refused with a message and changes nothing."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = ["user request 2026-11-23: carry the whole OpenXplorer setup to a new PC with one file"]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "The file has \"kind\": \"openxplorer-settings\" and \"format\": 1, then pins, shares, hiddenQuick, quickOrder and preferences in the layout of settings.json; it is read back through the settings.json reader, so every value is checked as one from the settings file is. The preferences kept on the computer are COMPUTER_PREFERENCES (native/crates/ox-core/src/settings/backup.rs); anything kept outside settings.json is never read. Tests: native/crates/ox-core/src/settings/backup.rs (export_change_everything_import_and_everything_is_back, which sets every field of Preferences to a value other than its default and fails when a new field is left out, a_broken_or_foreign_file_is_refused, a_newer_file_imports_what_this_version_knows, paths_not_on_this_computer_are_kept_and_named). The rows and the question are native/crates/ox-app/src/settings_page/backup.rs; AppContext::import_settings draws the theme, font and text size again and tells every window that the places and the folder styles changed."
+
+[[feature]]
+id = "SET-022"
+area = "SET"
+title = "Drive letters on mapped network folders can be turned off"
+behaviour = "Settings > Appearance > Layout has Show letters on mapped network folders, on by default. Off, a network folder Map network drive gave a letter is named without it (Projects, not Projects (Z:)) in the navigation pane, This PC and Send to, and Map network drive asks for the folder alone, without its Drive list. The letter stays in the saved name, so the mapping and typing Z: in the address bar keep working, and turning the setting on again shows it. It is not one of the settings Behave like Windows Explorer sets."
+origin = ["openxplorer"]
+priority = "could"
+openxplorer = "missing"
+sources = ["user request 2026-11-23: the Windows drive letters on mapped shares mean nothing on Linux"]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "Stored as preferences.showDriveLetters, only when off. Places::shown_label (native/crates/ox-app/src/places.rs) drops the letter with ox_core::location::without_drive_letter where a label is shown; the logic that reads letters (Z: in the address bar, the letters already taken, Disconnect) reads the saved label. Tabs, the address bar, the Details pane and Properties name a share by its folder, never by this label. Tests: native/crates/ox-core/src/location/drive_letters.rs (a_label_loses_only_its_drive_letter), native/crates/ox-app/src/dialogs/network_map.rs (without_letters_map_network_drive_asks_only_for_the_folder), native/crates/ox-app/src/window/sidebar/entries.rs (without_letters_a_mapped_share_is_named_by_its_folder)."
+
+[[feature]]
 id = "SET-019"
 area = "SET"
 title = "Settings are organised by category, one category at a time"

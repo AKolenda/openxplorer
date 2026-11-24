@@ -24,6 +24,7 @@
 mod about;
 mod appearance;
 mod archives;
+mod backup;
 mod bindings;
 mod brave;
 mod building;

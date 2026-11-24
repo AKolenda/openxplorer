@@ -171,7 +171,7 @@ impl BrowserWindow {
             _ => None,
         });
         let network = places.saved_shares.iter().map(|share| SendToDrive {
-            label: share.bookmark.label.clone(),
+            label: places.shown_label(&share.bookmark.label).to_owned(),
             uri: share.bookmark.uri.clone(),
             is_network: true,
         });
