@@ -64,6 +64,7 @@ pub(super) fn build_entry(
     let is_dir = classification.is_dir();
     // A folder's own size is not the size of its contents, so none is shown.
     let size = if is_dir { None } else { reported_size(info) };
+    let is_hidden = info.boolean("standard::is-hidden") || is_administrative_share(&classification, &name);
     Entry {
         uri: uri.to_owned(),
         name,
@@ -76,7 +77,7 @@ pub(super) fn build_entry(
         type_label,
         content_type,
         modified: time_attribute(info, "time::modified"),
-        is_hidden: info.boolean("standard::is-hidden"),
+        is_hidden,
         is_symlink,
         trash_orig_path: path_attribute(info, "trash::orig-path"),
         trash_deletion_date: deletion_date(info),
@@ -91,6 +92,15 @@ pub(super) fn build_entry(
             ..EntryMeta::from_info(info)
         }),
     }
+}
+
+/// Whether the item is a share whose name ends in `$` in an SMB server's
+/// listing, which Windows hides: "Shared resource names that end in a $
+/// character do not appear when you browse the local computer from a
+/// remote computer." Such shares are hidden items, so "Show hidden files"
+/// shows them, and typing `\\server\share$` still opens one.
+fn is_administrative_share(classification: &Classification, name: &str) -> bool {
+    classification.folder_type == Some(FolderType::NetworkShare) && name.ends_with('$')
 }
 
 /// The type of a file of a server or a device whose backend reported no
@@ -466,6 +476,22 @@ mod tests {
         assert_eq!(share.name, "work");
         assert_eq!(share.can_rename, None);
         assert_eq!(share.serialized_icon, None);
+    }
+
+    /// A share whose name ends in `$` is a hidden item in a server's
+    /// listing, as Windows hides it; a folder named so on a share is not.
+    ///
+    /// parity: NET-037
+    #[test]
+    fn a_share_ending_in_a_dollar_sign_is_hidden() {
+        let backup = file_info(gio::FileType::Mountable, "Backup$", Some(FOLDER_MIME_TYPE));
+        let hidden = entry_for_uri("smb://nas/Backup%24", &backup);
+        assert_eq!(hidden.name, "Backup$");
+        assert!(hidden.is_hidden);
+        assert!(!entry_for_uri("smb://nas/work", &smb_share_info()).is_hidden);
+
+        let folder = file_info(gio::FileType::Directory, "Cash$", Some(FOLDER_MIME_TYPE));
+        assert!(!entry_for_uri("smb://nas/work/Cash%24", &folder).is_hidden);
     }
 
     /// parity: NET-003

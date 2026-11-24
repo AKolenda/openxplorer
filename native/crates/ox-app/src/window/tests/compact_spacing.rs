@@ -416,6 +416,7 @@ fn a_drive_with_an_eject_button_compacts_as_the_other_rows() {
             uri: "file:///media/demo/USB".into(),
             label: "Eject",
         }),
+        expander: None,
     };
     let sidebar = test.window.sidebar();
     sidebar.set_entries(vec![

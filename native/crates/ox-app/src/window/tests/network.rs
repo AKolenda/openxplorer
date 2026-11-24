@@ -85,6 +85,7 @@ fn studio_nas() -> DiscoveredServer {
     DiscoveredServer {
         uri: "smb://studio-nas/".into(),
         label: "studio-nas".into(),
+        name: "studio-nas".into(),
         host: "studio-nas".into(),
     }
 }
@@ -254,8 +255,8 @@ fn network_lists_the_discovered_computers_as_items() {
     );
     let computer = test.window.folder_model().item(0).expect("the computer");
     assert_eq!(computer.entry().type_label, "Computer");
-    assert_eq!(Art::for_entry(computer.entry()), Art::SERVER);
-    assert!(!test.window.network_info_bar().is_visible());
+    assert_eq!(Art::for_entry(computer.entry()), Art::COMPUTER);
+    assert!(!test.window.network_info_bar().bar.is_visible());
     assert_eq!(
         activation_for(computer.entry()),
         Activation::Folder("smb://studio-nas/".into()),
@@ -263,11 +264,190 @@ fn network_lists_the_discovered_computers_as_items() {
     );
 }
 
-/// Where the network browser cannot be read, Network says, as Windows
-/// does, that discovery is off, with GIO's reason as the tooltip; the bar
-/// opens Help, and leaves with Network.
+/// The services one NAS advertises: its SFTP and WebDAV servers, without
+/// SMB, so listing the computer reads no server in a test.
+fn harbor_files() -> Discovery {
+    let service = |uri: &str, label: &str| DiscoveredServer {
+        uri: uri.into(),
+        label: label.into(),
+        name: "Harbor Files".into(),
+        host: "harbornas.local".into(),
+    };
+    Discovery {
+        servers: vec![
+            service("sftp://harbornas.local:2222/", "Harbor Files (Remote Login)"),
+            service("dav://harbornas.local:8080/dav", "Harbor Files (dav+sd)"),
+        ],
+        warnings: Vec::new(),
+    }
+}
+
+/// Network lists one computer for every service of a host, in Tiles
+/// grouped by type; opening it lists its services as rows, and the tab,
+/// the crumbs and the search box name it as Windows does (`\\\\PC`,
+/// "Network > PC", "Search PC"). Its menu has no Properties, and
+/// Properties does nothing on it.
 ///
-/// parity: NET-024
+/// parity: NET-036, HOME-008
+#[gtk::test]
+fn a_computer_lists_its_services_and_is_named_like_windows() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.context
+        .network()
+        .set_discoverer(Discoverer::finding(harbor_files()));
+
+    test.window.navigate(Page::Network.uri()).expect("Network");
+    test.wait_for_listing("Network");
+
+    assert_eq!(test.names(), ["harbornas"]);
+    let pane = test.window.folder_pane();
+    assert_eq!(pane.view().as_str(), "tiles", "Network starts in Tiles");
+    assert_eq!(
+        pane.model().grouping().map(|grouping| grouping.by),
+        Some(ox_core::grouping::GroupBy::Type)
+    );
+    let computer = test.window.folder_model().item(0).expect("the computer");
+    let uri = computer.entry().navigation_uri().to_owned();
+    assert_eq!(uri, "smb://harbornas.local/");
+    // The menu a right-click on it opens: Windows 11's for a computer.
+    test.window.right_click(Some(0));
+    let menu = test.window.context_menu();
+    assert_eq!(
+        menu.row_labels(),
+        [
+            "Open",
+            "Open in new tab",
+            "Open in new window",
+            "Pin to Quick access",
+            "Create shortcut",
+            "-",
+            "Show more options"
+        ]
+    );
+    menu.popdown();
+
+    test.window.navigate(&uri).expect("the computer");
+    test.wait_for_listing("the computer");
+
+    assert_eq!(test.names(), ["Harbor Files (SFTP)", "Harbor Files (WebDAV)"]);
+    let locations = test.window.imp().locations.borrow().clone();
+    assert_eq!(locations.title_for(&uri), "\\\\harbornas");
+    let crumbs: Vec<String> = locations
+        .breadcrumbs(&uri)
+        .into_iter()
+        .map(|crumb| crumb.label)
+        .collect();
+    assert_eq!(crumbs, ["Network", "harbornas"]);
+    assert_eq!(test.window.search_box().accessible_name(), "Search harbornas");
+    // The tabs are back on Network: no item there opens Properties.
+    test.window.navigate(Page::Network.uri()).expect("Network");
+    test.wait_for_listing("Network again");
+    test.window.folder_pane().model().select_all();
+    test.window
+        .open_properties(crate::properties::PropertiesTab::General);
+    let titles: Vec<String> = gtk::Window::list_toplevels()
+        .iter()
+        .filter_map(|window| window.downcast_ref::<gtk::Window>().and_then(gtk::Window::title))
+        .map(|title| title.to_string())
+        .collect();
+    assert!(
+        titles.iter().all(|title| !title.contains("Properties")),
+        "a computer has no Properties: {titles:?}"
+    );
+}
+
+/// Typing a mapped drive letter, alone or with a path, opens the share
+/// mapped to it, as in Windows; the mapped share is listed under This PC.
+///
+/// parity: NET-039, SIDE-035
+#[gtk::test]
+fn a_mapped_drive_letter_opens_in_the_address_bar() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.context
+        .remember_mapped_share("smb://harbornas.local/Projects", "Projects (Z:)");
+
+    assert_eq!(
+        test.window.resolve_address("Z:").as_deref(),
+        Ok("smb://harbornas.local/Projects")
+    );
+    assert_eq!(
+        test.window.resolve_address("z:\\Plans\\Q3").as_deref(),
+        Ok("smb://harbornas.local/Projects/Plans/Q3")
+    );
+    assert!(
+        test.window.resolve_address("Q:\\Plans").is_err(),
+        "no share is mapped to Q"
+    );
+    let labels = test.window.sidebar().labels_shown();
+    let this_pc = labels
+        .iter()
+        .position(|label| label == "This PC")
+        .expect("This PC");
+    let network = labels
+        .iter()
+        .position(|label| label == "Network")
+        .expect("Network");
+    let mapped = labels
+        .iter()
+        .position(|label| label == "Projects (Z:)")
+        .expect("the mapped share");
+    assert!(this_pc < mapped && mapped < network, "{labels:?}");
+}
+
+/// Network in the navigation pane starts collapsed; expanding it looks for
+/// computers, and each computer's chevron expands it to what it shares.
+///
+/// parity: SIDE-035
+#[gtk::test]
+fn the_navigation_pane_expands_network_to_computers_and_shares() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.context
+        .network()
+        .set_discoverer(Discoverer::finding(harbor_files()));
+    let sidebar = test.window.sidebar();
+    assert!(sidebar.section_is_collapsed("network"));
+
+    sidebar.toggle_section("network");
+    wait_until("the computer under Network", || {
+        sidebar.labels_shown().contains(&"harbornas".to_owned())
+    });
+    assert!(!sidebar
+        .labels_shown()
+        .iter()
+        .any(|label| label.starts_with("Harbor Files")));
+
+    test.window.toggle_computer("smb://harbornas.local/");
+    wait_until("its services", || {
+        sidebar.labels_shown().contains(&"Harbor Files (SFTP)".to_owned())
+    });
+    assert!(test.window.is_computer_expanded("smb://harbornas.local/"));
+    let labels = sidebar.labels_shown();
+    let computer = labels
+        .iter()
+        .position(|label| label == "harbornas")
+        .expect("the computer");
+    assert_eq!(
+        labels[computer + 1..computer + 3],
+        ["Harbor Files (SFTP)", "Harbor Files (WebDAV)"]
+    );
+
+    test.window.toggle_computer("smb://harbornas.local/");
+    assert!(!sidebar
+        .labels_shown()
+        .iter()
+        .any(|label| label.starts_with("Harbor Files")));
+}
+
+/// Where the network browser cannot be read, Network says, as Windows
+/// does, that discovery is off, with GIO's reason as the tooltip, and
+/// lists nothing ("This folder is empty."); the bar's text opens a menu
+/// whose "How to turn on network discovery" opens the manual's steps,
+/// its × hides it until discovery runs again, and it leaves with Network.
+///
+/// parity: NET-024, NET-038
 #[gtk::test]
 fn network_says_when_discovery_is_turned_off() {
     let fixture = Fixture::standard();
@@ -280,19 +460,74 @@ fn network_says_when_discovery_is_turned_off() {
     test.window.navigate(Page::Network.uri()).expect("Network");
     test.wait_for_listing("Network");
 
-    let bar = test.window.network_info_bar();
-    assert!(bar.is_visible());
+    let parts = test.window.network_info_bar();
+    assert!(parts.bar.is_visible());
     assert_eq!(
-        texts_in(bar),
-        ["Network discovery is turned off. Network computers and devices are not visible. Click to learn more..."]
+        texts_in(&parts.text),
+        ["Network discovery is turned off. Network computers and devices are not visible. Click to change..."]
     );
-    assert_eq!(bar.tooltip_text().as_deref(), Some("Location is not supported"));
-    assert_eq!(bar.action_name().as_deref(), Some("win.help"));
+    assert_eq!(
+        parts.text.tooltip_text().as_deref(),
+        Some("Location is not supported")
+    );
     assert!(test.names().is_empty());
     capture(&test.window, "native-network-discovery-off.png");
+
+    parts.text.emit_clicked();
+    let menu =
+        crate::window::widget_tree::descendants::<crate::window::menu_popover::MenuPopover>(&parts.bar)
+            .into_iter()
+            .next()
+            .expect("the bar's menu");
+    let labels: Vec<String> = menu.items().iter().map(|item| item.label.clone()).collect();
+    assert_eq!(labels, ["How to turn on network discovery", "Open Help"]);
+    menu.popdown();
+
+    test.window.dismiss_network_info_bar();
+    assert!(!parts.bar.is_visible(), "× hides the bar");
+    test.window.refresh();
+    test.wait_for_listing("Network again");
+    assert!(parts.bar.is_visible(), "discovery ran again and is still off");
+
     test.window.navigate(&fixture.uri()).expect("the folder");
     test.wait_for_listing("the folder");
-    assert!(!bar.is_visible(), "the bar belongs to Network");
+    assert!(!parts.bar.is_visible(), "the bar belongs to Network");
+}
+
+/// With the network browser there but neither Avahi nor wsdd, and
+/// nothing found, discovery is off too, and the tooltip says what is
+/// missing; with them there, an empty network shows no bar.
+///
+/// parity: NET-038
+#[gtk::test]
+fn network_says_discovery_is_off_without_avahi_or_wsdd() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let off = ox_core::network::DiscoverySources {
+        browser: true,
+        dns_sd: false,
+        ws_discovery: false,
+    };
+    test.context
+        .network()
+        .set_discoverer(Discoverer::finding(Discovery::default()).with_sources(off));
+
+    test.window.navigate(Page::Network.uri()).expect("Network");
+    test.wait_for_listing("Network");
+
+    let parts = test.window.network_info_bar();
+    assert!(parts.bar.is_visible());
+    assert_eq!(
+        parts.text.tooltip_text().as_deref(),
+        Some("Avahi (DNS-SD) is not running and wsdd (WS-Discovery) is not installed.")
+    );
+
+    test.context
+        .network()
+        .set_discoverer(Discoverer::finding(Discovery::default()));
+    test.window.refresh();
+    test.wait_for_listing("Network again");
+    assert!(!parts.bar.is_visible());
 }
 
 /// Map network drive opens from every place that offers it; an
@@ -616,8 +851,9 @@ fn signing_out_forgets_the_server_and_its_tabs() {
     test.window
         .open_tab("smb://nas/share", TabPlacement::Background)
         .expect("an SMB share");
-    wait_until("the share in the sidebar", || {
-        test.window.sidebar().labels().contains(&"share".to_owned())
+    // Its server is a computer under Network (SIDE-035).
+    wait_until("the share's computer in the sidebar", || {
+        test.window.sidebar().labels().contains(&"nas".to_owned())
     });
 
     test.activate("sign-out", Some("smb://nas/share"));
@@ -634,7 +870,7 @@ fn signing_out_forgets_the_server_and_its_tabs() {
         "",
         "signing out says nothing"
     );
-    assert!(!test.window.sidebar().labels().contains(&"share".to_owned()));
+    assert!(!test.window.sidebar().labels().contains(&"nas".to_owned()));
     let tabs = test.tab_listing_needs();
     assert!(tabs.contains(&("smb://nas/share".to_owned(), true)), "{tabs:?}");
 }
@@ -707,8 +943,9 @@ fn signing_out_without_a_keyring_says_the_credentials_remain() {
 fn keep_in_network_saves_a_browsed_share_and_remove_deletes_it() {
     let test = TestWindow::open(Page::Network.uri());
     test.window.context().remember_network("smb://nas/media");
-    wait_until("the visited share under Network", || {
-        test.window.sidebar().labels().contains(&"media".to_owned())
+    // The visited share's server is a computer under Network (SIDE-035).
+    wait_until("the visited share's computer under Network", || {
+        test.window.sidebar().labels().contains(&"nas".to_owned())
     });
     assert!(
         test.context.settings_data().shares.is_empty(),
@@ -718,6 +955,10 @@ fn keep_in_network_saves_a_browsed_share_and_remove_deletes_it() {
     test.activate("keep-in-network", Some("smb://nas/media"));
     wait_until("the saved share", || {
         !test.context.settings_data().shares.is_empty()
+    });
+    // A saved location is under This PC, as Windows lists them.
+    wait_until("the saved share under This PC", || {
+        test.window.sidebar().labels().contains(&"media".to_owned())
     });
     let saved = test.context.settings_data().shares;
     assert_eq!(

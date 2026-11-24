@@ -54,6 +54,7 @@ mod classify;
 mod cloud_names;
 mod device_uri;
 mod display;
+mod drive_letters;
 mod names;
 mod normalise;
 mod parts;
@@ -70,6 +71,7 @@ pub use archive_location::{is_archive_location, ArchiveLocation, ARCHIVE_SCHEME}
 pub use classify::{is_network_filesystem, is_smb_share_root};
 pub use cloud_names::{names_items_by_id, remember_cloud_name, unnamed_cloud_folders};
 pub use display::{crumb_divider, device_root, parent_location, same_location, DeviceLabel, LocationContext};
+pub use drive_letters::mapped_drive_location;
 pub use names::{
     ends_like_windows_drops, fitted_name, has_windows_forbidden_character, is_reserved_device_name,
     kept_both_name, name_with_copy_marker, new_copy_name, safe_label, validate_name, ItemKind,

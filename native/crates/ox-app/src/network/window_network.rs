@@ -36,6 +36,8 @@ pub(crate) struct WindowNetwork {
     /// Why the last listing of Network could not discover computers;
     /// `None` when it could. Network's info bar shows it.
     discovery_problem: RefCell<Option<String>>,
+    /// Whether the info bar's × hid it until discovery runs again.
+    problem_dismissed: std::cell::Cell<bool>,
     /// Test safety: tests answer mounts themselves, and a test that does
     /// not is refused, so no test mounts a share.
     #[cfg(test)]
@@ -71,6 +73,7 @@ impl WindowNetwork {
             prompts: MountPrompts::new(credentials, prompter),
             sign_in,
             discovery_problem: RefCell::default(),
+            problem_dismissed: std::cell::Cell::new(false),
             #[cfg(test)]
             mount_answer: std::cell::RefCell::new(Some(Rc::new(refuse_test_mount))),
         }
@@ -109,6 +112,17 @@ impl WindowNetwork {
         &self.sign_in
     }
 
+    /// What Network's info bar shows: why the last listing could not
+    /// discover computers, unless the bar's × hid it.
+    pub(crate) fn shown_discovery_problem(&self) -> Option<String> {
+        self.discovery_problem().filter(|_| !self.problem_dismissed.get())
+    }
+
+    /// Hides the info bar until discovery runs again.
+    pub(crate) fn dismiss_discovery_problem(&self) {
+        self.problem_dismissed.set(true);
+    }
+
     /// Why the last listing of Network could not discover computers, or
     /// `None` when it could.
     pub(crate) fn discovery_problem(&self) -> Option<String> {
@@ -118,6 +132,7 @@ impl WindowNetwork {
     /// Records how the last listing of Network went: `problem` says why
     /// discovery could not run, or is `None` when it ran.
     pub(crate) fn set_discovery_problem(&self, problem: Option<String>) {
+        self.problem_dismissed.set(false);
         self.discovery_problem.replace(problem);
     }
 

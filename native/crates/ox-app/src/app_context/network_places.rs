@@ -37,6 +37,14 @@ impl AppContext {
         }
     }
 
+    /// Keeps the computers a discovery pass found, and tells every window
+    /// when they changed, so the navigation pane lists them under Network.
+    pub(crate) fn remember_computers(&self, found: &[ox_core::network::DiscoveredComputer]) {
+        if self.network().remember_computers(found) {
+            self.notify_places_changed();
+        }
+    }
+
     /// Lists the share `uri`, mapped for this session only, under Network
     /// as `label`, such as `Projects (Y:)`, until the app quits or its
     /// server is signed out; nothing is saved.
@@ -44,6 +52,14 @@ impl AppContext {
         self.network().remember_mapped(uri, label);
         self.network().remember_visited(uri);
         self.notify_places_changed();
+    }
+
+    /// Forgets the shares mapped this session at or inside `root`, which
+    /// was disconnected, and tells every window.
+    pub(crate) fn forget_mapped_shares_inside(&self, root: &str) {
+        if self.network().forget_mapped_inside(root) {
+            self.notify_places_changed();
+        }
     }
 
     /// The server `host` is being signed out: forgets the servers and

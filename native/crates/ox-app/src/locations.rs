@@ -324,9 +324,12 @@ mod tests {
     #[test]
     fn smb_roots_are_labelled_with_the_server() {
         let context = demo_context();
-        assert_eq!(context.title_for("smb://nas/"), "nas");
+        // As Windows titles a computer's list of shares and starts its
+        // address at Network.
+        assert_eq!(context.title_for("smb://nas/"), "\\\\nas");
         let crumbs = labels(&context, "smb://studio-nas/projects/Design");
-        assert_eq!(crumbs.first().map(String::as_str), Some("studio-nas"));
+        assert_eq!(crumbs.first().map(String::as_str), Some("Network"));
+        assert_eq!(crumbs.get(1).map(String::as_str), Some("studio-nas"));
         assert_eq!(crumbs.last().map(String::as_str), Some("Design"));
     }
 

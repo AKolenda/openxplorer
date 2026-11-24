@@ -79,7 +79,7 @@ pub(crate) struct SignInDialog {
     pub(super) question_label: TemplateChild<gtk::Label>,
     /// One button per answer to the question, then Cancel.
     #[template_child]
-    pub(super) choices: TemplateChild<gtk::FlowBox>,
+    pub(super) choices: TemplateChild<gtk::Box>,
     /// The footer with OK and Cancel.
     #[template_child]
     pub(super) actions: TemplateChild<gtk::Box>,

@@ -5669,7 +5669,7 @@ python_tests = [
 bridge = ["environment", "bookmark", "pin"]
 dolphin = "Places panel; show_places_panel: F9"
 native = "done"
-native_note = "Changed to match Windows 11 (2026-11-06): the order and dividers are Windows 11's (Home | pins | This PC and Network), the pinned rows are full width on the 32 px pitch with every top-level icon in one column (a chevron's room in, as in Windows), drives and network locations a 16 px level in, and saved searches moved from below Quick access to the last group after Network, with Recent files, Recent locations and the Recycle Bin, where they were. Gallery is left out until the app has a Gallery view; since HOME-017 it is listed right under Home, in Home's group, in both states of 'Show more items in the navigation pane' (native/crates/ox-app/src/window/tests/gallery.rs the_gallery_row_is_right_under_home_and_opens_gallery). native/crates/ox-app/src/window/sidebar/entries.rs (rows_follow_windows_11_order_and_smb_mounts_appear_once_under_network, the_places_windows_lacks_follow_network_in_a_group_of_their_own, home_this_pc_and_network_show_their_glyphs_in_their_own_colours); native/crates/ox-app/src/window/tests/sidebar_layout.rs (pinned_rows_line_up_with_home_on_the_32_pixel_pitch); native/crates/ox-app/src/window/tests/sidebar.rs (nothing_is_pinned_below_the_navigation_pane); native/crates/ox-app/src/window/tests/sidebar.rs (quick_access_has_no_heading_and_this_pc_opens_from_its_name). The order, the blue Home glyph, the section separators, non-SMB volumes and devices under This PC, the chevrons (buttons that collapse their section, SIDE-033; activating This PC's row opens it and its drives stay listed) and the absence of a Quick access heading or counter are tested. On 2026-11-10 the owner chose to keep this as the default and to offer Windows 11 File Explorer's layout (as checked in Windows 11 build 26200) as an opt-in (SIDE-034). Test: native/crates/ox-app/src/window/tests/sidebar.rs (the_navigation_pane_keeps_more_rows_by_default_and_a_setting_gives_windows_pane)."
+native_note = "Changed to match Windows 11 (2026-11-06): the order and dividers are Windows 11's (Home | pins | This PC and Network), the pinned rows are full width on the 32 px pitch with every top-level icon in one column (a chevron's room in, as in Windows), drives and network locations a 16 px level in, and saved searches moved from below Quick access to the last group after Network, with Recent files, Recent locations and the Recycle Bin, where they were. Gallery is left out until the app has a Gallery view; since HOME-017 it is listed right under Home, in Home's group, in both states of 'Show more items in the navigation pane' (native/crates/ox-app/src/window/tests/gallery.rs the_gallery_row_is_right_under_home_and_opens_gallery). native/crates/ox-app/src/window/sidebar/entries.rs (rows_follow_windows_11_order_and_saved_shares_appear_once_under_this_pc, the_places_windows_lacks_follow_network_in_a_group_of_their_own, home_this_pc_and_network_show_their_glyphs_in_their_own_colours); native/crates/ox-app/src/window/tests/sidebar_layout.rs (pinned_rows_line_up_with_home_on_the_32_pixel_pitch); native/crates/ox-app/src/window/tests/sidebar.rs (nothing_is_pinned_below_the_navigation_pane); native/crates/ox-app/src/window/tests/sidebar.rs (quick_access_has_no_heading_and_this_pc_opens_from_its_name). The order, the blue Home glyph, the section separators, non-SMB volumes and devices under This PC, the chevrons (buttons that collapse their section, SIDE-033; activating This PC's row opens it and its drives stay listed) and the absence of a Quick access heading or counter are tested. On 2026-11-10 the owner chose to keep this as the default and to offer Windows 11 File Explorer's layout (as checked in Windows 11 build 26200) as an opt-in (SIDE-034). Test: native/crates/ox-app/src/window/tests/sidebar.rs (the_navigation_pane_keeps_more_rows_by_default_and_a_setting_gives_windows_pane)."
 
 [[feature]]
 id = "SIDE-002"
@@ -6397,6 +6397,19 @@ python_tests = []
 bridge = []
 native = "done"
 native_note = "Preferences::more_navigation_pane_items (native/crates/ox-core/src/settings/preferences.rs), read by render_places (native/crates/ox-app/src/window/environment.rs) and the sidebar rows (native/crates/ox-app/src/window/sidebar/row.rs). Owner-approved opt-in (2026-11-10): the app's pane stays the default and Windows 11's is a switch away. Tests: preferences.rs (tab_menu_and_navigation_pane_extras_start_on_and_are_stored_when_off), native/crates/ox-app/src/window/tests/sidebar.rs (the_navigation_pane_keeps_more_rows_by_default_and_a_setting_gives_windows_pane), native/crates/ox-app/src/window/tests/address_input.rs (the_recycle_bin_and_recent_open_from_the_typed_address). Until 2026-11-09 Enter on 'Recycle Bin', 'Recent' or 'Recent locations', or on trash:///, recent:/// or ox:recent-locations, in the address bar did nothing: its by-title fallback knew only Home, This PC and Network. Folder Options > General > Privacy's 'Show recently used files' and 'Show frequently used folders' choose whether those rows show while this switch is on, the default; while it is off they are grayed out, with a tooltip saying they apply when 'Show more items in the navigation pane' is on in Settings > Appearance, and Folder Options does not turn the switch on; an open Folder Options follows the switch at once when any window or process changes it, in both directions (native/crates/ox-app/src/window/tests/folder_options.rs, privacy_check_boxes_follow_the_navigation_pane_switch, privacy_check_boxes_follow_the_switch_while_folder_options_is_open)."
+[[feature]]
+id = "SIDE-035"
+area = "SIDE"
+title = "Network in the navigation pane expands to computers, then shares"
+behaviour = "As in Windows 11, Network in the navigation pane starts collapsed and expands to the computers on the network (discovery runs when it is expanded and nothing found them yet), each with its own chevron that expands it to its shares and services, read off the main loop; Left and Right expand and collapse it from the keyboard. Shares and servers mounted or browsed this session are inside their computer, and a server no discovery found is a computer of its own. Saved network locations and shares mapped to a drive letter are under This PC."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = ["Windows 11 File Explorer: Network (build 26200)"]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-app/src/window/sidebar/network_tree.rs (network_lists_computers_and_this_pc_the_mapped_drives, an_expanded_computer_lists_its_shares); native/crates/ox-app/src/window/network_pane.rs; native/crates/ox-app/src/window/tests/network.rs (the_navigation_pane_expands_network_to_computers_and_shares). Review 5 U1."
 [[feature]]
 id = "CMD-001"
 area = "CMD"
@@ -12025,6 +12038,90 @@ dolphin = "Properties → Share tab (kdenetwork-filesharing); Samba share proper
 gnome = "`net usershare add/delete/info` (samba-common-bin installed), as the nautilus-share extension does; gnome-user-share for the Public folder; nautilus-share (usershares via 'net usershare')"
 native = "done"
 native_note = "native/crates/ox-core/src/network/usershare.rs runs net usershare info/add/delete with an argument list (a_folder_is_shared_read_only_by_default_and_its_state_is_read_back, sharing_is_unavailable_without_permitted_user_shares, another_folders_share_name_is_refused); native/crates/ox-app/src/properties/sharing_panel.rs is the Sharing tab of a local folder's Properties: share this folder, share name, comment, guests, read only and Apply, with the current state (the_tab_shows_the_share_and_applies_a_change). Without Samba or permitted user shares the tab says so and its controls are off. Tested with a fake net command only. A share name another folder already uses is refused ('This share name is already used for another folder.'), as Dolphin's Share tab does, since Samba would move that share. A missing net says 'Folder sharing needs Samba, and its net command is not installed.'. The share is read when the tab is first shown. The Flatpak has no Sharing tab, as it cannot run the host's net. The shares are read with `net usershare info --long`: Samba 4.15 and newer read `-l` as --log-basename, so `-l` failed there with 'Invalid option -l: missing argument' and the Sharing tab always said sharing was unavailable (native/crates/ox-core/src/network/usershare.rs: shares_are_listed_with_the_long_option_newer_samba_takes)."
+
+[[feature]]
+id = "NET-036"
+area = "NET"
+title = "One row per device on Network, opened as \\\\PC"
+behaviour = "Network lists one row per device, as Windows 11 does: every SMB, SFTP, FTP and WebDAV service one host advertises (WebDAV over DNS-SD included) is one computer, named by its SMB server's NetBIOS name, else its host name, in Tiles grouped by type ('Computer') until another view is chosen there. Opening it lists its SMB shares and its other services as rows of their own ('Harbor Files (SFTP)'), so nothing advertised is lost; the tab says '\\\\PC', the address 'Network > PC' and the search box 'Search PC'. Its menu is Open, Open in new tab, Open in new window, Pin to Quick access and Create shortcut (on the Desktop), with no Properties."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = ["Windows 11 File Explorer: Network (build 26200)"]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-core/src/network/computers.rs groups services by host (every_service_of_one_host_is_one_computer, a_netbios_name_and_its_dns_sd_host_are_one_computer); native/crates/ox-core/src/network/discovery.rs resolves dav+sd through Avahi's D-Bus ResolveService (a_dns_sd_webdav_service_resolves_to_its_host); native/crates/ox-app/src/folder_view/loader.rs lists a computer (list_computer); native/crates/ox-app/src/window/tests/network.rs (a_computer_lists_its_services_and_is_named_like_windows). Review 5 U1, B3, B4."
+
+[[feature]]
+id = "NET-037"
+area = "NET"
+title = "Shares ending in $ are hidden"
+behaviour = "A share whose name ends in $ is a hidden item in a server's list of shares and in the navigation pane, as Windows hides it; 'Show hidden files' shows it, and typing its address opens it."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = ["https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/hh750728(v=ws.11)"]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-core/src/entry/info.rs (a_share_ending_in_a_dollar_sign_is_hidden); native/crates/ox-app/src/window/sidebar/network_tree.rs (an_expanded_computer_lists_its_shares). Review 5 U1."
+
+[[feature]]
+id = "NET-038"
+area = "NET"
+title = "Network says when discovery is off"
+behaviour = "When discovery cannot run (no GVfs network browser, or neither Avahi nor wsdd and nothing found), Network shows Windows' yellow bar: 'Network discovery is turned off. Network computers and devices are not visible. Click to change...', with the reason as its tooltip and an x that hides it until discovery runs again. Clicking it opens a menu: 'How to turn on network discovery' (the manual's steps) and 'Open Help'. The list says 'This folder is empty.'. The app never starts or changes a system service."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = ["Windows 11 File Explorer: Network (build 26200)", "https://support.microsoft.com/en-us/windows/experience/connectivity-networking/file-sharing-over-a-network-in-windows"]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-core/src/network/discovery.rs (discovery_sources, discovery_needs_the_browser_and_one_source); native/crates/ox-app/src/network/discovery.rs (discovery_is_off_without_a_source); native/crates/ox-app/src/window/tests/network.rs (network_says_when_discovery_is_turned_off, network_says_discovery_is_off_without_avahi_or_wsdd). Review 5 U1."
+
+[[feature]]
+id = "NET-039"
+area = "NET"
+title = "Mapped drive letters open in the address bar"
+behaviour = "Typing Z: or Z:\\folder\\sub (or with /) in the address bar opens the share mapped to Z by Map network drive, saved or for this session, and the folder inside it. A letter no share is mapped to is still refused as a Windows path."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = ["https://support.microsoft.com/en-us/windows/experience/connectivity-networking/file-sharing-over-a-network-in-windows"]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-core/src/location/drive_letters.rs (a_mapped_letter_opens_its_share, other_addresses_are_not_mapped_drives); native/crates/ox-app/src/window/tests/network.rs (a_mapped_drive_letter_opens_in_the_address_bar). Review 5 B1."
+
+[[feature]]
+id = "NET-040"
+area = "NET"
+title = "Disconnect ends a drive's mapping"
+behaviour = "Disconnect of a share mapped to a drive letter ends the mapping, saved or for this session, as in Windows: no row of it is left in the navigation pane or This PC. 'Disconnect this mount?' has Disconnect as its default button. A saved network location without a letter stays."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = ["Windows 11 File Explorer: Network (build 26200)"]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-core/src/network/visited.rs (disconnecting_a_mapped_share_forgets_its_mapping); native/crates/ox-app/src/window/mounting.rs (forget_mapped_drives_inside). Review 5 B1, U1."
+
+[[feature]]
+id = "NET-041"
+area = "NET"
+title = "Share names keep the spelling they were opened with"
+behaviour = "Inside an SMB share, folders keep the spelling the share was opened with (the server's own when opened from its list of shares), not GVfs's mounted spelling, so the tab, the address bar and Recent locations say 'Projects', not 'projects'; Recent locations lists a share once whatever its case."
+origin = ["openxplorer"]
+priority = "should"
+openxplorer = "missing"
+sources = ["Windows 11 File Explorer: Network (build 26200)"]
+python_tests = []
+bridge = []
+native = "done"
+native_note = "native/crates/ox-core/src/entry/enumerate.rs (rows_of_a_share_keep_the_folders_spelling); native/crates/ox-app/src/folder_view/recent_locations.rs (a_share_spelled_in_two_cases_is_listed_once). Review 5 U1."
 
 [[feature]]
 id = "DEV-001"

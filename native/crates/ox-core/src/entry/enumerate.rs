@@ -49,9 +49,15 @@ const MERGE_WINDOW: Duration = Duration::from_millis(250);
 ///
 /// The GIO failure, sorted by [`EntryError`]. When it is
 /// [`EntryError::NotMounted`], mount the location and list it again.
-pub async fn enumerate_folder(uri: &str, on_batch: impl FnMut(Vec<Entry>)) -> Result<(), EntryError> {
+pub async fn enumerate_folder(uri: &str, mut on_batch: impl FnMut(Vec<Entry>)) -> Result<(), EntryError> {
     let reader = Reader::start(uri)?;
-    let mut batches = BatchCoalescer::new(on_batch);
+    let folder = uri.to_owned();
+    let mut batches = BatchCoalescer::new(move |mut rows: Vec<Entry>| {
+        for row in &mut rows {
+            keep_folder_spelling(row, &folder);
+        }
+        on_batch(rows);
+    });
     loop {
         match reader.next().await {
             Read::Rows(rows) => {
@@ -72,6 +78,35 @@ pub async fn enumerate_folder(uri: &str, on_batch: impl FnMut(Vec<Entry>)) -> Re
             }
             Read::Failed(error) => return Err(error),
         }
+    }
+}
+
+/// Gives `row`, read in the SMB folder `folder`, the folder's spelling.
+///
+/// SMB names ignore case, and `GVfs` names everything inside a mounted
+/// share as the share was first mounted (`smb://nas/projects/Plans` after
+/// `projects` was typed once), whatever spelling the folder was opened
+/// with. A row whose location starts with the folder's in another case
+/// takes the folder's, so the address bar, the tab and Recent locations
+/// keep the spelling the share was opened with, the server's own when it
+/// was opened from the server's list.
+fn keep_folder_spelling(row: &mut Entry, folder: &str) {
+    if !crate::location::is_smb_location(folder) {
+        return;
+    }
+    let folder = folder.trim_end_matches('/');
+    let respell = |uri: &mut String| {
+        let Some(head) = uri.get(..folder.len()) else {
+            return;
+        };
+        let rest_starts_a_name = uri[folder.len()..].starts_with('/');
+        if head != folder && head.eq_ignore_ascii_case(folder) && rest_starts_a_name {
+            uri.replace_range(..folder.len(), folder);
+        }
+    };
+    respell(&mut row.uri);
+    if let Some(target) = row.target_uri.as_mut() {
+        respell(target);
     }
 }
 
@@ -272,6 +307,28 @@ mod tests {
 
     use super::*;
     use crate::entry::test_support::entry_for_uri;
+
+    /// A row `GVfs` names under the share's mounted spelling takes the
+    /// spelling the folder was opened with; other rows are left alone.
+    ///
+    /// parity: NET-041
+    #[test]
+    fn rows_of_a_share_keep_the_folders_spelling() {
+        let info = gio::FileInfo::new();
+        info.set_file_type(gio::FileType::Directory);
+        info.set_display_name("Plans");
+        let mut row = entry_for_uri("smb://harbornas.local/projects/Plans", &info);
+        keep_folder_spelling(&mut row, "smb://harbornas.local/Projects/");
+        assert_eq!(row.uri, "smb://harbornas.local/Projects/Plans");
+
+        let mut elsewhere = entry_for_uri("smb://harbornas.local/projectsold/Plans", &info);
+        keep_folder_spelling(&mut elsewhere, "smb://harbornas.local/Projects");
+        assert_eq!(elsewhere.uri, "smb://harbornas.local/projectsold/Plans");
+
+        let mut local = entry_for_uri("file:///tmp/a/B", &info);
+        keep_folder_spelling(&mut local, "file:///tmp/A");
+        assert_eq!(local.uri, "file:///tmp/a/B");
+    }
 
     /// [`FIRST_BATCH_SIZE`] as a row count.
     fn first_batch_len() -> usize {

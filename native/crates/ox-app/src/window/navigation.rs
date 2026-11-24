@@ -98,6 +98,11 @@ impl BrowserWindow {
         if let Some(place) = self.place_titled(typed) {
             return Ok(place);
         }
+        // A mapped drive letter, `Z:\Plans`, is the share mapped to it, as
+        // in Windows (B1).
+        if let Some(mapped) = ox_core::location::mapped_drive_location(typed, &self.mapped_drives()) {
+            return Ok(mapped);
+        }
         if let Some(listed) = gio_folder_location(typed)? {
             return Ok(listed);
         }
@@ -119,6 +124,19 @@ impl BrowserWindow {
         } else {
             None
         }
+    }
+
+    /// The letter and location of each share mapped to a drive letter
+    /// ("Projects (Z:)"), saved or for this session.
+    pub(super) fn mapped_drives(&self) -> Vec<(char, String)> {
+        self.places()
+            .network
+            .iter()
+            .filter_map(|location| {
+                let letter = crate::dialogs::drive_letter(&location.label)?.chars().next()?;
+                Some((letter, location.uri.clone()))
+            })
+            .collect()
     }
 
     /// The place whose title is `typed` ("Home", "This PC", "Network",
@@ -585,6 +603,14 @@ impl BrowserWindow {
         }
         self.context().reload_settings();
         self.save_selection();
+        // Refresh on Network or a computer reads the computers expanded in
+        // the navigation pane again too.
+        let on_network = self.current_uri().is_some_and(|uri| {
+            Page::from_uri(&uri) == Some(Page::Network) || ox_core::location::is_smb_server(&uri)
+        });
+        if on_network {
+            self.relist_expanded_computers();
+        }
         let active = self.imp().session.borrow().active_id();
         if let Some(id) = active {
             // The user asks for it: a share another application asked to

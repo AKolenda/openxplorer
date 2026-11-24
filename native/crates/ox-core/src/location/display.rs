@@ -54,6 +54,10 @@ pub struct LocationContext {
     /// mounts whose file system type passes
     /// [`is_network_filesystem`](super::is_network_filesystem).
     pub network_mounts: Vec<PathBuf>,
+    /// The computers Network found, as (host key, name) pairs: an SMB
+    /// server's tab, crumb and search box use the computer's name, as
+    /// Windows names `\\PC` after the computer.
+    pub computer_names: Vec<(String, String)>,
 }
 
 impl LocationContext {
@@ -116,13 +120,30 @@ impl LocationContext {
     }
 
     /// The window and tab title: "Home" for the Home page and the home
-    /// folder, the place title for other virtual places, else
-    /// [`base_name`](Self::base_name).
+    /// folder, the place title for other virtual places, `\\PC` for a
+    /// computer's (an SMB server's) list of shares, as Windows titles it,
+    /// else [`base_name`](Self::base_name).
     pub fn title_for(&self, uri: &str) -> String {
         if same_location(uri, &self.home_uri()) {
             return VirtualPlace::Home.title().to_string();
         }
+        if super::is_smb_server(uri) {
+            return format!("\\\\{}", self.base_name(uri));
+        }
         self.base_name(uri)
+    }
+
+    /// The name of the computer Network found for the SMB location `uri`,
+    /// if it found one.
+    pub fn computer_name(&self, uri: &str) -> Option<&str> {
+        if location_kind(uri) != LocationKind::Smb {
+            return None;
+        }
+        let key = crate::network::computer_key_of(uri)?;
+        self.computer_names
+            .iter()
+            .find(|(known, _)| *known == key)
+            .map(|(_, name)| name.as_str())
     }
 
     /// Text for the editable address bar and tooltips: a plain path for
@@ -220,6 +241,9 @@ impl LocationContext {
     /// The name of a root folder: the device label, the server, or
     /// "Local Disk".
     fn root_name(&self, uri: &str, parts: LocationParts) -> String {
+        if let Some(name) = self.computer_name(uri) {
+            return name.to_owned();
+        }
         if parts.is_device() {
             self.device_name(uri).to_string()
         } else if parts.is_cloud() {
@@ -244,7 +268,17 @@ impl LocationContext {
         let parts = location_parts(uri)?;
         let root = self.root_crumb(uri, &parts)?;
         let mut crumb_uri = strip_one_trailing_slash(&root.uri).to_string();
-        let mut crumbs = vec![root];
+        // Windows starts a computer's address with Network: "Network >
+        // PC > share".
+        let mut crumbs = if parts.kind() == LocationKind::Smb {
+            vec![Crumb::new(
+                VirtualPlace::Network.title(),
+                VirtualPlace::Network.uri(),
+            )]
+        } else {
+            Vec::new()
+        };
+        crumbs.push(root);
         for component in parts.path.split('/').filter(|component| !component.is_empty()) {
             crumb_uri = format!("{crumb_uri}/{component}");
             let label = match cloud_name(&crumb_uri) {
@@ -261,9 +295,11 @@ impl LocationContext {
     fn root_crumb(&self, uri: &str, parts: &LocationParts) -> Option<Crumb> {
         match parts.kind() {
             LocationKind::Local => Some(Crumb::new("/", "file:///")),
-            LocationKind::Smb | LocationKind::Remote | LocationKind::Cloud => {
-                Some(Crumb::new(&parts.authority, root_uri(parts)))
+            LocationKind::Smb => {
+                let name = self.computer_name(uri).unwrap_or(&parts.authority);
+                Some(Crumb::new(name, root_uri(parts)))
             }
+            LocationKind::Remote | LocationKind::Cloud => Some(Crumb::new(&parts.authority, root_uri(parts))),
             LocationKind::Device => Some(Crumb::new(self.device_name(uri), root_uri(parts))),
             LocationKind::Other if parts.scheme == "admin" => Some(Crumb::new("Administrator", "admin:///")),
             LocationKind::Other => None,

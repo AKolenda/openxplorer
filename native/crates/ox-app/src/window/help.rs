@@ -25,6 +25,9 @@ const MANUAL: &str = include_str!("../../resources/manual.md");
 /// The label of the button that opens the issue tracker.
 pub(super) const REPORT_ISSUE: &str = crate::i18n::message_id("Report an issue");
 
+/// The topic that says how to turn network discovery on.
+const DISCOVERY_TOPIC: &str = crate::i18n::message_id("Turning on network discovery");
+
 /// The topic the manual opens at when nothing more specific applies.
 const FIRST_TOPIC: &str = crate::i18n::message_id("Getting started");
 
@@ -66,7 +69,12 @@ impl BrowserWindow {
 
     /// Opens the manual at the topic of what the window shows.
     pub(super) fn show_help(&self) {
-        let (dialog, report_button) = self.help_dialog(self.help_topic());
+        self.show_help_at(self.help_topic());
+    }
+
+    /// Opens the manual at `topic`.
+    fn show_help_at(&self, topic: &str) {
+        let (dialog, report_button) = self.help_dialog(topic);
         dialog.open();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
@@ -79,6 +87,12 @@ impl BrowserWindow {
                 }
             }
         ));
+    }
+
+    /// Opens the manual at how to turn network discovery on, from
+    /// Network's info bar.
+    pub(super) fn show_network_discovery_help(&self) {
+        self.show_help_at(DISCOVERY_TOPIC);
     }
 
     /// The Help dialog, showing `topic`, and its "Report an issue"

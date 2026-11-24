@@ -646,17 +646,22 @@ paned.pane-split > separator:hover { background-color: @ox_accent; }
 /* Windows' info bar above the items, as Network shows it while discovery
    cannot run (window/network_info_bar.rs): the caution tokens of C35,
    the whole width of the folder panes, the text at the start. */
-window.ox button.info-bar {
-  min-height: 0;
-  padding: 7px 14px;
-  border: none;
+window.ox box.info-bar {
   border-bottom: 1px solid @ox_caution_border;
-  border-radius: 0;
   background-color: @ox_caution_bg;
+  color: @ox_caution_text;
+}
+window.ox box.info-bar button {
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
   color: @ox_caution_text;
   box-shadow: none;
 }
-window.ox button.info-bar:hover { background-color: mix(@ox_caution_bg, @ox_caution_border, .35); }
+window.ox box.info-bar button.info-bar-text { padding: 7px 14px; }
+window.ox box.info-bar button.info-bar-close { min-width: 0; padding: 4px 10px; border-radius: 4px; margin: 2px 6px; }
+window.ox box.info-bar button:hover { background-color: mix(@ox_caution_bg, @ox_caution_border, .35); }
 
 /* ---- Gallery (HOME-026 to HOME-028) ---- */
 /* Justified rows of photos 4px apart (src/folder_view/gallery_view.rs),

@@ -124,6 +124,7 @@ mod navigation;
 mod navigation_buttons;
 mod network_actions;
 mod network_info_bar;
+mod network_pane;
 mod network_session;
 mod network_sign_out;
 mod notice_card;

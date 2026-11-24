@@ -925,7 +925,7 @@ fn every_control_the_window_shows_is_a_tab_stop_that_draws_its_focus() {
     test.search_for("notes");
     wait_until("the search strip", || test.window.search_strip().is_mapped());
     // Network's info bar shows while Network found no computers.
-    test.window.network_info_bar().set_visible(true);
+    test.window.network_info_bar().bar.set_visible(true);
     test.window.present();
     wait_for_frames(&test.window, 3);
 

@@ -996,6 +996,77 @@ pub(crate) fn compact_background_menu(undo_label: &str, submenus: BackgroundSubm
     ]
 }
 
+/// Network's own menu on blank space, as Windows 11 shows it there: View,
+/// Sort by and Group by, then "Show more options". Network is not a folder:
+/// nothing can be pasted, made or undone there.
+pub(crate) fn network_background_menu(submenus: BackgroundSubmenus) -> Vec<MenuEntry> {
+    let [view, sort, group, _] = background_submenu_items(submenus);
+    vec![view, sort, group, MenuEntry::Divider, show_more_options_item()]
+}
+
+/// The menu of a computer Network lists (`uri`, `\\PC`), as Windows 11
+/// shows it: Open, Open in new tab, Open in new window, Pin to Quick
+/// access and Create shortcut, which puts the shortcut on the Desktop, as
+/// Windows offers when it cannot make one in Network. Windows' Connect
+/// with Remote Desktop Connection and Pin to Start have no twin here, and
+/// a computer has no Properties (Windows lists none) and no file
+/// commands. Several computers open in new tabs.
+pub(crate) fn computer_menu(uri: &str, is_single: bool) -> Vec<MenuEntry> {
+    let new_tab = if is_single {
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Open in new tab"),
+            Icon::Add,
+            WindowAction::OpenTab,
+            uri,
+        )
+    } else {
+        item(
+            ox_core::i18n::gettext_static("Open in new tabs"),
+            Icon::Add,
+            WindowAction::OpenSelectionInTabs,
+        )
+    };
+    let mut entries: Vec<MenuEntry> = vec![
+        item(
+            ox_core::i18n::gettext_static("Open"),
+            Icon::Folder,
+            WindowAction::Open,
+        )
+        .with_shortcut("Enter")
+        .into(),
+        new_tab.into(),
+    ];
+    if is_single {
+        entries.push(
+            MenuItem::with_text_target(
+                &ox_core::i18n::gettext("Open in new window"),
+                Icon::WindowNew,
+                WindowAction::OpenWindow,
+                uri,
+            )
+            .into(),
+        );
+    }
+    entries.push(
+        item(
+            ox_core::i18n::gettext_static("Pin to Quick access"),
+            Icon::Pin,
+            WindowAction::PinSelected,
+        )
+        .into(),
+    );
+    entries.push(MenuEntry::Divider);
+    entries.push(
+        item(
+            ox_core::i18n::gettext_static("Create shortcut"),
+            Icon::Link,
+            WindowAction::SendToDesktop,
+        )
+        .into(),
+    );
+    entries
+}
+
 /// The menu of a file or folder, in `style` (`entryMenu`).
 pub(crate) fn item_menu(facts: &ItemFacts, style: MenuStyle) -> ContextMenu {
     match style {

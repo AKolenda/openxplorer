@@ -120,7 +120,8 @@ impl BrowserWindow {
         }
     }
 
-    /// "Disconnect this mount?" with the location, then Disconnect.
+    /// "Disconnect this mount?" with the location, then Disconnect, which
+    /// Enter presses, as Windows' Disconnect goes ahead.
     fn confirm_disconnect(&self, uri: &str) {
         let address = self.imp().locations.borrow().display_location(uri);
         let message = format!("{address}\n\n{DISCONNECT_NOTE}");
@@ -136,7 +137,7 @@ impl BrowserWindow {
                 window.run_removal(&uri, Removal::Disconnect);
             }
         ));
-        dialog.open();
+        dialog.open_on_primary_button();
     }
 
     /// Stops reading the tabs on the drive, then removes it.
@@ -181,7 +182,10 @@ impl BrowserWindow {
         let was_inside = self.current_uri().is_some_and(|current| is_inside(&current, uri));
         self.mark_stale_inside(uri);
         match removal {
-            Removal::Disconnect => self.navigate_or_report(Page::Network.uri()),
+            Removal::Disconnect => {
+                self.forget_mapped_drives_inside(uri);
+                self.navigate_or_report(Page::Network.uri());
+            }
             Removal::Eject | Removal::SafelyRemove if was_inside => {
                 self.navigate_or_report(Page::ThisPc.uri());
             }
@@ -190,6 +194,26 @@ impl BrowserWindow {
         if let Some(message) = removal.done_message(label) {
             self.show_message(&message);
         }
+    }
+
+    /// Disconnect of a mapped drive ends its mapping, as in Windows: the
+    /// shares mapped to a letter at or inside the disconnected `root`, for
+    /// this session or saved, are forgotten, so no row of it is left in
+    /// the navigation pane or This PC (B1). A saved network location
+    /// without a letter stays, as Windows keeps network locations.
+    fn forget_mapped_drives_inside(&self, root: &str) {
+        let mapped: Vec<String> = self
+            .network_locations()
+            .into_iter()
+            .filter(|location| location.is_saved)
+            .filter(|location| crate::dialogs::drive_letter(&location.label).is_some())
+            .filter(|location| ox_core::network::is_at_or_inside(&location.uri, root))
+            .map(|location| location.uri)
+            .collect();
+        for uri in mapped {
+            self.forget_saved_location(&uri);
+        }
+        self.context().forget_mapped_shares_inside(root);
     }
 
     /// The name of the drive that holds `uri`, for the message after it

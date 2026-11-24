@@ -223,6 +223,10 @@ impl SignInDialog {
         imp.pages.set_visible_child_name("question");
         imp.question_label.set_text(&question.message);
         imp.actions.set_visible(false);
+        // A question asked again replaces the answers shown.
+        while let Some(old) = imp.choices.first_child() {
+            imp.choices.remove(&old);
+        }
         for (index, label) in question.choices.iter().enumerate() {
             let choice = gtk::Button::builder()
                 .label(label)
@@ -247,14 +251,9 @@ impl SignInDialog {
         self.append_choice(&cancel);
     }
 
-    /// Adds `button` to the question's answers. Only the button takes
-    /// keyboard focus, not the flow box's cell around it.
+    /// Adds `button` to the question's answers.
     fn append_choice(&self, button: &gtk::Button) {
-        let choices = &self.imp().choices;
-        choices.append(button);
-        if let Some(cell) = button.parent() {
-            cell.set_focusable(false);
-        }
+        self.imp().choices.append(button);
         if GtkWindowExt::focus(self).is_none() {
             GtkWindowExt::set_focus(self, Some(button));
         }

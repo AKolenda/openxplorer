@@ -2,8 +2,10 @@
 //! The sidebar's rows as data, in the order of Windows 11's navigation
 //! pane: Home and Gallery; a divider; the pinned folders (the standard folders and
 //! the user's pins, each with the pin glyph); a divider; This PC with
-//! Local Disk and the drives and devices, then Network with the merged
-//! network locations, in one group as Windows 11 lists them. The places
+//! Local Disk, the drives and devices and the saved and mapped network
+//! locations, then Network with the computers on the network, each
+//! expanding to its shares ([`network_tree`](super::network_tree)), in
+//! one group as Windows 11 lists them. The places
 //! Windows has no twin of follow in a last group of their own after
 //! Network: the searches saved to the sidebar (SRCH-038), then Recent
 //! files, Recent locations and the Recycle Bin
@@ -28,6 +30,8 @@ use crate::i18n::message_id;
 use crate::icons::{Art, Icon, Storage, Tint};
 use crate::locations::Page;
 use crate::places::Places;
+
+use super::network_tree::{is_this_pc_location, ComputerChild, ComputerNode};
 use crate::volumes::{MountControls, VolumeKind, VolumeRow, VolumeState};
 use crate::window::place_menus::PlaceMenu;
 
@@ -92,6 +96,27 @@ pub(in crate::window) enum RowLevel {
     Group,
     /// A row inside a group, indented.
     Child,
+    /// A row inside a row of a group, such as a share inside a computer
+    /// under Network, indented twice.
+    Grandchild,
+}
+
+impl RowLevel {
+    /// Whether the row is inside a group, so collapsing the group hides
+    /// it.
+    pub(in crate::window) fn is_inside(self) -> bool {
+        matches!(self, RowLevel::Child | RowLevel::Grandchild)
+    }
+}
+
+/// The chevron of a row inside a group that expands on its own, such as
+/// a computer under Network, which expands to its shares.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::window) struct RowExpander {
+    /// What the chevron toggles: the computer's location.
+    pub uri: String,
+    /// Whether the rows inside it show.
+    pub expanded: bool,
 }
 
 /// What activating a row does.
@@ -130,6 +155,8 @@ pub(in crate::window) struct SidebarEntry {
     pub menu: Option<PlaceMenu>,
     /// The eject button of a drive that can be removed.
     pub eject: Option<EjectButton>,
+    /// The chevron of a row that expands on its own.
+    pub expander: Option<RowExpander>,
 }
 
 /// The eject button at the end of a removable drive's row, as GNOME's
@@ -174,6 +201,7 @@ pub(in crate::window) fn place_entry(place: &Place, locations: &LocationContext)
         pinned: true,
         menu: None,
         eject: None,
+        expander: None,
     }
 }
 
@@ -188,6 +216,7 @@ fn saved_search_entry(search: &SavedSearch, locations: &LocationContext) -> Side
         pinned: false,
         menu: None,
         eject: None,
+        expander: None,
     }
 }
 
@@ -213,6 +242,7 @@ fn drive_entry(row: &VolumeRow, locations: &LocationContext) -> SidebarEntry {
         pinned: false,
         menu: Some(drive_menu(row)),
         eject: drive_eject_button(row),
+        expander: None,
     }
 }
 
@@ -247,10 +277,12 @@ fn network_state(location: &NetworkLocation) -> &'static str {
     }
 }
 
+/// The row of a saved or mapped network location, under This PC as
+/// Windows lists mapped drives.
 fn network_entry(location: &NetworkLocation, locations: &LocationContext) -> SidebarEntry {
     let address = locations.display_location(&location.uri);
     SidebarEntry {
-        section: Section::Network,
+        section: Section::ThisPc,
         level: RowLevel::Child,
         label: location.label.clone(),
         icon: Art::for_network_row(location),
@@ -259,6 +291,56 @@ fn network_entry(location: &NetworkLocation, locations: &LocationContext) -> Sid
         pinned: false,
         menu: Some(PlaceMenu::Network(location.clone())),
         eject: None,
+        expander: None,
+    }
+}
+
+/// The row of a computer under Network, with the chevron that expands it
+/// to its shares, as Windows 11's navigation pane shows one.
+fn computer_entry(node: &ComputerNode, locations: &LocationContext) -> SidebarEntry {
+    SidebarEntry {
+        section: Section::Network,
+        level: RowLevel::Child,
+        label: node.name.clone(),
+        icon: Art::COMPUTER,
+        target: RowTarget::Location(node.uri.clone()),
+        tooltip: locations.display_location(&node.uri),
+        pinned: false,
+        // The menu of a server, which every network place shares.
+        menu: Some(PlaceMenu::Network(NetworkLocation {
+            uri: node.uri.clone(),
+            label: node.name.clone(),
+            is_saved: false,
+            is_connected: false,
+            kind: ox_core::places::NetworkKind::Server,
+        })),
+        eject: None,
+        expander: Some(RowExpander {
+            uri: node.uri.clone(),
+            expanded: node.expanded,
+        }),
+    }
+}
+
+/// A row inside an expanded computer: a share, a service, or a location
+/// mounted or browsed on it, which keeps its network location's menu.
+fn computer_child_entry(child: &ComputerChild, locations: &LocationContext) -> SidebarEntry {
+    let address = locations.display_location(&child.uri);
+    let tooltip = match &child.location {
+        Some(location) => format!("{address} · {}", network_state(location)),
+        None => address,
+    };
+    SidebarEntry {
+        section: Section::Network,
+        level: RowLevel::Grandchild,
+        label: child.label.clone(),
+        icon: child.icon,
+        target: RowTarget::Location(child.uri.clone()),
+        tooltip,
+        pinned: false,
+        menu: child.location.clone().map(PlaceMenu::Network),
+        eject: None,
+        expander: None,
     }
 }
 
@@ -282,6 +364,7 @@ fn fixed_entry(section: Section, label: &'static str, icon: Art, uri: &str) -> S
         pinned: false,
         menu: None,
         eject: None,
+        expander: None,
     }
 }
 
@@ -297,6 +380,7 @@ fn local_disk_entry(locations: &LocationContext) -> SidebarEntry {
         pinned: false,
         menu: Some(local_disk_menu()),
         eject: None,
+        expander: None,
     }
 }
 
@@ -323,6 +407,7 @@ fn pin_drop_tail() -> SidebarEntry {
         pinned: false,
         menu: None,
         eject: None,
+        expander: None,
     }
 }
 
@@ -333,6 +418,7 @@ fn pin_drop_tail() -> SidebarEntry {
 /// (HOME-012).
 pub(in crate::window) fn sidebar_entries(
     places: &Places,
+    computers: &[ComputerNode],
     searches: &[SavedSearch],
     locations: &LocationContext,
     home_page: bool,
@@ -366,7 +452,18 @@ pub(in crate::window) fn sidebar_entries(
         .iter()
         .map(|place| place_entry(place, locations));
     let drives = places.drives.iter().map(|row| drive_entry(row, locations));
-    let network_rows = places.network.iter().map(|row| network_entry(row, locations));
+    let network_locations = places
+        .network
+        .iter()
+        .filter(|location| is_this_pc_location(location))
+        .map(|row| network_entry(row, locations));
+    let network_rows = computers.iter().flat_map(|node| {
+        std::iter::once(computer_entry(node, locations)).chain(
+            node.children
+                .iter()
+                .map(|child| computer_child_entry(child, locations)),
+        )
+    });
     let saved = searches
         .iter()
         .map(|search| saved_search_entry(search, locations));
@@ -378,6 +475,7 @@ pub(in crate::window) fn sidebar_entries(
     entries.push(this_pc);
     entries.push(local_disk_entry(locations));
     entries.extend(drives);
+    entries.extend(network_locations);
     entries.push(network);
     entries.extend(network_rows);
     entries.extend(saved);
@@ -457,7 +555,7 @@ mod tests {
             home: Some(PathBuf::from("/home/demo")),
             ..LocationContext::default()
         };
-        sidebar_entries(&places, &[], &locations, false)
+        sidebar_entries(&places, &[], &[], &locations, false)
     }
 
     fn labels(entries: &[SidebarEntry]) -> Vec<&str> {
@@ -466,7 +564,7 @@ mod tests {
 
     /// parity: SIDE-001, SIDE-019
     #[test]
-    fn rows_follow_windows_11_order_and_smb_mounts_appear_once_under_network() {
+    fn rows_follow_windows_11_order_and_saved_shares_appear_once_under_this_pc() {
         let settings = SettingsData {
             pins: vec![Bookmark {
                 uri: "file:///srv/work".into(),
@@ -494,13 +592,18 @@ mod tests {
                 "Local Disk",
                 "USB",
                 "Pixel 7",
-                "Network",
-                "Media"
+                "Media",
+                "Network"
             ]
         );
-        let media = entries.last().expect("network row");
+        // A saved share is a network location under This PC, as Windows
+        // lists mapped drives and network locations (SIDE-035).
+        let media = entries
+            .iter()
+            .find(|entry| entry.label == "Media")
+            .expect("the saved share");
         assert_eq!(media.tooltip, "\\\\nas\\media · Connected");
-        assert_eq!(media.section, Section::Network);
+        assert_eq!(media.section, Section::ThisPc);
     }
 
     /// Windows 11's navigation pane: Home, a divider, the pins, a divider,
@@ -536,7 +639,7 @@ mod tests {
             search_in: ox_core::search::SearchIn::default(),
             all_cached_folders: false,
         };
-        let mut entries = sidebar_entries(&places, &[search], &locations, false);
+        let mut entries = sidebar_entries(&places, &[], &[search], &locations, false);
         entries.extend(recent_and_bin_entries(0));
         assert_eq!(
             labels(&entries),
@@ -701,7 +804,10 @@ mod tests {
             ..SettingsData::default()
         };
         let entries = entries_for(&settings, &[]);
-        let share = entries.last().expect("the saved share's row");
+        let share = entries
+            .iter()
+            .find(|entry| entry.label == "Studio NAS (Z:)")
+            .expect("the saved share's row");
         let disconnected_drive = Art::for_network_location(
             ox_core::places::NetworkKind::Share,
             "Studio NAS (Z:)",
@@ -776,7 +882,7 @@ mod tests {
             visited_network: &[],
         });
 
-        let entries = sidebar_entries(&places, &[], &LocationContext::default(), false);
+        let entries = sidebar_entries(&places, &[], &[], &LocationContext::default(), false);
 
         let documents = entries.iter().find(|entry| entry.label == "Documents");
         let documents = documents.expect("Documents is in Quick access");

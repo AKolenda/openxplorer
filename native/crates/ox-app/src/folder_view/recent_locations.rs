@@ -37,11 +37,26 @@ pub(crate) fn recent_folder_uris() -> Vec<String> {
         })
         .collect();
     folders.sort_by_key(|info| std::cmp::Reverse(info.visited().to_unix()));
-    folders
-        .iter()
-        .map(|info| info.uri().to_string())
+    newest_of_each(folders.iter().map(|info| info.uri().to_string()))
         .take(MAX_RECENT_LOCATIONS)
         .collect()
+}
+
+/// `uris`, newest first, each folder once: two spellings of one SMB folder
+/// that differ only in case (`smb://nas/Private` and `smb://nas/private`,
+/// as a share typed and the share mounted spell it) are one folder, as SMB
+/// names ignore case, and its newest visit stands for it.
+fn newest_of_each(uris: impl Iterator<Item = String>) -> impl Iterator<Item = String> {
+    let mut seen = Vec::new();
+    uris.filter(move |uri| {
+        let key = match ox_core::places::network_key(uri) {
+            Ok(key) if ox_core::location::is_smb_location(uri) => format!("{key:?}"),
+            _ => uri.clone(),
+        };
+        let is_new = !seen.contains(&key);
+        seen.push(key);
+        is_new
+    })
 }
 
 /// The entry of the folder at `uri`, if it can be read now.
@@ -88,5 +103,35 @@ pub(crate) fn clear_recent_locations() {
             // An item another program removed meanwhile is already gone.
             let _ = manager.remove_item(&info.uri());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Recent locations lists a share once however its case was spelled,
+    /// at its newest visit; local folders keep their case.
+    ///
+    /// parity: SIDE-026
+    #[test]
+    fn a_share_spelled_in_two_cases_is_listed_once() {
+        let uris = [
+            "smb://harbornas.local/private",
+            "file:///home/ana/Plans",
+            "smb://harbornas.local/Private",
+            "file:///home/ana/plans",
+        ];
+
+        let listed: Vec<String> = newest_of_each(uris.iter().map(|uri| (*uri).to_owned())).collect();
+
+        assert_eq!(
+            listed,
+            [
+                "smb://harbornas.local/private",
+                "file:///home/ana/Plans",
+                "file:///home/ana/plans"
+            ]
+        );
     }
 }

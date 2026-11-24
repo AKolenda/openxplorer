@@ -8,6 +8,11 @@
 //! again from empty rows. A second "not mounted" is reported, never
 //! mounted again, and only listings come here: a write is never replayed
 //! after a mount or a sign-in.
+//!
+//! An SFTP server opened at its root (`sftp://host/`, as Network's
+//! service rows open it) is shown at the account's home folder once it is
+//! mounted, where `GVfs` says the mount starts (B6), rather than at the
+//! server's `/`.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -57,6 +62,12 @@ impl BrowserWindow {
         let mode = run.mode;
         let listing = loader::Listing::spawn(async move {
             let mounted = mounting.await;
+            let mut start = start;
+            if mounted.is_ok() {
+                if let Some(home) = remote_home(&start.uri).await {
+                    start.uri = home;
+                }
+            }
             if let Some(window) = window.upgrade() {
                 window.list_after_mount(tab, &start, mode, mounted);
             }
@@ -83,6 +94,16 @@ impl BrowserWindow {
             self.refuse_listing(id, mode, listing_error(error));
             return;
         }
+        // An SFTP server opens at the account's home: the tab is there now.
+        {
+            let mut session = self.imp().session.borrow_mut();
+            if let Some(tab) = session.tab_mut(id).filter(|tab| tab.uri() != start.uri) {
+                tab.history.replace_current(&start.uri);
+            }
+        }
+        if self.imp().session.borrow().is_active(id) {
+            self.render_navigation();
+        }
         // `retry_list` resets the rows a partial listing left.
         self.clear_rows(id);
         let listing = self.start_listing(id, start, LoadMode::Navigate, MountRetry::Used);
@@ -90,6 +111,47 @@ impl BrowserWindow {
             tab.listing = Some(listing);
         }
     }
+}
+
+/// `uri`, or for an SFTP server's root, the account's home once it is
+/// mounted ([`remote_home`]): where opening it from a row shows it.
+pub(in crate::window) async fn at_remote_home(uri: String) -> String {
+    remote_home(&uri).await.unwrap_or(uri)
+}
+
+/// How long finding where an SFTP mount starts may take.
+const HOME_LOOKUP: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Where an SFTP server opened at its root `uri` is shown once mounted:
+/// the folder `GVfs` says its mount starts at, the account's home, when
+/// that is not the root itself; `None` for another location, or when the
+/// mount cannot say within five seconds. GIO is asked on a worker thread,
+/// so the window never waits for it.
+async fn remote_home(uri: &str) -> Option<String> {
+    let is_root = |uri: &str| {
+        ox_core::location::split_location(uri)
+            .is_ok_and(|parts| parts.scheme == "sftp" && parts.path.trim_matches('/').is_empty())
+    };
+    if !is_root(uri) {
+        return None;
+    }
+    let server = uri.to_owned();
+    let lookup = gtk::gio::spawn_blocking(move || {
+        use gtk::gio::prelude::{FileExt, MountExt};
+        let mount = gtk::gio::File::for_uri(&server)
+            .find_enclosing_mount(gtk::gio::Cancellable::NONE)
+            .ok()?;
+        Some(mount.default_location().uri().to_string())
+    });
+    let home = gtk::glib::future_with_timeout(HOME_LOOKUP, lookup)
+        .await
+        .ok()?
+        .ok()??;
+    // The home's path on the server as it was asked for, without the
+    // account the mount's own address names (`sftp://ana@host/`).
+    let path = ox_core::location::split_location(&home).ok()?.path;
+    let home = ox_core::location::normalise(&format!("{}{path}", uri.trim_end_matches('/'))).ok()?;
+    (!is_root(&home)).then_some(home)
 }
 
 #[cfg(test)]

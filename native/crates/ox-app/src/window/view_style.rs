@@ -201,14 +201,16 @@ impl BrowserWindow {
             self.show_gallery_style(self.folder_pane(), store);
             return;
         }
-        // Gallery's own style never stays on a folder (HOME-019).
+        // Gallery's own style never stays on a folder (HOME-019), and
+        // neither does Network's.
         let from_gallery = super::gallery::shows_gallery_style(self.folder_pane());
+        let own_style = from_gallery || is_network(uri) || self.folder_pane().is_styled_for_network();
         self.folder_pane().set_gallery(false);
         let preferences = self.context().settings_data().preferences;
         let downloads = self.downloads_location();
         let style = preferences.view_in(uri, downloads.as_deref());
         self.folder_pane().set_styled_for(store, uri);
-        if preferences.per_folder_views || from_gallery {
+        if preferences.per_folder_views || own_style {
             self.apply_style(&style);
             return;
         }
@@ -235,12 +237,13 @@ impl BrowserWindow {
             return;
         }
         let from_gallery = super::gallery::shows_gallery_style(pane);
+        let own_style = from_gallery || is_network(uri) || pane.is_styled_for_network();
         pane.set_gallery(false);
         let preferences = self.context().settings_data().preferences;
         let downloads = self.downloads_location();
         let style = preferences.view_in(uri, downloads.as_deref());
         pane.set_styled_for(store, uri);
-        if preferences.per_folder_views || from_gallery {
+        if preferences.per_folder_views || own_style {
             self.apply_style_to(pane, &style);
             return;
         }
@@ -286,6 +289,11 @@ impl BrowserWindow {
             .shown_panes()
             .into_iter()
             .find_map(|(side, uri)| (self.pane_on(side) == pane).then_some(uri));
+        // Network keeps its own style, whether or not each folder does.
+        if let Some(uri) = shown_uri.as_deref().filter(|uri| is_network(uri)) {
+            self.save_style(uri, style, ViewScope::Folder);
+            return;
+        }
         if preferences.per_folder_views {
             if let Some(uri) = shown_uri.filter(|uri| may_remember(uri)) {
                 self.save_style(&uri, style, ViewScope::Folder);
@@ -413,6 +421,12 @@ fn show_pane_sort(pane: &FolderPane, state: SortState) {
                 .sort_by_column(None, state.direction.to_sort_type());
         }
     }
+}
+
+/// Whether `uri` is Network, which keeps a style of its own: Tiles grouped
+/// by type until the user chooses another there.
+fn is_network(uri: &str) -> bool {
+    ox_core::location::same_location(uri, ox_core::location::NETWORK_URI)
 }
 
 #[cfg(test)]
