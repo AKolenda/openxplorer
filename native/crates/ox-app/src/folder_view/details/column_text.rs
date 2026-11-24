@@ -33,17 +33,21 @@ thread_local! {
 /// nothing when its size is unknown (app.js wrote `prettyBytes`).
 pub(crate) fn cell_text(column: SortColumn, item: &FileItem, dates: DateStyle) -> String {
     let entry = item.entry();
+    // "Today at" counts from the clock the date groups count from, so the
+    // rows and their headings follow midnight together.
+    let now = crate::folder_view::groups::local_now();
+    let date_text = |time: Option<u64>| format::column_date_text_at(time, dates, now.as_ref());
     match column {
         SortColumn::Name => entry.name.clone(),
-        SortColumn::Modified => format::column_date_text(entry.modified, dates),
+        SortColumn::Modified => date_text(entry.modified),
         SortColumn::Created => entry
             .meta
             .created
-            .map(|created| format::column_date_text(Some(created), dates))
+            .map(|created| date_text(Some(created)))
             .unwrap_or_default(),
         SortColumn::FolderPath => item.folder_path().text.clone(),
         SortColumn::OriginalLocation => item.original_location().text.clone(),
-        SortColumn::Deleted => format::column_date_text(entry.trash_deletion_date, dates),
+        SortColumn::Deleted => date_text(entry.trash_deletion_date),
         SortColumn::Type => entry.type_label.clone(),
         // A shortcut's own size, a folder's shortcut too, as Windows shows
         // a `.lnk`'s (VIEW-074).

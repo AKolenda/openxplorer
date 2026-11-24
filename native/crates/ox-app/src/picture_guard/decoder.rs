@@ -35,7 +35,7 @@ use gtk::gdk_pixbuf::{Colorspace, Pixbuf};
 use gtk::gio;
 use gtk::glib;
 use gtk::prelude::*;
-use rustix::process::{kill_process_group, Pid, Signal};
+use rustix::process::{kill_process_group, waitid, Pid, Signal, WaitId, WaitIdOptions};
 
 use super::{Decoded, Limits, Refusal, READ_CHUNK};
 
@@ -344,21 +344,6 @@ impl Pool {
         });
     }
 
-    /// An idle decoder that still runs, if any. One may have ended while
-    /// it waited: bubblewrap's `--die-with-parent` (the sandbox's) ends
-    /// it when the thread that started it exits, as the worker threads of
-    /// `GLib`'s pool do once idle, not when the app does. Handed a picture,
-    /// it would give no answer and the picture would not be shown.
-    fn idle_alive(&self) -> Option<Decoder> {
-        loop {
-            let mut decoder = self.idle.lock().unwrap_or_else(PoisonError::into_inner).pop()?;
-            if matches!(decoder.child.0.try_wait(), Ok(None)) {
-                return Some(decoder);
-            }
-            // Dropping it reaps it.
-        }
-    }
-
     /// Decodes with an idle decoder, or a new one; a decoder that served
     /// well goes back to the pool, any other is stopped.
     fn decode(
@@ -369,8 +354,7 @@ impl Pool {
         limits: Limits,
         cancellable: Option<&gio::Cancellable>,
     ) -> Result<Decoded, Refusal> {
-        let idle = self.idle_alive();
-        let decoder = match idle {
+        let decoder = match self.take_idle() {
             Some(decoder) => decoder,
             None => Decoder::start(&self.words)?,
         };
@@ -382,6 +366,20 @@ impl Pool {
             }
         }
         result
+    }
+
+    /// An idle decoder still running, if one is. One that ended while it
+    /// waited (killed, or out of processor time) is dropped, which reaps
+    /// it ([`stop`]), so it neither lingers as a zombie nor refuses the
+    /// next picture as damaged.
+    fn take_idle(&self) -> Option<Decoder> {
+        let mut idle = self.idle.lock().unwrap_or_else(PoisonError::into_inner);
+        while let Some(decoder) = idle.pop() {
+            if decoder.is_running() {
+                return Some(decoder);
+            }
+        }
+        None
     }
 }
 
@@ -416,6 +414,17 @@ struct Decoder {
 }
 
 impl Decoder {
+    /// Whether the decoder's process has not ended. It is not reaped here:
+    /// until [`stop`] reaps it its number stays its own, so the kill there
+    /// reaches no other process that took the number over.
+    fn is_running(&self) -> bool {
+        let Some(pid) = i32::try_from(self.child.0.id()).ok().and_then(Pid::from_raw) else {
+            return false;
+        };
+        let ended = WaitIdOptions::EXITED | WaitIdOptions::NOHANG | WaitIdOptions::NOWAIT;
+        matches!(waitid(WaitId::Pid(pid), ended), Ok(None))
+    }
+
     /// Starts a decoder with `words`.
     fn start(words: &[OsString]) -> Result<Self, Refusal> {
         let (program, before) = words.split_first().ok_or(Refusal::Unreadable)?;
@@ -437,7 +446,7 @@ impl Decoder {
         } else {
             command.arg(DECODER_FLAG);
         }
-        let mut child = Process(command.spawn().map_err(|_| Refusal::Unreadable)?);
+        let mut child = Process(spawn_lasting(command).map_err(|_| Refusal::Unreadable)?);
         let (Some(stdin), Some(stdout)) = (child.0.stdin.take(), child.0.stdout.take()) else {
             return Err(Refusal::Unreadable);
         };
@@ -692,6 +701,46 @@ fn answer_limit(width: i32, height: i32, limits: Limits) -> u64 {
         .saturating_mul(4)
         .saturating_add(side(height).saturating_mul(8))
         .saturating_add(1024 * 1024)
+}
+
+/// A start request for the thread that starts decoders: the command, and
+/// where to send the process it started.
+type SpawnRequest = (Command, mpsc::Sender<std::io::Result<Child>>);
+
+/// Starts `command` on a thread that lasts as long as the app, rather than
+/// on the caller's.
+///
+/// bubblewrap's `--die-with-parent` (`PR_SET_PDEATHSIG`) kills the sandbox
+/// when the thread that started it ends, not when the app does: the
+/// kernel counts that thread as its parent. The pool's decoders are started
+/// from GIO's worker threads, which end once idle for a while, so an idle
+/// decoder died with its thread and lay in the pool unreaped until the next
+/// picture found it dead. Started here, a decoder ends with the app alone.
+fn spawn_lasting(mut command: Command) -> std::io::Result<Child> {
+    static SPAWNER: OnceLock<Option<mpsc::Sender<SpawnRequest>>> = OnceLock::new();
+    let spawner = SPAWNER.get_or_init(|| {
+        let (requests, received) = mpsc::channel::<SpawnRequest>();
+        thread::Builder::new()
+            .name("ox-picture-spawner".to_owned())
+            .spawn(move || {
+                for (mut command, reply) in received {
+                    let _ = reply.send(command.spawn());
+                }
+            })
+            .ok()
+            .map(|_| requests)
+    });
+    let Some(spawner) = spawner else {
+        // No thread could be started: the caller's thread is all there is.
+        return command.spawn();
+    };
+    let (reply, started) = mpsc::channel();
+    if let Err(mpsc::SendError((mut command, _))) = spawner.send((command, reply)) {
+        return command.spawn();
+    }
+    started
+        .recv()
+        .unwrap_or_else(|_| Err(std::io::Error::other("the decoder spawner ended")))
 }
 
 /// Kills the process group `child` leads, and reaps the child.

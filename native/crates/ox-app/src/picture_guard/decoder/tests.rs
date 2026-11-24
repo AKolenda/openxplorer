@@ -31,6 +31,10 @@ fn picture_decoder_child() {
             std::thread::sleep(Duration::from_secs(1));
         }
     }
+    // As in bubblewrap's sandbox (`--die-with-parent`), the decoder is
+    // killed when the thread that started it ends: the kernel counts that
+    // thread as its parent, not the app.
+    let _ = rustix::process::set_parent_process_death_signal(Some(rustix::process::Signal::KILL));
     let ok = serve_standard_input();
     std::process::exit(i32::from(!ok));
 }
@@ -420,4 +424,82 @@ fn a_decoder_ends_after_a_vector_picture_and_the_next_picture_is_decoded() {
     assert_eq!(decode_png().expect("decoded after it").pixbuf.width(), 60);
     let second = pid().expect("a new decoder");
     assert_ne!(first, second);
+}
+/// Whether the process `pid` has ended, reaped or not.
+fn has_ended(pid: u32) -> bool {
+    let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
+        return true;
+    };
+    stat.rsplit(')')
+        .next()
+        .and_then(|rest| rest.split_whitespace().next())
+        == Some("Z")
+}
+
+/// A decoder kept idle in the pool serves the next picture although the
+/// thread that started it has ended, as GIO's worker threads do once idle
+/// a while: bubblewrap's `--die-with-parent` ends a process with the
+/// thread that started it, which left the app's idle decoders dead and
+/// unreaped overnight.
+#[test]
+fn a_pooled_decoder_outlives_the_thread_that_started_it() {
+    let folder = tempfile::tempdir().expect("a temporary folder");
+    let path = saved_png(folder.path(), "Harbor.png", 120, 80);
+    let pool = Pool::new(child_words());
+    // The width alone comes back from the worker: a picture stays on it.
+    let decode = || {
+        let file = std::fs::File::open(&path).expect("opened");
+        pool.decode(Source::Reader(Box::new(file)), 60, 60, Limits::DISPLAY, None)
+            .map(|decoded| decoded.pixbuf.width())
+    };
+    let width = std::thread::scope(|scope| scope.spawn(decode).join().expect("the worker"));
+    assert_eq!(width, Ok(60), "decoded on a worker");
+    let pid = || {
+        let idle = pool.idle.lock().expect("the pool");
+        idle.first().map(|decoder| decoder.child.0.id())
+    };
+    let first = pid().expect("an idle decoder");
+    // The worker has ended; a decoder that ends with it does so at once.
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(
+        !has_ended(first),
+        "the idle decoder ended with the worker that started it"
+    );
+    let again = std::thread::scope(|scope| scope.spawn(decode).join().expect("another worker"));
+    assert_eq!(again, Ok(60), "decoded on another worker");
+    assert_eq!(pid(), Some(first), "the same decoder served again");
+}
+
+/// A decoder that died while idle (killed, or out of processor time) is
+/// reaped and replaced when the next picture comes, and that picture is
+/// decoded instead of refused as damaged.
+#[test]
+fn a_decoder_that_died_while_idle_is_replaced_not_refused() {
+    let folder = tempfile::tempdir().expect("a temporary folder");
+    let path = saved_png(folder.path(), "Harbor.png", 120, 80);
+    let pool = Pool::new(child_words());
+    let decode = || {
+        let file = std::fs::File::open(&path).expect("opened");
+        pool.decode(Source::Reader(Box::new(file)), 60, 60, Limits::DISPLAY, None)
+    };
+    assert_eq!(decode().expect("decoded").pixbuf.width(), 60);
+    let dead = {
+        let idle = pool.idle.lock().expect("the pool");
+        idle.first().expect("an idle decoder").child.0.id()
+    };
+    let group = Pid::from_raw(i32::try_from(dead).expect("a pid")).expect("a pid");
+    kill_process_group(group, Signal::KILL).expect("killed");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !has_ended(dead) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(has_ended(dead), "the decoder was killed");
+    assert_eq!(decode().expect("decoded, not refused").pixbuf.width(), 60);
+    let idle = pool.idle.lock().expect("the pool");
+    let kept = idle.first().expect("a new idle decoder").child.0.id();
+    assert_ne!(kept, dead);
+    assert!(
+        std::fs::metadata(format!("/proc/{dead}")).is_err(),
+        "the dead decoder was reaped"
+    );
 }

@@ -176,8 +176,9 @@ pub(crate) fn set_clock_for_tests(now: Option<glib::DateTime>) {
     TEST_NOW.with(|shown| shown.replace(now));
 }
 
-/// The local time the groups count from.
-fn local_now() -> Option<glib::DateTime> {
+/// The local time the groups count from, and the details view's relative
+/// dates ("Today at …") with them.
+pub(crate) fn local_now() -> Option<glib::DateTime> {
     #[cfg(test)]
     if let Some(now) = TEST_NOW.with(|shown| shown.borrow().clone()) {
         return Some(now);
