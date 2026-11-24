@@ -157,25 +157,6 @@ fn second_line_distance(test: &TestWindow, name: &str, second: &str) -> i32 {
     super::geometry::pixels(middle(test, &line) - middle(test, &name_label(test, name)))
 }
 
-/// How far below the bottom of the item `name`'s name the top of its next
-/// line (its type) starts.
-fn second_line_gap(test: &TestWindow, name: &str, second: &str) -> i32 {
-    let view = test.window.folder_pane().view_widget();
-    let first = name_label(test, name)
-        .compute_bounds(&view)
-        .expect("the name is laid out");
-    let cell = descendants::<FileCell>(&view)
-        .into_iter()
-        .find(|cell| cell.is_mapped() && cell.group_heading().is_none() && cell.name() == name)
-        .unwrap_or_else(|| panic!("an item shows {name}"));
-    let next = descendants::<gtk::Label>(&cell)
-        .into_iter()
-        .find(|label| label.is_mapped() && label.text() == second)
-        .and_then(|label| label.compute_bounds(&view))
-        .unwrap_or_else(|| panic!("{name} shows {second}"));
-    super::geometry::pixels(next.y() - (first.y() + first.height()))
-}
-
 /// The places' rows of the navigation pane top to bottom, each with its
 /// top and whether a separator stands above it.
 fn navigation_rows(test: &TestWindow) -> Vec<(i32, bool)> {
@@ -332,9 +313,10 @@ fn compact_view_spaces_tiles_and_content_as_windows() {
     assert!((30..=31).contains(&below), "heading to first item: {below}");
     let above = text_distance(&test, Line::Name("Agenda.ln1"), Line::Heading("Text Document"));
     assert!((49..=50).contains(&above), "last item to heading: {above}");
-    // 17.5 to 18 pixels as the display scale rounds the labels.
-    let second = second_line_distance(&test, "Notes 1", "Text Document");
-    assert!((17..=18).contains(&second), "a name to its type: {second}");
+    // The name stands on the row's first line, level with its date, as
+    // Windows 11's Content shows a file with nothing under its name.
+    let level = second_line_distance(&test, "Notes 1", "Date modified:");
+    assert!((-1..=1).contains(&level), "a name level with its date: {level}");
     assert_page_counts_rows(&test, FolderView::Content);
 }
 
@@ -382,11 +364,8 @@ fn the_usual_view_keeps_its_spacing() {
     assert!((28..=30).contains(&below), "heading to first item: {below}");
     let above = text_distance(&test, Line::Name("Agenda.ln1"), Line::Heading("Text Document"));
     assert!((53..=55).contains(&above), "last item to heading: {above}");
-    assert_eq!(
-        second_line_gap(&test, "Notes 1", "Text Document"),
-        1,
-        "a name to its type"
-    );
+    let level = second_line_distance(&test, "Notes 1", "Date modified:");
+    assert!((-1..=1).contains(&level), "a name level with its date: {level}");
 }
 
 /// In Compact view a removable drive's row, with its eject button, is as

@@ -594,27 +594,14 @@ fn closing_a_window_disconnects_it_from_the_shared_skin() {
     assert!(!shared.has_listeners(), "the last window left no handler");
 }
 
-/// Where the icon view's tiles are, relative to the view's scroller.
-fn tile_bounds(test: &TestWindow) -> (i32, Vec<Bounds>) {
-    let grid = test.window.folder_pane().icon_view().grid();
-    let scroll = grid.parent().expect("the icon view scrolls");
-    let cells = descendants::<FileCell>(grid);
-    let bounds = cells
-        .iter()
-        .filter_map(WidgetExt::parent)
-        .filter_map(|tile| tile.compute_bounds(&scroll))
-        .map(|rect| Bounds::from_rect(&rect))
-        .collect();
-    (scroll.width(), bounds)
-}
-
 /// A window that opened in the icon view used to keep one column, because
-/// GTK ignored the column count set while it allocated the view. Tiles sit
-/// where `renderRows` in app.js puts them: `floor(width / cell)` columns
-/// sharing the width less 20 pixels, the first 10 pixels in and 5 down,
-/// 4 pixels apart. Large icons' 96-pixel icons (Windows 11's, owner
-/// decision 2026-11-06) make the web's 135 × 130 cell 40 pixels wider and
-/// taller: 168 pixels tall on a 170-pixel pitch.
+/// GTK ignored the column count set while it allocated the view. Large
+/// icons stand as Windows 11's do (measured on its Large icons capture at
+/// 100%): columns 109 pixels apart, as many as fit, with the rest of the
+/// width free at the right; each item's box 101 pixels wide, 8 from the
+/// next; rows as tall as the icon, two lines of name and 2 pixels above
+/// and below (129); the name right under the icon, as Windows 11's
+/// (measured on its Large icons capture).
 ///
 /// parity: VIEW-005, LOOK-014
 #[gtk::test]
@@ -626,25 +613,36 @@ fn a_window_that_opens_in_the_icon_view_lays_tiles_out_as_render_rows() {
     test.window.show_view(FolderView::Icons(IconSize::LARGE));
     test.show(&fixture.uri());
     wait_for_frames(&test.window, 4);
-    let (width, tiles) = tile_bounds(&test);
-    let columns = width / 175;
+    let grid = test.window.folder_pane().icon_view().grid().clone();
+    let scroll = grid.parent().expect("the icon view scrolls");
+    let width = scroll.width();
+    let boxes: Vec<Bounds> = descendants::<FileCell>(&grid)
+        .iter()
+        .filter_map(|cell| cell.compute_bounds(&scroll))
+        .map(|rect| Bounds::from_rect(&rect))
+        .collect();
+    let columns = (width - 20) / 109;
     assert!(columns >= 2, "a {width}-pixel pane holds several columns");
-    let tile_width = (width - 20) / columns - 4;
-    assert_eq!(tiles[0], Bounds::new(10, 5, tile_width, 168), "the first tile");
-    let first_row: Vec<_> = tiles.iter().filter(|tile| tile.y == 5).collect();
+    let first = boxes
+        .iter()
+        .find(|tile| tile.x < 20 && tile.y < 20)
+        .expect("the first box");
+    assert_eq!((first.x, first.width), (12, 101), "the first box");
+    let first_row: Vec<_> = boxes.iter().filter(|tile| tile.y == first.y).collect();
     assert_eq!(first_row.len(), usize::try_from(columns).expect("a few columns"));
-    let next_row = tiles.iter().find(|tile| tile.y != 5).expect("a second row");
-    assert_eq!(next_row.y, 5 + 170, "rows are 170 pixels apart");
-    let first_cell = descendants::<FileCell>(test.window.folder_pane().icon_view().grid())
-        .into_iter()
-        .next()
-        .expect("a tile");
+    assert!(
+        first_row.iter().any(|tile| tile.x == first.x + 109),
+        "columns are 109 pixels apart"
+    );
+    let next_row = boxes.iter().find(|tile| tile.y != first.y).expect("a second row");
+    assert_eq!(next_row.y, first.y + 129, "rows are 129 pixels apart");
+    let first_cell = descendants::<FileCell>(&grid).into_iter().next().expect("a tile");
     let name = descendants::<gtk::Label>(&first_cell)
         .into_iter()
         .next()
         .expect("a name");
     let name_top = name.compute_bounds(&first_cell).map(|rect| pixels(rect.y()));
-    assert_eq!(name_top, Some(96 + 8), "the name starts 8 pixels under the icon");
+    assert_eq!(name_top, Some(96), "the name starts right under the icon");
 }
 
 /// Choosing a view while the keyboard is on no item but the first, and

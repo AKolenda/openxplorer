@@ -562,6 +562,8 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Use system window decorations",
             "Compact view",
             "Column header style",
+            "Show a line under column titles",
+            "Name column starts at Windows' width (256 px)",
             "Hide expand arrows in the sidebar",
             "Show more items in the navigation pane",
             "Show more items in the tab menu",

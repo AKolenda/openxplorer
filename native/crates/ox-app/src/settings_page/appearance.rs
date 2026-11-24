@@ -118,6 +118,21 @@ const MORE_TAB_MENU_ITEMS: RowText = RowText {
     keywords: "tab menu right-click move tab new window open windows extra more items windows",
 };
 
+const COLUMN_TITLE_LINE: RowText = RowText {
+    title: "Show a line under column titles",
+    description: "In the details view, a thin line separates the column titles from the list. \
+                  Windows 11 draws none.",
+    keywords: "column header title line border separator underline divider details view windows",
+};
+
+const NAME_COLUMN_WINDOWS_WIDTH: RowText = RowText {
+    title: "Name column starts at Windows' width (256 px)",
+    description: "In the details view, Name starts 256 pixels wide, so the rows and their selection \
+                  end after the last column, as in Windows 11. Off: Name fills the room the other \
+                  columns leave.",
+    keywords: "name column width wide fill details view selection row windows 256",
+};
+
 const COLUMN_HEADER_STYLE: RowText = RowText {
     title: "Column header style",
     description: "How the Details view marks the sorted column. OpenXplorer puts an arrow after its \
@@ -813,7 +828,7 @@ fn choose_text_size(page: &SettingsPage, size: TextSize) {
     });
 }
 
-/// The compact view, the column header style, the navigation pane's
+/// The compact view, the column header style and line, Name's width, the navigation pane's
 /// arrows, the app's extra navigation pane rows and tab menu items, the
 /// right-click menu, Shift+F10's menu and the pane widths.
 fn layout_group(page: &SettingsPage) -> SettingsGroup {
@@ -821,6 +836,26 @@ fn layout_group(page: &SettingsPage) -> SettingsGroup {
     group.add_row(&super::window_decorations::row(page));
     group.add_row(&super::files_folders::compact_view_row(page));
     group.add_row(&column_header_style_row(page));
+    let title_line = SettingRow::new(COLUMN_TITLE_LINE);
+    let switch = page.preference_switch(PreferenceBinding {
+        read: |preferences| preferences.column_title_line,
+        write: |on| PreferencesUpdate {
+            column_title_line: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    });
+    title_line.add_control(&switch, ControlName::RowTitle);
+    group.add_row(&title_line);
+    let name_width = SettingRow::new(NAME_COLUMN_WINDOWS_WIDTH);
+    let switch = page.preference_switch(PreferenceBinding {
+        read: |preferences| preferences.name_column_windows_width,
+        write: |on| PreferencesUpdate {
+            name_column_windows_width: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    });
+    name_width.add_control(&switch, ControlName::RowTitle);
+    group.add_row(&name_width);
     let arrows = SettingRow::new(HIDE_EXPAND_ARROWS);
     let binding = PreferenceBinding {
         read: |preferences| preferences.hide_expand_arrows,
