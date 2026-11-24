@@ -621,6 +621,14 @@ impl FsctlResponseContent for RawReply {
     const FSCTL_CODES: &'static [FsctlCodes] = &[FsctlCodes::SrvEnumerateSnapshots];
 }
 
+/// Reads `bytes` as a server's snapshot list, for the fuzz targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_snapshot_reply(bytes: &[u8]) {
+    if let Ok(reply) = SnapshotReply::read(bytes) {
+        let _ = reply.into_copies();
+    }
+}
+
 /// A `SRV_SNAPSHOT_ARRAY` (MS-SMB2 2.2.32.2).
 #[derive(Debug, PartialEq, Eq)]
 struct SnapshotReply {

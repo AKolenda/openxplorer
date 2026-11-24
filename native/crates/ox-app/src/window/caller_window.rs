@@ -51,6 +51,12 @@ pub(super) enum CallerWindow {
     Unknown,
 }
 
+/// Reads `parent` as a portal's parent window, for the fuzz targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_parent(parent: &str) {
+    let _ = CallerWindow::parse(parent);
+}
+
 impl CallerWindow {
     /// Reads the portal's `parent_window`: `wayland:<handle>`, `x11:<id in
     /// hex>` or empty. A handle is printable ASCII, spaces included:

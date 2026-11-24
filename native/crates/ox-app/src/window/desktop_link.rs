@@ -70,6 +70,13 @@ fn link_target(text: &str) -> Option<Result<LinkTarget, &'static str>> {
 }
 
 /// Whether `entry` may be a desktop link, by its content type or name.
+/// Reads `text` as a desktop entry the app may follow, for the fuzz
+/// targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_link(text: &str) {
+    let _ = link_target(text);
+}
+
 pub(super) fn may_be_link(content_type: Option<&str>, name: &str) -> bool {
     content_type == Some("application/x-desktop") || name.to_ascii_lowercase().ends_with(".desktop")
 }

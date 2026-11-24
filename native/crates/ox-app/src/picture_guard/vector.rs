@@ -211,6 +211,10 @@ fn read_answer(answer: &[u8]) -> Result<Decoded, Refusal> {
     match status {
         STATUS_DRAWN => {
             let mut picture = rest.get(8..).ok_or(Refusal::Damaged)?;
+            // The drawing process writes PNG; nothing else goes to a loader.
+            if !picture.starts_with(super::PNG_SIGNATURE) {
+                return Err(Refusal::Damaged);
+            }
             let read = |buffer: &mut [u8]| picture.read(buffer).map_err(|_| ());
             // The PNG the drawing process wrote is checked as any picture.
             let drawn = decode_loaded(read, Instant::now(), i32::MAX, i32::MAX, Limits::DISPLAY, None)
@@ -226,6 +230,13 @@ fn read_answer(answer: &[u8]) -> Result<Decoded, Refusal> {
         STATUS_TIMED_OUT => Err(Refusal::TimedOut),
         _ => Err(Refusal::Damaged),
     }
+}
+
+/// Reads `bytes` as the drawing process's answer, for the fuzz targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_vector_answer(bytes: &[u8]) {
+    let _ = may_be_vector(bytes);
+    let _ = read_answer(bytes);
 }
 
 /// The picture was drawn.
@@ -368,6 +379,21 @@ pub(crate) mod tests {
         not_png.extend_from_slice(&10_i32.to_le_bytes());
         not_png.extend_from_slice(b"not a picture");
         assert_eq!(read_answer(&not_png).map(|_| ()), Err(Refusal::Damaged));
+        // The drawing process writes PNG: a picture of another format is
+        // not handed to that format's loader (found by fuzzing).
+        let pixbuf = gtk::gdk_pixbuf::Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, false, 8, 2, 2)
+            .expect("a small picture");
+        let bmp = pixbuf.save_to_bufferv("bmp", &[]).expect("a BMP");
+        let mut drawn_bmp = ANSWER_MARK.to_vec();
+        drawn_bmp.push(STATUS_DRAWN);
+        drawn_bmp.extend_from_slice(&2_i32.to_le_bytes());
+        drawn_bmp.extend_from_slice(&2_i32.to_le_bytes());
+        drawn_bmp.extend_from_slice(&bmp);
+        assert_eq!(read_answer(&drawn_bmp).map(|_| ()), Err(Refusal::Damaged));
+        let png = pixbuf.save_to_bufferv("png", &[]).expect("a PNG");
+        let mut drawn_png = drawn_bmp[..drawn_bmp.len() - bmp.len()].to_vec();
+        drawn_png.extend_from_slice(&png);
+        assert!(read_answer(&drawn_png).is_ok(), "a drawn PNG is read");
         let mut too_large = b"running 1 test\n".to_vec();
         too_large.extend_from_slice(ANSWER_MARK);
         too_large.push(STATUS_TOO_LARGE);

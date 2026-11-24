@@ -1908,6 +1908,11 @@ fn quoted_names(files: &[&Entry]) -> String {
 /// The names of a quoted list such as `"a.txt" "b.txt"`, `None` for text
 /// that is not one (a plain name or path). A file name cannot hold a
 /// quote here, as in Windows.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_quoted_names(text: &str) {
+    let _ = parse_quoted_names(text);
+}
+
 fn parse_quoted_names(text: &str) -> Option<Vec<String>> {
     let mut names = Vec::new();
     let mut rest = text.trim();

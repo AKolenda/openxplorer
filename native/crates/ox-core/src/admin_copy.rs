@@ -45,6 +45,8 @@
 //! this check and the copy that would make it wrong.
 
 mod user_mounts;
+#[cfg(feature = "fuzzing")]
+pub(crate) use user_mounts::fuzz_tables as fuzz_mount_tables;
 
 use std::collections::VecDeque;
 use std::ffi::OsString;

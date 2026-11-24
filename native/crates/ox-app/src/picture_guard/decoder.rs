@@ -777,6 +777,58 @@ fn parse_answer(bytes: &[u8]) -> Result<Decoded, Refusal> {
     })
 }
 
+/// Reads `bytes` as the decoder's frames and answers, and as the app's
+/// requests, for the fuzz targets: what each side reads from the other.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_answer(bytes: &[u8]) {
+    let _ = parse_answer(bytes);
+    let limit = std::sync::atomic::AtomicU64::new(64 * 1024 * 1024);
+    let mut stream = bytes;
+    while let Some(frame) = read_frame(&mut stream, &limit) {
+        let _ = parse_answer(&frame);
+    }
+    let mut stream = bytes;
+    while read_request(&mut stream).is_some() {}
+}
+
+/// Serves one request for the picture `picture`, sent in the pieces
+/// `cuts` gives, as the decoder process does, within `limits`, for the
+/// fuzz targets; then reads the answer as the app does.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_serve(picture: &[u8], cuts: &[usize], fit: (i32, i32), limits: Limits) {
+    // A vector picture is drawn under resource limits of its own, which
+    // would apply to the fuzzing process.
+    if super::vector::may_be_vector(picture) {
+        return;
+    }
+    IN_CHILD.store(true, Ordering::Relaxed);
+    let mut request = REQUEST.to_vec();
+    for value in [fit.0, fit.1] {
+        request.extend_from_slice(&value.to_le_bytes());
+    }
+    let millis = u64::try_from(limits.time.as_millis()).unwrap_or(u64::MAX);
+    for value in [limits.max_pixels, limits.max_jpeg_pixels, millis] {
+        request.extend_from_slice(&value.to_le_bytes());
+    }
+    let mut from = 0;
+    for &cut in cuts.iter().chain(std::iter::once(&picture.len())) {
+        let to = cut.clamp(from, picture.len());
+        if to > from {
+            request.extend_from_slice(&u32::try_from(to - from).unwrap_or(u32::MAX).to_le_bytes());
+            request.extend_from_slice(&picture[from..to]);
+        }
+        from = to;
+    }
+    request.extend_from_slice(&0_u32.to_le_bytes());
+    let mut output = Vec::new();
+    let _ = serve(&mut request.as_slice(), &mut output);
+    let limit = std::sync::atomic::AtomicU64::new(u64::MAX);
+    if let Some(answer) = read_frame(&mut output.as_slice(), &limit) {
+        let answer = answer.strip_prefix(&[ENDING_MARK]).unwrap_or(&answer);
+        let _ = parse_answer(answer);
+    }
+}
+
 /// Where `needle` first starts in `haystack`.
 fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack.windows(needle.len()).position(|window| window == needle)

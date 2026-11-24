@@ -171,6 +171,27 @@ const ORIENTATION: u16 = 0x0112;
 /// TIFF's SHORT type.
 const SHORT: u16 = 3;
 
+/// Turns `bytes` as Rotate right and Rotate left turn a JPEG, and checks
+/// the result turns back, for the fuzz targets.
+///
+/// # Panics
+///
+/// When a turned JPEG does not turn back.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_turn(bytes: &[u8]) {
+    // Rotate turns only files that start as a JPEG does (`of_bytes`).
+    if Rotatable::of_bytes(bytes) != Some(Rotatable::Jpeg) {
+        return;
+    }
+    for quarters in 1..=3 {
+        if let Some(turned) = turn_jpeg(bytes, quarters) {
+            if let Some(back) = turn_jpeg(&turned, 4 - quarters) {
+                assert_eq!(turn_jpeg(&back, quarters).as_deref(), Some(turned.as_slice()));
+            }
+        }
+    }
+}
+
 /// The JPEG `bytes` turned `quarters` clockwise by its EXIF orientation;
 /// `None` for a JPEG whose segments or EXIF cannot be read.
 pub(crate) fn turn_jpeg(bytes: &[u8], quarters: u8) -> Option<Vec<u8>> {

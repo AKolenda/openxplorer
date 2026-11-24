@@ -384,6 +384,22 @@ impl Thumbnailer {
     }
 }
 
+/// Reads `bytes` as a `.thumbnailer` entry and builds its command, and as
+/// a thumbnailer's picture, for the fuzz targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_thumbnailer(bytes: &[u8]) {
+    if let Some(thumbnailer) = std::str::from_utf8(bytes).ok().and_then(Thumbnailer::parse) {
+        let _ = thumbnailer.handles("image/png");
+        let _ = thumbnailer.command(
+            Path::new("/home/alex/Pictures/100% done %u.png"),
+            "file:///home/alex/Pictures/100%25%20done%20%25u.png",
+            Path::new("/tmp/openxplorer-thumbnail.png"),
+            256,
+        );
+    }
+    let _ = drawn_png(bytes);
+}
+
 /// Whether `declared` names `content_type`, itself or a kind of it.
 fn covers(content_type: &str, declared: &str) -> bool {
     declared == content_type

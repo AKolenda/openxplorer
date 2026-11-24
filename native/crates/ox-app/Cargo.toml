@@ -12,6 +12,11 @@ publish.workspace = true
 name = "openxplorer-native"
 path = "src/main.rs"
 
+[features]
+# Entry points for the fuzz targets in native/fuzz (`ox_app::fuzzing`).
+# Off in every build of the app.
+fuzzing = ["ox-core/fuzzing"]
+
 [dependencies]
 async-channel.workspace = true
 gtk.workspace = true

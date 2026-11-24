@@ -237,6 +237,12 @@ pub fn validate_share_name(name: &str) -> Result<(), UsershareError> {
 }
 
 /// Parses `net usershare info --long`: an INI section per share.
+/// Reads `text` as `net usershare info` prints it, for the fuzz targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_info(text: &str) {
+    let _ = parse_info(text);
+}
+
 fn parse_info(text: &str) -> Vec<Usershare> {
     let mut shares: Vec<Usershare> = Vec::new();
     for line in text.lines().map(str::trim) {

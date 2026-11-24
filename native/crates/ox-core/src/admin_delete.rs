@@ -42,6 +42,8 @@
 //! whole item before the helper is started at all.
 
 mod command;
+#[cfg(feature = "fuzzing")]
+pub(crate) use command::fuzz_request;
 mod elevation;
 mod report;
 mod walk;

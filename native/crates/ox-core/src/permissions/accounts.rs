@@ -61,6 +61,11 @@ fn named(ids: &[u32], known: &[Account]) -> Vec<Account> {
 }
 
 /// The `name:password:id:…` lines of `/etc/passwd` or `/etc/group`.
+#[cfg(feature = "fuzzing")]
+pub(super) fn fuzz_database(text: &str) {
+    let _ = parse_database(text);
+}
+
 fn parse_database(text: &str) -> Vec<Account> {
     text.lines()
         .filter(|line| !line.starts_with('#'))

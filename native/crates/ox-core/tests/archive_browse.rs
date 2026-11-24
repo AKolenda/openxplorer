@@ -513,3 +513,83 @@ fn the_start_and_quit_sweep_removes_only_old_copies() {
     assert!(!old_folder.exists());
     assert!(fresh.path.is_file());
 }
+
+/// A stored ZIP of one member, `name`, holding `data` but recording
+/// `recorded_size` as its size, with the checksum of `data`.
+fn zip_recording_size(name: &str, data: &[u8], recorded_size: u32) -> Vec<u8> {
+    let crc = crc32fast::hash(data);
+    let packed = u32::try_from(data.len()).expect("a small member");
+    let name_length = u16::try_from(name.len()).expect("a short name");
+    let mut zip = Vec::new();
+    zip.extend_from_slice(&0x0403_4b50_u32.to_le_bytes());
+    for value in [20_u16, 0, 0, 0, 0x5821] {
+        zip.extend_from_slice(&value.to_le_bytes());
+    }
+    for value in [crc, packed, recorded_size] {
+        zip.extend_from_slice(&value.to_le_bytes());
+    }
+    zip.extend_from_slice(&name_length.to_le_bytes());
+    zip.extend_from_slice(&0_u16.to_le_bytes());
+    zip.extend_from_slice(name.as_bytes());
+    zip.extend_from_slice(data);
+    let directory_start = u32::try_from(zip.len()).expect("a small archive");
+    zip.extend_from_slice(&0x0201_4b50_u32.to_le_bytes());
+    for value in [0x0314_u16, 20, 0, 0, 0, 0x5821] {
+        zip.extend_from_slice(&value.to_le_bytes());
+    }
+    for value in [crc, packed, recorded_size] {
+        zip.extend_from_slice(&value.to_le_bytes());
+    }
+    for value in [name_length, 0, 0, 0, 0] {
+        zip.extend_from_slice(&value.to_le_bytes());
+    }
+    zip.extend_from_slice(&(0o100_644_u32 << 16).to_le_bytes());
+    zip.extend_from_slice(&0_u32.to_le_bytes());
+    zip.extend_from_slice(name.as_bytes());
+    let directory_length = u32::try_from(zip.len()).expect("a small archive") - directory_start;
+    zip.extend_from_slice(&0x0605_4b50_u32.to_le_bytes());
+    for value in [0_u16, 0, 1, 1] {
+        zip.extend_from_slice(&value.to_le_bytes());
+    }
+    zip.extend_from_slice(&directory_length.to_le_bytes());
+    zip.extend_from_slice(&directory_start.to_le_bytes());
+    zip.extend_from_slice(&0_u16.to_le_bytes());
+    zip
+}
+
+/// A member whose data ends before the size the archive records is not
+/// opened as a shorter copy, as Extract All refuses it too (found by
+/// fuzzing).
+///
+/// parity: ARC-006
+#[test]
+fn a_member_shorter_than_its_recorded_size_is_not_opened() {
+    let temporary = tempfile::tempdir().expect("a temporary folder");
+    let previews = temporary.path().join("previews");
+    let browser = in_memory_browser(zip_recording_size("readme.txt", b"", 40), &previews);
+    let cancel = Cancellation::new();
+    let listing = browser
+        .list("file:///short.zip", "", &cancel)
+        .expect("the archive lists");
+    assert_eq!(
+        listing.entries[0].kind,
+        ArchiveEntryKind::File {
+            size: 40,
+            compressed_size: 0
+        }
+    );
+    let result = browser.preview_member("file:///short.zip", "readme.txt", &cancel);
+    assert_eq!(result.unwrap_err(), ArchiveError::TruncatedMember);
+    let left = if previews.exists() {
+        files_below(&previews)
+    } else {
+        Vec::new()
+    };
+    assert!(left.is_empty(), "{left:?}");
+    // A member as long as it says is opened.
+    let browser = in_memory_browser(zip_recording_size("readme.txt", b"hello", 5), &previews);
+    let copy = browser
+        .preview_member("file:///whole.zip", "readme.txt", &cancel)
+        .expect("the member opens");
+    assert_eq!(fs::read(&copy.path).expect("the copy"), b"hello");
+}

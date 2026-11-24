@@ -36,6 +36,11 @@ pub(super) fn read(bytes: &[u8]) -> Option<HashMap<String, Vec<String>>> {
         let (length, offset) = (number(entry)?, number(entry + 4)?);
         std::str::from_utf8(bytes.get(offset..offset.checked_add(length)?)?).ok()
     };
+    // Each message has an entry of 8 bytes in both tables, so a count the
+    // file cannot hold is no catalogue; it must not size the map either.
+    if count > bytes.len() / 16 {
+        return None;
+    }
     let mut messages = HashMap::with_capacity(count);
     for index in 0..count {
         let original = string(originals, index)?;
@@ -87,4 +92,23 @@ pub(super) fn write(entries: &[(String, String)]) -> Vec<u8> {
     }
     bytes.extend_from_slice(&strings);
     bytes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A header claiming more messages than the file can hold is refused
+    /// without reserving room for them (found by fuzzing).
+    #[test]
+    fn a_message_count_past_the_file_is_refused() {
+        let mut bytes = write(&[(
+            String::new(),
+            "Content-Type: text/plain; charset=UTF-8\n".to_owned(),
+        )]);
+        bytes[8..12].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert_eq!(read(&bytes), None);
+        bytes[8..12].copy_from_slice(&0x1880_0000_u32.to_le_bytes());
+        assert_eq!(read(&bytes), None);
+    }
 }

@@ -54,9 +54,13 @@ use gtk::prelude::*;
 mod decoder;
 mod vector;
 
+#[cfg(feature = "fuzzing")]
+pub(crate) use decoder::{fuzz_answer, fuzz_serve};
 #[cfg(test)]
 pub(crate) use decoder::{idle_decoder_ids, UnusedForTests};
 pub(crate) use decoder::{run_as_decoder, unused_limit};
+#[cfg(feature = "fuzzing")]
+pub(crate) use vector::fuzz_vector_answer;
 pub(crate) use vector::run_as_drawer;
 
 /// The most pixels a raster picture may have to be decoded for display:
@@ -554,6 +558,9 @@ enum Declared {
     },
     /// The bytes may be a picture whose header is not yet whole.
     Incomplete,
+    /// The header is one no loader may be given: it would make the loader
+    /// reserve far more memory than any picture's header needs.
+    Damaged,
     /// The bytes are no PNG, JPEG, GIF, WebP or BMP whose header can be
     /// read: gdk-pixbuf reads their size itself.
     Unknown,
@@ -562,14 +569,17 @@ enum Declared {
 /// Reads the size a picture's header declares.
 type HeaderReader = fn(&[u8]) -> Declared;
 
-/// The size a PNG, JPEG, GIF, WebP or BMP declares in its first `bytes`.
+/// The size a PNG, JPEG, GIF, WebP or BMP declares in its first `bytes`,
+/// or that an icon's directory is one no loader may be given.
 fn declared_size(bytes: &[u8]) -> Declared {
-    let readers: [(&[u8], HeaderReader); 5] = [
+    let readers: [(&[u8], HeaderReader); 7] = [
         (PNG_SIGNATURE, png_size),
         (b"\xFF\xD8", jpeg_size),
         (b"GIF87a", gif_size),
         (b"GIF89a", gif_size),
         (b"BM", bmp_size),
+        (b"\0\0\x01\0", icon_size),
+        (b"\0\0\x02\0", icon_size),
     ];
     let mut incomplete = false;
     for (signature, read) in readers {
@@ -611,7 +621,7 @@ fn starts_with(bytes: &[u8], signature: &[u8]) -> Option<bool> {
 /// `limits` allow, with the header's size.
 fn refusal_by_header(declared: Declared, limits: Limits) -> Option<Refusal> {
     let Declared::Size { jpeg, width, height } = declared else {
-        return None;
+        return (declared == Declared::Damaged).then_some(Refusal::Damaged);
     };
     let pixels = u64::from(width) * u64::from(height);
     let side = |side: u32| i32::try_from(side).unwrap_or(i32::MAX);
@@ -709,11 +719,21 @@ fn gif_size(bytes: &[u8]) -> Declared {
 
 /// The size in a BMP's information header: an OS/2 core header's two
 /// 16-bit sides, or a Windows header's 32-bit ones, whose height is
-/// negative for rows stored from the top.
+/// negative for rows stored from the top. gdk-pixbuf reserves room for
+/// the whole information header as its length says, and for everything
+/// up to the pixels as the file header's offset says, before it looks at
+/// either, so a length past the longest header (`BITMAPV5HEADER`) and an
+/// offset past [`MAX_BMP_PIXEL_OFFSET`] are refused.
 fn bmp_size(bytes: &[u8]) -> Declared {
-    let Some(header) = field(bytes, 14).map(u32::from_le_bytes) else {
+    let (Some(offset), Some(header)) = (
+        field(bytes, 10).map(u32::from_le_bytes),
+        field(bytes, 14).map(u32::from_le_bytes),
+    ) else {
         return Declared::Incomplete;
     };
+    if header > MAX_BMP_INFO_HEADER || offset > MAX_BMP_PIXEL_OFFSET {
+        return Declared::Damaged;
+    }
     let size = if header == 12 {
         field(bytes, 18).zip(field(bytes, 20)).map(|(width, height)| {
             (
@@ -739,6 +759,77 @@ fn bmp_size(bytes: &[u8]) -> Declared {
         height,
     })
 }
+
+/// What an icon's or cursor's directory says: gdk-pixbuf reserves room
+/// from the start of the file to an image's data, as the image's entry
+/// gives its offset and length, and rows as wide as the image's bitmap
+/// header says, before it reads the image. An entry past
+/// [`MAX_ICON_DATA_END`] or inside the directory, and a bitmap header
+/// wider or taller than [`MAX_ICON_EDGE`], are refused; a bitmap header
+/// past the start read before deciding is left to the loader. Each image's
+/// size is read by the loader itself.
+fn icon_size(bytes: &[u8]) -> Declared {
+    let Some(count) = field(bytes, 4).map(u16::from_le_bytes) else {
+        return Declared::Incomplete;
+    };
+    let directory = 6 + 16 * usize::from(count);
+    // A directory longer than the start read before deciding is no icon's.
+    if directory > HEADER_LIMIT {
+        return Declared::Damaged;
+    }
+    if bytes.len() < directory {
+        return Declared::Incomplete;
+    }
+    let mut incomplete = false;
+    for entry in bytes[6..directory].chunks_exact(16) {
+        let word = |at: usize| u32::from_le_bytes([entry[at], entry[at + 1], entry[at + 2], entry[at + 3]]);
+        let (length, offset) = (word(8), word(12));
+        let at = usize::try_from(offset).unwrap_or(usize::MAX);
+        if offset.saturating_add(length) > MAX_ICON_DATA_END || at < directory {
+            return Declared::Damaged;
+        }
+        // A PNG image's size is read by the loader as any PNG's is.
+        match starts_with(bytes.get(at..).unwrap_or_default(), PNG_SIGNATURE) {
+            Some(true) => continue,
+            Some(false) => {}
+            None => {
+                incomplete |= at < HEADER_LIMIT;
+                continue;
+            }
+        }
+        let sides = field(bytes, at + 4).zip(field(bytes, at + 8));
+        match sides.map(|(width, height)| (i32::from_le_bytes(width), i32::from_le_bytes(height))) {
+            // The height counts the image and its mask.
+            Some((width, height))
+                if width.unsigned_abs() > MAX_ICON_EDGE || height.unsigned_abs() > 2 * MAX_ICON_EDGE =>
+            {
+                return Declared::Damaged;
+            }
+            Some(_) => {}
+            None => incomplete |= at + 12 <= HEADER_LIMIT,
+        }
+    }
+    if incomplete {
+        Declared::Incomplete
+    } else {
+        Declared::Unknown
+    }
+}
+
+/// The widest and tallest an icon's bitmap may be: icons are at most 256
+/// pixels square, and this leaves room for larger ones some programs write.
+const MAX_ICON_EDGE: u32 = 1024;
+
+/// The furthest an icon's image data may end: far past any icon a program
+/// writes, which holds a few pictures of at most 256 pixels square.
+const MAX_ICON_DATA_END: u32 = 64 * 1024 * 1024;
+
+/// The length of the longest BMP information header, `BITMAPV5HEADER`.
+const MAX_BMP_INFO_HEADER: u32 = 124;
+
+/// The furthest a BMP's pixels may start: far past the longest header, its
+/// color masks and the largest palette a loader reads.
+const MAX_BMP_PIXEL_OFFSET: u32 = 1024 * 1024;
 
 /// The size in a WebP's first chunk: a lossy (VP8) frame's, a lossless
 /// (VP8L) picture's, or an extended file's (VP8X) canvas.
@@ -918,6 +1009,61 @@ impl Ending {
     fn is_complete(&self) -> bool {
         self.start != PNG_SIGNATURE || self.ended
     }
+}
+
+/// Runs the header readers and the stream cutters on `bytes`, for the
+/// fuzz targets, and checks that neither depends on how the bytes come:
+/// the size read from any start of the picture that is no longer
+/// incomplete is the size read from all of it, and feeding the picture
+/// in the pieces `cuts` gives the bytes feeding it whole gives.
+///
+/// # Panics
+///
+/// When a reader's answer depends on where the reads end.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_headers(bytes: &[u8], cuts: &[usize]) {
+    let whole = declared_size(bytes);
+    let _ = refusal_by_header(whole, Limits::DISPLAY);
+    let _ = refusal_by_header(whole, Limits::THUMBNAIL_FILE);
+    let _ = declared_dimensions(bytes);
+    for &cut in cuts {
+        let start = &bytes[..cut.min(bytes.len())];
+        let declared = declared_size(start);
+        assert!(
+            declared == Declared::Incomplete || declared == whole,
+            "the first {} bytes declare {declared:?}, all {} bytes {whole:?}",
+            start.len(),
+            bytes.len()
+        );
+    }
+    let feed = |pieces: &mut dyn Iterator<Item = &[u8]>| {
+        let mut first_frame = FirstFrame::default();
+        let mut ending = Ending::default();
+        let mut fed = Vec::new();
+        for piece in pieces {
+            let (chunk, first_frame_done) = first_frame.take(piece);
+            let (chunk, png_done) = ending.take(chunk);
+            fed.extend_from_slice(chunk);
+            if first_frame_done || png_done {
+                return (fed, true, ending.is_complete());
+            }
+        }
+        (fed, false, ending.is_complete())
+    };
+    let whole_feed = feed(&mut std::iter::once(bytes));
+    let mut pieces = Vec::new();
+    let mut from = 0;
+    for &cut in cuts {
+        let to = cut.clamp(from, bytes.len());
+        pieces.push(&bytes[from..to]);
+        from = to;
+    }
+    pieces.push(&bytes[from..]);
+    let pieces_feed = feed(&mut pieces.into_iter());
+    assert_eq!(
+        whole_feed, pieces_feed,
+        "feeding in pieces differs from feeding whole"
+    );
 }
 
 /// The byte that ends a GIF.
@@ -1258,6 +1404,100 @@ mod tests {
         webp.extend_from_slice(&(width - 1).to_le_bytes()[..3]);
         webp.extend_from_slice(&(height - 1).to_le_bytes()[..3]);
         webp
+    }
+
+    /// An icon whose directory puts an image gigabytes in is refused
+    /// before a loader reserves room up to it; an icon as programs write
+    /// them is still read (found by fuzzing).
+    #[test]
+    fn an_icon_with_an_image_gigabytes_in_is_refused_before_it_is_read() {
+        let pixbuf = Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, true, 8, 16, 16).expect("a small picture");
+        pixbuf.fill(0x3366_99ff);
+        let icon = pixbuf.save_to_bufferv("ico", &[]).expect("an icon");
+        assert_eq!(declared_size(&icon), Declared::Unknown);
+        let mut reader = std::io::Cursor::new(icon.clone());
+        let decoded =
+            decode_reader_here_to_fit(&mut reader, 64, 64, Limits::DISPLAY, None).expect("the icon");
+        assert_eq!((decoded.width, decoded.height), (16, 16));
+        for (offset, size) in [(0x4849_4441_u32, 40_u32), (22, 0xFFFF_FF00)] {
+            let mut far = icon.clone();
+            far[6 + 8..6 + 12].copy_from_slice(&size.to_le_bytes());
+            far[6 + 12..6 + 16].copy_from_slice(&offset.to_le_bytes());
+            assert_eq!(
+                declared_size(&far),
+                Declared::Damaged,
+                "offset {offset:#x}, size {size:#x}"
+            );
+            let mut reader = std::io::Cursor::new(far);
+            let decoded = decode_reader_here_to_fit(&mut reader, 64, 64, Limits::DISPLAY, None);
+            assert_eq!(decoded.err(), Some(Refusal::Damaged));
+        }
+        // An image inside the directory, or a bitmap far wider or taller
+        // than any icon's, makes the loader reserve rows of that width.
+        let mut inside = icon.clone();
+        inside[6 + 12..6 + 16].copy_from_slice(&0_u32.to_le_bytes());
+        assert_eq!(declared_size(&inside), Declared::Damaged);
+        let image = usize::try_from(u32::from_le_bytes(icon[18..22].try_into().expect("an offset")))
+            .expect("an offset");
+        assert!(
+            !icon[image..].starts_with(PNG_SIGNATURE),
+            "gdk-pixbuf writes bitmaps into icons"
+        );
+        for (width, height) in [(289_865_731_i32, 32_i32), (16, -1_000_000)] {
+            let mut wide = icon.clone();
+            wide[image + 4..image + 8].copy_from_slice(&width.to_le_bytes());
+            wide[image + 8..image + 12].copy_from_slice(&height.to_le_bytes());
+            assert_eq!(declared_size(&wide), Declared::Damaged, "{width} x {height}");
+        }
+        // The directory is read whole before deciding, and one longer
+        // than the start read before deciding is refused.
+        assert_eq!(declared_size(&icon[..10]), Declared::Incomplete);
+        let mut crowded = icon.clone();
+        crowded[4..6].copy_from_slice(&u16::MAX.to_le_bytes());
+        assert_eq!(declared_size(&crowded), Declared::Damaged);
+    }
+
+    /// A BMP whose information header claims to be gigabytes long is
+    /// refused before a loader reserves room for that header, whatever
+    /// size it gives (found by fuzzing).
+    #[test]
+    fn a_bmp_header_of_gigabytes_is_refused_before_it_is_read() {
+        for (width, height) in [(-741_092_397_i32, -741_092_397_i32), (1, 1), (640, -480)] {
+            let mut bmp = bmp_header(width, height);
+            bmp[14..18].copy_from_slice(&0xD3D3_D328_u32.to_le_bytes());
+            assert_eq!(declared_size(&bmp), Declared::Damaged, "{width} x {height}");
+            assert_eq!(
+                refusal_by_header(declared_size(&bmp), Limits::DISPLAY),
+                Some(Refusal::Damaged)
+            );
+            let mut reader = std::io::Cursor::new(bmp);
+            let decoded = decode_reader_here_to_fit(&mut reader, 64, 64, Limits::DISPLAY, None);
+            assert_eq!(decoded.err(), Some(Refusal::Damaged));
+        }
+        // The offset of the pixels makes the loader reserve room up to
+        // them, so one far past any header and palette is refused too.
+        for offset in [0xFFFF_FFC4_u32, 0x4000_0000] {
+            let mut bmp = bmp_header(12, 8);
+            bmp[10..14].copy_from_slice(&offset.to_le_bytes());
+            assert_eq!(declared_size(&bmp), Declared::Damaged, "offset {offset:#x}");
+            let mut reader = std::io::Cursor::new(bmp);
+            let decoded = decode_reader_here_to_fit(&mut reader, 64, 64, Limits::DISPLAY, None);
+            assert_eq!(decoded.err(), Some(Refusal::Damaged));
+        }
+        // Every header gdk-pixbuf reads is still read for its size.
+        for header in [40_u32, 52, 56, 64, 108, 124] {
+            let mut bmp = bmp_header(32, 16);
+            bmp[14..18].copy_from_slice(&header.to_le_bytes());
+            bmp.resize(14 + 124 + 16, 0);
+            assert!(matches!(
+                declared_size(&bmp),
+                Declared::Size {
+                    width: 32,
+                    height: 16,
+                    ..
+                }
+            ));
+        }
     }
 
     /// Each format's size is read from its own header, however few of

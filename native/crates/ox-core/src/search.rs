@@ -74,6 +74,22 @@ mod mounts;
 #[cfg(test)]
 pub(crate) use mounts::parse_mounts;
 pub(crate) use mounts::{mount_for_path as mount_holding, read_mounts, Mount};
+
+/// Reads `text` as a search box's words, and matches it as a wildcard
+/// against `name`, for the fuzz targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_query(text: &str, name: &str) {
+    let _ = expression::parse(text, &|word| word.to_lowercase());
+    let _ = pattern::wildcard_matches(text, name);
+    let _ = pattern::wildcard_in_name(text, name);
+    let _ = pattern::word_in_name(text, name);
+}
+
+/// Reads `table` as `/proc/self/mountinfo`, for the fuzz targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_mounts(table: &[u8]) {
+    let _ = mounts::parse_mounts(table);
+}
 mod ownership;
 mod pattern;
 mod pins;

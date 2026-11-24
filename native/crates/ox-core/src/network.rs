@@ -64,6 +64,8 @@ mod error;
 mod keyring;
 mod local_path;
 mod mount_helper;
+#[cfg(feature = "fuzzing")]
+pub(crate) use mount_helper::fuzz_arguments as fuzz_mount_helper;
 mod mount_plan;
 mod mount_table;
 mod mounting;
@@ -77,6 +79,8 @@ mod sign_out;
 #[cfg(test)]
 mod test_support;
 mod usershare;
+#[cfg(feature = "fuzzing")]
+pub(crate) use usershare::fuzz_info as fuzz_usershares;
 mod visited;
 mod volumes;
 
@@ -109,6 +113,8 @@ pub use recent_servers::RecentServers;
 pub use secret_service::SecretService;
 pub use server::{ServerKey, DEFAULT_SMB_PORT};
 pub use session_credentials::SessionCredentials;
+#[cfg(feature = "fuzzing")]
+pub(crate) use shadow_copies::fuzz_snapshot_reply;
 pub use shadow_copies::SmbShadowCopies;
 pub use sign_out::{
     begin_sign_out, finish_sign_out, SignOutRegistry, SignOutReport, SignOutRequest, SigningOut,

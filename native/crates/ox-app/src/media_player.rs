@@ -19,6 +19,32 @@
 
 mod child;
 mod protocol;
+
+/// Reads `text` as the player's events and the app's commands, line by
+/// line, as each side reads the other, with the frames' lengths, for the
+/// fuzz targets.
+///
+/// # Panics
+///
+/// When a frame the app would read is larger than the protocol allows.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_protocol(text: &str) {
+    for line in text.split_inclusive('\n').take(64) {
+        let _ = protocol::Command::parse(line);
+        if let Some(protocol::Event::Frame {
+            width,
+            height,
+            stride,
+        }) = protocol::Event::parse(line)
+        {
+            if let Some(length) = protocol::frame_length(width, height, stride) {
+                let side = u64::from(protocol::MAX_FRAME_SIDE);
+                assert!(length as u64 <= (side * 4 + 63) * side, "{line:?}");
+                assert!(length >= (width as usize) * 4 * (height as usize), "{line:?}");
+            }
+        }
+    }
+}
 mod stream;
 
 #[cfg(test)]

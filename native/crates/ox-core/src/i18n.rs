@@ -22,6 +22,12 @@
 //! ([`mo`], [`plural`]) rather than by the C library, so no FFI is needed.
 
 mod mo;
+
+/// Reads `bytes` as a compiled catalog, for the fuzz targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_mo(bytes: &[u8]) {
+    let _ = mo::read(bytes);
+}
 mod plural;
 
 use std::collections::HashMap;
