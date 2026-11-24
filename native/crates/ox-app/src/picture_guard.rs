@@ -54,7 +54,9 @@ use gtk::prelude::*;
 mod decoder;
 mod vector;
 
-pub(crate) use decoder::run_as_decoder;
+#[cfg(test)]
+pub(crate) use decoder::{idle_decoder_ids, UnusedForTests};
+pub(crate) use decoder::{run_as_decoder, unused_limit};
 pub(crate) use vector::run_as_drawer;
 
 /// The most pixels a raster picture may have to be decoded for display:

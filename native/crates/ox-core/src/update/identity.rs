@@ -97,6 +97,29 @@ impl RuntimeIdentity {
         serde_json::to_string(self).expect("an identity is two strings and a number")
     }
 
+    /// [`Self::to_action_state`], naming the executable file the process
+    /// runs when `file` is given, so a later launch of that very file can
+    /// tell it runs the same build without reading it
+    /// ([`ExecutableFile::from_action_state`]). Readers that predate the
+    /// name ignore it.
+    ///
+    /// # Panics
+    ///
+    /// Never: an identity is three strings and a number.
+    pub fn to_action_state_naming(&self, file: Option<&ExecutableFile>) -> String {
+        let Some(file) = file else {
+            return self.to_action_state();
+        };
+        let mut report = serde_json::to_value(self).expect("an identity is two strings and a number");
+        if let Some(fields) = report.as_object_mut() {
+            fields.insert(
+                EXECUTABLE_FIELD.to_owned(),
+                serde_json::Value::from(file.0.as_str()),
+            );
+        }
+        report.to_string()
+    }
+
     fn with_digest(version: &str, checksum: glib::Checksum) -> Self {
         Self {
             version: version.to_owned(),
@@ -105,6 +128,53 @@ impl RuntimeIdentity {
                 .string()
                 .expect("a SHA-256 checksum has a hexadecimal form"),
         }
+    }
+}
+
+/// The field of a `runtime-info` report that names the running file.
+const EXECUTABLE_FIELD: &str = "executable";
+
+/// Which file an executable is: its device, inode, size and modification
+/// and change times.
+///
+/// A running instance publishes the file it runs beside its identity. A
+/// later launch whose own executable is that same file runs the same
+/// build, so it need not read and digest tens of megabytes before it
+/// can hand its command line over: while a process runs its executable,
+/// the file cannot be written (Linux refuses with `ETXTBSY`) and its inode
+/// cannot be reused, and a package upgrade puts a new file, with a new
+/// inode, in its place. Any other file, or a report without the name,
+/// falls back to comparing digests ([`RuntimeIdentity`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutableFile(String);
+
+impl ExecutableFile {
+    /// The file at `path`, following links, as `/proc/self/exe` is one.
+    ///
+    /// # Errors
+    ///
+    /// Any error reading the file's status.
+    pub fn of_path(path: &Path) -> io::Result<Self> {
+        use std::os::unix::fs::MetadataExt;
+        let status = fs::metadata(path)?;
+        Ok(Self(format!(
+            "{}:{}:{}:{}.{:09}:{}.{:09}",
+            status.dev(),
+            status.ino(),
+            status.size(),
+            status.mtime(),
+            status.mtime_nsec(),
+            status.ctime(),
+            status.ctime_nsec(),
+        )))
+    }
+
+    /// The file a running instance's `runtime-info` report names; `None`
+    /// for a report without one, as releases before it publish.
+    pub fn from_action_state(state: &str) -> Option<Self> {
+        let report: serde_json::Value = serde_json::from_str(state).ok()?;
+        let name = report.as_object()?.get(EXECUTABLE_FIELD)?.as_str()?;
+        Some(Self(name.to_owned()))
     }
 }
 
@@ -217,6 +287,28 @@ mod tests {
         assert!(RuntimeIdentity::from_action_state(r#"{"version": 1}"#).is_none());
         assert!(RuntimeIdentity::from_action_state(r#"["1.0.0"]"#).is_none());
         assert!(RuntimeIdentity::from_action_state("not JSON").is_none());
+    }
+
+    /// The same file has the same name however often it is asked; a file
+    /// put in its place, as a package upgrade does, or one written again,
+    /// has another.
+    #[test]
+    fn a_replaced_or_rewritten_executable_is_another_file() {
+        let folder = tempfile::tempdir().unwrap();
+        let executable = folder.path().join("openxplorer");
+        fs::write(&executable, b"first build").unwrap();
+        let first = ExecutableFile::of_path(&executable).unwrap();
+        assert_eq!(ExecutableFile::of_path(&executable).unwrap(), first);
+
+        let upgrade = folder.path().join("openxplorer.dpkg-new");
+        fs::write(&upgrade, b"first build").unwrap();
+        fs::rename(&upgrade, &executable).unwrap();
+        let replaced = ExecutableFile::of_path(&executable).unwrap();
+        assert_ne!(replaced, first);
+
+        fs::write(&executable, b"the second build").unwrap();
+        assert_ne!(ExecutableFile::of_path(&executable).unwrap(), replaced);
+        assert!(ExecutableFile::of_path(&folder.path().join("missing")).is_err());
     }
 
     #[test]

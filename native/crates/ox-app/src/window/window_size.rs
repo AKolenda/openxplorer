@@ -118,6 +118,7 @@ impl BrowserWindow {
         self.present();
         self.remember_size(maximized);
         self.imp().remembers_session.set(true);
+        crate::startup_trace::mark("presented");
     }
 
     /// Gives the window the saved size, else the default one, fitted to

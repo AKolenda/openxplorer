@@ -12,7 +12,7 @@
 use std::thread;
 use std::time::{Duration, Instant};
 
-use super::{InstanceError, RuntimeIdentity};
+use super::{ExecutableFile, InstanceError, RuntimeIdentity};
 
 /// The D-Bus calls the guard makes: [`SessionBus`](super::SessionBus) in
 /// the app, a scripted double in tests.
@@ -28,6 +28,13 @@ pub trait InstanceBus {
     /// What the instance at `owner` reports through its `runtime-info`
     /// action; `None` for releases without it, or an unreadable report.
     fn reported_identity(&self, owner: &str) -> Option<RuntimeIdentity>;
+
+    /// The executable file the instance at `owner` says it runs
+    /// ([`ExecutableFile::from_action_state`]); `None` when its report
+    /// names none, as releases before it do not.
+    fn reported_executable(&self, _owner: &str) -> Option<ExecutableFile> {
+        None
+    }
 
     /// Activates the `quit` action of the instance at `owner`, which quits
     /// only if no file operation is writing.

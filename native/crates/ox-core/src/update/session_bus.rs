@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use gio::prelude::*;
 
-use super::{InstanceBus, InstanceError, RuntimeIdentity};
+use super::{ExecutableFile, InstanceBus, InstanceError, RuntimeIdentity};
 
 /// How long one call may take, in milliseconds.
 const CALL_TIMEOUT_MS: i32 = 3000;
@@ -116,6 +116,12 @@ impl InstanceBus for SessionBus {
         identity_from_description(&reply)
     }
 
+    fn reported_executable(&self, owner: &str) -> Option<ExecutableFile> {
+        let target = self.actions_call(owner, "Describe");
+        let reply = self.call(target, &(RUNTIME_INFO_ACTION,).to_variant()).ok()?;
+        ExecutableFile::from_action_state(&state_from_description(&reply)?)
+    }
+
     fn request_quit(&self, owner: &str) -> Result<(), InstanceError> {
         let target = self.actions_call(owner, "Activate");
         let parameter: Vec<glib::Variant> = Vec::new();
@@ -130,13 +136,18 @@ impl InstanceBus for SessionBus {
 /// array holding the JSON text. Anything else, including an error for an
 /// unknown action, means an older release without `runtime-info`.
 fn identity_from_description(reply: &glib::Variant) -> Option<RuntimeIdentity> {
+    RuntimeIdentity::from_action_state(&state_from_description(reply)?)
+}
+
+/// The JSON text of the state in a `Describe` reply, `((bgav))`.
+fn state_from_description(reply: &glib::Variant) -> Option<String> {
     if reply.type_().as_str() != "((bgav))" {
         return None;
     }
     let state = reply.child_value(0).child_value(2);
     let boxed_state = state.iter().next()?;
     let state_text = boxed_state.as_variant()?;
-    RuntimeIdentity::from_action_state(state_text.str()?)
+    state_text.str().map(str::to_owned)
 }
 
 /// Where one D-Bus method call goes.
