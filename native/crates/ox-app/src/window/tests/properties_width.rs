@@ -535,6 +535,46 @@ fn every_kind_of_properties_has_one_size() {
     assert!(others.is_empty(), "every window is {expected:?}: {others:?}");
 }
 
+/// With Settings' "Keep Properties windows a fixed size (like Windows)"
+/// on, a file's, a folder's and several items' Properties all open at
+/// Windows' one size and none can be resized.
+///
+/// parity: PROP-001, SET-020
+#[gtk::test]
+fn the_setting_keeps_every_properties_window_at_one_fixed_size() {
+    let fixture = Fixture::standard();
+    fs::create_dir(fixture.path("Short")).expect("a folder");
+    fixture.write("Short.txt");
+    let test = TestWindow::open(&fixture.uri());
+    test.context.update_preferences(
+        ox_core::settings::PreferencesUpdate {
+            fixed_properties_size: Some(true),
+            ..Default::default()
+        },
+        |_| {},
+    );
+    wait_until("the setting to be saved", || {
+        test.context.settings_data().preferences.fixed_properties_size
+    });
+    let mut sizes = Vec::new();
+    let mut keep = |window: PropertiesWindow, what: &str| {
+        assert!(!window.is_resizable(), "{what}: cannot be resized");
+        wait_until("the window to be laid out", || window.height() > 0);
+        sizes.push((window.width(), window.height()));
+        window.close();
+    };
+    test.select_named("Short");
+    keep(properties_of_selection(&test, "Short Properties"), "a folder");
+    test.select_named("Short.txt");
+    keep(properties_of_selection(&test, "Short Properties"), "a file");
+    keep(properties_of_two(&test, "Short", "Short.txt"), "several items");
+    assert!(
+        sizes.windows(2).all(|pair| pair[0] == pair[1]),
+        "one size: {sizes:?}"
+    );
+    assert_eq!(sizes[0], (PropertiesWindow::WIDTH, PropertiesWindow::HEIGHT));
+}
+
 /// An item's Properties opens at Windows' size, and the user can make it
 /// larger: Previous Versions' list grows with the window, so more versions
 /// show at once (owner request, 2026-11-22).

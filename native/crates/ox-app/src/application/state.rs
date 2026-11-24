@@ -139,6 +139,7 @@ impl AppState {
         let clock_setting = ClockSetting::follow();
         crate::window::install_accelerators(app);
         let context = AppContext::new(skin, settings);
+        follow_text_size_keys(app, &context);
         context.start_search_cache(CacheLocation::UserCache);
         // Tests mirror pins into temporary lists only, never the user's.
         #[cfg(not(test))]
@@ -577,6 +578,24 @@ fn follow_accent(skin: &Skin) -> AccentSetting {
     ));
     skin.set_accent(setting.accent());
     setting
+}
+
+/// Gives Ctrl+plus and Ctrl+minus on the main keyboard to the text size
+/// while Settings > Appearance > "Ctrl+plus and Ctrl+minus change text
+/// size" is on, now and whenever the preferences change.
+fn follow_text_size_keys(app: &gtk::Application, context: &AppContext) {
+    let apply = glib::clone!(
+        #[weak]
+        app,
+        #[weak]
+        context,
+        move || {
+            let on = context.settings_data().preferences.ctrl_plus_minus_text_size;
+            crate::window::set_text_size_keys(&app, on);
+        }
+    );
+    apply();
+    context.connect_places_changed(apply);
 }
 
 #[cfg(test)]

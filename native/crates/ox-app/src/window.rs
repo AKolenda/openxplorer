@@ -220,6 +220,7 @@ use tab_strip::TabStrip;
 pub(crate) use crate::dialog::Dialog;
 pub(crate) use actions::follow_text_size_keys;
 pub(crate) use actions::install_accelerators;
+pub(crate) use actions::set_text_size_keys;
 pub(crate) use button_style::ButtonStyle;
 #[cfg(feature = "fuzzing")]
 pub(crate) use caller_window::fuzz_parent;
@@ -280,6 +281,12 @@ impl BrowserWindow {
         window.focus_file_list_once_shown();
         crate::startup_trace::trace_window(&window);
         window
+    }
+
+    /// Whether Settings keeps every Properties window at Windows' one
+    /// size, not resizable ("Keep Properties windows a fixed size").
+    pub(crate) fn keeps_properties_fixed(&self) -> bool {
+        self.context().settings_data().preferences.fixed_properties_size
     }
 
     /// The state shared by every window of the application.

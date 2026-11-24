@@ -48,6 +48,7 @@ mod test_support;
 mod tree_options;
 mod view_options;
 mod view_properties;
+mod windows_mode;
 
 use std::path::{Path, PathBuf};
 
@@ -67,6 +68,10 @@ pub use preferences::{
     WINDOW_HEIGHTS, WINDOW_WIDTHS,
 };
 pub use view_options::{ViewOptions, DEFAULT_DETAILS_COLUMNS, PREVIEW_SIZE_LIMIT};
+pub use windows_mode::{
+    differing, turn_off, turn_on, windows_mode, WindowsMode, WindowsModeChange, WindowsSetting,
+    WINDOWS_SETTINGS,
+};
 
 pub use tree_options::FolderTreeOptions;
 pub use view_properties::{

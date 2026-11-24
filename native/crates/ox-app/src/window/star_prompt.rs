@@ -185,7 +185,7 @@ impl BrowserWindow {
                 move || window.context().dismiss_star_prompt()
             ),
         );
-        if self.context().star_prompt_due() {
+        if self.context().star_prompt_due() && !self.is_file_dialog() {
             self.wait_to_offer_star_prompt();
         }
     }
@@ -275,9 +275,11 @@ impl BrowserWindow {
 
     /// Pops the prompt up in this window, unless another window took it
     /// this session or it was dismissed meanwhile. While the update notice
-    /// shows in its place, it waits for the next session.
+    /// shows in its place, it waits for the next session. Another app's
+    /// Open or Save dialog never shows it, whatever Settings says, and
+    /// leaves it for a browser window.
     pub(super) fn offer_star_prompt(&self) {
-        if self.imp().update_notice.is_visible() {
+        if self.is_file_dialog() || self.imp().update_notice.is_visible() {
             return;
         }
         if self.context().take_star_prompt() {
