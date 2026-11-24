@@ -53,6 +53,7 @@ pub(super) const MESSAGES: &[(&str, &str, &str, bool, &str)] = &[
     ("open-with-dialog.ui", "default_list", "label", true, "Current default"),
     ("open-with-dialog.ui", "filter_entry", "label", true, "Find an application"),
     ("open-with-dialog.ui", "filter_entry", "placeholder-text", false, "Find an application"),
+    ("open-with-dialog.ui", "find_software_button", "label", false, "Find an app in Software"),
     ("open-with-dialog.ui", "i18n_1", "label", false, "Command"),
     ("open-with-dialog.ui", "just_once_button", "label", false, "Just once"),
     ("open-with-dialog.ui", "keep_open_check", "label", false, "Keep the terminal open when the command ends"),

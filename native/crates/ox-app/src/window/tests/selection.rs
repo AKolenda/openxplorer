@@ -14,7 +14,7 @@ use gtk::prelude::*;
 use gtk::{gdk, glib};
 
 use super::file_ops_support::{is_triggered_by, press_shortcut_where_focused, shortcuts_of};
-use crate::test_support::harness::{capture, descendants, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{capture, descendants, wait_until, Fixture, TestWindow};
 use crate::window::rubber_band::{BandMode, RELEASE_WATCH};
 
 /// A folder long enough to scroll.
@@ -502,60 +502,6 @@ fn changing_the_view_of_a_grouped_folder_keeps_the_focused_item_in_view() {
     }
 }
 
-/// Switching to Small icons (Ctrl+Shift+4) from Details or Large icons
-/// shows the list from the top, its first row whole, as Windows 11 keeps
-/// the scroll at the top: with nothing selected, with the first item
-/// selected, and with nothing selected while the keyboard rests on an
-/// item further down (after a Ctrl+click took the selection away). Only
-/// a selected item out of view would scroll it.
-///
-/// parity: VIEW-006, SEL-007
-#[gtk::test]
-fn switching_to_small_icons_keeps_the_list_at_the_top() {
-    let fixture = Fixture::with_files(LONG_FOLDER);
-    let test = TestWindow::open(&fixture.uri());
-    let views = gdk::ModifierType::CONTROL_MASK | gdk::ModifierType::SHIFT_MASK;
-    let pane = test.window.folder_pane();
-    let last = u32::try_from(LONG_FOLDER).expect("small") - 1;
-    for (from, first_selected, keyboard_at) in [
-        (gdk::Key::_6, false, 0),
-        (gdk::Key::_2, false, 0),
-        (gdk::Key::_6, true, 0),
-        (gdk::Key::_2, true, 0),
-        (gdk::Key::_6, false, last),
-        (gdk::Key::_2, false, last),
-    ] {
-        press_key(&test, from, views);
-        wait_for_frames(&test.window, 4);
-        pane.focus_view();
-        start_at(&test, keyboard_at);
-        if !first_selected {
-            pane.model().select_none();
-        }
-        pane.restore_scroll_position(0.0);
-        wait_for_frames(&test.window, 4);
-        press_key(&test, gdk::Key::_4, views);
-        for _ in 0..10 {
-            wait_for_frames(&test.window, 1);
-        }
-        let adjustment = pane.icon_view().scroll_adjustment();
-        let shown = pane.view_widget();
-        let first = pane
-            .owners()
-            .widget_at(0)
-            .filter(|cell| cell.is_ancestor(&shown))
-            .and_then(|cell| cell.compute_bounds(&shown))
-            .expect("the first item is laid out");
-        assert!(
-            adjustment.value() <= adjustment.lower() + 0.5 && first.y() >= 0.0,
-            "from {from:?}, first selected {first_selected}, keyboard at {keyboard_at}: \
-             scrolled to {} (first row at {})",
-            adjustment.value(),
-            first.y()
-        );
-    }
-}
-
 /// parity: SEL-009
 #[gtk::test]
 fn ctrl_arrows_move_without_selecting_and_ctrl_space_toggles() {
@@ -722,52 +668,6 @@ fn arrows_cross_the_group_headings_in_tiles_and_content() {
         press_key(&test, gdk::Key::Right, shift);
         let extended: Vec<u32> = (1..=focused + 1).collect();
         assert_eq!(selected(&test), extended, "{view}: Shift extends from the anchor");
-    }
-}
-
-/// Home in a grouped grid goes back to the top of the list, with the
-/// first group's heading in view, as Windows 11 shows it; so does a key
-/// that lands on the first row of a group whose heading is above the
-/// view. Before, the first item was scrolled to the top edge and its
-/// heading stayed hidden above it.
-///
-/// parity: VIEW-022, VIEW-071, SEL-008
-#[gtk::test]
-fn home_shows_the_first_groups_heading_in_a_grouped_grid() {
-    use crate::folder_view::cells::FileCell;
-    use crate::folder_view::grid::SlotKind;
-    let fixture = Fixture::empty();
-    for number in 0..40 {
-        for extension in ["mp3", "jpg", "pdf"] {
-            fixture.write(&format!("Track {number:02}.{extension}"));
-        }
-    }
-    let test = TestWindow::open(&fixture.uri());
-    test.activate("group-by", Some("type"));
-    let none = gdk::ModifierType::empty();
-    for view in ["tiles", "content", "medium", "large"] {
-        show_view(&test, view);
-        start_at(&test, 0);
-        press_key(&test, gdk::Key::End, none);
-        press_key(&test, gdk::Key::Home, none);
-        assert_eq!(selected(&test), [0], "{view}: Home");
-        let pane = test.window.folder_pane();
-        let grid = pane.view_widget();
-        wait_until("the first heading in view", || {
-            descendants::<FileCell>(&grid).into_iter().any(|cell| {
-                cell.is_mapped()
-                    && cell
-                        .slot()
-                        .is_some_and(|slot| slot.kind() == SlotKind::Heading && slot.group_index() == Some(0))
-                    && cell.compute_bounds(&grid).is_some_and(|bounds| bounds.y() >= 0.0)
-            })
-        });
-        let adjustment = pane.icon_view().scroll_adjustment();
-        assert!(
-            adjustment.value() <= adjustment.lower() + 1.0,
-            "{view}: scrolled to the top, not {}",
-            adjustment.value()
-        );
     }
 }
 

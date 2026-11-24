@@ -329,40 +329,41 @@ fn open_in_new_tab_opens_the_folder_in_a_tab_in_front() {
 }
 
 /// Enter on several items opens each: folders in background tabs and
-/// files in their applications; 15 or more are asked about first, as in
-/// Windows Explorer, and 14 are not.
+/// files in their applications; more than 15 are asked about first, as
+/// Windows Explorer asks above its `MultipleInvokePromptMinimum` of 15,
+/// and 15 are not.
 ///
 /// parity: OPEN-003
 #[gtk::test]
 fn enter_on_several_items_opens_each_and_asks_for_many() {
     let fixture = Fixture::standard();
-    let files: Vec<String> = (1..=14).map(|number| format!("File {number:02}.txt")).collect();
+    let files: Vec<String> = (1..=15).map(|number| format!("File {number:02}.txt")).collect();
     for name in &files {
         fixture.write(name);
     }
     let test = TestWindow::open(&fixture.uri());
 
-    let mut fourteen: Vec<&str> = files[..13].iter().map(String::as_str).collect();
-    fourteen.push("Documents");
-    select_names(&test, &fourteen);
+    let mut fifteen: Vec<&str> = files[..14].iter().map(String::as_str).collect();
+    fifteen.push("Documents");
+    select_names(&test, &fifteen);
     // Enter on the focused row is the column view's activate signal.
     let column_view = test.window.folder_pane().details().column_view();
     column_view.emit_by_name::<()>("activate", &[&test.position_of("File 01.txt")]);
-    wait_until("the 13 files to open", || {
-        test.context.recorded_launches().len() == 13
+    wait_until("the 14 files to open", || {
+        test.context.recorded_launches().len() == 14
     });
 
     assert_eq!(tab_uris(&test), [fixture.uri(), fixture.uri_of("Documents")]);
     assert_eq!(test.window.current_uri(), Some(fixture.uri()), "the tab stays");
-    let mut fifteen: Vec<&str> = files.iter().map(String::as_str).collect();
-    fifteen.push("Notes 2.txt");
-    select_names(&test, &fifteen);
+    let mut sixteen: Vec<&str> = files.iter().map(String::as_str).collect();
+    sixteen.push("Notes 2.txt");
+    select_names(&test, &sixteen);
     test.activate("open", None);
     let dialog = open_dialog(&test);
-    assert_eq!(dialog.message_text(), "Are you sure you want to open 15 items?");
+    assert_eq!(dialog.message_text(), "Are you sure you want to open 16 items?");
     dialog.press("Cancel");
     wait_for(std::time::Duration::from_millis(200));
-    assert_eq!(test.context.recorded_launches().len(), 13, "nothing more opened");
+    assert_eq!(test.context.recorded_launches().len(), 14, "nothing more opened");
 }
 
 /// An executable script opens in its application; with "Ask whether to
@@ -536,28 +537,68 @@ fn ctrl_shift_f_opens_the_search_tool_at_the_folder() {
     assert_eq!(test.context.recorded_launches(), [fixture.uri()]);
 }
 
-/// When no application opens a file's type, "Could not open the item"
-/// offers to find one in Software, while Software is installed.
+/// When no application opens a file's type, opening it shows the app
+/// chooser, as Windows does ("Select an app to open this .blend file"),
+/// rather than a message to read and close; nothing opens until an app is
+/// chosen. While Software is installed, the chooser's "Find an app in
+/// Software" searches Software for the type, as Windows' link to the
+/// Microsoft Store does.
 ///
 /// parity: OPEN-010
 #[gtk::test]
-fn a_file_without_an_application_offers_a_search_in_software() {
+fn a_file_without_an_application_opens_the_app_chooser() {
     let fixture = Fixture::standard();
+    fs::write(fixture.path("scene.blend"), b"BLENDER-v300 synthetic test data\n").expect("a fixture file");
     let test = TestWindow::open(&fixture.uri());
-    let mut entry = crate::test_support::file_entry("scene.blend");
-    entry.content_type = Some("application/x-blender".to_owned());
-    let reason = ox_core::integration::OpenError::NoApplication.to_string();
     let _software = install_test_application("org.gnome.Software.desktop");
     let software = FakeSoftware::start();
+    // An app that is not registered for the type, listed under More apps.
+    let applications = gtk::glib::user_data_dir().join("applications");
+    let viewer = applications.join("io.winspace.AnyBlendViewer.desktop");
+    fs::write(
+        &viewer,
+        "[Desktop Entry]\nType=Application\nName=Any Viewer\nExec=true %F\n",
+    )
+    .expect("the private data folder");
+    wait_until("GIO to read the entry", || {
+        crate::integration::installed_application("io.winspace.AnyBlendViewer.desktop").is_some()
+    });
+    let open_with = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|toplevel| toplevel.downcast::<crate::integration::OpenWithDialog>().ok())
+            .find(WidgetExt::is_visible)
+    };
 
-    test.window.report_open_failure(&reason, &entry);
+    test.window.activate_item(test.position_of("scene.blend"));
 
-    let dialog = open_dialog(&test);
-    assert_eq!(dialog.message_text(), reason);
-    dialog.press("Find an app in Software");
+    wait_until("the app chooser", || {
+        open_with().is_some_and(|dialog| dialog.is_listed())
+    });
+    let dialog = open_with().expect("the chooser is open");
+    assert_eq!(dialog.heading_text(), "Select an app to open this .blend file");
+    assert!(
+        dialog.shows_more_apps(),
+        "with no suggested app, every installed app is listed at once"
+    );
+    wait_until("the keyboard in the list", || {
+        dialog.is_listed() && dialog.focused_name().is_some()
+    });
+    // As in Windows, no app is chosen for the user: Just once and Always
+    // wait for one.
+    assert_eq!(dialog.chosen(), None, "nothing preselected");
+    assert_eq!(dialog.controls_state(), (true, false, false));
+    assert!(
+        test.window.dialog_layer().shown().is_none(),
+        "no message to close first"
+    );
+    assert!(test.context.recorded_launches().is_empty(), "nothing opened");
+    dialog.click_find_in_software();
     wait_until("Software to be asked", || !software.calls.borrow().is_empty());
     let search = ("search".to_owned(), vec!["application/x-blender".to_owned()]);
     assert_eq!(*software.calls.borrow(), [search]);
+    dialog.close();
+    fs::remove_file(viewer).expect("the fixture entry");
 }
 
 /// An action and its string parameters.

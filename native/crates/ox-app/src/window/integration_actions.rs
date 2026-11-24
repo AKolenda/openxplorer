@@ -205,28 +205,36 @@ impl BrowserWindow {
         self.present_open_with(subject);
     }
 
-    /// Change app…: opens the Open with dialog for the file at `uri`
-    /// over this window.
+    /// Change app…: the chooser for the file at `uri` over this window,
+    /// which changes the default of its type ([`Self::change_app_over`]).
     fn change_app(&self, uri: &str) {
-        self.change_app_over(self.upcast_ref(), uri);
+        self.change_app_over(self.upcast_ref(), uri, |_| {});
     }
 
-    /// Change... in Properties: opens the Open with dialog for the file at
-    /// `uri` as a dialog of `parent`, the Properties window, which stays
-    /// open behind it wherever this window is.
-    pub(crate) fn change_app_over(&self, parent: &gtk::Window, uri: &str) {
+    /// Change... in Properties: opens the chooser for the file at `uri` as
+    /// a dialog of `parent`, the Properties window, which stays open
+    /// behind it wherever this window is. As in Windows it changes which
+    /// application opens the file's type and opens nothing; `changed` is
+    /// told the new default's name.
+    pub(crate) fn change_app_over(&self, parent: &gtk::Window, uri: &str, changed: impl Fn(&str) + 'static) {
         let name = self.imp().locations.borrow().base_name(uri);
         let subject = OpenWithSubject {
             uri: uri.to_owned(),
             name,
             is_folder: false,
         };
-        self.present_open_with_over(parent, subject);
+        let parent = parent.downgrade();
+        self.after_mounting(uri, move |window| {
+            let Some(parent) = parent.upgrade() else {
+                return;
+            };
+            OpenWithDialog::present_to_change_default(&parent, subject, window.reporter(), changed);
+        });
     }
 
     /// Shows the Open with dialog for `subject`, once its share is
     /// mounted (NET-004).
-    fn present_open_with(&self, subject: OpenWithSubject) {
+    pub(super) fn present_open_with(&self, subject: OpenWithSubject) {
         self.present_open_with_over(self.upcast_ref(), subject);
     }
 

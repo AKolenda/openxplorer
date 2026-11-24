@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Where an activation started and what becomes of its result: the result
 //! belongs to the tab that asked, a folder opens there even when another
-//! tab is in front by then, and a failure is reported with an offer to
-//! find an application in Software (OPEN-001, OPEN-004, OPEN-010).
+//! tab is in front by then, and a failure is reported; a file no
+//! application opens shows the app chooser instead, as Windows does
+//! (OPEN-001, OPEN-004, OPEN-010).
 
 use gtk::glib;
 use gtk::subclass::prelude::*;
@@ -12,7 +13,9 @@ use ox_core::location::parent_location;
 use super::Resolved;
 use crate::dialog::Dialog;
 use crate::window::session::TabId;
-use crate::window::software_search::{self, FIND_IN_SOFTWARE};
+use ox_core::integration::OpenError;
+
+use crate::integration::OpenWithSubject;
 use crate::window::{BrowserWindow, ButtonStyle};
 
 /// The title of the dialog that says why an item did not open.
@@ -151,30 +154,27 @@ impl BrowserWindow {
 
     /// Says why `entry` could not be opened in a dialog, as
     /// `showMessage('Could not open the item', …)` does. When no
-    /// application opens its type, the dialog offers to find one in
-    /// Software (OPEN-010).
+    /// application opens its type, the app chooser opens instead, as in
+    /// Windows, with its link to find one in Software (OPEN-010).
     pub(in crate::window) fn report_open_failure(&self, reason: &str, entry: &Entry) {
+        if reason == OpenError::NoApplication.to_string() && !entry.is_dir {
+            self.present_open_with(OpenWithSubject {
+                uri: entry.opened_uri().to_owned(),
+                name: entry.name.clone(),
+                is_folder: false,
+            });
+            return;
+        }
         let reason = reason.to_owned();
-        let unhandled = software_search::unhandled_type(&reason, entry.content_type.as_deref())
-            .filter(|_| software_search::is_available());
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
                 let dialog = Dialog::new(&window, ox_core::i18n::gettext_static(OPEN_FAILED), &reason);
-                let find = unhandled
-                    .as_ref()
-                    .map(|_| dialog.add_button(FIND_IN_SOFTWARE, ButtonStyle::Bordered));
                 dialog.add_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Accent);
                 dialog.open();
-                let answer = dialog.next_response().await;
+                dialog.next_response().await;
                 dialog.finish();
-                let (Some(content_type), true) = (unhandled, answer.is_some() && answer == find) else {
-                    return;
-                };
-                if let Err(error) = software_search::search_software(&content_type).await {
-                    window.show_message(&error.to_string());
-                }
             }
         ));
     }
