@@ -289,8 +289,11 @@ impl BrowserWindow {
             let options = self.context().settings_data().preferences.view_options;
             let pane = self.pane_on(side);
             let is_remote = self.is_remote_folder(&uri);
-            pane.owners()
-                .set_previews(PreviewPolicy::for_folder(&options, is_remote));
+            let previews = PreviewPolicy::for_folder(&options, is_remote);
+            if previews.shown {
+                crate::thumbnails::prepare();
+            }
+            pane.owners().set_previews(previews);
             pane.details()
                 .set_counts_items(options.count_folder_items && !is_remote);
         }

@@ -110,6 +110,10 @@ fn add_location_tab(window: &PropertiesWindow, folder: KnownFolder, context: &Pr
 
 /// Opens the Properties window of `target` on `initial` (General when the
 /// item has no such tab), from `opener`.
+#[expect(
+    clippy::too_many_lines,
+    reason = "the window's tabs are added one after another"
+)]
 pub(crate) fn open_item_properties(
     opener: &BrowserWindow,
     target: PropertiesTarget,

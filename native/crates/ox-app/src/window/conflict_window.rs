@@ -651,7 +651,7 @@ fn load_pictures(conflict: &NameConflict, pictures: &[gtk::Image; 2], size: i32)
             let file = gio::File::for_uri(&uri);
             let Ok(info) = file
                 .query_info_future(
-                    gio::FILE_ATTRIBUTE_STANDARD_CONTENT_TYPE,
+                    "standard::content-type,standard::size",
                     gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
                     glib::Priority::LOW,
                 )
@@ -662,11 +662,16 @@ fn load_pictures(conflict: &NameConflict, pictures: &[gtk::Image; 2], size: i32)
             let Some(content_type) = info.content_type() else {
                 return;
             };
+            let file_size = info
+                .has_attribute(gio::FILE_ATTRIBUTE_STANDARD_SIZE)
+                .then(|| u64::try_from(info.size()).ok())
+                .flatten();
             let scale = picture.scale_factor().max(1);
             let request = PreviewRequest {
                 uri,
                 content_type: content_type.to_string(),
                 modified,
+                size: file_size,
                 pixels: size * scale,
                 // The dialog shows the two files it asks about, wherever
                 // they are, as before.
@@ -675,6 +680,7 @@ fn load_pictures(conflict: &NameConflict, pictures: &[gtk::Image; 2], size: i32)
                 // A file of a mounted share is found by the file system
                 // check, and made on the network's slots.
                 on_network: false,
+                on_screen: crate::thumbnails::OnScreen::default(),
             };
             if let Some(texture) = preview(request).await {
                 picture.set_paintable(Some(&texture));

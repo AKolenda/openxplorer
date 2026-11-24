@@ -85,6 +85,10 @@ pub(super) struct GeneralTab {
 
 /// Fills the General tab of `properties`, registering its changes with
 /// `window`.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one row of the tab after another, as Windows lays them out"
+)]
 pub(super) fn general_tab(
     window: &PropertiesWindow,
     properties: &ItemProperties,

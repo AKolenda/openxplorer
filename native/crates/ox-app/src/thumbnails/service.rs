@@ -149,6 +149,7 @@ impl Service {
     /// service is done; `true` when it made one. Dropping the future
     /// takes the request back out of the queue.
     pub(super) async fn make(&self, uri: &str, content_type: &str, flavor: ThumbnailFlavor) -> bool {
+        super::trace::event("service", uri);
         let arguments = (
             vec![uri.to_owned()],
             vec![content_type.to_owned()],

@@ -24,6 +24,7 @@ impl AppContext {
 
     /// Remembers a finished operation for Undo.
     pub(crate) fn record_operation(&self, record: UndoRecord) {
+        crate::thumbnails::follow_moves(record.moved_items());
         self.imp().undo_journal.borrow_mut().record(record);
         self.notify_journal_changed();
     }
@@ -50,6 +51,10 @@ impl AppContext {
         operation: Operation,
         inverse: Option<UndoRecord>,
     ) {
+        // What the reversal did is what its inverse would undo.
+        if let Some(inverse) = &inverse {
+            crate::thumbnails::follow_moves(inverse.moved_items());
+        }
         let mut journal = self.imp().undo_journal.borrow_mut();
         journal.record_reversal(direction, operation, inverse);
         drop(journal);

@@ -65,6 +65,7 @@ pub mod session;
 pub mod settings;
 pub mod sizes;
 pub mod system_error;
+pub mod thumbnail_cache;
 pub mod transfer;
 pub mod typed_addresses;
 pub mod update;
