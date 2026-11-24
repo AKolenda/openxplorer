@@ -185,6 +185,13 @@ pub(crate) struct CommandFacts {
     /// A drive's tile is selected on This PC, which Copy copies: a paste
     /// of it makes a shortcut to the drive, as in Windows Explorer.
     pub(crate) drive_selected: bool,
+    /// Whether a row of Home's Recent or Favorites is selected, whose file
+    /// Copy acts on (HOME-036).
+    pub(crate) home_file_selected: bool,
+    /// Whether that row is a Favorites row, whose file Cut, Rename and
+    /// Delete also act on; Windows 11 offers none of them on a Recent row
+    /// (checked on Windows 11, 2026-11-22).
+    pub(crate) home_file_changeable: bool,
 }
 
 impl CommandFacts {
@@ -199,11 +206,17 @@ impl CommandFacts {
         let can_change = selection.count > 0 && !busy && !selection.has_read_only;
         match command {
             FileCommand::New => !folder.is_searching && !self.is_busy && folder.is_writable,
-            FileCommand::Copy => can_copy || (self.drive_selected && !self.is_busy),
-            FileCommand::Cut | FileCommand::Duplicate | FileCommand::Rename => {
-                can_copy && !selection.has_read_only && !selection.has_recent
+            FileCommand::Copy => {
+                can_copy || ((self.drive_selected || self.home_file_selected) && !self.is_busy)
             }
-            FileCommand::Delete | FileCommand::DeletePermanently => can_change && !selection.has_recent,
+            FileCommand::Cut | FileCommand::Rename => {
+                (can_copy && !selection.has_read_only && !selection.has_recent)
+                    || (self.home_file_changeable && !self.is_busy)
+            }
+            FileCommand::Duplicate => can_copy && !selection.has_read_only && !selection.has_recent,
+            FileCommand::Delete | FileCommand::DeletePermanently => {
+                (can_change && !selection.has_recent) || (self.home_file_changeable && !self.is_busy)
+            }
             FileCommand::Paste => {
                 self.clipboard.is_pasteable() && !folder.is_searching && !busy && folder.is_writable
             }
@@ -407,6 +420,8 @@ impl BrowserWindow {
                 .selected_drive_tiles()
                 .iter()
                 .any(|uri| !ox_core::location::is_device_location(uri)),
+            home_file_selected: self.selected_home_file().is_some(),
+            home_file_changeable: self.selected_home_file().is_some() && !self.selected_home_file_is_recent(),
         }
     }
 
@@ -553,6 +568,8 @@ mod tests {
     fn a_selected_drive_enables_copy_alone() {
         let drive = CommandFacts {
             drive_selected: true,
+            home_file_selected: false,
+            home_file_changeable: false,
             ..CommandFacts::default()
         };
         let mut busy = drive;

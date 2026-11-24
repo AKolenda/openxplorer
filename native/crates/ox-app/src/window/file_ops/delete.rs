@@ -229,6 +229,11 @@ impl BrowserWindow {
         if !self.allows(FileCommand::Delete) {
             return;
         }
+        // A row selected on Home stands for its file (HOME-036).
+        if let Some(uri) = self.selected_home_file() {
+            self.trash_dropped(vec![uri]).await;
+            return;
+        }
         if self.shows_recycle_bin() {
             self.delete_from_recycle_bin().await;
             return;
@@ -285,6 +290,10 @@ impl BrowserWindow {
     /// where a Trash exists (OPS-016).
     pub(crate) async fn delete_selection_permanently(&self) {
         if !self.allows(FileCommand::DeletePermanently) {
+            return;
+        }
+        if let Some(uri) = self.selected_home_file() {
+            self.delete_permanently_at(&uri).await;
             return;
         }
         if self.shows_recycle_bin() {

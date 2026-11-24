@@ -352,7 +352,7 @@ fn extraction_items(facts: &ItemFacts) -> Vec<MenuEntry> {
 /// editor (`uniqueEditors`), as Windows lists an editor's own "Open with
 /// Code" for a folder, each with the editor's own icon: one item at a time,
 /// outside a previous version. An editor is offered once.
-fn editor_items(facts: &ItemFacts) -> Vec<MenuEntry> {
+pub(super) fn editor_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     let text_editor = facts.text_editor.iter().map(|editor| {
         let label = ox_core::i18n::format_message("Edit in {name}", &[("name", &editor.name)]);
         let edit = MenuItem::with_text_target(&label, Icon::Document, WindowAction::OpenInEditor, &editor.id)
@@ -454,7 +454,7 @@ fn open_with_submenu(facts: &ItemFacts) -> MenuEntry {
 /// Share, the desktop's email share (CMD-037): offered where the desktop
 /// can share and on files only, as Windows offers it for what it can
 /// share. Its action decides when it is enabled.
-fn share_item(facts: &ItemFacts) -> Option<MenuItem> {
+pub(super) fn share_item(facts: &ItemFacts) -> Option<MenuItem> {
     (facts.can_share && facts.shape != ItemShape::Folder).then(|| {
         item(
             ox_core::i18n::gettext_static("Share"),
@@ -467,7 +467,7 @@ fn share_item(facts: &ItemFacts) -> Option<MenuItem> {
 /// "Share with", Windows 11's submenu of the ways to share a file: here
 /// the computer's own, Bluetooth device and Mail recipient, where it has
 /// them; none on a folder or where the computer has neither.
-fn share_with_item(facts: &ItemFacts) -> Option<MenuEntry> {
+pub(super) fn share_with_item(facts: &ItemFacts) -> Option<MenuEntry> {
     if facts.shape == ItemShape::Folder {
         return None;
     }

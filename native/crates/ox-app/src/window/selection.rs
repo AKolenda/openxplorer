@@ -201,6 +201,15 @@ impl BrowserWindow {
         if let Some(tiles) = self.this_pc_tiles() {
             return tiles.count;
         }
+        // Home counts its tiles and rows, as its status bar does.
+        let shows_home = self
+            .current_uri()
+            .is_some_and(|uri| Page::from_uri(&uri) == Some(Page::Home));
+        if let Some(count) = super::home_page::item_count(self.folder_pane().landing())
+            .filter(|_| shows_home && !self.shows_search_step())
+        {
+            return count;
+        }
         let model = self.folder_pane().model();
         if let Some(count) = self.search_count(model.n_items()) {
             return count.shown;

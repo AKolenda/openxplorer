@@ -333,6 +333,14 @@ impl BrowserWindow {
             }
             return;
         }
+        // A row selected on Home stands for its file (HOME-036).
+        if let Some(uri) = self.selected_home_file() {
+            // A Recent row is never cut, as in Windows 11's Home.
+            if mode == ClipboardMode::Copy || !self.selected_home_file_is_recent() {
+                self.copy_items(mode, &[uri]);
+            }
+            return;
+        }
         let items = self.folder_pane().model().selected_items();
         let command_facts = self.command_facts();
         // The Recycle Bin's items can only be restored or deleted, which is

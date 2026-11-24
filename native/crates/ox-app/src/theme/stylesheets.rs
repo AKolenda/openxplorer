@@ -233,6 +233,7 @@ mod tests {
         let code = without_comments(RULES);
         let item_ring = "{\n  outline: 2px solid @ox_item_focus_outer;\n  outline-offset: -2px;\n  \
                          box-shadow: inset 0 0 0 3px @ox_item_focus_inner;\n}";
+        // A row being renamed draws no ring (pass-3-rename, OPS-010).
         let item_rings = [
             "columnview.files > listview > row",
             "gridview.files > child",
@@ -245,7 +246,7 @@ mod tests {
             "gridview.files.keyboard-in > child",
         ]
         .map(|item| {
-            format!("{item}:focus:not(:focus-visible):not(.file-drop-active) {{ outline: 1px solid @ox_item_focus_outer; outline-offset: -1px; }}")
+            format!("{item}:focus:not(:focus-visible):not(.file-drop-active):not(.renaming) {{ outline: 1px solid @ox_item_focus_outer; outline-offset: -1px; }}")
         });
         let control_rings = [
             "window.ox button:focus-visible { outline: 2px solid @ox_focus_outer; outline-offset: -2px; }",
