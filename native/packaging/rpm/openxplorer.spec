@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.24
+Version:        2.0.25
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -142,6 +142,11 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Tue Nov 24 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.25-1
+- OpenXplorer 2.0.25: Google Drive and OneDrive accounts from GNOME Online
+  Accounts show as drives and can be browsed and copied from, read-only for
+  now, and the system's window title bar can be used instead of the app's.
+
 * Mon Nov 23 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.24-1
 - OpenXplorer 2.0.24: an item's Properties window can be made larger,
   and releases are published in a signed Flatpak repository.

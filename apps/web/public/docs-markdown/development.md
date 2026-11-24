@@ -67,4 +67,4 @@ Documentation search opens from its named button. The site does not intercept Co
 
 ---
 
-OpenXplorer 2.0.24. Project-authored documentation: AGPL-3.0-only.
+OpenXplorer 2.0.25. Project-authored documentation: AGPL-3.0-only.
