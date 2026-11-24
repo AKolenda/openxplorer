@@ -47,6 +47,7 @@ mod section;
 mod startup;
 mod status_card;
 mod troubleshooting;
+mod window_decorations;
 
 #[cfg(test)]
 mod tests;

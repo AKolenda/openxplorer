@@ -121,20 +121,21 @@ impl BrowserWindow {
     /// True for a point of the title bar from the first tab to the end of
     /// the empty drag area, where the caption buttons start: the tabs, "+"
     /// and the drag area.
-    pub(super) fn is_in_tab_row(&self, point: graphene::Point) -> bool {
+    pub(in crate::window) fn is_in_tab_row(&self, point: graphene::Point) -> bool {
         let strip = self.tab_strip().compute_bounds(self);
         let drag_area = self.imp().title_drag.compute_bounds(self);
         let (Some(strip), Some(drag_area), Some(bottom)) = (strip, drag_area, self.title_bar_bottom()) else {
             return false;
         };
         let is_across = point.x() >= strip.x() && point.x() < drag_area.x() + drag_area.width();
-        let is_down = point.y() >= 0.0 && point.y() < bottom;
+        let top = strip.y().min(drag_area.y());
+        let is_down = point.y() >= top && point.y() < bottom;
         is_across && is_down
     }
 
     /// Where the title bar ends, in the window's coordinates.
     pub(super) fn title_bar_bottom(&self) -> Option<f32> {
-        let bar = self.titlebar()?.compute_bounds(self)?;
+        let bar = self.imp().tab_bar.compute_bounds(self)?;
         Some(bar.y() + bar.height())
     }
 
