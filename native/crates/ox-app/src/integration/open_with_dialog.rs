@@ -722,11 +722,12 @@ impl OpenWithDialog {
             self,
             async move {
                 if let Err(error) = crate::window::software_search::search_software(&content_type).await {
-                    dialog.set_status(Some(&error.to_string()));
+                    dialog.set_status(Some(&ox_core::system_error::message_of(&error)));
                 }
             }
         ));
     }
+
     /// Choose an app on your PC: asks for a program file, then chooses
     /// it ([`Self::use_program`]).
     fn choose_program(&self) {

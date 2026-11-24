@@ -422,11 +422,15 @@ impl BrowserWindow {
         match target {
             LinkTarget::Location(uri) => Ok(Resolved::Folder(uri)),
             LinkTarget::Web(url) => {
-                gtk::UriLauncher::new(&url)
+                match gtk::UriLauncher::new(&url)
                     .launch_future(Some(self.upcast_ref::<gtk::Window>()))
                     .await
-                    .map_err(|error| error.to_string())?;
-                Ok(Resolved::Opened)
+                {
+                    Err(error) if !error.matches(gtk::DialogError::Dismissed) => {
+                        Err(ox_core::system_error::message_of(&error))
+                    }
+                    _ => Ok(Resolved::Opened),
+                }
             }
         }
     }
@@ -741,7 +745,7 @@ impl BrowserWindow {
         let on_error = glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |error: glib::Error| window.show_message(&error.to_string())
+            move |error: glib::Error| window.show_message(&ox_core::system_error::message_of(&error))
         );
         self.context().open_uri(address, self.upcast_ref(), on_error);
         self.show_message(&ox_core::i18n::format_message(

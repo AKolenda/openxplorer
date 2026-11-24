@@ -27,6 +27,7 @@
 //! Bin, Cut, Copy, Rename and Duplicate are off: its items can only be
 //! restored or deleted.
 
+use gtk::gio::prelude::FileExt;
 use gtk::subclass::prelude::*;
 use ox_core::location::{is_archive_location, is_cloud_location, same_location, LocationContext, TRASH_URI};
 use ox_core::ops::JournalDirection;
@@ -159,6 +160,9 @@ pub(crate) struct FolderFacts {
     pub(crate) has_items: bool,
     /// It is inside a ZIP opened like a folder, read-only (ARC-026).
     pub(crate) is_zip: bool,
+    /// Its drive's file system may not be written, as a write-protected
+    /// USB stick's.
+    pub(crate) is_on_read_only_drive: bool,
     /// It is on Google Drive or `OneDrive`, read-only for now (DEV-013).
     pub(crate) is_cloud: bool,
 }
@@ -206,7 +210,9 @@ impl CommandFacts {
         let can_copy = selection.count > 0 && !busy && !folder.is_recycle_bin;
         let can_change = selection.count > 0 && !busy && !selection.has_read_only;
         match command {
-            FileCommand::New => !folder.is_searching && !self.is_busy && folder.is_writable,
+            FileCommand::New => {
+                !folder.is_searching && !self.is_busy && folder.is_writable && !folder.is_on_read_only_drive
+            }
             FileCommand::Copy => {
                 can_copy || ((self.drive_selected || self.home_file_selected) && !self.is_busy)
             }
@@ -406,6 +412,10 @@ impl BrowserWindow {
             has_items: model.n_items() > 0
                 || (is_recycle_bin && self.is_searching() && self.imp().trash_items.get() > 0),
             is_zip: is_archive_location(&folder_uri),
+            is_on_read_only_drive: {
+                let known = self.imp().read_only_drive.borrow();
+                known.1 && known.0 == folder_uri
+            },
             is_cloud: is_cloud_location(&folder_uri),
         };
         let operations = self.imp().file_operations.borrow();
@@ -440,9 +450,42 @@ impl BrowserWindow {
         facts
     }
 
+    /// Asks, once per folder shown and off the main loop, whether the
+    /// folder's file system is read-only, as a write-protected USB stick
+    /// is; the answer greys New and updates the commands.
+    fn learn_whether_the_drive_is_read_only(&self) {
+        let Some(uri) = self.current_uri() else {
+            return;
+        };
+        if self.imp().read_only_drive.borrow().0 == uri {
+            return;
+        }
+        self.imp().read_only_drive.replace((uri.clone(), false));
+        let folder = gtk::gio::File::for_uri(&uri);
+        gtk::glib::spawn_future_local(gtk::glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move {
+                let read_only = folder
+                    .query_filesystem_info_future(
+                        gtk::gio::FILE_ATTRIBUTE_FILESYSTEM_READONLY,
+                        gtk::glib::Priority::DEFAULT,
+                    )
+                    .await
+                    .is_ok_and(|info| info.boolean(gtk::gio::FILE_ATTRIBUTE_FILESYSTEM_READONLY));
+                let still_shown = window.imp().read_only_drive.borrow().0 == uri;
+                if still_shown && read_only {
+                    window.imp().read_only_drive.replace((uri, true));
+                    window.update_file_commands();
+                }
+            }
+        ));
+    }
+
     /// Enables and disables every file command, and labels Delete for the
     /// selection's folder (`updateToolbar`).
     pub(crate) fn update_file_commands(&self) {
+        self.learn_whether_the_drive_is_read_only();
         for command in FileCommand::ALL {
             let enabled = self.allows(command);
             for &action in command.actions() {
@@ -667,6 +710,21 @@ mod tests {
 
         assert!(enabled(&searching).is_empty());
         assert!(enabled(&read_only_folder).is_empty());
+    }
+
+    /// On a drive that may not be written, New is greyed, as Windows 11
+    /// greys it on a write-protected USB stick (checked on a Windows 11
+    /// VM); everything else follows its own rule, so Paste stays on and
+    /// says the system's error.
+    ///
+    /// parity: DEV-015
+    #[test]
+    fn a_read_only_drive_greys_new() {
+        let mut stick = selected(0);
+        stick.folder.is_on_read_only_drive = true;
+
+        assert_eq!(enabled(&stick), [FileCommand::Paste]);
+        assert_eq!(stick.refusal(FileCommand::New), Some("This folder is read-only."));
     }
 
     /// A paste of a file list queues behind the jobs that run, as a copy does;

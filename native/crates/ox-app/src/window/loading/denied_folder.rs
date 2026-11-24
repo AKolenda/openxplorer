@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! A folder the user went to that may not be read: as Windows 11 does, the
 //! tab stays where it was and "Location is not available" says
-//! "<path> is not accessible. Access is denied.", with the system's own
-//! error under Details. app.js showed the "This location is unavailable"
+//! "<path> is not accessible. Access is denied." in a message box with the
+//! error icon and one OK, as Windows' says it, with nothing under it.
+//! app.js showed the "This location is unavailable"
 //! page with the raw error, which a tab with nowhere to stay (a new tab or
 //! window, Back or Forward to the folder, a reload) and a network location
 //! still show.
@@ -16,6 +17,7 @@ use super::{LoadMode, LoadRun};
 use crate::dialog::Dialog;
 use crate::locations::Page;
 use crate::window::listing_state::ListingEnd;
+use crate::window::session::TabId;
 use crate::window::{BrowserWindow, ButtonStyle};
 
 /// The caption of the question.
@@ -38,21 +40,28 @@ impl BrowserWindow {
     /// the unavailable page.
     pub(super) fn may_leave_denied_folder(&self, run: &LoadRun) -> bool {
         let local = run.uri.starts_with("file://") && !run.uri.contains("/gvfs/");
-        if run.mode != LoadMode::Navigate || !local || Page::from_uri(&run.uri).is_some() {
+        if !local || Page::from_uri(&run.uri).is_some() {
             return false;
         }
-        if self.has_open_dialog() {
+        self.may_step_back(run.tab, &run.uri, run.mode)
+    }
+
+    /// Whether tab `id`, which went to `uri` in `mode`, may go back to the
+    /// folder it came from: the tab in front went there just now, so it has
+    /// a folder to stay in, and no other dialog is up.
+    pub(super) fn may_step_back(&self, id: TabId, uri: &str, mode: LoadMode) -> bool {
+        if mode != LoadMode::Navigate || self.has_open_dialog() {
             return false;
         }
         let session = self.imp().session.borrow();
-        if !session.is_active(run.tab) {
+        if !session.is_active(id) {
             return false;
         }
         // The current step must still be the navigation itself: a search
         // started there meanwhile is a step of its own, and keeps the page.
-        session.tab(run.tab).is_some_and(|tab| {
+        session.tab(id).is_some_and(|tab| {
             let history = &tab.history;
-            tab.uri() == run.uri
+            tab.uri() == uri
                 && history.current_search().is_none()
                 && history.can_go_back()
                 && !history.can_go_forward()
@@ -62,17 +71,33 @@ impl BrowserWindow {
     /// Takes the tab back to the folder it came from, forgetting the
     /// navigation, and says why, as Windows does.
     pub(super) fn leave_denied_folder(&self, run: &LoadRun, error: &EntryError) {
-        let id = run.tab;
-        if self.imp().session.borrow_mut().end_listing(id) == ListingEnd::TabClosed {
+        if !self.step_back(run.tab) {
             return;
+        }
+        let path = self.imp().locations.borrow().display_location(&run.uri);
+        glib::g_debug!(ox_core::LOG_DOMAIN, "{path} is not accessible: {error}");
+        glib::spawn_future_local(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            async move { window.say_location_is_not_available(&path).await }
+        ));
+    }
+
+    /// Ends tab `id`'s listing and takes it back to the folder it came
+    /// from, forgetting the navigation, as Windows does when the folder
+    /// it went to cannot be shown; false when the tab closed or has no
+    /// step to go back to.
+    pub(super) fn step_back(&self, id: TabId) -> bool {
+        if self.imp().session.borrow_mut().end_listing(id) == ListingEnd::TabClosed {
+            return false;
         }
         {
             let mut session = self.imp().session.borrow_mut();
             let Some(tab) = session.tab_mut(id) else {
-                return;
+                return false;
             };
             if !tab.history.drop_last() {
-                return;
+                return false;
             }
             tab.forget_location_state();
             if let Some(returned) = tab.left_views.take(tab.history.position()) {
@@ -85,27 +110,13 @@ impl BrowserWindow {
         self.load_tab(id, LoadMode::Navigate);
         // A search the tab came from shows again, as Back shows it.
         self.show_step_search();
-        let path = self.imp().locations.borrow().display_location(&run.uri);
-        let details = error.to_string();
-        glib::spawn_future_local(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            async move { window.say_location_is_not_available(&path, &details).await }
-        ));
+        true
     }
 
-    /// "Location is not available" for `path`, with `details`, the
-    /// system's error, under Details for diagnosis.
-    async fn say_location_is_not_available(&self, path: &str, details: &str) {
-        let dialog = Dialog::new(self, ox_core::i18n::gettext_static(TITLE), &denied_message(path));
-        let text = gtk::Label::new(Some(details));
-        text.set_xalign(0.0);
-        text.set_wrap(true);
-        text.set_wrap_mode(gtk::pango::WrapMode::WordChar);
-        text.set_selectable(true);
-        let expander = gtk::Expander::new(Some(&gettext("Details")));
-        expander.set_child(Some(&text));
-        dialog.add_field(&expander);
+    /// "Location is not available" for `path`, in Windows' message box:
+    /// the error icon, the message and OK.
+    async fn say_location_is_not_available(&self, path: &str) {
+        let dialog = Dialog::error_box(self, ox_core::i18n::gettext_static(TITLE), &denied_message(path));
         dialog.add_button(&gettext("OK"), ButtonStyle::Accent);
         dialog.open();
         dialog.next_response().await;

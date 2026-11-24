@@ -205,7 +205,7 @@ impl BrowserWindow {
         let info = match info {
             Ok(info) => info,
             Err(error) => {
-                self.show_message(error.message());
+                self.show_message(&ox_core::system_error::message_of(&error));
                 return;
             }
         };

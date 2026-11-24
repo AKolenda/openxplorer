@@ -667,7 +667,9 @@ fn a_folder_without_write_permission_keeps_new_and_paste_and_shows_the_error() {
         test.window.shown_message() != before.as_str()
     });
     assert!(
-        test.window.shown_message().contains("Permission denied"),
+        test.window
+            .shown_message()
+            .ends_with("Locked/New folder: Access is denied."),
         "the system's error: {}",
         test.window.shown_message()
     );

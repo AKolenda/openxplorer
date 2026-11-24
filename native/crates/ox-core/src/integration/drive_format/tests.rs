@@ -570,11 +570,13 @@ fn a_busy_drive_or_a_dismissed_prompt_stops_the_format() {
     );
     assert_eq!(
         refused.map_err(|error| error.to_string()),
-        Err("Could not format the drive: refused".to_owned())
+        Err("OpenXplorer was unable to complete the format.".to_owned())
     );
     assert_eq!(
         unmountable.map_err(|error| error.to_string()),
-        Err("Could not format the drive: refused (It could not be mounted again: refused)".to_owned()),
+        Err(
+            "OpenXplorer was unable to complete the format. The drive could not be mounted again.".to_owned()
+        ),
         "a drive left unmounted says so"
     );
 }

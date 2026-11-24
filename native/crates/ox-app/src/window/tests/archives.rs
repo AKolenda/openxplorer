@@ -131,7 +131,10 @@ fn a_corrupt_zip_says_why_it_cannot_be_browsed() {
 
     let browser = archive_browser(&test);
     wait_until("the refusal", || !browser.status_text().is_empty());
-    assert_eq!(browser.status_text(), "File is not a zip file");
+    assert_eq!(
+        browser.status_text(),
+        "The Compressed (zipped) Folder is invalid."
+    );
     assert!(browser.row_names().is_empty());
 }
 

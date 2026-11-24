@@ -33,6 +33,7 @@
 //! | [`update`] | Update checks, installation, restart and the running-instance guard | `updater.py`, `runtime_guard.py`, `winspace.py` |
 //! | [`session`] | Tab handoff state and `FileManager1` request validation | `window_state.py` |
 //! | [`ops`] | File operations as the interface starts them: New, Rename, paste conflicts, the Delete plan, copy and move, Duplicate, the Recycle Bin, Undo and tab moves | `winspace.py`, `file_services.py`, `gio_backend.py`, `tab_transfers.py`, `ui/app.js` |
+//! | [`system_error`] | The system's error in Windows' words, and its code | (new, after Windows) |
 
 pub mod admin_copy;
 pub mod admin_delete;
@@ -58,6 +59,7 @@ pub mod service_actions;
 pub mod session;
 pub mod settings;
 pub mod sizes;
+pub mod system_error;
 pub mod transfer;
 pub mod typed_addresses;
 pub mod update;

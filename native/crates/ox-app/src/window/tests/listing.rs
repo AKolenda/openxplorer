@@ -578,8 +578,8 @@ fn set_active_listing(test: &TestWindow, state: ListingState) {
 
 /// A folder on this computer that may not be read keeps the tab where it
 /// was, as Windows 11 does: "Location is not available" says "<path> is
-/// not accessible. Access is denied.", the system's error stays under
-/// Details, and the folder is not in the history. Tests run as a normal
+/// not accessible. Access is denied." in a message box with one OK and
+/// nothing under Details, and the folder is not in the history. Tests run as a normal
 /// user: root reads the folder anyway.
 ///
 /// parity: VIEW-047
@@ -620,9 +620,14 @@ fn a_folder_that_may_not_be_read_keeps_the_tab_where_it_was() {
         dialog.message_text()
     );
     assert!(
-        descendants::<gtk::Expander>(&dialog).len() == 1,
-        "the system's error under Details"
+        descendants::<gtk::Expander>(&dialog).is_empty(),
+        "no Details: the message is the system's error already"
     );
+    assert!(
+        dialog.has_css_class("message-box"),
+        "Windows' message box, with its icon"
+    );
+    assert_eq!(dialog.button_labels(), ["OK"]);
     dialog.press("OK");
     super::file_ops_support::wait_for_no_dialog(&test);
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));

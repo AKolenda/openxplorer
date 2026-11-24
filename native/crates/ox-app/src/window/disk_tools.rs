@@ -429,8 +429,14 @@ fn start(tool: DiskTool, target: &Path) -> Result<(), String> {
         ox_core::i18n::format_message(
             "Could not start {display}: {error}",
             &[
-                ("display", &program.display().to_string()),
-                ("error", &error.to_string()),
+                (
+                    "display",
+                    &program.file_name().map_or_else(
+                        || program.display().to_string(),
+                        |name| name.to_string_lossy().into_owned(),
+                    ),
+                ),
+                ("error", &ox_core::system_error::describe_io(&error)),
             ],
         )
     })
@@ -441,10 +447,13 @@ fn start(tool: DiskTool, target: &Path) -> Result<(), String> {
 fn formatted_message(name: &str, formatted: &Formatted) -> String {
     match formatted {
         Formatted::Mounted => ox_core::i18n::format_message("{drive} is formatted.", &[("drive", name)]),
-        Formatted::NotMounted(error) => ox_core::i18n::format_message(
-            "{drive} is formatted, but could not be mounted again: {error}",
-            &[("drive", name), ("error", error)],
-        ),
+        Formatted::NotMounted(error) => {
+            glib::g_debug!(ox_core::LOG_DOMAIN, "{name} was not mounted again: {error}");
+            ox_core::i18n::format_message(
+                "{drive} is formatted, but could not be mounted again.",
+                &[("drive", name)],
+            )
+        }
     }
 }
 
@@ -482,7 +491,7 @@ mod tests {
         );
         assert_eq!(
             formatted_message("USB Drive", &Formatted::NotMounted("Not permitted".to_owned())),
-            "USB Drive is formatted, but could not be mounted again: Not permitted"
+            "USB Drive is formatted, but could not be mounted again."
         );
     }
 

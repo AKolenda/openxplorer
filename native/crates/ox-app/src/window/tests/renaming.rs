@@ -1045,3 +1045,59 @@ fn an_erased_name_keeps_the_old_name() {
         );
     }
 }
+
+/// A rename the system refuses asks in Windows' words, as Windows'
+/// "File Access Denied" does, with Try Again and Cancel, never in a toast
+/// with the system's text: Try Again renames once the folder may be
+/// written, Cancel keeps the field for another name. Tests run as a
+/// normal user: root writes anywhere.
+///
+/// parity: OPS-047
+#[gtk::test]
+fn a_refused_rename_in_place_asks_to_try_again_in_windows_words() {
+    use std::os::unix::fs::PermissionsExt;
+
+    /// Gives the folder its permissions back, also when the test fails.
+    struct Unlock(std::path::PathBuf);
+    impl Drop for Unlock {
+        fn drop(&mut self) {
+            let _ = fs::set_permissions(&self.0, fs::Permissions::from_mode(0o755));
+        }
+    }
+
+    let fixture = Fixture::standard();
+    let _unlock = Unlock(fixture.path(""));
+    fs::set_permissions(fixture.path(""), fs::Permissions::from_mode(0o555)).expect("mode");
+    if fs::write(fixture.path("probe"), "").is_ok() {
+        return; // Running as root, which writes anywhere.
+    }
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 2.txt"]);
+    test.activate("rename", None);
+    let field = name_editor(&test);
+
+    field.set_text("Plan");
+    field.emit_activate();
+
+    let dialog = open_dialog(&test);
+    assert_eq!(dialog.title_text(), "File Access Denied");
+    assert!(
+        dialog
+            .message_text()
+            .starts_with("You need permission to perform this action"),
+        "{}",
+        dialog.message_text()
+    );
+    assert_eq!(dialog.button_labels(), ["Try Again", "Cancel"]);
+    assert_eq!(test.window.shown_message(), "", "no toast");
+    dialog.press("Cancel");
+    wait_until("the field to come back", || field.is_sensitive());
+    assert!(is_renaming_in_place(&test), "editing goes on");
+    assert!(fixture.path("Notes 2.txt").is_file(), "nothing renamed");
+
+    field.emit_activate();
+    let dialog = open_dialog(&test);
+    fs::set_permissions(fixture.path(""), fs::Permissions::from_mode(0o755)).expect("mode");
+    dialog.press("Try Again");
+    wait_until("the rename", || fixture.path("Plan.txt").is_file());
+}

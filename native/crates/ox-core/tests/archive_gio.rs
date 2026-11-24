@@ -343,7 +343,7 @@ fn a_failed_open_closes_the_stream() {
 
     let result = GioArchiveReader::open(file.upcast_ref(), &Cancellation::new());
 
-    assert_eq!(result.unwrap_err().to_string(), "query failed");
+    assert_eq!(result.unwrap_err().to_string(), "Access is denied.");
     let stream = file.opened_stream().expect("the data was opened");
     assert!(stream.is_closed());
 }

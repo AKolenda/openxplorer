@@ -22,8 +22,8 @@ pub enum ArchiveError {
     #[error("{}", crate::i18n::gettext("Operation cancelled."))]
     Cancelled,
     /// The archive is damaged or uses a ZIP feature the reader does not
-    /// support.
-    #[error(transparent)]
+    /// support, said in Windows' words.
+    #[error("{}", .0.user_message())]
     Format(#[from] ZipFormatError),
     /// Reading the archive or writing the destination failed, or the write
     /// guard refused a protected location. [`TransferError::NotMounted`]

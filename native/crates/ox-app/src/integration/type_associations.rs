@@ -118,7 +118,7 @@ pub(crate) fn change_type(content_type: &str, change: &TypeChange) -> Result<(),
             Ok(())
         }
     };
-    changed.map_err(|error| error.to_string())
+    changed.map_err(|error| ox_core::system_error::message_of(&error))
 }
 
 /// The installed application `id`.

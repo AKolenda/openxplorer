@@ -91,7 +91,7 @@ pub enum SearchError {
     },
     /// The file system refused an operation on `path`, for example because
     /// `search.sqlite3` is a symlink.
-    #[error("{error}: {}", path.display())]
+    #[error("{}: {}", path.display(), crate::system_error::describe_io(error))]
     Io {
         /// The file or directory the operation was on.
         path: PathBuf,

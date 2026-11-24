@@ -325,7 +325,7 @@ impl BrowserWindow {
             return;
         };
         if let Err(error) = self.context().launch_application(&app, self.upcast_ref()) {
-            self.show_message(&error.to_string());
+            self.show_message(&ox_core::system_error::message_of(&error));
         }
     }
 
@@ -336,7 +336,7 @@ impl BrowserWindow {
             return;
         };
         if let Err(error) = self.context().launch_tool(&app, uris, self.upcast_ref()) {
-            self.show_message(&error.to_string());
+            self.show_message(&ox_core::system_error::message_of(&error));
         }
     }
 

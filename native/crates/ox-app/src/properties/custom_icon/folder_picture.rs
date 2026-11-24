@@ -86,7 +86,7 @@ impl Pending for PictureChoice {
             let uri = self.uri.borrow().clone();
             set_metadata(&uri, FOLDER_PICTURE, picture.clone())
                 .await
-                .map_err(|error| error.to_string())?;
+                .map_err(|error| ox_core::system_error::message_of(&error))?;
             self.current.replace(picture);
             if let Some(opener) = self.window.upgrade().and_then(|window| window.opener()) {
                 opener.announce_item_icon(&uri);

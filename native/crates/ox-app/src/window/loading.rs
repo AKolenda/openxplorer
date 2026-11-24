@@ -35,6 +35,7 @@ mod denied_folder;
 mod disconnected;
 pub(super) use disconnected::disconnected_message;
 mod mount_retry;
+mod network_error;
 mod removed_folder;
 
 use std::cell::RefCell;

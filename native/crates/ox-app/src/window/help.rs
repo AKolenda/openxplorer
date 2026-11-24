@@ -137,7 +137,7 @@ impl BrowserWindow {
         let window = self.downgrade();
         self.context().open_uri(url, self.upcast_ref(), move |error| {
             if let Some(window) = window.upgrade() {
-                window.show_message(&error.to_string());
+                window.show_message(&ox_core::system_error::message_of(&error));
             }
         });
     }

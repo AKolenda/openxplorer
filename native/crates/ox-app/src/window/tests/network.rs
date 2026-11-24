@@ -468,7 +468,7 @@ fn network_says_when_discovery_is_turned_off() {
     );
     assert_eq!(
         parts.text.tooltip_text().as_deref(),
-        Some("Location is not supported")
+        Some("The request is not supported.")
     );
     assert!(test.names().is_empty());
     capture(&test.window, "native-network-discovery-off.png");
@@ -636,9 +636,10 @@ fn an_unmounted_share_is_mounted_once_then_listed_again() {
     });
 }
 
-/// A share the server refuses, or that dropped off the network, says so
-/// in plain words that name it, as Windows Explorer does, with the
-/// system's own message only under Details. Nothing on the page is
+/// A share the server refuses, or that dropped off the network, opened in
+/// a tab with no folder to stay in, says so in plain words that name it,
+/// as Windows Explorer does, with the
+/// system's error code and words, in Windows', only under Details. Nothing on the page is
 /// selected when it shows or takes the keyboard, and Try again stays.
 /// The share is on a host that does not exist, and the mount is the
 /// test's.
@@ -655,12 +656,15 @@ fn an_offline_share_says_so_plainly_and_names_it() {
         )))
     });
 
+    // A new tab has no folder to stay in, so the share's page shows; a
+    // tab that came from a folder stays there and says "Network Error"
+    // (a_share_that_cannot_be_reached_says_network_error_and_stays).
     test.window
-        .navigate("smb://example.invalid/Studio/Photos")
+        .open_tab("smb://example.invalid/Studio/Photos", TabPlacement::Foreground)
         .expect("an SMB share");
-    wait_until("the failed mount", || {
-        test.window.load_error().as_deref() == Some(RAW)
-    });
+    wait_until("the failed mount", || test.window.load_error().is_some());
+    let error = test.window.load_error().unwrap_or_default();
+    assert!(!error.contains(RAW), "Windows' words, not Samba's: {error}");
     test.wait_for_listing("the failed listing");
 
     let pane = test.window.folder_pane();
@@ -682,9 +686,10 @@ fn an_offline_share_says_so_plainly_and_names_it() {
         .find(|expander| expander.is_visible() && expander.label().as_deref() == Some("Details"))
         .expect("the system's error is under Details");
     let detail = details.child().and_downcast::<gtk::Label>();
-    assert!(
-        detail.is_some_and(|label| label.text().contains(RAW)),
-        "the raw error stays under Details"
+    assert_eq!(
+        detail.map(|label| label.text().to_string()).as_deref(),
+        Some("Error code: 0x80070043\nThe network name cannot be found."),
+        "Windows' error code and words under Details"
     );
     details.set_expanded(true);
     let labels = descendants::<gtk::Label>(&page.root);
@@ -1258,4 +1263,72 @@ fn sign_out_and_disconnect_wait_for_a_running_file_operation() {
         disconnect_refusal,
         "Finish the current operation before disconnecting."
     );
+}
+
+/// A share that cannot be reached, gone to from a folder, says so as
+/// Windows 11 does (checked on a Windows 11 VM with
+/// `\\192.168.1.250\Projects`): "Network Error", "`OpenXplorer` cannot
+/// access \\…", what to check, "See details" ("Hide details" when open)
+/// with "Error code: 0x80070043" and "The network name cannot be found.",
+/// Diagnose when a network settings app is installed, and Cancel, after
+/// which the tab is still on the folder it showed.
+///
+/// parity: NET-003
+#[gtk::test]
+fn a_share_that_cannot_be_reached_says_network_error_and_stays() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.network().answer_mounts_with(|| {
+        Err(NetworkError::Gio(gtk::glib::Error::new(
+            gtk::gio::IOErrorEnum::Failed,
+            "Failed to mount Windows share: Connection timed out",
+        )))
+    });
+
+    test.window
+        .navigate("smb://192.0.2.250/Projects")
+        .expect("an SMB share");
+
+    let dialog = super::file_ops_support::open_dialog(&test);
+    assert_eq!(dialog.title().as_deref(), Some("Network Error"));
+    assert!(
+        dialog.has_css_class("main-instruction"),
+        "the heading is blue, as Windows' is"
+    );
+    assert_eq!(
+        dialog.title_text(),
+        "OpenXplorer cannot access \\\\192.0.2.250\\Projects"
+    );
+    assert!(
+        dialog.message_text().starts_with(
+            "Check the spelling of the name. Otherwise, there might be a problem with your network."
+        ),
+        "{}",
+        dialog.message_text()
+    );
+    let details = descendants::<gtk::Expander>(&dialog)
+        .into_iter()
+        .next()
+        .expect("See details");
+    assert!(!details.is_expanded());
+    assert_eq!(details.label().as_deref(), Some("See details"));
+    details.set_expanded(true);
+    assert_eq!(details.label().as_deref(), Some("Hide details"));
+    let detail = details.child().and_downcast::<gtk::Label>().expect("the details");
+    assert_eq!(
+        detail.text(),
+        "Error code: 0x80070043\nThe network name cannot be found."
+    );
+    let buttons = dialog.button_labels();
+    assert_eq!(buttons.last().map(String::as_str), Some("Cancel"));
+    assert!(buttons.len() == 1 || buttons[0] == "Diagnose", "{buttons:?}");
+    dialog.press("Cancel");
+    super::file_ops_support::wait_for_no_dialog(&test);
+    wait_until("the tab back on its folder", || {
+        test.window.current_uri() == Some(fixture.uri())
+    });
+    let session = test.window.imp().session.borrow();
+    let tab = session.active().expect("a tab");
+    assert!(tab.error.is_none(), "no unavailable page");
+    assert!(!tab.history.can_go_forward(), "the share is not in the history");
 }

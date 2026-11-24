@@ -304,19 +304,17 @@ pub enum FormatError {
         crate::i18n::gettext("The drive is in use. Close the files and programs using it, then try again.")
     )]
     Busy,
-    /// Formatting failed for another reason, which UDisks names.
-    #[error(
-        "{}",
-        crate::i18n::format_message("Could not format the drive: {error}", &[("error", .0.as_str())])
-    )]
+    /// Formatting failed for another reason, which UDisks names; the
+    /// user reads Windows' words, UDisks' go to the debug log.
+    #[error("{}", crate::i18n::gettext("OpenXplorer was unable to complete the format."))]
     Failed(String),
     /// Formatting failed as `error` says, and the drive it unmounted
     /// could not be mounted again, for the `reason` UDisks gave.
     #[error(
         "{}",
         crate::i18n::format_message(
-            "{error} (It could not be mounted again: {reason})",
-            &[("error", error.to_string().as_str()), ("reason", reason.as_str())]
+            "{error} The drive could not be mounted again.",
+            &[("error", error.to_string().as_str())]
         )
     )]
     NotMountedAgain {
@@ -341,6 +339,7 @@ impl FormatError {
             Some(_) => {
                 let mut error = error;
                 gio::DBusError::strip_remote_error(&mut error);
+                glib::g_debug!(crate::LOG_DOMAIN, "Formatting failed: {error}");
                 Self::Failed(error.message().to_owned())
             }
             None if name.starts_with("org.freedesktop.DBus.Error.") => Self::Unavailable(error),

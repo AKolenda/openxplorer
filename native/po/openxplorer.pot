@@ -448,7 +448,7 @@ msgstr ""
 msgid "Browse…"
 msgstr ""
 
-#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs crates/ox-app/src/window/gallery_locations.rs crates/ox-app/src/window/picker.rs crates/ox-app/src/window/transfer_panel/failure.rs
+#: crates/ox-app/resources/ui/brave-dialog.ui crates/ox-app/resources/ui/network-sign-in.ui crates/ox-app/resources/ui/open-with-dialog.ui crates/ox-app/resources/ui/transfer-panel.ui crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-app/src/properties/restore.rs crates/ox-app/src/properties/window.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/conflict_window.rs crates/ox-app/src/window/file_drop/action.rs crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/gallery_locations.rs crates/ox-app/src/window/loading/network_error.rs crates/ox-app/src/window/picker.rs crates/ox-app/src/window/transfer_panel/failure.rs
 msgid "Cancel"
 msgstr ""
 
@@ -728,8 +728,8 @@ msgstr ""
 msgid "Show password"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/network_sign_in.rs
-msgid "The previous sign-in was not accepted. Check your username and password."
+#: crates/ox-app/src/dialogs/network_sign_in.rs crates/ox-core/src/system_error.rs
+msgid "The user name or password is incorrect."
 msgstr ""
 
 #: crates/ox-app/src/dialogs/network_sign_out.rs
@@ -850,7 +850,7 @@ msgid "Date: {date}"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/folder_view/gallery_view.rs
+#: crates/ox-app/src/folder_view/gallery_view.rs crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Item type: {type}"
 msgstr ""
 
@@ -2015,7 +2015,7 @@ msgstr ""
 msgid "{width} x {height}"
 msgstr ""
 
-#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/details_tab.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/empty_page.rs crates/ox-app/src/window/loading/denied_folder.rs crates/ox-app/src/window/shortcuts_window.rs
+#: crates/ox-app/resources/ui/command-bar.ui crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/properties.rs crates/ox-app/src/properties/details_tab.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/command_bar/menus.rs crates/ox-app/src/window/empty_page.rs crates/ox-app/src/window/shortcuts_window.rs
 msgid "Details"
 msgstr ""
 
@@ -5862,7 +5862,7 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/disk_tools.rs
-msgid "{drive} is formatted, but could not be mounted again: {error}"
+msgid "{drive} is formatted, but could not be mounted again."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -5872,6 +5872,11 @@ msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
 msgid "Create a folder or paste files here."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/empty_page.rs crates/ox-app/src/window/loading/network_error.rs
+msgid "Error code: {code}\n{message}"
 msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
@@ -6202,6 +6207,14 @@ msgid "An unexpected error is keeping you from moving the folder. If you continu
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "An unexpected error is keeping you from renaming the file. If you continue to receive this error, you can use the error code to search for help with this problem."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "An unexpected error is keeping you from renaming the folder. If you continue to receive this error, you can use the error code to search for help with this problem."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Close the file and try again."
 msgstr ""
 
@@ -6219,6 +6232,11 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Destination Folder Access Denied"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Dimensions: {dimensions}"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
@@ -6239,6 +6257,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "Interrupted Action"
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "Remove the write-protection or use another disk."
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs crates/ox-app/src/window/file_ops/unstorable_dialog.rs
@@ -6264,6 +6286,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/failure_dialog.rs
 msgid "The destination folder is a subfolder of the source folder."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/failure_dialog.rs
+msgid "The disk is write-protected."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -6979,6 +7005,35 @@ msgstr ""
 
 #: crates/ox-app/src/window/loading/disconnected.rs
 msgid "The drive or network share that holds this folder was disconnected."
+msgstr ""
+
+#: crates/ox-app/src/window/loading/network_error.rs
+msgid "Check the spelling of the name. Otherwise, there might be a problem with your network."
+msgstr ""
+
+#: crates/ox-app/src/window/loading/network_error.rs
+msgid "Check the spelling of the name. Otherwise, there might be a problem with your network. To try to identify and resolve network problems, click Diagnose."
+msgstr ""
+
+#: crates/ox-app/src/window/loading/network_error.rs
+msgid "Diagnose"
+msgstr ""
+
+#: crates/ox-app/src/window/loading/network_error.rs
+msgid "Hide details"
+msgstr ""
+
+#: crates/ox-app/src/window/loading/network_error.rs
+msgid "Network Error"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/loading/network_error.rs
+msgid "OpenXplorer cannot access {location}"
+msgstr ""
+
+#: crates/ox-app/src/window/loading/network_error.rs
+msgid "See details"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -8702,6 +8757,14 @@ msgid "That compression method is not supported"
 msgstr ""
 
 #: crates/ox-core/src/archive/zip/error.rs
+msgid "The Compressed (zipped) Folder is invalid."
+msgstr ""
+
+#: crates/ox-core/src/archive/zip/error.rs
+msgid "This ZIP archive uses a feature that isn't supported. To open it, use a different archive app."
+msgstr ""
+
+#: crates/ox-core/src/archive/zip/error.rs
 msgid "Truncated central directory"
 msgstr ""
 
@@ -9163,17 +9226,16 @@ msgstr ""
 msgid "xdg-mime could not be run: {error}"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-core/src/integration/drive_format.rs
-msgid "Could not format the drive: {error}"
-msgstr ""
-
 #: crates/ox-core/src/integration/drive_format.rs
 msgid "Formatting needs the UDisks service, which is not available."
 msgstr ""
 
 #: crates/ox-core/src/integration/drive_format.rs
 msgid "Formatting was cancelled."
+msgstr ""
+
+#: crates/ox-core/src/integration/drive_format.rs
+msgid "OpenXplorer was unable to complete the format."
 msgstr ""
 
 #: crates/ox-core/src/integration/drive_format.rs
@@ -9194,7 +9256,7 @@ msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/integration/drive_format.rs
-msgid "{error} (It could not be mounted again: {reason})"
+msgid "{error} The drive could not be mounted again."
 msgstr ""
 
 #: crates/ox-core/src/integration/email_portal.rs
@@ -10399,6 +10461,171 @@ msgstr ""
 
 #: crates/ox-core/src/sizes/result.rs
 msgid "Time limit reached"
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "Access is denied."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "An operation is not supported on a directory."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "An unexpected network error occurred."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "Cannot create a file when that file already exists."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/system_error.rs
+msgid "Error {code}: {message}"
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "Incorrect function."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "No application is associated with the specified file for this operation."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "Not enough memory resources are available to process this command."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The data is invalid."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The device is not connected."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The device is not ready."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The directory is not empty."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The directory name is invalid."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The file or directory is corrupted and unreadable."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The file or directory is not a reparse point."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The file size exceeds the limit allowed and cannot be saved."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The filename or extension is too long."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The filename, directory name, or volume label syntax is incorrect."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The handle is invalid."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The media is write protected."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The name of the file cannot be resolved by the system."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The network connection was aborted by the local system."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The network location cannot be reached."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The network name cannot be found."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The network path was not found."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The operation was canceled by the user."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The parameter is incorrect."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The process cannot access the file because it is being used by another process."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The remote computer refused the network connection."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The request could not be performed because of an I/O device error."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The request is not supported."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The requested file operation failed because the storage quota was exceeded. To free up disk space, move files to a different location or delete unnecessary files. For more information, contact your system administrator."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The semaphore timeout period has expired."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The specified network name is no longer available."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The system cannot find the file specified."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The system cannot find the path specified."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The system cannot move the file to a different disk drive."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "The system cannot open the file."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "There is not enough space on the disk."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "This operation returned because the timeout period expired."
+msgstr ""
+
+#: crates/ox-core/src/system_error.rs
+msgid "Unspecified error"
 msgstr ""
 
 #: crates/ox-core/src/transfer/commit.rs

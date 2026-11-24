@@ -70,7 +70,7 @@ async fn target_of(uri: &str) -> Result<Target, String> {
         Ok(info) if info.file_type() == gio::FileType::Directory => Ok(Target::Folder),
         Ok(_) => Ok(Target::Other),
         Err(error) if error.matches(gio::IOErrorEnum::NotFound) => Ok(Target::Missing),
-        Err(error) => Err(error.to_string()),
+        Err(error) => Err(ox_core::system_error::message_of(&error)),
     }
 }
 
@@ -164,7 +164,7 @@ impl BrowserWindow {
         gio::spawn_blocking(move || make_folder(&missing_parent))
             .await
             .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| ox_core::system_error::message_of(&error))?;
         let request = ExtractionRequest {
             archive_uri: archive.uri.clone(),
             destination_uri: parent,
@@ -213,7 +213,7 @@ impl BrowserWindow {
             Ok(uris) => uris,
             Err(error) => {
                 self.discard_private_folder(staging).await;
-                return Err(error.to_string());
+                return Err(ox_core::system_error::message_of(&error));
             }
         };
         let moved = uris.is_empty()

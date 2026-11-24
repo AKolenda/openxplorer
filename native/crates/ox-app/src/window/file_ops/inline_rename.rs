@@ -411,24 +411,34 @@ impl BrowserWindow {
             editor.grab_focus();
             return;
         }
-        let Some(renamed) = self.rename_or_offer_number(cell, editor, target, name).await else {
+        let Some(mut renamed) = self.rename_or_offer_number(cell, editor, target, name).await else {
             return;
         };
-        match renamed {
-            Ok(renamed) => {
-                // Before the folder is listed again, which rebinds the cell.
-                self.close_name_editor(cell);
-                match self.take_rename_next() {
-                    Some(next) => self.finish_rename_and_continue(&renamed, next),
-                    None => self.finish_rename_in_place(&renamed),
-                }
+        // A refused rename asks to try again, as Windows does; Try Again
+        // renames to the same name once more.
+        while let Err(error) = &renamed {
+            if !self
+                .ask_to_rename_again(&target.uri, &target.name, target.is_folder, error)
+                .await
+            {
+                break;
             }
-            Err(error) => {
-                self.take_rename_next();
-                editor.set_sensitive(true);
-                editor.grab_focus();
-                self.show_message(&error.to_string());
+            let Some(again) = self.admitted_rename(cell, &target.uri, name).await else {
+                return;
+            };
+            renamed = again;
+        }
+        if let Ok(renamed) = renamed {
+            // Before the folder is listed again, which rebinds the cell.
+            self.close_name_editor(cell);
+            match self.take_rename_next() {
+                Some(next) => self.finish_rename_and_continue(&renamed, next),
+                None => self.finish_rename_in_place(&renamed),
             }
+        } else {
+            self.take_rename_next();
+            editor.set_sensitive(true);
+            editor.grab_focus();
         }
     }
 

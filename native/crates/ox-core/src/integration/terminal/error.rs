@@ -100,7 +100,7 @@ pub enum TerminalError {
     #[error(transparent)]
     Entry(#[from] EntryError),
     /// Resolving the folder or starting the terminal failed.
-    #[error("{error}: {}", path.display())]
+    #[error("{}: {}", path.display(), crate::system_error::describe_io(error))]
     Io {
         /// The folder or program the operation was on.
         path: PathBuf,

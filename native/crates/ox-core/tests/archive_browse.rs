@@ -213,7 +213,7 @@ fn a_file_that_is_not_a_zip_reports_a_bad_zip() {
     let error = fixture.list("").unwrap_err();
 
     assert_eq!(error, ArchiveError::Format(ZipFormatError::NotAZip));
-    assert_eq!(error.to_string(), "File is not a zip file");
+    assert_eq!(error.to_string(), "The Compressed (zipped) Folder is invalid.");
 }
 
 /// Ported from `v2.0.0:desktop/tests/test_v05.py::ZipTests::test_central_directory_allocation_bounded`.

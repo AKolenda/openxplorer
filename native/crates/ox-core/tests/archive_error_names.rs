@@ -34,13 +34,14 @@ fn unlock(folder: &Path) {
     fs::set_permissions(folder, fs::Permissions::from_mode(0o755)).expect("chmod");
 }
 
-/// Asserts `error` names `real` and the system's reason, and nothing of
+/// Asserts `error` names `real` and the system's reason in Windows'
+/// words, and nothing of
 /// the staging.
 fn assert_names(error: &str, real: &Path) {
     assert!(!error.contains(".openxplorer-"), "{error}");
     assert!(!error.contains(".part"), "{error}");
     assert!(error.contains(&real.display().to_string()), "{error}");
-    assert!(error.contains("Permission denied"), "{error}");
+    assert!(error.contains("Access is denied."), "{error}");
 }
 
 /// parity: ARC-013
@@ -104,7 +105,7 @@ fn a_new_folder_named_like_a_private_one_keeps_its_name_in_errors() {
     let error = fixture.extract(&name).unwrap_err().to_string();
 
     unlock(&fixture.destination);
-    let real = format!("{}: Permission denied", fixture.destination.join(&name).display());
+    let real = format!("{}: Access is denied.", fixture.destination.join(&name).display());
     assert!(error.ends_with(&real), "{error}");
     assert!(!error.contains(".part"), "{error}");
     fixture.assert_no_output();
