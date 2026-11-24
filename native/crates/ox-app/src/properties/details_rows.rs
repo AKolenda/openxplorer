@@ -390,8 +390,8 @@ fn content_section(media: &MediaDetails) -> Section {
     content
 }
 
-/// Name, Item type, Folder path, Date created, Date modified, Size,
-/// Attributes and Owner.
+/// Name, Type, File location, Date created, Date modified, Size,
+/// Attributes, Owner and Computer, in Windows 11's words and order.
 fn file_section(properties: &ItemProperties, locations: &LocationContext) -> Section {
     let entry = &properties.entry;
     let folder = properties.parent_uri.as_deref().map(|parent| {
@@ -405,8 +405,8 @@ fn file_section(properties: &ItemProperties, locations: &LocationContext) -> Sec
     });
     let mut file = Section::new(message_id("File"));
     file.text(message_id("Name"), Some(entry.name.clone()))
-        .text(message_id("Item type"), Some(entry.type_label.clone()))
-        .text(message_id("Folder path"), folder)
+        .text(message_id("Type"), Some(entry.type_label.clone()))
+        .text(message_id("File location"), folder)
         .text(
             message_id("Date created"),
             properties
@@ -424,12 +424,21 @@ fn file_section(properties: &ItemProperties, locations: &LocationContext) -> Sec
             entry.size.map(|size| format::size_text(Some(size))),
         )
         .text(message_id("Attributes"), attributes_text(properties))
-        .text(message_id("Owner"), properties.owner.clone());
+        .text(message_id("Owner"), properties.owner.clone())
+        .text(message_id("Computer"), Some(computer_text()));
     file
 }
 
-/// Windows' attribute letters Linux has: R when the owner may not write
-/// the file, H when its name starts with a dot.
+/// Windows' Computer row: this computer's name and "(this PC)", as
+/// `fileserver (this PC)`.
+fn computer_text() -> String {
+    ox_core::i18n::format_message("{name} (this PC)", &[("name", &gtk::glib::host_name())])
+}
+
+/// Windows' attribute letters Linux has, in Windows' order: R when the
+/// owner may not write the file, H when its name starts with a dot, and
+/// A for every file, as Windows sets a file's Archive attribute when it is
+/// made or changed, so a normal file reads "A" and a read-only one "RA".
 fn attributes_text(properties: &ItemProperties) -> Option<String> {
     let mut letters = String::new();
     if properties.mode.is_some_and(|mode| mode & 0o200 == 0) {
@@ -437,6 +446,9 @@ fn attributes_text(properties: &ItemProperties) -> Option<String> {
     }
     if properties.entry.name.starts_with('.') {
         letters.push('H');
+    }
+    if !properties.entry.is_dir {
+        letters.push('A');
     }
     (!letters.is_empty()).then_some(letters)
 }
@@ -635,6 +647,7 @@ mod tests {
             link_target: None,
             links_to_folder: false,
             default_app: None,
+            default_app_icon: None,
             mount: None,
             dimensions: None,
             custom_icon: None,
@@ -733,12 +746,12 @@ mod tests {
         );
         assert_eq!(text(&sections, "35mm focal length").as_deref(), Some("75"));
         assert!(text(&sections, "Date taken").is_some_and(|date| date.contains("2026")));
-        assert_eq!(text(&sections, "Folder path").as_deref(), Some("/tmp/ox-test"));
+        assert_eq!(text(&sections, "File location").as_deref(), Some("/tmp/ox-test"));
         assert_eq!(
             text(&sections, "Size").as_deref(),
             Some(format::size_text(Some(322_003)).as_str())
         );
-        assert_eq!(text(&sections, "Attributes").as_deref(), Some("R"));
+        assert_eq!(text(&sections, "Attributes").as_deref(), Some("RA"));
         assert_eq!(text(&sections, "Owner").as_deref(), Some("tester"));
         assert_eq!(
             row(&sections, "Lens model"),
@@ -767,9 +780,9 @@ mod tests {
         assert_eq!(row(&sections, "Rating"), Some(&DetailValue::Stars(0)));
         assert_eq!(text(&sections, "Rating").as_deref(), Some("Unrated"));
         assert_eq!(
-            text(&sections, "Attributes"),
-            None,
-            "a writable, visible file has no letters"
+            text(&sections, "Attributes").as_deref(),
+            Some("A"),
+            "a writable, visible file is A, as Windows shows a normal file"
         );
 
         item.dimensions = Some((485, 596));
@@ -876,9 +889,17 @@ mod tests {
         let names: Vec<&str> = sections[0].rows.iter().map(|row| row.name.as_str()).collect();
         assert_eq!(
             names,
-            ["Name", "Item type", "Folder path", "Size", "Attributes", "Owner"]
+            [
+                "Name",
+                "Type",
+                "File location",
+                "Size",
+                "Attributes",
+                "Owner",
+                "Computer"
+            ]
         );
-        assert_eq!(text(&sections, "Attributes").as_deref(), Some("H"));
+        assert_eq!(text(&sections, "Attributes").as_deref(), Some("HA"));
     }
 
     /// Exposure, flash and channel wording.

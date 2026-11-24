@@ -103,16 +103,18 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     assert!(menu.is_visible());
     assert_eq!(menu.style(), MenuStyle::Classic);
     assert!(menu.strip_labels().is_empty());
-    // "Open with <app>" rows name whatever the machine has installed.
+    // "Open with <app>" rows, and "Edit in <text editor>", name whatever
+    // the machine has installed.
     let rows: Vec<String> = menu
         .row_labels()
         .into_iter()
-        .filter(|label| !label.starts_with("Open with "))
+        .filter(|label| !label.starts_with("Open with ") && !label.starts_with("Edit in "))
         .collect();
     assert_eq!(
         rows,
         [
             "Open",
+            "Add to Favorites",
             "Open containing folder in Terminal",
             "Open with…",
             "-",
@@ -130,8 +132,9 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
             "-",
             "Compress to…",
             "-",
-            "Properties",
             "Configure service actions…",
+            "-",
+            "Properties",
         ]
     );
     assert!(menu.row("Rename").is_sensitive());
@@ -215,6 +218,94 @@ fn right_clicking_opens_the_compact_menu_with_show_more_options_last() {
         !rows.iter().any(|row| row == "Configure service actions…"),
         "configuring is in the classic menu: {rows:?}"
     );
+}
+
+/// Removes the desktop entries a test added when it ends.
+struct TestEntries(Vec<std::path::PathBuf>);
+
+impl Drop for TestEntries {
+    fn drop(&mut self) {
+        for path in &self.0 {
+            let _ = fs::remove_file(path);
+        }
+    }
+}
+
+/// A text file whose default application is a word processor still
+/// offers "Edit in <text editor>" with the editor's icon, in its own group
+/// between Properties and Show more options, as Windows 11 offers "Edit in
+/// Notepad" for a .txt that opens in Word; choosing it opens the file in
+/// the editor. Before, the row named only Visual Studio Code and its kin.
+///
+/// parity: OPEN-015, CMD-010
+#[gtk::test]
+fn a_text_file_that_opens_in_a_word_processor_offers_edit_in_the_text_editor() {
+    let data = glib::user_data_dir();
+    assert!(
+        data.starts_with(std::env::temp_dir()),
+        "tests add applications only to a private data folder"
+    );
+    let folder = data.join("applications");
+    fs::create_dir_all(&folder).expect("the data folder is writable");
+    let entries = [
+        (
+            "ox-test-writer.desktop",
+            "Name=Fictional Writer\nCategories=Office;WordProcessor;",
+        ),
+        (
+            "ox-test-text-editor.desktop",
+            "Name=Fictional Editor\nIcon=accessories-text-editor\nCategories=Utility;TextEditor;",
+        ),
+    ];
+    let _cleanup = TestEntries(entries.iter().map(|(id, _)| folder.join(id)).collect());
+    for (id, fields) in entries {
+        let entry =
+            format!("[Desktop Entry]\nType=Application\n{fields}\nExec=true %U\nMimeType=text/plain;\n");
+        fs::write(folder.join(id), entry).expect("the data folder is writable");
+    }
+    wait_until("GIO to list both", || {
+        entries
+            .iter()
+            .all(|(id, _)| crate::integration::installed_application(id).is_some())
+    });
+    let app = |id: &str| crate::integration::installed_application(id).expect("installed");
+    app("ox-test-writer.desktop")
+        .set_as_default_for_type("text/plain")
+        .expect("the private mimeapps.list takes the default");
+    app("ox-test-text-editor.desktop")
+        .set_as_last_used_for_type("text/plain")
+        .expect("the private mimeapps.list takes the editor");
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+
+    test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
+    let menu = test.window.context_menu();
+    let rows = menu.row_labels();
+    let properties = rows
+        .iter()
+        .position(|row| row == "Properties")
+        .expect("Properties");
+    assert_eq!(
+        rows[properties..],
+        [
+            "Properties",
+            "-",
+            "Edit in Fictional Editor",
+            "-",
+            "Show more options"
+        ],
+        "{rows:?}"
+    );
+    let edit = menu
+        .items()
+        .into_iter()
+        .find(|item| item.label == "Edit in Fictional Editor")
+        .expect("the row");
+    assert_eq!(edit.application_icon.as_deref(), Some("accessories-text-editor"));
+    menu.row("Edit in Fictional Editor").emit_activate();
+    wait_until("the editor to get the file", || {
+        test.window.shown_message_text() == "Opened with Fictional Editor"
+    });
 }
 
 /// The keyboard starts on the first enabled item, Up and Down wrap
@@ -1370,4 +1461,44 @@ fn new_in_a_pinned_folder_ends_a_search_first() {
     });
     assert_eq!(test.window.current_uri().as_deref(), Some(pinned.as_str()));
     test.window.search_strip().set_keeps_search(false);
+}
+
+/// The folder menu grays Open in Terminal where no terminal can open, as
+/// the navigation pane's menus do: on Gallery's blank space, which is no
+/// folder on a drive or share; Network's menu leaves it out, as Windows
+/// 11's; a folder keeps it.
+///
+/// parity: CMD-011, OPEN-017
+#[gtk::test]
+fn the_folder_menu_grays_open_in_terminal_where_no_terminal_opens() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    for style in [ContextMenu::Win11, ContextMenu::Win10] {
+        choose_menu_style(&test, style);
+        for (place, uri, opens) in [
+            ("a folder", fixture.uri(), true),
+            ("Network", ox_core::location::NETWORK_URI.to_owned(), false),
+            ("Gallery", ox_core::location::GALLERY_URI.to_owned(), false),
+        ] {
+            test.activate("go-to", Some(&uri));
+            wait_until(&format!("{place} to show"), || {
+                test.window.current_uri().as_deref() == Some(uri.as_str())
+            });
+            test.window.right_click(None);
+            let menu = test.window.context_menu();
+            let rows = menu.row_labels();
+            // Network's menus have no Open in Terminal at all, as
+            // Windows 11's (page_menus.rs).
+            if rows.contains(&"Open in Terminal".to_owned()) {
+                assert_eq!(
+                    menu.row("Open in Terminal").is_sensitive(),
+                    opens,
+                    "{style:?} {place}: {rows:?}"
+                );
+            } else {
+                assert_eq!(place, "Network", "{style:?}: {rows:?}");
+            }
+            menu.popdown();
+        }
+    }
 }

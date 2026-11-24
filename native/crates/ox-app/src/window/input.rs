@@ -415,6 +415,11 @@ impl BrowserWindow {
         area.add_controller(press);
         self.attach_context_menu(area);
         self.attach_file_drop_zone(area, DropZone::FolderView);
+        // A landing page's blank space (Home, This PC) has the page's menu,
+        // as Windows 11's; its tiles and rows claim their own right-clicks.
+        if let Some(scroll) = pane.landing().ancestor(gtk::ScrolledWindow::static_type()) {
+            self.attach_context_menu(&scroll);
+        }
     }
 
     /// The input method that turns key presses in `view` into text for

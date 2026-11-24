@@ -160,6 +160,36 @@ impl Fixture {
         fixture
     }
 
+    /// "Example projects" as a person's folder looks: a Documents folder,
+    /// an MP3, an MP4, a PDF, a JPEG, an ODT, a ZIP and a 7z archive
+    /// (valid, if tiny, with their real signatures), names with spaces,
+    /// brackets, an accent, an emoji and a leading dash, and a 5 GB sparse
+    /// disk image that takes no room on the disk.
+    pub(crate) fn real_world() -> Self {
+        let fixture = Self::empty();
+        fs::create_dir(fixture.path("Documents")).expect("fixture subfolder");
+        let files: [(&str, &[u8]); 9] = [
+            ("Holiday song.mp3", b"ID3\x04\x00\x00\x00\x00\x00\x00synthetic"),
+            ("Beach clip.mp4", b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom"),
+            ("Quarterly report.pdf", b"%PDF-1.4\n%%EOF\n"),
+            ("Sunset (2).jpg", b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xd9"),
+            ("Meeting notes.odt", b"PK\x03\x04synthetic"),
+            ("Résumé [final] 🙂.txt", b"Synthetic test data\n"),
+            ("-dash first.txt", b"Synthetic test data\n"),
+            // An empty 7z archive: its signature, version and header CRC.
+            ("Archive.7z", b"7z\xbc\xaf\x27\x1c\x00\x04\x8d\x9b\xd5\x0f\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"),
+            // An empty ZIP archive: its end of central directory alone.
+            ("Photos.zip", b"PK\x05\x06\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"),
+        ];
+        for (name, contents) in files {
+            fs::write(fixture.path(name), contents).expect("fixture file");
+        }
+        let big = fs::File::create(fixture.path("Backup disk.img")).expect("fixture file");
+        big.set_len(5 * 1024 * 1024 * 1024)
+            .expect("a sparse fixture file");
+        fixture
+    }
+
     /// A folder of `count` files, enough to scroll.
     pub(crate) fn with_files(count: usize) -> Self {
         let fixture = Self::empty();

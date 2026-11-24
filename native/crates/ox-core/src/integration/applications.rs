@@ -26,6 +26,11 @@ pub trait ApplicationInfo {
     fn icon(&self) -> Option<String> {
         None
     }
+    /// The desktop file's `Categories`, such as `Utility;TextEditor;`;
+    /// `None` without them.
+    fn categories(&self) -> Option<String> {
+        None
+    }
 }
 
 impl ApplicationInfo for gio::AppInfo {
@@ -52,6 +57,17 @@ impl ApplicationInfo for gio::AppInfo {
     fn icon(&self) -> Option<String> {
         let icon = gio::prelude::AppInfoExt::icon(self)?;
         gio::prelude::IconExt::to_string(&icon).map(Into::into)
+    }
+
+    /// Read from the desktop file the data folders hold under the
+    /// application's desktop ID, as GIO finds it.
+    fn categories(&self) -> Option<String> {
+        let id = ApplicationInfo::id(self)?;
+        let entry = glib::KeyFile::new();
+        entry
+            .load_from_data_dirs(format!("applications/{id}"), glib::KeyFileFlags::NONE)
+            .ok()?;
+        entry.string("Desktop Entry", "Categories").ok().map(Into::into)
     }
 }
 

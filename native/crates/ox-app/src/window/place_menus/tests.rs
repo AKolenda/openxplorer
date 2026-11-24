@@ -58,9 +58,18 @@ fn a_network_share_can_be_kept_removed_and_signed_out_of() {
         ]
     );
     assert_eq!(browsed_menu[5..], ["Keep in Network", "Sign out of server…"]);
+    // A computer is never saved; it is pinned to Quick access, as in
+    // Windows 11.
     assert_eq!(
-        server_menu[4..],
-        ["Sign out of server…"],
+        server_menu,
+        [
+            "Open",
+            "Open in new tab",
+            "Open in new window",
+            "Pin to Quick access",
+            "Open in Terminal",
+            "Sign out of server…"
+        ],
         "a server is never saved"
     );
 }

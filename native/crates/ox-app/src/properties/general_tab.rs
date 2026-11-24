@@ -50,6 +50,10 @@ use crate::icons::{Art, ArtImage};
 /// The size of the item's picture beside its name.
 pub(super) const HEADER_ART_SIZE: i32 = 32;
 
+/// The CSS class of the dates' rows, whose names take only the room they
+/// need (`properties.css`).
+const DATES_CLASS: &str = "properties-dates";
+
 /// A file's Opens with row without a default application.
 const NO_DEFAULT_APP: &str = crate::i18n::message_id("No default application");
 
@@ -156,25 +160,29 @@ pub(super) fn general_tab(
     page.append(place.widget());
     page.append(&divider());
 
+    // The dates' names need less room than the other groups' ("Size on
+    // disk:"), so their values take it: Windows 11 writes each date on one
+    // line, "Wednesday, November 18, 2026, 8:36:06 PM".
     let dates = Rows::new();
+    dates.widget().add_css_class(DATES_CLASS);
     dates.add(
         &ox_core::i18n::gettext("Created"),
-        &format::weekday_date_time_text(properties.created),
+        &keep_time_together(&format::weekday_date_time_text(properties.created)),
     );
     if !is_folder {
         dates.add(
             &ox_core::i18n::gettext("Modified"),
-            &format::weekday_date_time_text(entry.modified),
+            &keep_time_together(&format::weekday_date_time_text(entry.modified)),
         );
         dates.add(
             &ox_core::i18n::gettext("Accessed"),
-            &format::long_date_time_text(properties.accessed),
+            &keep_time_together(&format::long_date_time_text(properties.accessed)),
         );
     }
     if entry.trash_orig_path.is_some() {
         dates.add(
             &ox_core::i18n::gettext("Deleted"),
-            &format::weekday_date_time_text(entry.trash_deletion_date),
+            &keep_time_together(&format::weekday_date_time_text(entry.trash_deletion_date)),
         );
     }
     page.append(dates.widget());
@@ -189,6 +197,22 @@ pub(super) fn general_tab(
         folder_rows,
         opens_with,
         edits,
+    }
+}
+
+/// `date` with a no-break space between its time and a closing word
+/// without digits, such as "PM", so a date too long for its line never leaves "PM" alone
+/// on the next one.
+fn keep_time_together(date: &str) -> String {
+    match date.rsplit_once(' ') {
+        Some((time, word))
+            if !word.is_empty()
+                && !word.chars().any(|c| c.is_ascii_digit())
+                && time.ends_with(|c: char| c.is_ascii_digit()) =>
+        {
+            format!("{time}\u{a0}{word}")
+        }
+        _ => date.to_owned(),
     }
 }
 
@@ -236,8 +260,9 @@ fn type_of_file(entry: &Entry) -> String {
     }
 }
 
-/// The application's name and Change..., which opens Open with for the
-/// file as a dialog of the Properties window.
+/// The application's icon and name, as Windows 11 shows them, and
+/// Change..., which opens Open with for the file as a dialog of the
+/// Properties window.
 fn opens_with_row(
     properties: &ItemProperties,
     can_change: bool,
@@ -256,7 +281,21 @@ fn opens_with_row(
         .ellipsize(gtk::pango::EllipsizeMode::End)
         .css_classes(["property-value"])
         .build();
-    row.append(&value);
+    let icon = gtk::Image::builder()
+        .accessible_role(gtk::AccessibleRole::Presentation)
+        .valign(gtk::Align::Center)
+        .css_classes([APP_ICON_CLASS])
+        .build();
+    show_app_icon(
+        &icon,
+        properties.default_app.is_some(),
+        properties.default_app_icon.as_deref(),
+    );
+    let named = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    named.set_hexpand(true);
+    named.append(&icon);
+    named.append(&value);
+    row.append(&named);
     let change = push_button(&ox_core::i18n::gettext("Change..."));
     super::window::give_access_key(&change, 'c');
     change.set_valign(gtk::Align::Center);
@@ -278,6 +317,26 @@ fn opens_with_row(
     });
     row.append(&change);
     (row, value)
+}
+
+/// The CSS class of Opens with's application icon.
+const APP_ICON_CLASS: &str = "app-icon";
+
+/// The edge of Opens with's application icon.
+const APP_ICON_SIZE: i32 = 16;
+
+/// Shows the default application's `icon` in `image`, or the generic
+/// application glyph for one without an icon, while there is an
+/// application (`has_app`); hides it otherwise.
+pub(super) fn show_app_icon(image: &gtk::Image, has_app: bool, icon: Option<&str>) {
+    image.set_visible(has_app);
+    match icon.and_then(|icon| gtk::gio::Icon::for_string(icon).ok()) {
+        Some(icon) => {
+            image.set_from_gicon(&icon);
+            image.set_pixel_size(APP_ICON_SIZE);
+        }
+        None => crate::icons::set_icon(image, crate::icons::Icon::Apps, APP_ICON_SIZE),
+    }
 }
 
 /// A Mounted Volume's Target: the volume's label, else its type, and

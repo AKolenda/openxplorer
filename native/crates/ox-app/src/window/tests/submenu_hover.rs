@@ -6,6 +6,7 @@
 //! moving across other rows on the way into the open submenu keeps it
 //! open, a click opens it at once, Right opens it with the keyboard in it
 //! and Left or Escape closes it and gives the keyboard back to its row.
+//! The pointer leaving every menu leaves an open submenu open.
 //!
 //! Every menu of the app with a submenu is a [`MenuPopover`], so these
 //! tests check one menu of each kind: the command bar's, the file list's

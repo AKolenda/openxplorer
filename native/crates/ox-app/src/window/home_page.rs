@@ -240,21 +240,22 @@ impl Item {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let at = gtk::graphene::Point::new(x as f32, y as f32);
         let point = self.child.compute_point(&owner, &at).unwrap_or(at);
-        let popover = MenuPopover::new(classic_or_compact(copy_entries(entries), style));
+        // The pane keeps one menu for Home's items and shows it again each
+        // time ([`MenuPopover::kept_by`]).
+        let popover = MenuPopover::kept_by(&owner, "home-item-menu");
+        popover.set_entries(classic_or_compact(copy_entries(entries), style));
         popover.set_style_and_strip(style, Vec::new());
         popover.set_offset(0, 0);
         popover.set_position(gtk::PositionType::Bottom);
-        popover.set_parent(&owner);
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let pointing_to = gtk::gdk::Rectangle::new(point.x() as i32, point.y() as i32, 1, 1);
         popover.set_pointing_to(Some(&pointing_to));
         let opener = self.child.downgrade();
-        popover.connect_closed(move |popover| {
-            let closed = popover.clone();
-            let opener = opener.clone();
+        popover.after_close(move |closed| {
+            let closed = closed.clone();
+            // Once the chosen item has run.
             glib::idle_add_local_once(move || {
                 let window = closed.root().and_downcast::<gtk::Window>();
-                closed.unparent();
                 if let (Some(window), Some(opener)) = (window, opener.upgrade()) {
                     give_focus_back(&window, &opener);
                 }
@@ -1699,15 +1700,10 @@ impl BrowserWindow {
         ]);
     }
 
-    /// Adds the file at `uri` to Favorites, or removes it; every window
-    /// draws Home again once it is saved. Nothing changes while "Open
-    /// Quick access on Home" is off, here or, should another window turn
-    /// it off meanwhile, when the change runs
-    /// ([`ox_core::settings::Settings::set_favorite`]).
+    /// Adds the file at `uri` to Favorites, or removes it, whatever Home
+    /// shows, as Windows 11 does; every window draws Home again once it is
+    /// saved ([`ox_core::settings::Settings::set_favorite`]).
     fn set_favorite(&self, uri: &str, favorite: bool) {
-        if !self.context().settings_data().preferences.home_quick_access {
-            return;
-        }
         let uri = uri.to_owned();
         let change: Change = Box::new(move |settings| settings.set_favorite(&uri, favorite).map(|_| ()));
         self.context().change_settings(
@@ -1920,17 +1916,15 @@ pub(crate) fn item_menu(page: &gtk::Box, name: &str, accelerator: &str) -> MenuP
     let pane = child
         .ancestor(super::folder_pane::FolderPane::static_type())
         .expect("the folder pane");
-    let menus = |pane: &gtk::Widget| -> Vec<MenuPopover> {
+    // The pane keeps its menus and shows them again: the one shown now.
+    let shown = |pane: &gtk::Widget| -> Option<MenuPopover> {
         children(pane)
             .filter_map(|widget| widget.downcast::<MenuPopover>().ok())
-            .collect()
+            .find(WidgetExt::is_visible)
     };
-    let before = menus(&pane).len();
     let ran = press_on_item(page, name, accelerator);
     assert!(ran, "{accelerator} opens the item's menu");
-    let opened = menus(&pane);
-    assert!(opened.len() > before, "a menu opened");
-    opened.last().expect("the menu").clone()
+    shown(&pane).expect("a menu opened")
 }
 
 /// Selects the item named `name` and runs the shortcut of its box that

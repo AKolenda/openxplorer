@@ -60,6 +60,8 @@ pub(crate) struct ItemProperties {
     pub links_to_folder: bool,
     /// The name of the application a file opens with.
     pub default_app: Option<String>,
+    /// That application's icon, as `g_icon_to_string` writes it.
+    pub default_app_icon: Option<String>,
     /// What is mounted at the item, when a folder is a mount point.
     pub mount: Option<MountFacts>,
     /// For an item in the Recycle Bin, where its Trash folder keeps it,
@@ -173,7 +175,7 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
         gio::Cancellable::NONE,
     )?;
     let entry = entry_from_info(&file, &info);
-    let default_app = default_app_for(&entry);
+    let (default_app, default_app_icon) = default_app_for(&entry).unzip();
     let mount = if entry.is_dir { mount_at(&file) } else { None };
     let dimensions = image_dimensions(&file, &entry);
     Ok(ItemProperties {
@@ -197,6 +199,7 @@ fn read_properties_blocking(uri: &str) -> Result<ItemProperties, EntryError> {
             && file.query_file_type(gio::FileQueryInfoFlags::NONE, gio::Cancellable::NONE)
                 == gio::FileType::Directory,
         default_app,
+        default_app_icon: default_app_icon.flatten(),
         mount,
         dimensions,
         custom_icon: optional_string(&info, "metadata::custom-icon").filter(|icon| !icon.is_empty()),
@@ -318,15 +321,16 @@ fn image_dimensions(file: &gio::File, entry: &Entry) -> Option<(i32, i32)> {
     crate::picture_guard::dimensions(file)
 }
 
-/// The name of the application a file opens with; `None` for a folder
-/// and for a type without one.
-fn default_app_for(entry: &Entry) -> Option<String> {
+/// The name and icon of the application a file opens with; `None` for a
+/// folder and for a type without one.
+fn default_app_for(entry: &Entry) -> Option<(String, Option<String>)> {
     if entry.is_dir {
         return None;
     }
     let content_type = entry.content_type.as_deref()?;
     let app = gio::AppInfo::default_for_type(content_type, false)?;
-    Some(app.display_name().to_string())
+    let icon = ox_core::integration::ApplicationInfo::icon(&app);
+    Some((app.display_name().to_string(), icon))
 }
 
 /// Where a symbolic link points. GIO sets the attribute only for links,
@@ -379,6 +383,7 @@ mod tests {
             link_target: None,
             links_to_folder: false,
             default_app: None,
+            default_app_icon: None,
             mount: None,
             dimensions: None,
             custom_icon: None,

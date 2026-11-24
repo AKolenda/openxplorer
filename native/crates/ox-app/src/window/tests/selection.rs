@@ -488,6 +488,22 @@ fn arrows_move_in_two_dimensions_in_the_icon_grid() {
     assert_eq!(selected(&test), [above], "Up remembers the column");
 }
 
+/// Small icons fill columns top to bottom, as List does: Down and Up move
+/// to the next and previous item in the column, Right and Left to the
+/// same row of the next and previous column, as Windows 11 moves.
+///
+/// parity: SEL-010, VIEW-005
+#[gtk::test]
+fn arrows_move_down_columns_in_small_icons() {
+    let fixture = Fixture::with_files(PRIME_FOLDER);
+    let test = TestWindow::open(&fixture.uri());
+    show_view(&test, "small");
+    let none = gdk::ModifierType::empty();
+    start_at(&test, 0);
+    press_key(&test, gdk::Key::Right, none);
+    let rows = test.window.folder_pane().icon_view().grid().max_columns();
+    assert_eq!(selected(&test), [rows], "Right goes to the next column");
+}
 /// In Tiles the arrows move across and down the tiles, Down keeping to
 /// the column; in Content, one row per item, Down and Up move a row, and
 /// Home, End and Shift work as in the other views.

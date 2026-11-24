@@ -523,18 +523,16 @@ fn popup_heading_menu(page: &gtk::Box, group: Group, point: gtk::graphene::Point
     // The folder view's heading menu, as Windows 11 words both
     // (`group_headings.rs`), with nothing below it.
     let entries = super::group_headings::this_pc_heading_entries(collapsed);
-    let popover = MenuPopover::new(classic_or_compact(entries, style));
+    // The pane keeps one heading menu and shows it again each time
+    // ([`MenuPopover::kept_by`]).
+    let popover = MenuPopover::kept_by(&owner, "heading-menu");
+    popover.set_entries(classic_or_compact(entries, style));
     popover.set_style_and_strip(style, Vec::new());
     popover.set_offset(0, 0);
     popover.set_position(gtk::PositionType::Bottom);
-    popover.set_parent(&owner);
     #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
     let pointing_to = gtk::gdk::Rectangle::new(point.x() as i32, point.y() as i32, 1, 1);
     popover.set_pointing_to(Some(&pointing_to));
-    popover.connect_closed(|popover| {
-        let closed = popover.clone();
-        glib::idle_add_local_once(move || closed.unparent());
-    });
     popover.popup();
 }
 

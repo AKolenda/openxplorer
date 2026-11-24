@@ -162,10 +162,12 @@ fn the_status_bar_counts_this_pc_and_a_folder() {
         status_bar.texts() == (items.clone(), String::new())
     });
     assert!(!status_bar.shows_selection_divider());
+    assert!(!status_bar.shows_trailing_divider());
     test.window.navigate(&fixture.uri()).expect("the fixture folder");
     test.wait_for_listing("the fixture folder");
     assert_eq!(status_bar.texts(), ("4 items".to_owned(), String::new()));
     assert!(!status_bar.shows_selection_divider(), "nothing is selected");
+    assert!(!status_bar.shows_trailing_divider(), "nothing is selected");
     let model = test.window.folder_model();
     assert_eq!(model.name_at(1).as_deref(), Some("Notes 2.txt"));
     model.select_only(1);
@@ -174,6 +176,9 @@ fn the_status_bar_counts_this_pc_and_a_folder() {
         ("4 items".to_owned(), "1 item selected  20\u{a0}bytes".to_owned())
     );
     assert!(status_bar.shows_selection_divider());
+    // Windows ends the selection with a divider too: "15 items | 1 item
+    // selected 4 bytes |".
+    assert!(status_bar.shows_trailing_divider());
     model.select_only(0);
     assert_eq!(
         status_bar.texts().1,

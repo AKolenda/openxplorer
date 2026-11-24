@@ -223,7 +223,11 @@ impl BrowserWindow {
             _ => return None,
         };
         let pane = self.folder_pane();
-        if !modifiers.is_empty() || !matches!(pane.view(), FolderView::Icons(_) | FolderView::Tiles) {
+        // Small icons, like List, fill columns top to bottom, where GTK's
+        // own Up and Down already move along the column.
+        let in_rows = matches!(pane.view(), FolderView::Icons(_) | FolderView::Tiles)
+            && !pane.icon_view().layout().flows_sideways();
+        if !modifiers.is_empty() || !in_rows {
             return None;
         }
         let focus = GtkWindowExt::focus(self)?;
