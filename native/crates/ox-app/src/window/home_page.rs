@@ -437,7 +437,10 @@ fn folder_tile(place: &Place, locations: &LocationContext, compact: bool) -> Ite
             TILE_ICON,
         )
     } else {
-        ArtImage::new(Art::Folder, TILE_ICON)
+        // A standard folder is its own tile when Windows icon files draw
+        // it (LOOK-030); its glyph then steps aside.
+        let art = place.known_folder.map_or(Art::Folder, Art::StandardFolder);
+        ArtImage::new(art, TILE_ICON)
     };
     let icon = gtk::Overlay::builder()
         .child(&art)
@@ -449,6 +452,11 @@ fn folder_tile(place: &Place, locations: &LocationContext, compact: bool) -> Ite
         emblem.set_valign(gtk::Align::End);
         emblem.set_margin_bottom(6);
         emblem.add_css_class("home-emblem");
+        art.connect_drawn(glib::clone!(
+            #[weak]
+            emblem,
+            move |art| emblem.set_visible(!art.shows_user_icon())
+        ));
         icon.add_overlay(&emblem);
     }
     let lines = gtk::Box::new(gtk::Orientation::Vertical, 1);

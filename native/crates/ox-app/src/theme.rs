@@ -339,6 +339,12 @@ pub(crate) const INTERFACE_SCHEMA: &str = "org.gnome.desktop.interface";
 /// The host desktop's settings under `schema_id`, when that schema is
 /// installed with `key`. `None` inside Flatpak, where the schema holds only
 /// the runtime's defaults, not the desktop's.
+/// The skin's rules, for the stylesheet that draws its chevrons from the
+/// Windows symbol font ([`crate::icons::user_glyphs`]).
+pub(crate) fn skin_rules() -> &'static str {
+    stylesheets::RULES
+}
+
 pub(crate) fn host_desktop_key(schema_id: &str, key: &str) -> Option<gio::Settings> {
     if ox_core::integration::Sandbox::detect().is_flatpak() {
         return None;

@@ -146,6 +146,11 @@ pub(super) fn group(page: &SettingsPage) -> SettingsGroup {
         group.add_row(&kind_row(page, kind));
     }
     group.add_row(&endings_row(page));
+    // Windows icon files, one more source of the same icons, after the
+    // choices above, which win over them (LOOK-030).
+    for row in super::appearance::icon_files_rows(page) {
+        group.add_row(&row);
+    }
     group
 }
 

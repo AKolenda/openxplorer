@@ -35,6 +35,18 @@ pub(crate) enum Art {
     TintedGlyph(Icon, Tint),
     /// The yellow folder.
     Folder,
+    /// A standard folder listed as an item (in a folder's list or as a
+    /// Quick access tile on Home): the yellow folder, which a Windows icon
+    /// file can draw as the folder's own tile (LOOK-030).
+    StandardFolder(KnownFolder),
+    /// A drive whose medium can be taken out: the drive glyph, which a
+    /// Windows icon file can draw as a removable or optical drive
+    /// (LOOK-030).
+    RemovableDrive(Medium),
+    /// The drive the system runs from, Local Disk: the drive glyph, which a
+    /// Windows icon file draws as the plain fixed drive (LOOK-030), never
+    /// with Windows' logo.
+    SystemDrive,
     /// A ZIP archive: the folder with the zip badge in its corner.
     ZipFolder,
     /// The document with the zip badge in its corner, which File icons
@@ -71,6 +83,15 @@ pub(crate) enum NetworkPlace {
     /// A standard folder relocated onto a network mount: its own glyph, in
     /// its colour (`networkIcon(19, glyph)` in app.js).
     KnownFolder(KnownFolder),
+}
+
+/// What a removable drive holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum Medium {
+    /// A USB stick, an SD card or an external disk.
+    Disk,
+    /// A CD, DVD or Blu-ray disc.
+    Optical,
 }
 
 /// Whether a network location is connected now.
@@ -146,7 +167,10 @@ impl Art {
             };
         }
         if entry.is_dir {
-            return Art::Folder;
+            // A standard folder keeps the yellow folder; a Windows icon
+            // file can draw it as the folder's own tile (LOOK-030).
+            return super::user_icons::standard_folder_at(&entry.uri)
+                .map_or(Art::Folder, Art::StandardFolder);
         }
         let content_type = entry.content_type.as_deref();
         if is_zip(&entry.name, content_type) {
@@ -286,7 +310,10 @@ mod tests {
     fn names_without_a_known_type_share_the_document() {
         assert_eq!(Art::for_entry(&file("ls")), Art::for_entry(&file("cargo")));
         assert_eq!(Art::for_entry(&file("ls")), Art::File(FileType::Document));
-        assert_eq!(Art::for_entry(&file("Report.PDF")), Art::File(FileType::Document));
+        // A PDF is a kind of its own for Windows icon files, drawn as the
+        // document (LOOK-030).
+        assert_eq!(Art::for_entry(&file("Report.PDF")), Art::File(FileType::Pdf));
+        assert_eq!(FileType::Pdf.icon(20), FileType::Document.icon(20));
         assert_eq!(Art::for_entry(&file("Notes.txt")), Art::File(FileType::Text));
     }
 

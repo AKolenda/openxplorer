@@ -118,19 +118,34 @@ impl ChosenIcon {
 
 /// The kind of item the usual art `usual` stands for, as `fileIcons`
 /// names it; `None` for art no choice replaces, such as a network share.
+/// A standard folder is a folder, and the file kinds Windows icon files
+/// tell apart (LOOK-030) are the documents and code they were before.
 pub(crate) fn kind_of(usual: Art) -> Option<&'static str> {
     Some(match usual {
-        Art::Folder => "folder",
+        Art::Folder | Art::StandardFolder(_) => "folder",
         Art::ZipFolder => "zip",
-        Art::File(FileType::Document) => "document",
+        Art::File(
+            FileType::Document
+            | FileType::Pdf
+            | FileType::Archive
+            | FileType::Executable
+            | FileType::Shortcut,
+        ) => "document",
         Art::File(FileType::Text) => "text",
         Art::File(FileType::Spreadsheet) => "spreadsheet",
         Art::File(FileType::Image) => "image",
         Art::File(FileType::Video) => "video",
         Art::File(FileType::Audio) => "audio",
-        Art::File(FileType::Code) => "code",
+        Art::File(FileType::Code | FileType::Script) => "code",
         _ => return None,
     })
+}
+
+/// Counts a new generation without a change of the chosen icons, for
+/// another source of the same icons: Windows icon files were read or
+/// turned off (LOOK-030), so a view draws its items again.
+pub(crate) fn count_new_generation() {
+    GENERATION.set(GENERATION.get().wrapping_add(1));
 }
 
 /// Follows the icons chosen in `icons`, counting a new generation when
@@ -160,7 +175,7 @@ pub(crate) fn generation() -> u32 {
 fn chosen_for(name: &str, usual: Art) -> Option<ChosenIcon> {
     let kind = kind_of(usual)?;
     CHOSEN.with_borrow(|chosen| {
-        let by_ending = (usual != Art::Folder)
+        let by_ending = (!matches!(usual, Art::Folder | Art::StandardFolder(_)))
             .then(|| {
                 let name = name.to_lowercase();
                 chosen

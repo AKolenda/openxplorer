@@ -46,12 +46,17 @@ pub(super) use menus::{
 };
 use overflow::OverflowLayout;
 
-/// The glyph of an icon-only command: 16 pixels, as Windows 11 draws its
-/// command bar (ui-spec.md I01; the web app's were 18).
-const ICON_COMMAND_GLYPH: i32 = 16;
+/// The square of an icon-only command's glyph: 18 pixels, so the app's
+/// own glyphs, drawn with room around them, ink 14 to 16 pixels as
+/// Windows 11's command bar does (ui-spec.md I01; measured at 1x).
+const ICON_COMMAND_GLYPH: i32 = 18;
 
-/// The glyph of a command with a label, and the chevron of a menu.
-const TEXT_COMMAND_GLYPH: i32 = 17;
+/// The square of the glyph of a command with a label.
+const TEXT_COMMAND_GLYPH: i32 = 18;
+
+/// The square of a menu command's chevron: 12 pixels, so the app's own
+/// chevron inks 6 by 4 pixels, as Windows 11's drop-down caret does.
+const CARET_GLYPH: i32 = 12;
 
 /// Whether a command stays in a compact window (the 680-pixel rules).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1074,7 +1079,7 @@ fn text_menu_content(label: &str, glyph: Icon) -> gtk::Box {
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
     content.append(&icons::image(glyph, TEXT_COMMAND_GLYPH));
     content.append(&gtk::Label::new(Some(label)));
-    let chevron = icons::image(Icon::ChevronDown, TEXT_COMMAND_GLYPH);
+    let chevron = icons::image(Icon::ChevronDown, CARET_GLYPH);
     chevron.add_css_class("chevron");
     content.append(&chevron);
     content

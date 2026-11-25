@@ -26,6 +26,31 @@ pub(crate) enum FileType {
     Audio,
     /// Source code, HTML and JSON.
     Code,
+    /// PDFs, drawn as the document. A kind of its own so a Windows icon
+    /// file can draw it (LOOK-030); likewise the kinds below.
+    Pdf,
+    /// Archives other than ZIP (7z, TAR and its compressed forms, RAR),
+    /// drawn as the document.
+    Archive,
+    /// Programs, drawn as the document.
+    Executable,
+    /// Shell, batch and `PowerShell` scripts, drawn as code.
+    Script,
+    /// `.desktop` launchers and Windows shortcuts, drawn as the document.
+    Shortcut,
+}
+
+/// The colour icons a file can show, one for each type the app drew
+/// before Windows icon files added kinds of their own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Look {
+    Document,
+    Text,
+    Spreadsheet,
+    Image,
+    Video,
+    Audio,
+    Code,
 }
 
 /// Which of Fluent's designs of a colour icon is drawn. Each is made for
@@ -77,8 +102,15 @@ impl FileType {
             }
             "mp4" | "mkv" | "webm" | "mov" | "avi" | "m4v" => FileType::Video,
             "mp3" | "flac" | "ogg" | "oga" | "opus" | "wav" | "m4a" | "aac" => FileType::Audio,
-            "py" | "js" | "ts" | "rs" | "c" | "h" | "cpp" | "java" | "sh" | "css" | "html" | "htm"
-            | "json" | "xml" | "toml" | "yaml" | "yml" => FileType::Code,
+            "py" | "js" | "ts" | "rs" | "c" | "h" | "cpp" | "java" | "css" | "html" | "htm" | "json"
+            | "xml" | "toml" | "yaml" | "yml" => FileType::Code,
+            "pdf" => FileType::Pdf,
+            "7z" | "tar" | "gz" | "tgz" | "bz2" | "tbz2" | "xz" | "txz" | "zst" | "tzst" | "rar" => {
+                FileType::Archive
+            }
+            "exe" | "msi" | "com" | "appimage" | "run" => FileType::Executable,
+            "sh" | "bash" | "bat" | "cmd" | "ps1" | "vbs" => FileType::Script,
+            "desktop" | "lnk" => FileType::Shortcut,
             _ => return None,
         };
         Some(file_type)
@@ -93,8 +125,36 @@ impl FileType {
             ("video", _) => Some(FileType::Video),
             ("audio", _) => Some(FileType::Audio),
             ("text", "csv") => Some(FileType::Spreadsheet),
+            ("application" | "text", "x-shellscript") => Some(FileType::Script),
             ("text", "html") | ("application", "json" | "javascript" | "xml") => Some(FileType::Code),
             ("text", _) => Some(FileType::Text),
+            ("application", "pdf") => Some(FileType::Pdf),
+            ("application", "x-desktop") => Some(FileType::Shortcut),
+            (
+                "application",
+                "x-executable"
+                | "x-pie-executable"
+                | "x-ms-dos-executable"
+                | "x-msdownload"
+                | "x-msi"
+                | "vnd.microsoft.portable-executable"
+                | "x-appimage",
+            ) => Some(FileType::Executable),
+            (
+                "application",
+                "x-7z-compressed"
+                | "x-tar"
+                | "x-compressed-tar"
+                | "x-bzip-compressed-tar"
+                | "x-xz-compressed-tar"
+                | "x-zstd-compressed-tar"
+                | "gzip"
+                | "x-bzip2"
+                | "x-xz"
+                | "zstd"
+                | "x-rar"
+                | "vnd.rar",
+            ) => Some(FileType::Archive),
             _ => None,
         }
     }
@@ -103,27 +163,45 @@ impl FileType {
     /// exhaustive table, hence its length. Fluent draws code no larger than
     /// 24 pixels, so that design serves the larger sizes.
     pub(crate) const fn icon(self, size: i32) -> Icon {
-        match (self, Design::nearest(size)) {
-            (FileType::Document, Design::Small) => Icon::DocumentColor20,
-            (FileType::Document, Design::Medium) => Icon::DocumentColor32,
-            (FileType::Document, Design::Large) => Icon::DocumentColor48,
-            (FileType::Text, Design::Small) => Icon::DocumentTextColor20,
-            (FileType::Text, Design::Medium) => Icon::DocumentTextColor32,
-            (FileType::Text, Design::Large) => Icon::DocumentTextColor48,
-            (FileType::Spreadsheet, Design::Small) => Icon::TableColor20,
-            (FileType::Spreadsheet, Design::Medium) => Icon::TableColor32,
-            (FileType::Spreadsheet, Design::Large) => Icon::TableColor48,
-            (FileType::Image, Design::Small) => Icon::ImageColor20,
-            (FileType::Image, Design::Medium) => Icon::ImageColor32,
-            (FileType::Image, Design::Large) => Icon::ImageColor48,
-            (FileType::Video, Design::Small) => Icon::VideoColor20,
-            (FileType::Video, Design::Medium) => Icon::VideoColor32,
-            (FileType::Video, Design::Large) => Icon::VideoColor48,
-            (FileType::Audio, Design::Small) => Icon::HeadphonesColor20,
-            (FileType::Audio, Design::Medium) => Icon::HeadphonesColor32,
-            (FileType::Audio, Design::Large) => Icon::HeadphonesColor48,
-            (FileType::Code, Design::Small) => Icon::CodeColor20,
-            (FileType::Code, Design::Medium | Design::Large) => Icon::CodeColor24,
+        match (self.look(), Design::nearest(size)) {
+            (Look::Document, Design::Small) => Icon::DocumentColor20,
+            (Look::Document, Design::Medium) => Icon::DocumentColor32,
+            (Look::Document, Design::Large) => Icon::DocumentColor48,
+            (Look::Text, Design::Small) => Icon::DocumentTextColor20,
+            (Look::Text, Design::Medium) => Icon::DocumentTextColor32,
+            (Look::Text, Design::Large) => Icon::DocumentTextColor48,
+            (Look::Spreadsheet, Design::Small) => Icon::TableColor20,
+            (Look::Spreadsheet, Design::Medium) => Icon::TableColor32,
+            (Look::Spreadsheet, Design::Large) => Icon::TableColor48,
+            (Look::Image, Design::Small) => Icon::ImageColor20,
+            (Look::Image, Design::Medium) => Icon::ImageColor32,
+            (Look::Image, Design::Large) => Icon::ImageColor48,
+            (Look::Video, Design::Small) => Icon::VideoColor20,
+            (Look::Video, Design::Medium) => Icon::VideoColor32,
+            (Look::Video, Design::Large) => Icon::VideoColor48,
+            (Look::Audio, Design::Small) => Icon::HeadphonesColor20,
+            (Look::Audio, Design::Medium) => Icon::HeadphonesColor32,
+            (Look::Audio, Design::Large) => Icon::HeadphonesColor48,
+            (Look::Code, Design::Small) => Icon::CodeColor20,
+            (Look::Code, Design::Medium | Design::Large) => Icon::CodeColor24,
+        }
+    }
+
+    /// The colour icon that draws this type: the kinds that exist only for
+    /// Windows icon files keep the icon they always had.
+    const fn look(self) -> Look {
+        match self {
+            FileType::Document
+            | FileType::Pdf
+            | FileType::Archive
+            | FileType::Executable
+            | FileType::Shortcut => Look::Document,
+            FileType::Text => Look::Text,
+            FileType::Spreadsheet => Look::Spreadsheet,
+            FileType::Image => Look::Image,
+            FileType::Video => Look::Video,
+            FileType::Audio => Look::Audio,
+            FileType::Code | FileType::Script => Look::Code,
         }
     }
 }
@@ -177,7 +255,7 @@ mod tests {
     fn a_known_extension_decides_the_type() {
         let cases = [
             case("Quarterly report.docx", None, FileType::Document),
-            case("Brochure.PDF", None, FileType::Document),
+            case("Brochure.PDF", None, FileType::Pdf),
             case("Q3 presentation.pptx", None, FileType::Document),
             case("Read me.txt", None, FileType::Text),
             case("Research notes.md", None, FileType::Text),
@@ -201,8 +279,33 @@ mod tests {
             case("IMG_0001", Some("image/jpeg"), FileType::Image),
             case("notes", Some("text/plain"), FileType::Text),
             case("page", Some("text/html"), FileType::Code),
-            case("cargo", Some("application/x-executable"), FileType::Document),
+            case("cargo", Some("application/x-executable"), FileType::Executable),
             case("README", None, FileType::Document),
+        ];
+        assert_types(&cases);
+    }
+
+    /// The kinds a Windows icon file can draw on their own: PDFs, archives
+    /// other than ZIP, programs, scripts and shortcuts, by extension or
+    /// content type.
+    ///
+    /// parity: LOOK-030
+    #[test]
+    fn windows_file_kinds_are_told_apart() {
+        let cases = [
+            case("Manual.pdf", None, FileType::Pdf),
+            case("scan", Some("application/pdf"), FileType::Pdf),
+            case("Backup.7z", None, FileType::Archive),
+            case("Sources.tar.gz", None, FileType::Archive),
+            case("logs", Some("application/x-compressed-tar"), FileType::Archive),
+            case("Setup.EXE", None, FileType::Executable),
+            case("Tool.AppImage", None, FileType::Executable),
+            case("tool", Some("application/x-pie-executable"), FileType::Executable),
+            case("build.sh", None, FileType::Script),
+            case("Start.bat", None, FileType::Script),
+            case("deploy", Some("application/x-shellscript"), FileType::Script),
+            case("Editor.desktop", None, FileType::Shortcut),
+            case("Report.lnk", None, FileType::Shortcut),
         ];
         assert_types(&cases);
     }

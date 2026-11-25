@@ -62,8 +62,10 @@ const ICON_SIZE: i32 = 16;
 const ICON_TO_TITLE: i32 = 10;
 /// The gap between a snapshot tab's badge and its close button.
 const CLOSE_GAP: i32 = 4;
-/// The glyph of a tab's close button.
-const CLOSE_GLYPH: i32 = 12;
+/// The square of a tab's close button's X: 13 pixels, so the app's own X
+/// and the symbol font's Cancel at a 13-pixel em ink 9 by 9, as
+/// Windows 11's does (measured at 1x).
+const CLOSE_GLYPH: i32 = 13;
 
 /// How many average characters of its title a tab keeps at its
 /// narrowest: about three letters of a long name, and "Home" whole, as

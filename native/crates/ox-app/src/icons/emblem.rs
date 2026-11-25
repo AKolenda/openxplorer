@@ -95,7 +95,7 @@ impl EmblemPieces {
         ];
         for (image, icon, is_shown) in pieces {
             image.set_pixel_size(emblem_size(size));
-            super::keep_loaded(image, icon, emblem_size(size));
+            super::keep_loaded(image, icon.name(), emblem_size(size));
             image.set_visible(is_shown);
         }
     }

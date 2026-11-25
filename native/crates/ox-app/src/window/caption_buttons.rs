@@ -24,8 +24,9 @@ use crate::icons::{self, Icon};
 use super::widget_tree::remove_children;
 use super::window_action::WindowAction;
 
-/// The edge of a caption glyph: thin 12-pixel lines, as index.html draws them.
-const GLYPH_SIZE: i32 = 12;
+/// The square of a caption glyph: 15 pixels, so the app's own glyphs ink
+/// 10 pixels, as Windows 11's caption buttons do (measured at 1x).
+const GLYPH_SIZE: i32 = 15;
 
 /// One caption button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -179,6 +179,7 @@ mod tests {
             can_stop: true,
             can_open_in_disks: false,
             can_format: false,
+            is_optical: false,
         };
         let sd_card = MountControls {
             can_stop: false,

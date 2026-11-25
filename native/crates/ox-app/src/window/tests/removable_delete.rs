@@ -27,6 +27,7 @@ fn stick_at(test: &TestWindow, fixture: &Fixture) {
                 can_stop: true,
                 can_open_in_disks: false,
                 can_format: true,
+                is_optical: false,
             },
         },
     }]);

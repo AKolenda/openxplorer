@@ -292,7 +292,13 @@ fn drive_tile(row: &VolumeRow, cell: CellSize) -> Tile {
         VolumeState::Mounted { uri, .. } => uri,
         VolumeState::Mountable { id } => id,
     };
-    let (child, lines) = tile_frame(&icons::image(glyph, TILES_ICON), &row.label, key, cell);
+    // The drive's picture from the user's Windows icon files, when they
+    // chose some (LOOK-030): a fixed, removable or optical drive.
+    let icon = match icons::user_icons::role_of(row.art()) {
+        Some(role) => icons::user_icons::role_image(role, glyph, TILES_ICON),
+        None => icons::image(glyph, TILES_ICON),
+    };
+    let (child, lines) = tile_frame(&icon, &row.label, key, cell);
     if row.kind == VolumeKind::Device {
         child.add_css_class(DEVICE_TILE_CLASS);
     }

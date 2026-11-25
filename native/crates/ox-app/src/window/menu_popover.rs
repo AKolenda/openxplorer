@@ -72,9 +72,14 @@ pub(crate) const SUBMENU_DELAY: Duration = Duration::from_millis(400);
 /// The class of a row whose submenu is open, which stays highlighted.
 const SUBMENU_OPEN: &str = "submenu-open";
 
-/// A menu row's glyph: 16 pixels, as Windows 11 draws menu icons (ui-spec.md I05;
-/// the web app's classic menus drew 15).
+/// A menu row's mark and submenu chevron: 16 pixels, as Windows 11 draws
+/// menu icons (ui-spec.md I05; the web app's classic menus drew 15).
 const ROW_GLYPH: i32 = 16;
+
+/// The square of a menu row's icon: 18 pixels, so the app's own glyphs,
+/// drawn with room around them, ink 14 to 16 pixels as Windows 11's do in
+/// their 16-pixel em (measured at 1x), and the label starts 42 pixels in.
+const ROW_ICON: i32 = 18;
 
 /// The check mark a row shows when the menu opens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -914,7 +919,7 @@ impl MenuPopover {
             .halign(gtk::Align::Center)
             .valign(gtk::Align::Center)
             .build();
-        face.append(&icons::image(item.glyph, ROW_GLYPH));
+        face.append(&icons::image(item.glyph, ROW_ICON));
         let label = gtk::Label::builder()
             .label(&item.label)
             .ellipsize(gtk::pango::EllipsizeMode::End)
@@ -1717,14 +1722,15 @@ fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: Gl
     let application_icon = item
         .application_icon
         .as_deref()
-        .and_then(|icon| integration::application_image(Some(icon), ROW_GLYPH));
+        .and_then(|icon| integration::application_image(Some(icon), ROW_GLYPH))
+        .inspect(|image| image.set_size_request(ROW_ICON, ROW_ICON));
     let content = gtk::Box::new(gtk::Orientation::Horizontal, 9);
     if marks == MarkColumn::Shown {
         content.append(&mark_slot(item, check));
     }
     let glyph = application_icon.or_else(|| {
         item.shows_glyph.then(|| {
-            let image = icons::image(item.glyph, ROW_GLYPH);
+            let image = icons::image(item.glyph, ROW_ICON);
             if item.glyph_look.mirrored {
                 image.add_css_class("mirrored");
             }
@@ -1742,8 +1748,8 @@ fn item_content(item: &MenuItem, check: CheckMark, marks: MarkColumn, glyphs: Gl
         // glyph's column empty, so its text sits where other menus' does,
         // as does a text-only row of a menu whose other rows have glyphs.
         let column = gtk::Box::builder()
-            .width_request(ROW_GLYPH)
-            .height_request(ROW_GLYPH)
+            .width_request(ROW_ICON)
+            .height_request(ROW_ICON)
             .build();
         content.append(&column);
     }

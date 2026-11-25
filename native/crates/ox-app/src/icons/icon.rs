@@ -65,7 +65,6 @@ pub(crate) enum Icon {
     /// `arrow_swap_20_regular`: Invert selection until "…" took Windows
     /// 11's glyph for it (2026-11-03); still bundled with the approved
     /// set, for the owner to keep or remove.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-03"))]
     ArrowSwap,
     /// `arrow_undo_20_regular`: Undo, and "Skip this file" in Replace or
     /// Skip Files.
@@ -76,7 +75,6 @@ pub(crate) enum Icon {
     Bluetooth,
     /// `braces_20_regular`: New JSON file until New took Windows 11's list (2026-11-06);
     /// still bundled with the approved set, for the owner to keep or remove.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-06"))]
     Braces,
     /// `checkbox_checked_20_regular`: View > Show > Item check boxes.
     CheckboxChecked,
@@ -88,11 +86,9 @@ pub(crate) enum Icon {
     /// `chevron_double_left_16_regular`: the address bar's « button, which
     /// lists the crumbs a long path hides (named by
     /// `resources/skin/navigation.css`).
-    #[cfg_attr(not(test), expect(dead_code, reason = "only the skin's CSS names it"))]
     ChevronDoubleLeft16,
     /// `chevron_double_right_16_regular`: the same button in a
     /// right-to-left language.
-    #[cfg_attr(not(test), expect(dead_code, reason = "only the skin's CSS names it"))]
     ChevronDoubleRight16,
     /// `chevron_down_16_regular`: the small carets (the address bar's edit
     /// chevron, a column title's sort arrow, the sidebar's expanders and a
@@ -231,7 +227,6 @@ pub(crate) enum Icon {
     MapNetworkDrive24,
     /// `markdown_20_regular`: New Markdown document until New took Windows 11's list (2026-11-06);
     /// still bundled with the approved set, for the owner to keep or remove.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-06"))]
     Markdown,
     /// `maximize_20_regular`: the window's maximise button.
     Maximize,
@@ -283,12 +278,10 @@ pub(crate) enum Icon {
     /// `select_all_off_20_regular`: Select none until "…" took Windows 11's
     /// four squares for it (2026-11-03); still bundled with the approved
     /// set, for the owner to keep or remove.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-03"))]
     SelectAllOff,
     /// `select_all_on_20_regular`: Select all until "…" took Windows 11's
     /// blue squares for it (2026-11-04); still bundled with the approved
     /// set, for the owner to keep or remove.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-04"))]
     SelectAllOn,
     /// Select none in the "…" menu: an original icon
     /// made for `OpenXplorer` to match Windows 11's command-bar glyph
@@ -312,7 +305,6 @@ pub(crate) enum Icon {
     Subtract,
     /// `table_20_regular`: New CSV file until New took Windows 11's list (2026-11-06);
     /// still bundled with the approved set, for the owner to keep or remove.
-    #[cfg_attr(not(test), expect(dead_code, reason = "no menu shows it since 2026-11-06"))]
     Table,
     /// `table_20_color`: spreadsheets and CSV files at small sizes.
     TableColor20,
@@ -502,9 +494,9 @@ impl Icon {
     }
 }
 
-/// Every icon, in the order of [`Icon`], for the tests that check each one
-/// ships, is recorded and resolves.
-#[cfg(test)]
+/// Every icon, in the order of [`Icon`]: for the tests that check each one
+/// ships, is recorded and resolves, and to find the icon a drawn name
+/// stands for ([`super::user_glyphs`]).
 pub(crate) const ALL_ICONS: [Icon; 126] = [
     Icon::Add,
     Icon::AddNetworkLocation24,
