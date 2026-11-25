@@ -318,6 +318,46 @@ impl UndoRecord {
         }
     }
 
+    /// How Undo takes back an extraction into an existing folder, given
+    /// the record of the move that brought its items in from the
+    /// extraction's private folder: that folder is gone, so the items are
+    /// not moved back but taken away as copies are, to the Recycle Bin,
+    /// under Undo Copy, as Windows names the Undo of Extract All. Files
+    /// a Replace answered there still come back from the Recycle Bin;
+    /// the private folder's removal is not undone. `None` when nothing is
+    /// left to undo.
+    pub fn as_extraction(self) -> Option<UndoRecord> {
+        match self {
+            UndoRecord::Move { items } => {
+                let copies: Vec<String> = items.into_iter().map(|item| item.moved_uri).collect();
+                (!copies.is_empty()).then_some(UndoRecord::Copy { copies })
+            }
+            UndoRecord::Replace {
+                steps,
+                replaced,
+                replaced_since,
+                overwritten,
+                ..
+            } => {
+                let steps: Vec<UndoRecord> =
+                    steps.into_iter().filter_map(UndoRecord::as_extraction).collect();
+                if steps.is_empty() && replaced.is_empty() && overwritten.is_empty() {
+                    return None;
+                }
+                Some(UndoRecord::Replace {
+                    operation: Operation::Copy,
+                    steps,
+                    replaced,
+                    replaced_since,
+                    overwritten,
+                })
+            }
+            // The private folder the move emptied is not made again.
+            UndoRecord::EmptiedFolders { .. } | UndoRecord::RemadeFolders { .. } => None,
+            other => Some(other),
+        }
+    }
+
     /// The label of the Undo command for this operation, for example
     /// `Undo Rename`.
     pub fn undo_label(&self) -> String {
@@ -561,6 +601,58 @@ mod tests {
         for case in cases {
             assert_eq!(case.record.undo_label(), case.label);
         }
+    }
+
+    /// An extraction into an existing folder moved its items in from a
+    /// private folder that is gone: Undo takes them away as copies, and a
+    /// Replace keeps bringing back the files it replaced.
+    ///
+    /// parity: OPS-029
+    #[test]
+    fn an_extraction_is_undone_as_a_copy() {
+        let moved = |from: &str, to: &str| MovedItem {
+            original_uri: from.to_owned(),
+            moved_uri: to.to_owned(),
+        };
+        let private = "file:///tmp/Work/.openxplorer-extract-1";
+        let plain = UndoRecord::Move {
+            items: vec![moved(&format!("{private}/a.mp3"), "file:///tmp/Work/a.mp3")],
+        };
+        assert_eq!(
+            plain.as_extraction(),
+            Some(UndoRecord::Copy {
+                copies: vec!["file:///tmp/Work/a.mp3".into()]
+            })
+        );
+        let replacing = UndoRecord::Replace {
+            operation: Operation::Move,
+            steps: vec![
+                UndoRecord::EmptiedFolders {
+                    folders: vec![format!("{private}/Docs")],
+                },
+                UndoRecord::Move {
+                    items: vec![moved(&format!("{private}/b.pdf"), "file:///tmp/Work/b.pdf")],
+                },
+            ],
+            replaced: vec![PathBuf::from("/tmp/Work/b.pdf")],
+            replaced_since: 3,
+            overwritten: Vec::new(),
+        };
+        let undone = replacing.as_extraction().expect("a step to undo");
+        assert_eq!(undone.undo_label(), "Undo Copy");
+        assert_eq!(
+            undone,
+            UndoRecord::Replace {
+                operation: Operation::Copy,
+                steps: vec![UndoRecord::Copy {
+                    copies: vec!["file:///tmp/Work/b.pdf".into()]
+                }],
+                replaced: vec![PathBuf::from("/tmp/Work/b.pdf")],
+                replaced_since: 3,
+                overwritten: Vec::new(),
+            }
+        );
+        assert_eq!(UndoRecord::Move { items: Vec::new() }.as_extraction(), None);
     }
 
     /// A reversal that finished `done`.

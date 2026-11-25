@@ -9938,6 +9938,11 @@ msgstr ""
 msgid "Undo Restore"
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-core/src/ops/undo_apply.rs
+msgid "An item named “{name}” is already in “{folder}”, so Undo left it in “{left_in}”."
+msgstr ""
+
 #: crates/ox-core/src/ops/unfinished.rs
 msgid "File operations did not finish"
 msgstr ""

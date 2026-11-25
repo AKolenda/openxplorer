@@ -344,12 +344,19 @@ fn move_to_trash(engine: &mut TransferEngine, uris: &[String], context: &Operati
 
 /// Moves each item of `items` back into the folder it came from, never
 /// overwriting: one engine run per folder for the items that kept their
-/// name, and one renamed run per item that landed under another name.
+/// name, and one renamed run per item that landed under another name. An
+/// item whose old name is taken again stays where the move took it, and
+/// the progress window says so, with Try Again, Skip and Cancel, as
+/// Windows asks about a name in the way rather than leaving it unsaid.
 fn move_back(engine: &mut TransferEngine, items: &[MovedItem], context: &OperationContext) -> TransferResult {
     let mut total = TransferResult::default();
     let mut questions = ItemQuestions::new(context, TransferMode::Move);
     let (kept_name, renamed): (Vec<&MovedItem>, Vec<&MovedItem>) =
         items.iter().partition(|item| moved_name(item).is_none());
+    // Each item still to move by itself: blocked by a name in the way, or
+    // going back under another name. As Windows asks at the end of a job,
+    // they follow the items that went back at once.
+    let mut one_by_one: Vec<(String, String, OsString)> = Vec::new();
     for group in group_by_original_folder(&kept_name) {
         // The folder the items go back into, asked about as one item.
         let folder = AskedItem {
@@ -370,12 +377,17 @@ fn move_back(engine: &mut TransferEngine, items: &[MovedItem], context: &Operati
             destination_folder: &group.folder_uri,
             policy: ConflictPolicy::Skip,
         };
-        let part = engine
+        let mut part = engine
             .run(operation, &group.uris, &context.cancel)
             .unwrap_or_else(|error| failed_request(&error.into(), context));
+        let blocked = take_blocked(&mut part, &group.folder_uri);
         merge_results(&mut total, part);
         if total.cancelled {
             return total;
+        }
+        for uri in blocked {
+            let name = GioNode::new(&uri).name();
+            one_by_one.push((uri, group.folder_uri.clone(), name));
         }
     }
     for item in renamed {
@@ -393,25 +405,99 @@ fn move_back(engine: &mut TransferEngine, items: &[MovedItem], context: &Operati
             .is_none()
         {
             if total.cancelled {
-                break;
+                return total;
             }
             continue;
         }
-        let part = engine
-            .run_renamed(
-                TransferMode::Move,
-                &folder.uri(),
-                &item.moved_uri,
-                &original.name(),
-                &context.cancel,
-            )
-            .unwrap_or_else(|error| failed_request(&error.into(), context));
-        merge_results(&mut total, part);
+        one_by_one.push((item.moved_uri.clone(), folder.uri(), original.name()));
+    }
+    let count = one_by_one.len();
+    for (index, (uri, folder_uri, name)) in one_by_one.iter().enumerate() {
+        let item = (uri.as_str(), folder_uri.as_str(), name.as_os_str());
+        move_back_asking(
+            engine,
+            &mut questions,
+            &mut total,
+            item,
+            index + 1 < count,
+            context,
+        );
         if total.cancelled {
             break;
         }
     }
     total
+}
+
+/// Removes from `part` the items it skipped because their name is taken
+/// in `folder_uri` and returns them; an item skipped for another reason,
+/// as a name the destination cannot store that the user chose to skip,
+/// stays skipped.
+fn take_blocked(part: &mut TransferResult, folder_uri: &str) -> Vec<String> {
+    let (blocked, skipped): (Vec<String>, Vec<String>) = std::mem::take(&mut part.skipped)
+        .into_iter()
+        .partition(|uri| name_is_taken(folder_uri, &GioNode::new(uri).name()));
+    part.skipped = skipped;
+    blocked
+}
+
+/// Whether an item called `name` is in the folder at `folder_uri`; a link
+/// counts, even one whose target is gone.
+fn name_is_taken(folder_uri: &str, name: &std::ffi::OsStr) -> bool {
+    gio::File::for_uri(folder_uri)
+        .child(name)
+        .query_file_type(gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS, gio::Cancellable::NONE)
+        != gio::FileType::Unknown
+}
+
+/// Moves the item at `uri` back into `folder_uri` as `name`, asking
+/// while its name is taken there: Try Again looks again, Skip leaves it
+/// where the move took it and Cancel stops the Undo. `more_items` says
+/// whether others follow, for "Do this for all current items".
+fn move_back_asking(
+    engine: &mut TransferEngine,
+    questions: &mut ItemQuestions,
+    total: &mut TransferResult,
+    (uri, folder_uri, name): (&str, &str, &std::ffi::OsStr),
+    more_items: bool,
+    context: &OperationContext,
+) {
+    let display_name = GioNode::new(uri).display_name();
+    let asked = AskedItem {
+        name: &display_name,
+        uri,
+        more_items,
+    };
+    let attempt = || {
+        if name_is_taken(folder_uri, name) {
+            return Err(name_taken_on_undo(&name.to_string_lossy(), uri, folder_uri));
+        }
+        let part = engine
+            .run_renamed(TransferMode::Move, folder_uri, uri, name, &context.cancel)
+            .unwrap_or_else(|error| failed_request(&error.into(), context));
+        // Taken in the moment between the look and the move.
+        if part.skipped.iter().any(|skipped| skipped == uri) && name_is_taken(folder_uri, name) {
+            return Err(name_taken_on_undo(&name.to_string_lossy(), uri, folder_uri));
+        }
+        Ok(part)
+    };
+    if let Some(part) = questions.run(total, asked, attempt) {
+        merge_results(total, part);
+    }
+}
+
+/// Why Undo left the moved item at `uri` where it is: `name` is taken
+/// again in `folder_uri`, the folder it came from.
+fn name_taken_on_undo(name: &str, uri: &str, folder_uri: &str) -> OpsError {
+    let folder = GioNode::new(folder_uri).display_name();
+    let left_in = GioNode::new(uri)
+        .parent()
+        .map(|parent| parent.display_name())
+        .unwrap_or_default();
+    OpsError::Exists(crate::i18n::format_message(
+        "An item named “{name}” is already in “{folder}”, so Undo left it in “{left_in}”.",
+        &[("name", name), ("folder", &folder), ("left_in", &left_in)],
+    ))
 }
 
 /// Makes the folder at `uri` again, with the folders it is in, when a

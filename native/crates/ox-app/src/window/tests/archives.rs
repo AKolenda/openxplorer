@@ -374,15 +374,90 @@ fn extract_all_goes_straight_into_an_existing_folder_after_asking() {
                     .starts_with(".openxplorer-extract-")
             })
     });
-    let undo = test.window.lookup_action("undo").expect("the Undo action");
-    assert!(
-        !undo.is_enabled(),
-        "Undo cannot move the files back into the removed private folder"
-    );
     assert!(
         !fixture.path("Bundle").exists(),
         "no folder named after the archive"
     );
+}
+
+/// Undo after Extract all into an existing folder takes the extracted
+/// items away again, as Undo Copy does, rather than reversing the step
+/// before the extraction; the file Skip kept and the archive stay.
+///
+/// parity: OPS-029, ARC-011
+#[gtk::test]
+fn undo_takes_back_an_extraction_into_an_existing_folder() {
+    super::file_ops_support::require_private_trash();
+    let fixture = fixture_with_zip();
+    fs::write(fixture.path("readme.txt"), b"mine").expect("a file the archive also has");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Notes 2.txt");
+    test.activate("rename", None);
+    let field = super::file_ops_support::name_editor(&test);
+    field.set_text("Earlier");
+    field.emit_activate();
+    wait_until("the earlier rename", || fixture.path("Earlier.txt").exists());
+    test.select_named("Bundle.zip");
+    test.activate("extract-all", None);
+    let frame = test.wait_for_dialog("the Extract dialog");
+    wait_until("the check", || {
+        texts(&frame).iter().any(|text| text.ends_with("unpacked"))
+    });
+    descendants::<gtk::Entry>(&frame)[0].set_text(&fixture.root().display().to_string());
+    press(&frame, "Extract");
+    super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
+    wait_until("the extracted folder", || fixture.path("Docs/a.txt").exists());
+    super::file_ops_support::assert_ended_without_a_message(&test);
+
+    assert_eq!(
+        test.window.journal_label(ox_core::ops::JournalDirection::Undo),
+        "Undo Copy"
+    );
+    test.activate("undo", None);
+    wait_until("the extracted items to go", || !fixture.path("Docs").exists());
+    wait_until("the undo to end", || !test.window.is_writing_files());
+
+    assert_eq!(fs::read(fixture.path("readme.txt")).expect("kept"), b"mine");
+    assert!(fixture.path("Bundle.zip").exists(), "the archive stays");
+    assert!(fixture.path("Earlier.txt").exists(), "the step before stays done");
+    assert_eq!(
+        test.window.journal_label(ox_core::ops::JournalDirection::Undo),
+        "Undo Rename"
+    );
+}
+
+/// Undo after Extract here takes the new folder away, and Redo brings it
+/// back; the folder that had the archive's name is never touched.
+///
+/// parity: OPS-029, ARC-025
+#[gtk::test]
+fn undo_and_redo_walk_extract_here() {
+    super::file_ops_support::require_private_trash();
+    let fixture = fixture_with_zip();
+    fs::create_dir(fixture.path("Bundle")).expect("a folder with the archive's name");
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Bundle.zip");
+    test.activate("extract-here", None);
+    let extracted = fixture.path("Bundle (2)");
+    wait_until("the extracted folder", || extracted.join("readme.txt").exists());
+    wait_until("the extraction to end", || {
+        test.window.journal_label(ox_core::ops::JournalDirection::Undo) == "Undo Copy"
+    });
+
+    test.activate("undo", None);
+    wait_until("the extracted folder to go", || !extracted.exists());
+    wait_until("the undo to end", || !test.window.is_writing_files());
+    assert!(fixture.path("Bundle").is_dir(), "the older folder stays");
+    test.activate("redo", None);
+    wait_until("the extracted folder to come back", || {
+        extracted.join("Docs/a.txt").exists()
+    });
+
+    assert_eq!(
+        fs::read(extracted.join("readme.txt")).expect("restored"),
+        b"read me"
+    );
+    assert!(fixture.path("Bundle.zip").exists(), "the archive stays");
 }
 
 /// Cancel in the name-conflict question of an extraction into an existing

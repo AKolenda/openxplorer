@@ -620,3 +620,51 @@ fn a_name_that_is_not_utf8_is_copied_and_pasted() {
     });
     super::file_ops_support::assert_ended_without_a_message(&test);
 }
+
+/// Undo of a cut and paste whose item's old name was taken again by
+/// another program says so in the progress window, with Try Again, Skip
+/// and Cancel, instead of leaving the item moved in silence and using up
+/// the step; Try Again, once the name is free, moves the item back.
+///
+/// parity: OPS-029, OPS-047
+#[gtk::test]
+fn undoing_a_move_onto_a_taken_name_asks_and_try_again_moves_it_back() {
+    let fixture = Fixture::standard();
+    fixture.write("Clip.mp4");
+    let test = clipboard_then_documents(&fixture, "cut", &["Clip.mp4"]);
+    test.activate("paste", None);
+    wait_until("the move", || fixture.path("Documents/Clip.mp4").is_file());
+    wait_until("the move to end", || !test.window.is_writing_files());
+    fs::write(fixture.path("Clip.mp4"), b"made by another program").expect("a new file");
+
+    test.activate("undo", None);
+    let window = crate::window::progress_window::ProgressWindow::of(&test.context);
+    let asking = || {
+        window
+            .actions()
+            .into_iter()
+            .find(crate::window::transfer_panel::TransferPanel::asks_about_failure)
+    };
+    wait_until("Undo to ask about the name in the way", || asking().is_some());
+    let question = asking().expect("the asking action");
+    let words = question.failure_texts().join("\n");
+    assert!(words.contains("Clip.mp4"), "{words}");
+    assert!(words.contains("already"), "{words}");
+    assert!(
+        question.failure_button_labels().contains(&"Try Again".to_owned()),
+        "{:?}",
+        question.failure_button_labels()
+    );
+    fs::rename(fixture.path("Clip.mp4"), fixture.path("Clip (other).mp4")).expect("the name freed");
+    question.press_failure("Try Again");
+
+    wait_until("the item to go back", || {
+        fixture.path("Clip.mp4").is_file() && !fixture.path("Documents/Clip.mp4").exists()
+    });
+    wait_until("the undo to end", || !test.window.is_writing_files());
+    assert_eq!(
+        fs::read(fixture.path("Clip (other).mp4")).expect("kept"),
+        b"made by another program"
+    );
+    assert!(super::file_ops_support::dialog_over(&test).is_none());
+}
