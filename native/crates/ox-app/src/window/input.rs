@@ -299,10 +299,19 @@ impl BrowserWindow {
     /// opened alone goes to a new window too, as in Windows
     /// ([`BrowserWindow::activate_item`]).
     pub(super) fn activate_from_view(&self, position: u32) {
-        // DND-007: the press or release of a drag never opens an item, and
-        // in single-click mode the second press of a double-click opens
+        // In single-click mode the second press of a double-click opens
         // nothing more (SEL-018).
-        if self.are_item_clicks_paused() || self.swallows_activation() {
+        if !self.swallows_activation() {
+            self.open_from_view(position);
+        }
+    }
+
+    /// Opens the item at `position` as [`Self::activate_from_view`] does,
+    /// even during the second press of a double-click: the single click
+    /// that started it, in single-click mode (SEL-018).
+    pub(super) fn open_from_view(&self, position: u32) {
+        // DND-007: the press or release of a drag never opens an item.
+        if self.are_item_clicks_paused() {
             return;
         }
         let modifiers = self

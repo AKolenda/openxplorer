@@ -43,6 +43,9 @@ use crate::folder_view::gallery_view::GalleryCanvas;
 /// user changed it), which its list view waits for in point to select.
 pub(crate) const HOVER_SELECT_DELAY: Duration = Duration::from_millis(400);
 
+/// GTK's drag threshold when the settings do not say (`GtkSettings`).
+const DEFAULT_DRAG_THRESHOLD: i32 = 8;
+
 /// The class of a folder view while a single click opens its items.
 const SINGLE_CLICK_CLASS: &str = "single-click";
 
@@ -100,14 +103,26 @@ impl ClickMode {
 pub(super) struct SingleClick {
     /// How a click opens an item now.
     mode: Cell<ClickMode>,
-    /// The item a plain primary press landed on, in its view, which a
-    /// release on it opens.
-    pressed: RefCell<Option<(glib::WeakRef<gtk::Widget>, u32)>>,
+    /// The item a plain primary press landed on, which a release on it
+    /// opens.
+    pressed: RefCell<Option<Pressed>>,
     /// The item the pointer is on.
     pointed: RefCell<Option<Pointed>>,
     /// While the second press of a double-click is handled: the view's own
     /// activation must not open the item a second time.
     swallows_activation: Cell<bool>,
+}
+
+/// The item a plain primary press landed on.
+#[derive(Debug)]
+struct Pressed {
+    view: glib::WeakRef<gtk::Widget>,
+    position: u32,
+    /// Its URI: the release opens this item, never another that a refresh
+    /// or a sort put at its position since.
+    uri: String,
+    /// Where the press was in the view.
+    point: (f64, f64),
 }
 
 /// The item the pointer is on.
@@ -117,10 +132,9 @@ struct Pointed {
     position: u32,
     /// Its icon-and-name cell, marked [`POINTED_CLASS`].
     cell: glib::WeakRef<FileCell>,
-    /// Selects it once the pointer has rested on it.
+    /// Selects it once the pointer has rested on it; gone once it did, or
+    /// once a key or a press took over.
     timer: Option<glib::SourceId>,
-    /// The modifiers and buttons held at the pointer's last move.
-    state: gdk::ModifierType,
 }
 
 impl BrowserWindow {
@@ -185,6 +199,17 @@ impl BrowserWindow {
                 window.single_click_released(&view, clicks, held_modifiers(press), (x, y));
             }
         ));
+        // A move past the drag threshold: a drag, even one that never
+        // starts, opens nothing where it ends.
+        press.connect_update(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |press, sequence| {
+                if let Some(point) = press.point(sequence) {
+                    window.drop_moved_press(point);
+                }
+            }
+        ));
         // A band, a drag or a check box that claims the press.
         press.connect_cancel(glib::clone!(
             #[weak(rename_to = window)]
@@ -201,14 +226,14 @@ impl BrowserWindow {
             self,
             #[weak]
             view,
-            move |motion, x, y| window.pointer_over_click_items(&view, Some((x, y)), held_modifiers(motion))
+            move |_, x, y| window.pointer_over_click_items(&view, Some((x, y)))
         ));
         motion.connect_leave(glib::clone!(
             #[weak(rename_to = window)]
             self,
             #[weak]
             view,
-            move |_| window.pointer_over_click_items(&view, None, gdk::ModifierType::empty())
+            move |_| window.pointer_over_click_items(&view, None)
         ));
         view.add_controller(motion);
         // Another folder listed, or this one changed: the item pointed at
@@ -231,7 +256,8 @@ impl BrowserWindow {
 
     /// A primary press at `point` in `view`: remembers a plain press on an
     /// item for its release, and keeps the second press of a double-click
-    /// from opening anything.
+    /// from opening anything. Pointing selects nothing more until the
+    /// pointer moves to another item: the press selects as it does.
     fn single_click_pressed(
         &self,
         view: &gtk::Widget,
@@ -244,7 +270,11 @@ impl BrowserWindow {
         if !self.single_click_opens() {
             return;
         }
+        self.stop_pointing_selection();
         if clicks > 1 {
+            // Only the view's own activation: the release of the first
+            // click may open its item after this, when the second press
+            // came before the window had time to.
             state.swallows_activation.set(true);
             glib::idle_add_local_once(glib::clone!(
                 #[weak(rename_to = window)]
@@ -256,9 +286,36 @@ impl BrowserWindow {
         if modifiers.intersects(selecting_modifiers()) || self.are_item_clicks_paused() {
             return;
         }
-        if let Some(position) = self.click_item_at(view, point) {
-            state.pressed.replace(Some((view.downgrade(), position)));
+        let Some(position) = self.click_item_at(view, point) else {
+            return;
+        };
+        let Some(uri) = self.uri_in(view, position) else {
+            return;
+        };
+        state.pressed.replace(Some(Pressed {
+            view: view.downgrade(),
+            position,
+            uri,
+            point,
+        }));
+    }
+
+    /// The pointer moved to `point` with the primary button held: past the
+    /// drag threshold, the press opens nothing.
+    fn drop_moved_press(&self, point: (f64, f64)) {
+        let mut pressed = self.imp().single_click.pressed.borrow_mut();
+        if pressed
+            .as_ref()
+            .is_some_and(|pressed| is_past_drag_threshold(pressed.point, point))
+        {
+            pressed.take();
         }
+    }
+
+    /// The URI of the item at `position` in `view`'s folder.
+    fn uri_in(&self, view: &gtk::Widget, position: u32) -> Option<String> {
+        let item = self.pane_holding(view)?.model().item(position)?;
+        Some(item.entry().uri.clone())
     }
 
     /// A primary release at `point` in `view`: opens the item a plain press
@@ -271,16 +328,19 @@ impl BrowserWindow {
         modifiers: gdk::ModifierType,
         point: (f64, f64),
     ) {
-        let Some((pressed_view, position)) = self.imp().single_click.pressed.take() else {
+        let Some(pressed) = self.imp().single_click.pressed.take() else {
             return;
         };
+        let position = pressed.position;
         let opens = self.single_click_opens()
             && clicks == 1
-            && pressed_view.upgrade().as_ref() == Some(view)
+            && pressed.view.upgrade().as_ref() == Some(view)
             && !modifiers.intersects(selecting_modifiers())
             && !self.are_item_clicks_paused()
             && !self.band_is_shown()
-            && self.click_item_at(view, point) == Some(position);
+            && !is_past_drag_threshold(pressed.point, point)
+            && self.click_item_at(view, point) == Some(position)
+            && self.uri_in(view, position).as_ref() == Some(&pressed.uri);
         if !opens {
             return;
         }
@@ -293,9 +353,14 @@ impl BrowserWindow {
             #[weak]
             view,
             move || {
-                // The press made its pane the active one, as any click does.
-                if window.side_holding(&view) == Some(window.active_side()) {
-                    window.activate_from_view(position);
+                // The press made its pane the active one, as any click
+                // does; the item is still the one clicked. This opens it
+                // even while a second press of a double-click that came
+                // first swallows the view's own activation.
+                let clicked = window.side_holding(&view) == Some(window.active_side())
+                    && window.uri_in(&view, position).as_ref() == Some(&pressed.uri);
+                if clicked {
+                    window.open_from_view(position);
                 }
             }
         ));
@@ -346,30 +411,31 @@ impl BrowserWindow {
             .cloned()
     }
 
-    /// The pointer moved to `point` in `view`, with `state` held, or left
-    /// it: over an item it is a hand and underlines the item's name, and
-    /// resting there selects the item.
-    fn pointer_over_click_items(
-        &self,
-        view: &gtk::Widget,
-        point: Option<(f64, f64)>,
-        state: gdk::ModifierType,
-    ) {
+    /// The pointer moved to `point` in `view`, or left it: over an item it
+    /// is a hand and underlines the item's name, and resting there selects
+    /// the item.
+    fn pointer_over_click_items(&self, view: &gtk::Widget, point: Option<(f64, f64)>) {
         if !self.single_click_opens() {
             return;
         }
         let position = point.and_then(|point| self.click_item_at(view, point));
-        view.set_cursor_from_name(position.map(|_| "pointer"));
-        {
-            let mut pointed = self.imp().single_click.pointed.borrow_mut();
-            if let Some(pointed) = pointed.as_mut().filter(|pointed| {
+        let same = self
+            .imp()
+            .single_click
+            .pointed
+            .borrow()
+            .as_ref()
+            .is_some_and(|pointed| {
                 Some(pointed.position) == position && pointed.view.upgrade().as_ref() == Some(view)
-            }) {
-                pointed.state = state;
-                return;
-            }
+            });
+        if same {
+            return;
         }
+        // Before the hand: forgetting the item before takes its view's
+        // pointer away, which is this view's when the pointer went
+        // straight from one item to another.
         self.forget_pointed_item();
+        view.set_cursor_from_name(position.map(|_| "pointer"));
         let Some(position) = position else {
             return;
         };
@@ -392,16 +458,33 @@ impl BrowserWindow {
             position,
             cell: cell.as_ref().map(ObjectExt::downgrade).unwrap_or_default(),
             timer: Some(timer),
-            state,
         }));
     }
 
+    /// Keeps the item pointed at from being selected by the pointer
+    /// resting there, until it moves to another item: a key (any but a
+    /// modifier alone, [`Self::install_slow_click_rename`]) or a press
+    /// took over the selection.
+    pub(super) fn stop_pointing_selection(&self) {
+        let timer = self
+            .imp()
+            .single_click
+            .pointed
+            .borrow_mut()
+            .as_mut()
+            .and_then(|pointed| pointed.timer.take());
+        if let Some(timer) = timer {
+            timer.remove();
+        }
+    }
+
     /// The pointer has rested on an item: selects it, as Windows' point to
-    /// select does, unless a button is held (a drag or a band), a dialog is
-    /// in front or a name is being edited. Ctrl adds it to the selection,
-    /// Shift selects from the item with keyboard focus to it.
+    /// select does, unless a button is held now (a drag or a band), a
+    /// dialog is in front or a name is being edited. Ctrl held now adds it
+    /// to the selection, Shift selects from the item with keyboard focus
+    /// (Gallery: the item Shift extends from) to it.
     fn select_pointed_item(&self) {
-        let (view, position, state) = {
+        let (view, position) = {
             let mut pointed = self.imp().single_click.pointed.borrow_mut();
             let Some(pointed) = pointed.as_mut() else {
                 return;
@@ -410,7 +493,10 @@ impl BrowserWindow {
             let Some(view) = pointed.view.upgrade() else {
                 return;
             };
-            (view, pointed.position, pointed.state)
+            (view, pointed.position)
+        };
+        let Some(state) = held_now(&view) else {
+            return;
         };
         let quiet = !state.intersects(held_buttons())
             && self.single_click_opens()
@@ -422,7 +508,7 @@ impl BrowserWindow {
             return;
         }
         if let Some(canvas) = view.downcast_ref::<GalleryCanvas>() {
-            canvas.select_only(position);
+            canvas.point_to_select(position, state);
             return;
         }
         let Some(pane) = self.pane_holding(&view) else {
@@ -462,6 +548,29 @@ impl BrowserWindow {
             view.set_cursor(None);
         }
     }
+}
+
+/// The modifiers and pointer buttons held now on `view`'s seat, read when
+/// pointing selects rather than at the pointer's last move: Ctrl or Shift
+/// pressed or a button let go while the pointer rests count.
+fn held_now(view: &gtk::Widget) -> Option<gdk::ModifierType> {
+    let seat = view.display().default_seat()?;
+    let surface = view.native()?.surface()?;
+    let (_, _, pointer) = surface.device_position(&seat.pointer()?)?;
+    let keys = seat
+        .keyboard()
+        .map_or_else(gdk::ModifierType::empty, |keyboard| keyboard.modifier_state());
+    Some(pointer | keys)
+}
+
+/// Whether the pointer at `to` is past the desktop's drag threshold from
+/// `from`, as GTK measures it (`gtk_drag_check_threshold`).
+fn is_past_drag_threshold(from: (f64, f64), to: (f64, f64)) -> bool {
+    let threshold = gtk::Settings::default().map_or(DEFAULT_DRAG_THRESHOLD, |settings| {
+        settings.gtk_dnd_drag_threshold()
+    });
+    let threshold = f64::from(threshold);
+    (to.0 - from.0).abs() > threshold || (to.1 - from.1).abs() > threshold
 }
 
 /// The views of `pane` a click opens items in: Details, the icon grid

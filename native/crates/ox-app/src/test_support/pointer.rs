@@ -131,6 +131,21 @@ impl Pointer {
         wait_for(STEP_SETTLE);
     }
 
+    /// Two quick clicks of `button` where the pointer is, in one go: the X
+    /// server has the second press before the window handles the first
+    /// release, so nothing the window does after that release, such as an
+    /// idle callback, comes before the second press.
+    pub(crate) fn double_tap(&mut self, button: Button) {
+        let mut requests = Vec::new();
+        for _ in 0..2 {
+            requests.extend(self.fake_request(BUTTON_PRESS, button as u8, 0, 0));
+            requests.extend(self.fake_request(BUTTON_RELEASE, button as u8, 0, 0));
+        }
+        self.send(&requests);
+        self.sync();
+        wait_for(STEP_SETTLE);
+    }
+
     /// Presses and releases `key` on the private display's keyboard.
     pub(crate) fn tap_key(&mut self, key: gdk::Key) {
         let keycode = keycode_of(key);

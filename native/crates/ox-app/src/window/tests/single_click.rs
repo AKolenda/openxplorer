@@ -3,13 +3,16 @@
 //! private display (SEL-018): GTK's own gestures decide which press opens,
 //! selects or draws a band, so only real clicks show that a plain click
 //! opens an item in every view, that pointing selects it, and that a Ctrl
-//! click, a check box, a rubber band and the second click of a
-//! double-click open nothing.
+//! click, a check box, a rubber band, the second click of a double-click
+//! and a release on another item at the place pressed open nothing.
+
+use std::fs;
 
 use gtk::gdk;
 use gtk::prelude::*;
 use ox_core::settings::{PreferencesUpdate, Settings};
 
+use super::gallery::{gallery_window, write_modified, PicturesHome};
 use super::right_drag::{blank_on_screen, item_on_screen, HOLD, PROBE};
 use crate::folder_view::cells::FileCell;
 use crate::test_support::harness::{wait_for, wait_for_frames, wait_until, Fixture, TestWindow};
@@ -89,6 +92,11 @@ fn a_single_click_opens_an_item_and_pointing_selects_it_in_every_view() {
 
         let documents = item_on_screen(&mut pointer, &test, "Documents");
         pointer.move_to(documents.0, documents.1);
+        assert_eq!(
+            view.cursor().and_then(|cursor| cursor.name()).as_deref(),
+            Some("pointer"),
+            "{view_name}: still a hand, straight from one item to another"
+        );
         assert!(
             !cell_of(&test, "Notes 2.txt").has_css_class(POINTED_CLASS),
             "{view_name}: only the item pointed at is underlined"
@@ -202,5 +210,136 @@ fn check_boxes_bands_and_double_clicks_open_nothing_more_with_single_click() {
         "the second click opens nothing more"
     );
     assert_eq!(test.window.current_uri(), Some(fixture.uri()));
+
+    // A double-click so quick that its second press comes before the
+    // window has opened what the first click did: still opened once.
+    pointer.double_tap(Button::Primary);
+    wait_until("the file double-clicked to open", || {
+        test.context.recorded_launches().len() == 2
+    });
+    pause();
+    assert_eq!(
+        test.context.recorded_launches(),
+        [fixture.uri_of("Notes 2.txt"), fixture.uri_of("Notes 2.txt")],
+        "a queued double-click opens the file once"
+    );
+
+    // A file listed before it while the button is down puts another item
+    // at the place pressed: the release opens neither.
+    pointer.press(Button::Primary);
+    fs::write(fixture.path("Aaa.txt"), b"Synthetic test data\n").expect("a new file");
+    wait_until("the new file listed", || {
+        test.names().contains(&"Aaa.txt".to_owned())
+    });
+    wait_for_frames(&test.window, 3);
+    assert!(
+        test.position_of("Aaa.txt") < test.position_of("Notes 2.txt"),
+        "the new file comes before"
+    );
+    pointer.release(Button::Primary);
+    pause();
+    assert_eq!(
+        test.context.recorded_launches().len(),
+        2,
+        "the release opens nothing"
+    );
+    pointer.move_to(720, 500);
+}
+
+/// With single-click on, a key that moves the selection while the
+/// pointer rests on an item keeps pointing from selecting that item.
+///
+/// parity: SEL-018
+#[gtk::test]
+fn a_key_takes_the_selection_over_from_pointing() {
+    let fixture = Fixture::standard();
+    let mut pointer = Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    single_click(&test, PreferencesUpdate::default());
+    test.activate("view", Some("details"));
+    test.window.present();
+    wait_for_frames(&test.window, 3);
+    let (x, y) = screen_point(&mut pointer, &test.window, (4.0, 4.0), PROBE);
+    pointer.move_to(x, y);
+    wait_until("the window to have the keyboard", || test.window.is_active());
+    let documents = test.position_of("Documents");
+    test.window.folder_pane().select_and_reveal(documents);
+    wait_until("the keyboard on Documents", || {
+        test.window.folder_pane().focused_position() == Some(documents)
+    });
+    let next = test.names()[documents as usize + 1].clone();
+    assert_ne!(next, "Résumé.txt");
+
+    let resume = item_on_screen(&mut pointer, &test, "Résumé.txt");
+    pointer.move_to(resume.0, resume.1);
+    pointer.tap_key(gdk::Key::Down);
+    pause();
+    assert_eq!(
+        test.selected_names(),
+        [next],
+        "the key's selection stays; pointing selects nothing"
+    );
+    pointer.move_to(720, 500);
+}
+
+/// With single-click on, in Gallery: the pointer resting on a photo
+/// selects it alone; with Ctrl held by the time pointing selects, the
+/// photo joins the selection; with Shift, the photos from the one
+/// pointed at first are selected.
+///
+/// parity: SEL-018
+#[gtk::test]
+fn pointing_with_ctrl_or_shift_extends_the_selection_in_gallery() {
+    let home = PicturesHome::new();
+    let pictures = home.pictures();
+    for (name, date) in [
+        ("a.png", "2026-11-02"),
+        ("b.png", "2026-10-02"),
+        ("c.png", "2026-09-02"),
+        ("d.png", "2026-08-02"),
+    ] {
+        write_modified(&pictures.join(name), date);
+    }
+    let mut pointer = Pointer::connect();
+    let test = gallery_window(&home);
+    single_click(&test, PreferencesUpdate::default());
+    let gallery = test.window.folder_pane().gallery().clone();
+    wait_until("the photos shown", || gallery.shown_tiles().len() == 4);
+    let photo = |pointer: &mut Pointer, name: &str| {
+        let (_, bounds, _) = gallery
+            .shown_tiles()
+            .into_iter()
+            .find(|(shown, _, _)| shown == name)
+            .expect("the photo is shown");
+        let middle = bounds.center();
+        screen_point(
+            pointer,
+            gallery.canvas(),
+            (f64::from(middle.x()), f64::from(middle.y())),
+            PROBE,
+        )
+    };
+
+    let a = photo(&mut pointer, "a.png");
+    pointer.move_to(a.0, a.1);
+    wait_until("pointing selects", || test.selected_names() == ["a.png"]);
+
+    let c = photo(&mut pointer, "c.png");
+    pointer.move_to(c.0, c.1);
+    pointer.hold_key(gdk::Key::Control_L);
+    pause();
+    pointer.let_go_key(gdk::Key::Control_L);
+    assert_eq!(test.selected_names(), ["a.png", "c.png"], "Ctrl adds");
+
+    let d = photo(&mut pointer, "d.png");
+    pointer.move_to(d.0, d.1);
+    pointer.hold_key(gdk::Key::Shift_L);
+    pause();
+    pointer.let_go_key(gdk::Key::Shift_L);
+    assert_eq!(
+        test.selected_names(),
+        ["a.png", "b.png", "c.png", "d.png"],
+        "Shift extends"
+    );
     pointer.move_to(720, 500);
 }

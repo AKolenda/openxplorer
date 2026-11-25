@@ -1284,6 +1284,22 @@ impl GalleryCanvas {
         self.set_anchor(position);
     }
 
+    /// Selects `position` as the pointer resting on it does in Folder
+    /// Options' single-click mode (SEL-018), with `modifiers` held: Ctrl
+    /// adds it to the selection, Shift selects from the anchor to it, as
+    /// a click would, and otherwise it is selected alone.
+    pub(crate) fn point_to_select(&self, position: u32, modifiers: gdk::ModifierType) {
+        if modifiers.contains(gdk::ModifierType::CONTROL_MASK) {
+            if let Some(model) = self.model() {
+                model.select_item(position, false);
+            }
+        } else if modifiers.contains(gdk::ModifierType::SHIFT_MASK) {
+            self.select_range_to(position, false);
+        } else {
+            self.select_only(position);
+        }
+    }
+
     /// Selects from the anchor to `position`, adding to the selection
     /// with `adding`.
     fn select_range_to(&self, position: u32, adding: bool) {

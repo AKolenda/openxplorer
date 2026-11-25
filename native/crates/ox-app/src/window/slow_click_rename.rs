@@ -132,6 +132,9 @@ impl BrowserWindow {
                         .is_some_and(|event| event.is_modifier());
                 if !modifier_alone {
                     window.cancel_slow_click_rename();
+                    // The keyboard takes the selection over from pointing
+                    // in single-click mode (SEL-018).
+                    window.stop_pointing_selection();
                 }
                 glib::Propagation::Proceed
             }
