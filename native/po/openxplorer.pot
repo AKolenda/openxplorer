@@ -6021,7 +6021,7 @@ msgstr ""
 msgid "Split view"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar/menus.rs
+#: crates/ox-app/src/window/command_bar/menus.rs crates/ox-core/src/integration/terminal/emulator.rs
 msgid "Terminal"
 msgstr ""
 
@@ -10055,6 +10055,10 @@ msgid "Refusing to replace a symlink: {path}"
 msgstr ""
 
 #: crates/ox-core/src/integration/terminal/emulator.rs
+msgid "Alacritty"
+msgstr ""
+
+#: crates/ox-core/src/integration/terminal/emulator.rs
 msgid "Console"
 msgstr ""
 
@@ -10063,11 +10067,31 @@ msgid "GNOME Terminal"
 msgstr ""
 
 #: crates/ox-core/src/integration/terminal/emulator.rs
+msgid "Ghostty"
+msgstr ""
+
+#: crates/ox-core/src/integration/terminal/emulator.rs
 msgid "Konsole"
 msgstr ""
 
 #: crates/ox-core/src/integration/terminal/emulator.rs
+msgid "Ptyxis"
+msgstr ""
+
+#: crates/ox-core/src/integration/terminal/emulator.rs
+msgid "Terminator"
+msgstr ""
+
+#: crates/ox-core/src/integration/terminal/emulator.rs
+msgid "Tilix"
+msgstr ""
+
+#: crates/ox-core/src/integration/terminal/emulator.rs
 msgid "UXTerm"
+msgstr ""
+
+#: crates/ox-core/src/integration/terminal/emulator.rs
+msgid "WezTerm"
 msgstr ""
 
 #: crates/ox-core/src/integration/terminal/emulator.rs
@@ -10076,6 +10100,10 @@ msgstr ""
 
 #: crates/ox-core/src/integration/terminal/emulator.rs
 msgid "Xfce Terminal"
+msgstr ""
+
+#: crates/ox-core/src/integration/terminal/emulator.rs
+msgid "foot"
 msgstr ""
 
 #: crates/ox-core/src/integration/terminal/emulator.rs
