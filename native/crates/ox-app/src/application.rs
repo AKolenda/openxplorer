@@ -175,6 +175,7 @@ mod imp {
             // is about to end (`query-end`), when the open tabs are saved
             // for the next start (TAB-053). GTK registers during startup.
             if let Launch::Interactive = app.launch() {
+                crate::thumbnails::trace::watch_main_loop();
                 crate::crash_guard::start_run();
                 app.set_register_session(true);
                 app.connect_query_end(|app| {

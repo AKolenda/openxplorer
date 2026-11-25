@@ -379,7 +379,7 @@ mod tests {
         let rows = std::cell::RefCell::new(Vec::new());
         glib::MainContext::new()
             .block_on(enumerate_folder(&folder_uri(&folder), |batch| {
-                rows.borrow_mut().extend(batch)
+                rows.borrow_mut().extend(batch);
             }))
             .expect("listed");
         let rows = rows.into_inner();

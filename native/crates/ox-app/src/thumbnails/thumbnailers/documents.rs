@@ -954,7 +954,7 @@ impl Sandbox {
 pub(in crate::thumbnails) fn write_thumbnail(
     job: &Job,
     cancellation: &gio::Cancellable,
-) -> Result<PathBuf, Failure> {
+) -> Result<writer::Made, Failure> {
     let converter = converter().ok_or(Failure::Unavailable)?;
     let path = gio::File::for_uri(&job.uri).path().ok_or(Failure::Refused)?;
     let pdf = converter.pdf(&path, Priority::Thumbnail, cancellation)?;
@@ -969,6 +969,9 @@ pub(in crate::thumbnails) fn write_thumbnail(
     let source = Source {
         uri: job.uri.clone(),
         modified: job.modified,
+        size: job.size,
+        mime_type: Some(job.content_type.clone()),
+        shown: job.shown,
     };
     // A cache that refused the picture is the app's trouble, not the
     // document's: it is asked again the next time it is shown.

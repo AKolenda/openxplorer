@@ -19,6 +19,7 @@ use overflow_name::OverflowName;
 use tile_lines::TileLines;
 mod custom_icon;
 mod expander;
+mod folder_contents;
 mod folder_picture;
 mod heading_span;
 mod item_check;
@@ -36,6 +37,7 @@ use gtk::{glib, pango};
 pub(crate) use cell_owners::{CellOwners, PositionMap, TileSlot};
 pub(crate) use custom_icon::{icon_texture, CUSTOM_ICON};
 pub(crate) use expander::connect_expanders;
+pub(crate) use folder_contents::FolderContents;
 pub(crate) use folder_picture::{folder_picture_of, FolderPicture, FOLDER_PICTURE};
 pub(crate) use row_tooltip::{show_row_tooltip, CellTooltip, RowTooltip, TooltipCell};
 
@@ -297,6 +299,9 @@ mod imp {
         /// The folder's picture on its icon (PROP-037), on a tile of
         /// Medium icons or larger.
         pub(super) folder_picture: super::FolderPicture,
+        /// The folder's contents peeking out of its icon (VIEW-058), at
+        /// Medium icons and larger and in Tiles.
+        pub(super) folder_contents: super::FolderContents,
         /// Whether the cell is an icon-view tile.
         pub(super) is_tile: Cell<bool>,
         /// Whether a heading the cell shows has no chevron: List's
@@ -307,6 +312,12 @@ mod imp {
         pub(super) is_details_row: Cell<bool>,
         /// The running lookup of the custom icon or preview.
         pub(super) picture_lookup: RefCell<Option<glib::JoinHandle<()>>>,
+        /// Counts the waits for a cached thumbnail, so a wait's end does
+        /// not show the type icon of an item bound since.
+        pub(super) icon_wait: Cell<u32>,
+        /// Counts the items the cell was bound to and unbound from, so a
+        /// preview read for one item is never shown for another.
+        pub(super) binding: Cell<u32>,
         /// Holds the icon, and on a tile spans it, with the check box in
         /// its top left corner.
         pub(super) icon_frame: gtk::Overlay,
@@ -380,6 +391,7 @@ mod imp {
                 self.image.upcast_ref::<gtk::Widget>(),
                 self.custom_icon.upcast_ref(),
                 self.folder_picture.upcast_ref(),
+                self.folder_contents.upcast_ref(),
             ] {
                 art.add_css_class(super::ITEM_ART_CLASS);
             }
@@ -388,6 +400,10 @@ mod imp {
             self.icon_frame.add_overlay(&self.custom_icon);
             self.folder_picture.set_visible(false);
             self.icon_frame.add_overlay(&self.folder_picture);
+            self.folder_contents.set_visible(false);
+            self.folder_contents.set_halign(gtk::Align::Center);
+            self.folder_contents.set_valign(gtk::Align::Center);
+            self.icon_frame.add_overlay(&self.folder_contents);
             cell.append(&self.icon_frame);
             cell.append(&self.label);
         }
@@ -414,6 +430,7 @@ impl FileCell {
         imp.icon_size.set(icon_size);
         imp.custom_icon.set_size_request(icon_size, icon_size);
         imp.folder_picture.place_on_icon(icon_size);
+        imp.folder_contents.set_edge(icon_size);
         // A folder until bound, so the cell has its full size from the start.
         imp.image.set_art(Art::Folder, icon_size);
         match layout {
@@ -1243,7 +1260,13 @@ pub(crate) fn connect_mapped_file_cells(
         }
     });
     factory.connect_unbind(|_, object| {
-        if let Some(cell) = as_list_item(object).child().and_downcast::<FileCell>() {
+        let list_item = as_list_item(object);
+        if crate::thumbnails::trace::enabled() {
+            if let Some(item) = bound_item(list_item) {
+                crate::thumbnails::trace::event("unbind", &item.entry().uri);
+            }
+        }
+        if let Some(cell) = list_item.child().and_downcast::<FileCell>() {
             cell.cancel_picture_lookup();
         }
     });

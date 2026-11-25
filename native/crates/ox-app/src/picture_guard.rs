@@ -229,6 +229,28 @@ pub(crate) fn decode_bytes_to_fit(
     )
 }
 
+/// Starts the picture decoders the thumbnail views use, in the background,
+/// before they are needed.
+pub(crate) fn warm_up_decoders(count: usize) {
+    decoder::warm_up(count);
+}
+
+/// The pictures in `pictures`, each decoded as [`decode_bytes_to_fit`]
+/// decodes one, in a single batch to one decoder process: what the
+/// thumbnail cache's reads use, many small files at a time. `each` is
+/// handed every result with its index as soon as it is decoded, in order.
+/// Blocks.
+pub(crate) fn decode_batch_to_fit(
+    pictures: Vec<Vec<u8>>,
+    width: i32,
+    height: i32,
+    limits: Limits,
+    cancellable: Option<&gio::Cancellable>,
+    each: &mut dyn FnMut(usize, Result<Decoded, Refusal>),
+) {
+    decoder::decode_batch(pictures, width, height, limits, cancellable, each);
+}
+
 /// The picture in `file`, decoded in this process: what the decoder
 /// process runs. Blocks.
 fn decode_here_to_fit(

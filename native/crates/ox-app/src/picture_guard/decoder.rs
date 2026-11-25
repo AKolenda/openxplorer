@@ -132,6 +132,36 @@ pub(super) fn decode(
     }
 }
 
+/// The pictures in `pictures`, each decoded to fit `width` × `height`
+/// within `limits` as [`decode`] decodes one, in one batch: by one decoder
+/// process where they run, handing each result to `each` with its index as
+/// it comes. Blocks.
+pub(super) fn decode_batch(
+    pictures: Vec<Vec<u8>>,
+    width: i32,
+    height: i32,
+    limits: Limits,
+    cancellable: Option<&gio::Cancellable>,
+    each: &mut dyn FnMut(usize, Result<Decoded, Refusal>),
+) {
+    crate::thumbnails::trace::event("decode-batch", &pictures.len().to_string());
+    match RUNNER.get_or_init(find_runner) {
+        Runner::Pool(pool) => {
+            pool.decode_batch(&pictures, width, height, limits, cancellable, each);
+            pool.stop_unused_later();
+        }
+        Runner::InProcess => {
+            for (index, picture) in pictures.into_iter().enumerate() {
+                let mut reader = std::io::Cursor::new(picture);
+                each(
+                    index,
+                    super::decode_reader_here_to_fit(&mut reader, width, height, limits, cancellable),
+                );
+            }
+        }
+    }
+}
+
 /// How this computer runs the decoders: sandboxed where bubblewrap works
 /// (with a `/proc` of its own, then without, as for the thumbnailers),
 /// else on their own; each way is tried on a picture of one pixel.
@@ -293,7 +323,39 @@ struct Pool {
     stopping_unused: AtomicBool,
 }
 
+/// Starts decoders until `count` wait idle, on a thread of its own, so the
+/// first thumbnails a view reads find their decoders started: one takes
+/// some tens of milliseconds to start in its sandbox.
+pub(super) fn warm_up(count: usize) {
+    let _ = thread::Builder::new()
+        .name("ox-picture-warm-up".to_owned())
+        .spawn(move || {
+            if let Runner::Pool(pool) = RUNNER.get_or_init(find_runner) {
+                pool.warm_up(count.min(POOL_SIZE));
+                // Started for pictures that may never be asked for: they
+                // are stopped as any unused decoder is.
+                pool.stop_unused_later();
+            }
+        });
+}
+
 impl Pool {
+    /// Starts decoders until `count` wait idle.
+    fn warm_up(&self, count: usize) {
+        loop {
+            if self.idle.lock().unwrap_or_else(PoisonError::into_inner).len() >= count {
+                return;
+            }
+            let Ok(decoder) = Decoder::start(&self.words) else {
+                return;
+            };
+            self.idle
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(decoder);
+        }
+    }
+
     fn new(words: Vec<OsString>) -> Self {
         Self {
             words,
@@ -354,6 +416,7 @@ impl Pool {
         limits: Limits,
         cancellable: Option<&gio::Cancellable>,
     ) -> Result<Decoded, Refusal> {
+        crate::thumbnails::trace::event("decode-request", &format!("{width}x{height}"));
         let decoder = match self.take_idle() {
             Some(decoder) => decoder,
             None => Decoder::start(&self.words)?,
@@ -380,6 +443,50 @@ impl Pool {
             }
         }
         None
+    }
+}
+
+impl Pool {
+    /// Decodes `pictures` in turn with one decoder, handing each result to
+    /// `each` with its index as it comes: the cached thumbnails of a
+    /// screenful of tiles cost one request and one wait rather than one of
+    /// each a picture. A picture that crashes or hangs its decoder is
+    /// refused alone, and the pictures after it go to another decoder.
+    fn decode_batch(
+        &self,
+        pictures: &[Vec<u8>],
+        width: i32,
+        height: i32,
+        limits: Limits,
+        cancellable: Option<&gio::Cancellable>,
+        each: &mut dyn FnMut(usize, Result<Decoded, Refusal>),
+    ) {
+        let mut start = 0;
+        while start < pictures.len() {
+            if cancellable.is_some_and(CancellableExt::is_cancelled) {
+                (start..pictures.len()).for_each(|index| each(index, Err(Refusal::Cancelled)));
+                return;
+            }
+            let decoder = match self.take_idle().map_or_else(|| Decoder::start(&self.words), Ok) {
+                Ok(decoder) => decoder,
+                Err(refusal) => {
+                    (start..pictures.len()).for_each(|index| each(index, Err(refusal)));
+                    return;
+                }
+            };
+            let rest = pictures.get(start..).unwrap_or_default().to_vec();
+            let (answered, kept) =
+                decoder.decode_many(rest, width, height, limits, cancellable, &mut |index, result| {
+                    each(start + index, result);
+                });
+            start += answered.max(1);
+            if let Some(decoder) = kept {
+                let mut idle = self.idle.lock().unwrap_or_else(PoisonError::into_inner);
+                if idle.len() < POOL_SIZE && decoder.served < PICTURES_PER_DECODER {
+                    idle.push(decoder);
+                }
+            }
+        }
     }
 }
 
@@ -427,6 +534,7 @@ impl Decoder {
 
     /// Starts a decoder with `words`.
     fn start(words: &[OsString]) -> Result<Self, Refusal> {
+        crate::thumbnails::trace::event("decoder-start", "");
         let (program, before) = words.split_first().ok_or(Refusal::Unreadable)?;
         let mut command = Command::new(program);
         command
@@ -491,13 +599,7 @@ impl Decoder {
         // Drop any answer left from an earlier picture: there is none, as
         // each is taken before the decoder is reused.
         while self.answers.try_recv().is_ok() {}
-        let mut request = REQUEST.to_vec();
-        request.extend_from_slice(&width.to_le_bytes());
-        request.extend_from_slice(&height.to_le_bytes());
-        request.extend_from_slice(&limits.max_pixels.to_le_bytes());
-        request.extend_from_slice(&limits.max_jpeg_pixels.to_le_bytes());
-        let milliseconds = u64::try_from(limits.time.as_millis()).unwrap_or(u64::MAX);
-        request.extend_from_slice(&milliseconds.to_le_bytes());
+        let request = request_header(width, height, limits);
         let answered = Arc::new(AtomicBool::new(false));
         let (give_back, returned) = mpsc::channel();
         let stdin = self.stdin;
@@ -562,6 +664,108 @@ impl Decoder {
             });
         (result, kept)
     }
+}
+
+impl Decoder {
+    /// Decodes `pictures` in turn, all of them sent at once by a thread of
+    /// their own and answered in order: how many were answered (the
+    /// picture a decoder crashed, hung or ended on is answered by its
+    /// refusal), and the decoder again when it answered them all and can
+    /// serve more.
+    fn decode_many(
+        self,
+        pictures: Vec<Vec<u8>>,
+        width: i32,
+        height: i32,
+        limits: Limits,
+        cancellable: Option<&gio::Cancellable>,
+        each: &mut dyn FnMut(usize, Result<Decoded, Refusal>),
+    ) -> (usize, Option<Self>) {
+        let count = pictures.len();
+        self.limit
+            .store(answer_limit(width, height, limits), Ordering::Relaxed);
+        while self.answers.try_recv().is_ok() {}
+        let request = request_header(width, height, limits);
+        let (give_back, returned) = mpsc::channel();
+        let mut stdin = self.stdin;
+        let spawned = thread::Builder::new()
+            .name("ox-picture-batch".to_owned())
+            .spawn(move || {
+                let sent = pictures.iter().try_for_each(|picture| {
+                    stdin.write_all(&request)?;
+                    for chunk in picture.chunks(READ_CHUNK) {
+                        stdin.write_all(&u32::try_from(chunk.len()).unwrap_or(0).to_le_bytes())?;
+                        stdin.write_all(chunk)?;
+                    }
+                    stdin.write_all(&0_u32.to_le_bytes())
+                });
+                let sent = sent.and_then(|()| stdin.flush());
+                let _ = give_back.send(sent.ok().map(|()| stdin));
+            });
+        if spawned.is_err() {
+            (0..count).for_each(|index| each(index, Err(Refusal::Unreadable)));
+            return (count, None);
+        }
+        for index in 0..count {
+            let deadline = Instant::now() + limits.time.saturating_add(GRACE);
+            let outcome = loop {
+                match self.answers.recv_timeout(POLL) {
+                    Ok(answer) => break Ok(answer),
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break Err(Refusal::Damaged),
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                }
+                if cancellable.is_some_and(CancellableExt::is_cancelled) {
+                    break Err(Refusal::Cancelled);
+                }
+                if Instant::now() >= deadline {
+                    break Err(Refusal::TimedOut);
+                }
+            };
+            match outcome {
+                Ok(answer) => {
+                    each(index, parse_answer(&answer));
+                    if answer.first() == Some(&ENDING_MARK) {
+                        return (index + 1, None);
+                    }
+                }
+                Err(Refusal::Cancelled) => {
+                    (index..count).for_each(|index| each(index, Err(Refusal::Cancelled)));
+                    return (count, None);
+                }
+                Err(refusal) => {
+                    each(index, Err(refusal));
+                    return (index + 1, None);
+                }
+            }
+        }
+        let kept = returned
+            .recv_timeout(RETURN_WAIT)
+            .ok()
+            .flatten()
+            .map(|stdin| Self {
+                child: self.child,
+                stdin,
+                answers: self.answers,
+                limit: self.limit,
+                served: self
+                    .served
+                    .saturating_add(u32::try_from(count).unwrap_or(u32::MAX)),
+                idle_since: Instant::now(),
+            });
+        (count, kept)
+    }
+}
+
+/// What starts a request for a picture `width` × `height` within `limits`.
+fn request_header(width: i32, height: i32, limits: Limits) -> Vec<u8> {
+    let mut request = REQUEST.to_vec();
+    request.extend_from_slice(&width.to_le_bytes());
+    request.extend_from_slice(&height.to_le_bytes());
+    request.extend_from_slice(&limits.max_pixels.to_le_bytes());
+    request.extend_from_slice(&limits.max_jpeg_pixels.to_le_bytes());
+    let milliseconds = u64::try_from(limits.time.as_millis()).unwrap_or(u64::MAX);
+    request.extend_from_slice(&milliseconds.to_le_bytes());
+    request
 }
 
 /// A decoder's process, stopped with everything it started when dropped.
@@ -1087,6 +1291,19 @@ fn serve(input: &mut impl Read, output: &mut impl Write) -> bool {
         if width == tests::CRASH_WIDTH {
             std::process::abort();
         }
+        #[cfg(test)]
+        let result = {
+            let mut head = Vec::new();
+            let _ = (&mut chunks)
+                .take(tests::CRASH_PICTURE.len() as u64)
+                .read_to_end(&mut head);
+            if head == tests::CRASH_PICTURE {
+                std::process::abort();
+            }
+            let mut reader = std::io::Cursor::new(head).chain(&mut chunks);
+            super::decode_reader_here_to_fit(&mut reader, width, height, limits, None)
+        };
+        #[cfg(not(test))]
         let result = super::decode_reader_here_to_fit(&mut chunks, width, height, limits, None);
         let ending = ENDING.load(Ordering::Relaxed);
         let mut answer = answer(&result);

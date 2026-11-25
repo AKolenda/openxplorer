@@ -304,6 +304,28 @@ impl UndoRecord {
         }
     }
 
+    /// Each item the operation moved or renamed, from where it was to
+    /// where it is now: what the thumbnail cache follows, so a moved file
+    /// keeps its thumbnail (`crate::thumbnail_cache::follow_move`).
+    pub fn moved_items(&self) -> Vec<(String, String)> {
+        match self {
+            UndoRecord::Rename {
+                original_uri,
+                renamed_uri,
+            } => vec![(original_uri.clone(), renamed_uri.clone())],
+            UndoRecord::BatchRename { items } => items
+                .iter()
+                .map(|pair| (pair.original_uri.clone(), pair.renamed_uri.clone()))
+                .collect(),
+            UndoRecord::Move { items } => items
+                .iter()
+                .map(|item| (item.original_uri.clone(), item.moved_uri.clone()))
+                .collect(),
+            UndoRecord::Replace { steps, .. } => steps.iter().flat_map(UndoRecord::moved_items).collect(),
+            _ => Vec::new(),
+        }
+    }
+
     /// Every location (URI) reversing the record may rename, move, delete
     /// or create, in the record's order: each item as it is now and where
     /// it goes back to, and for a Replace, the files it put back and the
@@ -543,6 +565,41 @@ fn moved_forward_again(items: &[MovedItem], moved_back: &[String]) -> Vec<MovedI
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Renames and moves, also inside a Replace, name each item's old and
+    /// new place; other operations move nothing.
+    ///
+    /// parity: VIEW-057
+    #[test]
+    fn renames_and_moves_name_what_they_moved() {
+        let rename = UndoRecord::Rename {
+            original_uri: "file:///work/a.jpg".to_owned(),
+            renamed_uri: "file:///work/b.jpg".to_owned(),
+        };
+        assert_eq!(
+            rename.moved_items(),
+            [("file:///work/a.jpg".to_owned(), "file:///work/b.jpg".to_owned())]
+        );
+        let moved = UndoRecord::Move {
+            items: vec![MovedItem {
+                original_uri: "file:///work/c.jpg".to_owned(),
+                moved_uri: "file:///work/Done/c.jpg".to_owned(),
+            }],
+        };
+        let replace = UndoRecord::Replace {
+            operation: Operation::Move,
+            steps: vec![moved, rename],
+            replaced: Vec::new(),
+            replaced_since: 0,
+            overwritten: Vec::new(),
+        };
+        assert_eq!(replace.moved_items().len(), 2);
+        assert_eq!(replace.moved_items()[0].1, "file:///work/Done/c.jpg");
+        let copy = UndoRecord::Copy {
+            copies: vec!["file:///work/d.jpg".to_owned()],
+        };
+        assert!(copy.moved_items().is_empty());
+    }
 
     #[test]
     fn a_reversal_names_every_file_it_may_change() {
