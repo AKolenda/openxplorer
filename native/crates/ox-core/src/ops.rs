@@ -53,6 +53,7 @@
 //! | `duplicate` | Duplicate in place |
 //! | `links` | Symbolic links to dropped items, and New ▸ Link |
 //! | `shortcuts` | Shortcuts named as Windows names them, for Send to ▸ Desktop and dropped links |
+//! | `shortcut_destination` | Where a shortcut leads, or why it is broken, before it opens |
 //! | `folder_groups` | Items grouped by folder, for per-folder runs of the engine |
 //! | `results` | Adding up per-item results into one result |
 //! | `progress` | Progress labels and throttling |
@@ -98,6 +99,7 @@ mod resolved_transfer;
 mod restore_conflicts;
 mod results;
 mod run_transfer;
+mod shortcut_destination;
 mod shortcuts;
 mod tab_transfer;
 mod templates;
@@ -118,7 +120,10 @@ pub use delete_plan::{
 pub use duplicate::duplicate_items;
 pub use error::OpsError;
 pub use journal::{JournalDirection, JournalEntry, UndoJournal, UNDO_LIMIT};
-pub use links::{create_link, create_links, CreatedLink, LinkRequest, NewLink};
+pub use links::{
+    create_link, create_links, shortcut_location, suggested_name, CreatedLink, LinkRequest, NewLink,
+    ShortcutLocation,
+};
 pub use new_from_template::{
     create_from_template, create_numbered_document, create_numbered_from_template, NewFromTemplate,
 };
@@ -141,9 +146,10 @@ pub use restore_conflicts::{
     scan_drag_out_conflicts, scan_restore_conflicts, tell_taken_items, RestoreSoFar,
 };
 pub use run_transfer::{run_transfer, TransferOutcome, TransferRequest};
+pub use shortcut_destination::{destination_of, resolve_shortcut, ShortcutDestination};
 pub use shortcuts::{
     create_named_shortcuts, create_shortcut, create_shortcut_named, create_shortcuts, shortcut_name,
-    NamedShortcuts, ShortcutTarget, NO_LINKS_HERE,
+    NamedShortcuts, ShortcutNames, ShortcutTarget, NO_LINKS_HERE,
 };
 pub use tab_transfer::{
     Acceptance, Delivery, KeptReason, TabMessage, TabMoveOutcome, TabTransferError, TabTransferToken,

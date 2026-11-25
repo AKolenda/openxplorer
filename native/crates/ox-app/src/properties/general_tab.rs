@@ -132,8 +132,17 @@ pub(super) fn general_tab(
 
     let place = Rows::new();
     place_row(&place, properties, locations);
+    // A shortcut's Description is its target's name, as Windows 11 shows a
+    // shortcut's; a symbolic link named for a type shows its Target.
     if let Some(target) = &properties.link_target {
-        place.add_line(&ox_core::i18n::gettext("Target"), target);
+        if properties.entry.is_shortcut() {
+            let name = std::path::Path::new(target)
+                .file_name()
+                .map_or_else(|| target.clone(), |name| name.to_string_lossy().into_owned());
+            place.add_line(&ox_core::i18n::gettext("Description"), &name);
+        } else {
+            place.add_line(&ox_core::i18n::gettext("Target"), target);
+        }
     }
     let folder_rows = if let Some(mount) = &properties.mount {
         place.add_control(&ox_core::i18n::gettext("Target"), &volume_row(mount, uri));
@@ -394,6 +403,14 @@ fn header(properties: &ItemProperties, edits: &GeneralEdits) -> gtk::Box {
     // A picture chosen in File icons for the item's kind (LOOK-029), read
     // as the file list reads it, else its art.
     let art = ArtImage::new(Art::for_entry(&properties.entry), HEADER_ART_SIZE);
+    // A shortcut's icon carries the shortcut arrow, as Windows shows it.
+    art.set_emblems(
+        crate::icons::Emblems {
+            link: properties.entry.is_shortcut(),
+            read_only: false,
+        },
+        HEADER_ART_SIZE,
+    );
     header.append(&art);
     if let Some(picture) = crate::icons::file_icons::picture_for(&properties.entry) {
         let art = art.downgrade();

@@ -45,6 +45,9 @@ pub(crate) fn cell_text(column: SortColumn, item: &FileItem, dates: DateStyle) -
         SortColumn::OriginalLocation => item.original_location().text.clone(),
         SortColumn::Deleted => format::column_date_text(entry.trash_deletion_date, dates),
         SortColumn::Type => entry.type_label.clone(),
+        // A shortcut's own size, a folder's shortcut too, as Windows shows
+        // a `.lnk`'s (VIEW-074).
+        SortColumn::Size if entry.is_shortcut() => format::column_size_text(item.file_size()),
         SortColumn::Size => match (item.folder_size(), item.item_count()) {
             (Some(measured), _) => measured.size_text(),
             (None, Some(count)) => item_count_text(count),
@@ -170,6 +173,7 @@ pub(super) fn request_item_count(label: &gtk::Label, item: &FileItem, owners: &R
     let entry = item.entry();
     let wanted = owners.counts_items()
         && entry.is_dir
+        && !entry.is_shortcut()
         && entry.uri.starts_with("file:")
         && item.folder_size().is_none()
         && item.item_count().is_none();

@@ -205,7 +205,7 @@ impl ItemLines {
     /// time.
     pub(crate) fn of(item: &FileItem) -> Self {
         let entry = item.entry();
-        let size = if entry.is_dir {
+        let size = if entry.is_dir && !entry.is_shortcut() {
             String::new()
         } else {
             item.file_size()

@@ -527,6 +527,10 @@ pub(crate) enum WindowAction {
     /// Send to ▸ Desktop (create shortcut): a shortcut to each selected
     /// item on the Desktop.
     SendToDesktop,
+    /// Create shortcut, in the classic menu: a shortcut to each selected
+    /// item beside it, or on the Desktop where the folder takes none
+    /// (CMD-040).
+    CreateShortcut,
     /// Send to ▸ Bluetooth device: the desktop's Bluetooth sender with the
     /// selected files.
     SendToBluetooth,
@@ -782,6 +786,7 @@ impl WindowAction {
             WindowAction::CompressTo => "compress-to",
             WindowAction::SendTo => "send-to",
             WindowAction::SendToDesktop => "send-to-desktop",
+            WindowAction::CreateShortcut => "create-shortcut",
             WindowAction::SendToBluetooth => "send-to-bluetooth",
             WindowAction::OpenWith => "open-with",
             WindowAction::ChangeApp => "change-app",

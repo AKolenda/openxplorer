@@ -10,10 +10,17 @@
 //! checks as dropping files on a program ([`super::file_drop`]): the
 //! execute permission is checked again, a program on a share or a
 //! removable drive asks again, and a script runs in the terminal.
+//!
+//! Settings' "Run installed apps' launchers on double-click", off by
+//! default, makes an application's launcher run when it is opened, as
+//! Windows runs a shortcut to a program (OPEN-029): an installed one (in
+//! an applications folder, or a link to one) starts its app at once, and
+//! one that is neither installed nor marked trusted asks the trust
+//! question first, as dropping files on it does (SAFE-023).
 
 use ox_core::entry::Entry;
 
-use super::file_drop::{query_program, ProgramTarget};
+use super::file_drop::{query_program, ProgramKind, ProgramTarget};
 use super::BrowserWindow;
 use super::ButtonStyle;
 use crate::dialog::Dialog;
@@ -34,7 +41,16 @@ impl BrowserWindow {
     /// settings ask and it is a program the user may run, and then the
     /// user decides.
     pub(super) async fn run_or_open(&self, entry: &Entry) -> RunChoice {
-        if !self.context().settings_data().preferences.ask_to_run_programs {
+        let preferences = self.context().settings_data().preferences;
+        if preferences.run_installed_launchers {
+            if let Some(launcher) = query_program(entry)
+                .await
+                .filter(|program| program.kind == ProgramKind::Launcher)
+            {
+                return RunChoice::Run(launcher);
+            }
+        }
+        if !preferences.ask_to_run_programs {
             return RunChoice::Open;
         }
         let Some(program) = query_program(entry).await else {

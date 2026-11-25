@@ -48,7 +48,8 @@ use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
 /// What GIO is asked about a file under a drag.
-const PROGRAM_ATTRIBUTES: &str = "standard::type,standard::content-type,access::can-execute";
+const PROGRAM_ATTRIBUTES: &str =
+    "standard::type,standard::content-type,access::can-execute,metadata::trusted";
 
 /// The content type every script is a kind of.
 const TEXT_CONTENT_TYPE: &str = "text/plain";
@@ -312,8 +313,17 @@ impl BrowserWindow {
                 &[("name", &program.name)],
             ));
         }
-        // Safety rule "ask before running a program from elsewhere".
-        if self.is_from_elsewhere(program).await && !self.confirm_run(program).await {
+        // Safety rule "a launcher nobody trusted asks first" (SAFE-023): one
+        // that is not installed and was not marked trusted, such as one in
+        // Downloads that came out of an archive with its execute bit, asks
+        // the trust question, and its answer marks it trusted. Safety rule
+        // "ask before running a program from elsewhere" covers the rest.
+        if program.kind == ProgramKind::Launcher && !launcher::is_marked_trusted(&path, &info) {
+            if !self.confirm_trust(program).await {
+                return Ok(());
+            }
+            launcher::mark_trusted(&program.uri).await;
+        } else if self.is_from_elsewhere(program).await && !self.confirm_run(program).await {
             return Ok(());
         }
         self.start_program(program, &path, items)
@@ -347,6 +357,24 @@ impl BrowserWindow {
         let answer = dialog.next_response().await;
         dialog.finish();
         answer.is_some()
+    }
+
+    /// Asks the trust question about the launcher `program`, as GNOME asks
+    /// about an untrusted application launcher; true when the user trusts
+    /// it. Enter does not answer it: neither button is the default.
+    async fn confirm_trust(&self, program: &ProgramTarget) -> bool {
+        let message = ox_core::i18n::format_message(
+            "“{name}” is a launcher that has not been marked as trusted. Launching it runs the command it \
+             holds. Launch it only if you trust where it came from.",
+            &[("name", &program.name)],
+        );
+        let dialog = Dialog::new(self, &ox_core::i18n::gettext("Run this program?"), &message);
+        dialog.add_cancel_button();
+        let trust = dialog.add_button(&ox_core::i18n::gettext("Trust and Launch"), ButtonStyle::Bordered);
+        dialog.open_on_first_button();
+        let answer = dialog.next_response().await;
+        dialog.finish();
+        answer == Some(trust)
     }
 
     /// Starts `program`, at `path`, with the local paths of `items`.

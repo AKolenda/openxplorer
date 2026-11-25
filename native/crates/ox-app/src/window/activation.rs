@@ -34,7 +34,10 @@ use super::slow_location::OpeningKind;
 use super::window_action::WindowAction;
 use super::{BrowserWindow, ButtonStyle};
 
+mod broken_shortcut;
 mod outcome;
+
+pub(super) use broken_shortcut::BrokenShortcut;
 
 /// Why an item cannot be opened (`activation_kind` in activation.py).
 const NOT_OPENABLE: &str = crate::i18n::message_id("This item is not a regular file or a readable folder.");
@@ -51,6 +54,9 @@ enum Resolved {
     /// The file a Recent row stands for is no longer there: "Item Not
     /// Found" says so.
     Gone,
+    /// A shortcut that leads nowhere: "Problem with Shortcut" asks about
+    /// it (OPEN-028).
+    BrokenShortcut(BrokenShortcut),
 }
 
 /// What activating an item does.
@@ -376,11 +382,29 @@ impl BrowserWindow {
     /// is not there any more.
     async fn resolve_activation(&self, entry: &Entry) -> Result<Resolved, String> {
         let stands_for_a_file = entry.meta.recent_target.is_some();
-        let fresh = match self.read_again(entry.opened_uri()).await {
+        let mut fresh = match self.read_again(entry.opened_uri()).await {
             Ok(fresh) => fresh,
             Err(ReadAgain::Gone(_)) if stands_for_a_file => return Ok(Resolved::Gone),
             Err(failure) => return Err(failure.to_string()),
         };
+        // A shortcut opens its target at the target's own address, and a
+        // link to nothing is a broken shortcut (OPEN-027, OPEN-028).
+        match broken_shortcut::link_destination(&fresh).await {
+            Some(ox_core::ops::ShortcutDestination::Found(path)) if fresh.is_shortcut() => {
+                let target = ox_core::location::file_uri(&path);
+                fresh = self
+                    .read_again(&target)
+                    .await
+                    .map_err(|failure| failure.to_string())?;
+            }
+            Some(ox_core::ops::ShortcutDestination::Found(_)) | None => {}
+            Some(destination) => {
+                return Ok(Resolved::BrokenShortcut(broken_shortcut::broken(
+                    &fresh,
+                    destination,
+                )));
+            }
+        }
         // In a file dialog, activating a file chooses it (INT-032).
         if self.is_picking() && matches!(activation_for(&fresh), Activation::File | Activation::Archive) {
             self.pick_activated(&fresh);
@@ -396,10 +420,10 @@ impl BrowserWindow {
                 // A Google Docs, Sheets or Slides file lives on the web
                 // only; the browser opens it, as GNOME Files does (DEV-013).
                 if let Some(url) = fresh.meta.web_target.clone() {
-                    return self.follow_link(LinkTarget::Web(url)).await;
+                    return self.follow_link(&fresh, LinkTarget::Web(url)).await;
                 }
                 if let Some(target) = desktop_link(&fresh) {
-                    return self.follow_link(target?).await;
+                    return self.follow_link(&fresh, target?).await;
                 }
                 match self.run_or_open(&fresh).await {
                     RunChoice::Open => {}
@@ -416,11 +440,19 @@ impl BrowserWindow {
         }
     }
 
-    /// Goes where a `.desktop` link points: a folder in the tab, a web
-    /// page or mail address in the desktop's handler (OPEN-009).
-    async fn follow_link(&self, target: LinkTarget) -> Result<Resolved, String> {
+    /// Goes where the `.desktop` link `link` points: a folder in the tab,
+    /// a web page or mail address in the desktop's handler (OPEN-009). A
+    /// folder of this computer that is gone makes it a broken shortcut
+    /// (OPEN-028).
+    async fn follow_link(&self, link: &Entry, target: LinkTarget) -> Result<Resolved, String> {
         match target {
-            LinkTarget::Location(uri) => Ok(Resolved::Folder(uri)),
+            LinkTarget::Location(uri) => match broken_shortcut::location_destination(&uri).await {
+                Some(ox_core::ops::ShortcutDestination::Found(_)) | None => Ok(Resolved::Folder(uri)),
+                Some(destination) => Ok(Resolved::BrokenShortcut(broken_shortcut::broken(
+                    link,
+                    destination,
+                ))),
+            },
             LinkTarget::Web(url) => {
                 match gtk::UriLauncher::new(&url)
                     .launch_future(Some(self.upcast_ref::<gtk::Window>()))
@@ -445,11 +477,12 @@ impl BrowserWindow {
             self,
             async move {
                 let outcome = match target {
-                    Ok(target) => window.follow_link(target).await,
+                    Ok(target) => window.follow_link(&entry, target).await,
                     Err(reason) => Err(reason),
                 };
                 match outcome {
                     Ok(Resolved::Folder(uri)) => window.open_tab_or_report(&uri, TabPlacement::Background),
+                    Ok(Resolved::BrokenShortcut(broken)) => window.report_broken_shortcut(broken).await,
                     Ok(Resolved::Archive(_) | Resolved::Opened | Resolved::Gone) => {}
                     Err(reason) => window.report_open_failure(&reason, &entry),
                 }

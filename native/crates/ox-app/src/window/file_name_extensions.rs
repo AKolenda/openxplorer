@@ -50,6 +50,16 @@ impl BrowserWindow {
         extensions(shown.unwrap_or_else(|| self.context().settings_data().preferences.show_extensions))
     }
 
+    /// How new shortcuts are named now: after their items as the view
+    /// shows them, with the extension while extensions are shown and
+    /// without a known one while they are hidden, as Windows 11 names them.
+    pub(super) fn shortcut_names(&self) -> ox_core::ops::ShortcutNames {
+        match self.file_name_extensions() {
+            Extensions::Shown => ox_core::ops::ShortcutNames::WholeName,
+            Extensions::Hidden => ox_core::ops::ShortcutNames::WithoutExtension,
+        }
+    }
+
     /// Shows names with or without the extensions of known types in both
     /// panes, the details pane and the address.
     fn show_file_name_extensions(&self, shown: bool) {

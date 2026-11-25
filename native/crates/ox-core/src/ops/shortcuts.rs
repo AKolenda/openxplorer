@@ -4,8 +4,11 @@
 //!
 //! On Linux a shortcut is a symbolic link. It gets the name Windows gives
 //! a new shortcut, the shell's naming template `%s - Shortcut` filled with
-//! the item's whole name, its extension included ("report.txt -
-//! Shortcut", "Reports - Shortcut"). When that name is taken the shell
+//! the item's name as File Explorer shows it: whole, its extension included
+//! ("report.txt - Shortcut", "Reports - Shortcut"), while file name
+//! extensions are shown, and without a known type's extension ("report -
+//! Shortcut") while they are hidden, as by default ([`ShortcutNames`];
+//! checked in Windows 11). When that name is taken the shell
 //! numbers it as `PathYetAnotherMakeUniqueName` does: "report.txt -
 //! Shortcut (2)", then (3) and so on. A link has no hidden `.lnk`
 //! extension, so the name is exactly what Explorer shows. A name too long
@@ -50,6 +53,32 @@ pub const NO_LINKS_HERE: &str = crate::i18n::message_id(
 const NOT_LINKABLE: &str =
     crate::i18n::message_id("A shortcut can only point to an item on this computer or on a mounted share.");
 
+/// Whether a new shortcut's name keeps its item's extension: Windows names
+/// a shortcut after the item as File Explorer shows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ShortcutNames {
+    /// "report.txt - Shortcut", while file name extensions are shown.
+    #[default]
+    WholeName,
+    /// "report - Shortcut", while the extensions of known types are
+    /// hidden, as they are by default. A folder's name, and an extension
+    /// of digits alone ("Notes v2.1"), stay whole, as the view shows them.
+    WithoutExtension,
+}
+
+impl ShortcutNames {
+    /// The part of `name`, the name of an item of `kind`, that a shortcut
+    /// is named after.
+    fn base(self, name: &str, kind: ItemKind) -> &str {
+        if self == Self::WholeName || kind == ItemKind::Folder {
+            return name;
+        }
+        let hidden = crate::entry::known_extension(name)
+            .filter(|extension| !extension[1..].chars().all(|character| character.is_ascii_digit()));
+        hidden.map_or(name, |extension| &name[..name.len() - extension.len()])
+    }
+}
+
 /// How many numbered names are tried before giving up.
 const MAX_NUMBER: u32 = 10_000;
 
@@ -80,12 +109,12 @@ pub fn shortcut_name(name: &str, number: u32) -> String {
 /// ([`OpsError::NotSupported`] with [`NO_LINKS_HERE`]), every numbered
 /// name is taken ([`OpsError::Exists`]), or the system's failure.
 pub fn create_shortcut(target_uri: &str, folder_uri: &str) -> Result<String, OpsError> {
-    create_shortcut_named(target_uri, folder_uri, None)
+    create_shortcut_named(target_uri, folder_uri, None, ShortcutNames::WholeName)
 }
 
 /// [`create_shortcut`], the shortcut's name made from `name` where it is
 /// given, such as a drive's name as This PC shows it, rather than from the
-/// item's own name.
+/// item's own name, with or without its extension as `names` says.
 ///
 /// # Errors
 ///
@@ -94,6 +123,7 @@ pub fn create_shortcut_named(
     target_uri: &str,
     folder_uri: &str,
     name: Option<&str>,
+    names: ShortcutNames,
 ) -> Result<String, OpsError> {
     let target_uri = normalise(target_uri)?;
     let folder = gio::File::for_uri(&normalise(folder_uri)?);
@@ -110,6 +140,7 @@ pub fn create_shortcut_named(
         ItemKind::File
     };
     let path = target_path(&target, &target_uri)?;
+    let name = names.base(&name, kind).to_owned();
     for number in 1..=MAX_NUMBER {
         // A long name loses whole characters before its extension, so the
         // extension and " - Shortcut (2)" are kept within 255 bytes.
@@ -195,6 +226,7 @@ fn unnamed(request: &LinkRequest) -> NamedShortcuts {
             })
             .collect(),
         destination_folder: request.destination_folder.clone(),
+        names: request.names,
     }
 }
 
@@ -216,6 +248,8 @@ pub struct NamedShortcuts {
     pub targets: Vec<ShortcutTarget>,
     /// The folder the shortcuts go into.
     pub destination_folder: String,
+    /// Whether their names keep their items' extensions.
+    pub names: ShortcutNames,
 }
 
 /// Makes a shortcut in the request's folder to each of its targets, named
@@ -268,7 +302,7 @@ fn create_shortcuts_blocking(
         };
         // An item that gets no shortcut is asked about in the progress
         // window (OPS-047).
-        let attempt = || create_shortcut_named(uri, &folder, target.name.as_deref());
+        let attempt = || create_shortcut_named(uri, &folder, target.name.as_deref(), request.names);
         if let Some(link) = questions.run(&mut outcome.result, asked, attempt) {
             outcome.result.done.push(uri.clone());
             outcome.created.push(link);
@@ -386,8 +420,18 @@ mod tests {
         let projects = folder.path().join("Projects");
         std::fs::create_dir(&projects).expect("fixture folder");
 
-        let first = create_shortcut_named(&file_uri(&mount), &file_uri(&projects), Some("Local Disk"));
-        let second = create_shortcut_named(&file_uri(&mount), &file_uri(&projects), Some("Local Disk"));
+        let first = create_shortcut_named(
+            &file_uri(&mount),
+            &file_uri(&projects),
+            Some("Local Disk"),
+            ShortcutNames::WholeName,
+        );
+        let second = create_shortcut_named(
+            &file_uri(&mount),
+            &file_uri(&projects),
+            Some("Local Disk"),
+            ShortcutNames::WholeName,
+        );
 
         let first_link = projects.join("Local Disk - Shortcut");
         let second_link = projects.join("Local Disk - Shortcut (2)");
@@ -407,7 +451,12 @@ mod tests {
     fn local_disk_gets_a_shortcut_to_the_root() {
         let folder = temporary_folder();
 
-        let link = create_shortcut_named("file:///", &file_uri(folder.path()), Some("Local Disk"));
+        let link = create_shortcut_named(
+            "file:///",
+            &file_uri(folder.path()),
+            Some("Local Disk"),
+            ShortcutNames::WholeName,
+        );
 
         let made = folder.path().join("Local Disk - Shortcut");
         assert_eq!(link, Ok(file_uri(&made)));
@@ -445,6 +494,7 @@ mod tests {
         let request = LinkRequest {
             uris: items.to_vec(),
             destination_folder: file_uri(&desktop),
+            names: ShortcutNames::WholeName,
         };
         let open = OperationContext::new(WriteProtection::unrestricted());
         let guarded = OperationContext::new(WriteProtection::new(|_| {

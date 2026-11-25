@@ -1463,20 +1463,22 @@ fn several_items_count_a_link_to_a_folder_as_a_file() {
 }
 
 /// With several items selected, Size on disk counts a link to a file as
-/// the file it points to, as Size does.
+/// the file it points to, as Size does. The link is named for a type: a
+/// shortcut, named "… - Shortcut", counts its own size, as Windows counts
+/// a `.lnk`'s (VIEW-074).
 ///
 /// parity: PROP-033
 #[gtk::test]
 fn size_on_disk_of_several_items_follows_links_as_size_does() {
     let fixture = Fixture::standard();
     fs::write(fixture.path("Big.bin"), vec![7_u8; 200_000]).expect("the file is written");
-    std::os::unix::fs::symlink(fixture.path("Big.bin"), fixture.path("Big link.bin"))
+    std::os::unix::fs::symlink(fixture.path("Big.bin"), fixture.path("Big link.txt"))
         .expect("the link is made");
     let test = TestWindow::open(&fixture.uri());
-    super::file_ops_support::select_names(&test, &["Big.bin", "Big link.bin"]);
+    super::file_ops_support::select_names(&test, &["Big.bin", "Big link.txt"]);
     test.activate("properties", None);
-    let window = test.wait_for_properties("Big link.bin, Big.bin Properties");
-    let both = [fixture.path("Big.bin"), fixture.path("Big link.bin")];
+    let window = test.wait_for_properties("Big link.txt, Big.bin Properties");
+    let both = [fixture.path("Big.bin"), fixture.path("Big link.txt")];
 
     wait_until("the space on disk", || {
         value_after(&window, "Size on disk:") == Some(on_disk_text(&both))
@@ -1816,7 +1818,8 @@ fn several_items_read_only_follows_a_change_made_on_security() {
     window.close();
 }
 
-/// A link says where it points. A drive, the root among them, has
+/// A shortcut names what it points to as its Description, as Windows 11
+/// shows a shortcut's. A drive, the root among them, has
 /// Windows' drive General tab: its type, file system, used and free
 /// space and capacity in bytes and short, and the ring, with nothing on
 /// it counted; where it is mounted and from what are on its Hardware tab.
@@ -1831,7 +1834,10 @@ fn properties_show_a_links_target_and_a_drives_space() {
     test.activate("properties-of", Some(&fixture.uri_of("Shortcut")));
     let window = test.wait_for_properties("Shortcut Properties");
     let general = general(&window);
-    assert_eq!(value_after(&general, "Target:").as_deref(), Some("Documents"));
+    assert_eq!(
+        value_after(&general, "Description:").as_deref(),
+        Some("Documents")
+    );
     window.close();
 
     test.activate("properties-of", Some("file:///"));

@@ -566,8 +566,19 @@ fn edit_items(facts: &ItemFacts) -> [MenuItem; 5] {
     ]
 }
 
-/// Duplicate, which the Python app did not have, where Windows lists
-/// Create shortcut.
+/// Create shortcut, as Windows' classic menu lists it before Delete and
+/// Rename (CMD-040).
+fn create_shortcut_item() -> MenuEntry {
+    item(
+        ox_core::i18n::gettext_static("Create shortcut"),
+        Icon::Link,
+        WindowAction::CreateShortcut,
+    )
+    .into()
+}
+
+/// Duplicate, which the Python app did not have, after Windows' Create
+/// shortcut, Delete and Rename.
 fn duplicate_item() -> MenuEntry {
     item(
         ox_core::i18n::gettext_static("Duplicate"),
@@ -827,7 +838,7 @@ pub(crate) fn more_options_item(action: WindowAction) -> MenuEntry {
 /// their glyph: Open in Terminal, Open with and the applications' own
 /// icons, Send to, Properties and Open as administrator's shield; so do
 /// the app's own commands, which Windows does not have.
-const TEXT_ONLY_IN_CLASSIC: [WindowAction; 33] = [
+const TEXT_ONLY_IN_CLASSIC: [WindowAction; 34] = [
     WindowAction::Open,
     WindowAction::OpenTab,
     WindowAction::OpenSelectionInTabs,
@@ -862,6 +873,8 @@ const TEXT_ONLY_IN_CLASSIC: [WindowAction; 33] = [
     WindowAction::RenameFolder,
     WindowAction::TrashFolder,
     WindowAction::EmptyRecycleBin,
+    // Windows' classic menu draws Create shortcut as text alone.
+    WindowAction::CreateShortcut,
 ];
 
 /// `entries` as Windows 11 draws its classic menu: no row shows shortcut
@@ -1143,8 +1156,8 @@ fn rename_items_item(facts: &ItemFacts) -> Option<MenuEntry> {
 /// Explorer's classic menu: Open (in bold), the editors (as "Edit in
 /// Notepad"), a folder's tab, window and pin commands, Open in Terminal
 /// and Open with; Copy as path, Share and Restore previous versions; Send
-/// to (CMD-038); Cut, Copy and Paste; Duplicate (where Windows has Create
-/// shortcut), Delete, Rename and Rename items… for several (OPS-014); the
+/// to (CMD-038); Cut, Copy and Paste; Create shortcut (CMD-040), Delete,
+/// Rename and Rename items… for several (OPS-014), then Duplicate; the
 /// app's own tools; and Properties.
 fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
     let [cut, copy, paste, rename, delete] = edit_items(facts);
@@ -1168,8 +1181,14 @@ fn classic_item_menu(facts: &ItemFacts) -> ContextMenu {
     if facts.shape == ItemShape::Folder && facts.is_single {
         entries.push(paste.into());
     }
-    entries.extend([MenuEntry::Divider, duplicate_item(), delete.into(), rename.into()]);
+    entries.extend([
+        MenuEntry::Divider,
+        create_shortcut_item(),
+        delete.into(),
+        rename.into(),
+    ]);
     entries.extend(rename_items_item(facts));
+    entries.push(duplicate_item());
     entries.push(MenuEntry::Divider);
     entries.extend(tool_items(facts));
     entries.push(MenuEntry::Divider);
@@ -1972,9 +1991,10 @@ mod tests {
                 "Copy",
                 "Paste",
                 "-",
-                "Duplicate",
+                "Create shortcut",
                 "Delete",
                 "Rename",
+                "Duplicate",
                 "-",
                 "Compress to…",
                 "Calculate folder size",
@@ -2532,9 +2552,10 @@ mod tests {
                 "Cut",
                 "Copy",
                 "-",
-                "Duplicate",
+                "Create shortcut",
                 "Delete",
                 "Rename",
+                "Duplicate",
                 "-",
                 "Compress to…",
                 "-",
@@ -2619,6 +2640,7 @@ mod tests {
                 "Pin this folder",
                 "Cache this folder for search",
                 "Calculate folder sizes",
+                "-",
                 "Previous versions",
                 "Properties",
             ]

@@ -811,3 +811,21 @@ fn a_renamed_favorite_keeps_its_place_under_its_new_name() {
         ]
     );
 }
+
+/// Running installed apps' launchers on open is off until chosen, as
+/// OPEN-007 keeps opening from running anything, and is saved once on.
+///
+/// parity: OPEN-029
+#[test]
+fn running_installed_launchers_is_off_until_chosen() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    assert!(!store.snapshot().preferences.run_installed_launchers);
+    save_preferences(&mut store, &json!({"runInstalledLaunchers": true}));
+    assert!(
+        Settings::open(root.path())
+            .snapshot()
+            .preferences
+            .run_installed_launchers
+    );
+}
