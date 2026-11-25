@@ -16,7 +16,7 @@ use std::time::Duration;
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 
 use super::directory::{checked_directory, PreparedDirectory};
-use super::emulator::Terminal;
+use super::emulator::{Terminal, TerminalKind};
 use super::TerminalError;
 use crate::integration::host_command::{wait_for_exit, HostCommand};
 use crate::integration::sandbox::Sandbox;
@@ -40,7 +40,8 @@ pub struct LaunchedTerminal {
     pub uri: String,
 }
 
-/// The program and arguments that start `terminal` in `directory`.
+/// The program and arguments that start `terminal` in `directory`: its
+/// program, its leading options and its working-directory option.
 ///
 /// # Errors
 ///
@@ -48,12 +49,24 @@ pub struct LaunchedTerminal {
 pub fn terminal_arguments(terminal: &Terminal, directory: &Path) -> Result<Vec<OsString>, TerminalError> {
     let directory = checked_directory(directory)?;
     let mut arguments = vec![terminal.executable().as_os_str().to_owned()];
-    if let Some(option) = terminal.kind().working_directory_option() {
-        let mut argument = OsString::from(option);
-        argument.push(directory.as_os_str());
-        arguments.push(argument);
-    }
+    arguments.extend(terminal.kind().leading_options().iter().map(OsString::from));
+    arguments.extend(directory_arguments(terminal.kind(), &directory));
     Ok(arguments)
+}
+
+/// The arguments that tell a terminal of `kind` to start in `directory`:
+/// none for the `XTerm` family, the folder joined to an option ending in
+/// `=`, or the option and the folder as two arguments.
+pub(super) fn directory_arguments(kind: TerminalKind, directory: &Path) -> Vec<OsString> {
+    match kind.working_directory_option() {
+        None => Vec::new(),
+        Some(option) if option.ends_with('=') => {
+            let mut argument = OsString::from(option);
+            argument.push(directory.as_os_str());
+            vec![argument]
+        }
+        Some(option) => vec![OsString::from(option), directory.as_os_str().to_owned()],
+    }
 }
 
 /// Starts `terminal` in the prepared folder, on the host (OPEN-020).
@@ -147,7 +160,6 @@ mod tests {
 
     use super::*;
     use crate::integration::host_command::argv;
-    use crate::integration::terminal::TerminalKind;
 
     #[test]
     fn the_terminal_gets_a_new_window_environment_and_starts_in_the_folder() {
@@ -166,6 +178,29 @@ mod tests {
         for variable in INHERITED_TERMINAL_VARIABLES {
             assert!(environment.contains(&(OsStr::new(variable), None)), "{variable}");
         }
+    }
+
+    /// `xdg-terminal-exec` is told the folder with `--dir=` and also starts
+    /// in it, since a terminal whose entry has no `X-TerminalArgDir` starts
+    /// in its working directory.
+    ///
+    /// parity: OPEN-019, OPEN-020
+    #[test]
+    fn xdg_terminal_exec_starts_in_the_folder_and_is_told_it() {
+        let folder = tempfile::tempdir().expect("temporary folder");
+        let directory = checked_directory(folder.path()).expect("folder");
+        let terminal = Terminal::new("/usr/bin/xdg-terminal-exec".into(), TerminalKind::XdgTerminalExec)
+            .expect("absolute");
+
+        let command = terminal_command(&terminal, &directory)
+            .expect("command")
+            .to_command(Sandbox::Host);
+
+        assert_eq!(command.get_current_dir(), Some(directory.as_path()));
+        let mut expected = OsString::from("--dir=");
+        expected.push(directory.as_os_str());
+        assert_eq!(command.get_args().collect::<Vec<_>>(), [expected.as_os_str()]);
+        assert_eq!(terminal.label(), "Terminal");
     }
 
     #[test]

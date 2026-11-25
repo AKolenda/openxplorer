@@ -10,8 +10,8 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use ox_core::integration::{
-    find_terminal, launch_terminal, terminal_arguments, ExecutableSearch, PreparedDirectory, Sandbox,
-    Terminal, TerminalError, TerminalKind, SYSTEM_PATH,
+    find_terminal, launch_terminal, terminal_arguments, ExecutableSearch, PreferredTerminal,
+    PreparedDirectory, Sandbox, Terminal, TerminalError, TerminalKind, SYSTEM_PATH,
 };
 use ox_core::location::file_uri;
 use serde_json::Value;
@@ -117,11 +117,113 @@ fn the_desktops_configured_terminal_wins_when_it_is_installed() {
     symlink("gnome-terminal", usr_bin.join("x-terminal-emulator")).expect("alternative");
     let search = ExecutableSearch::under(root.path());
 
-    let console = find_terminal(&search.clone().preferring(Some(TerminalKind::Console))).expect("a terminal");
-    let missing = find_terminal(&search.preferring(Some(TerminalKind::Konsole))).expect("a terminal");
+    let console = find_terminal(
+        &search
+            .clone()
+            .preferring(vec![PreferredTerminal::Listed(Some(TerminalKind::Console))]),
+    )
+    .expect("a terminal");
+    let missing = find_terminal(&search.clone().preferring(vec![
+        PreferredTerminal::Listed(Some(TerminalKind::Konsole)),
+        PreferredTerminal::Listed(None),
+    ]))
+    .expect("a terminal");
+    let gnome = find_terminal(&search.preferring(vec![
+        PreferredTerminal::Listed(Some(TerminalKind::Konsole)),
+        PreferredTerminal::Gnome(TerminalKind::Console),
+    ]))
+    .expect("a terminal");
 
     assert_eq!(console.kind(), TerminalKind::Console);
-    assert_eq!(missing.kind(), TerminalKind::GnomeTerminal);
+    assert_eq!(
+        missing.kind(),
+        TerminalKind::GnomeTerminal,
+        "without xdg-terminal-exec, terminals it would start are passed over"
+    );
+    assert_eq!(gnome.kind(), TerminalKind::Console);
+}
+
+/// A configured terminal the app cannot start itself, such as one it does
+/// not know, is started through `xdg-terminal-exec` when that is installed
+/// in the system folders; a known, installed one before it is still
+/// started directly, and GNOME's setting never calls `xdg-terminal-exec`.
+///
+/// parity: OPEN-019, SAFE-015
+#[test]
+fn xdg_terminal_exec_starts_a_configured_terminal_the_app_cannot_start() {
+    let root = temporary_folder();
+    let usr_bin = root.path().join("usr/bin");
+    install_program(&usr_bin.join("xterm"), "#!/bin/sh\n");
+    install_program(&usr_bin.join("ghostty"), "#!/bin/sh\n");
+    symlink("xterm", usr_bin.join("x-terminal-emulator")).expect("alternative");
+    let search = ExecutableSearch::under(root.path());
+    let unknown = vec![PreferredTerminal::Listed(None)];
+    let not_installed = vec![PreferredTerminal::Listed(Some(TerminalKind::Alacritty))];
+
+    // Only a program in the system folders is used.
+    install_program(
+        &root.path().join("home/demo/.local/bin/xdg-terminal-exec"),
+        "#!/bin/sh\n",
+    );
+    let without = find_terminal(&search.clone().preferring(unknown.clone())).expect("a terminal");
+    assert_eq!(without.kind(), TerminalKind::XTerm);
+
+    install_program(&usr_bin.join("xdg-terminal-exec"), "#!/bin/sh\n");
+    let through = find_terminal(&search.clone().preferring(unknown)).expect("a terminal");
+    let not_found = find_terminal(&search.clone().preferring(not_installed)).expect("a terminal");
+    let known = find_terminal(&search.clone().preferring(vec![
+        PreferredTerminal::Listed(Some(TerminalKind::Ghostty)),
+        PreferredTerminal::Listed(None),
+    ]))
+    .expect("a terminal");
+    let gnome = find_terminal(
+        &search
+            .clone()
+            .preferring(vec![PreferredTerminal::Gnome(TerminalKind::Alacritty)]),
+    )
+    .expect("a terminal");
+
+    assert_eq!(
+        through,
+        Terminal::new("/usr/bin/xdg-terminal-exec".into(), TerminalKind::XdgTerminalExec).expect("absolute")
+    );
+    assert_eq!(not_found.kind(), TerminalKind::XdgTerminalExec);
+    assert_eq!(known.kind(), TerminalKind::Ghostty);
+    assert_eq!(gnome.kind(), TerminalKind::XTerm, "the Debian alternative");
+}
+
+/// With no known terminal installed, `xdg-terminal-exec` starts whatever
+/// terminal the desktop has.
+///
+/// parity: OPEN-018
+#[test]
+fn xdg_terminal_exec_is_the_last_resort() {
+    let root = temporary_folder();
+    install_program(&root.path().join("usr/bin/xdg-terminal-exec"), "#!/bin/sh\n");
+
+    let terminal = find_terminal(&ExecutableSearch::under(root.path())).expect("a terminal");
+
+    assert_eq!(terminal.kind(), TerminalKind::XdgTerminalExec);
+}
+
+/// A Debian alternative pointing to one of the added terminals is
+/// followed, and Tilix's option-translating wrapper resolves to the real
+/// program.
+///
+/// parity: OPEN-018
+#[test]
+fn the_debian_alternative_names_the_added_terminals_too() {
+    let root = temporary_folder();
+    let usr_bin = root.path().join("usr/bin");
+    install_program(&usr_bin.join("gnome-terminal"), "#!/bin/sh\n");
+    install_program(&usr_bin.join("tilix"), "#!/bin/sh\n");
+    install_program(&usr_bin.join("tilix.wrapper"), "#!/bin/sh\n");
+    symlink("tilix.wrapper", usr_bin.join("x-terminal-emulator")).expect("alternative");
+
+    let terminal = find_terminal(&ExecutableSearch::under(root.path())).expect("a terminal");
+
+    assert_eq!(terminal.executable(), Path::new("/usr/bin/tilix"));
+    assert_eq!(terminal.kind(), TerminalKind::Tilix);
 }
 
 /// parity: OPEN-018
@@ -155,50 +257,56 @@ fn kitty_is_preferred_over_xterm_when_nothing_else_is_installed() {
 /// parity: OPEN-020
 #[test]
 fn each_terminal_gets_its_own_working_directory_option() {
-    /// A terminal and the option that names its starting folder.
-    struct CommandLineStyle {
-        kind: TerminalKind,
-        option: Option<&'static str>,
-    }
     let root = temporary_folder();
     let folder = real_path(root.path());
-    let styles = [
-        CommandLineStyle {
-            kind: TerminalKind::Console,
-            option: Some("--working-directory="),
-        },
-        CommandLineStyle {
-            kind: TerminalKind::GnomeTerminal,
-            option: Some("--working-directory="),
-        },
-        CommandLineStyle {
-            kind: TerminalKind::XfceTerminal,
-            option: Some("--working-directory="),
-        },
-        CommandLineStyle {
-            kind: TerminalKind::Konsole,
-            option: Some("--workdir="),
-        },
-        CommandLineStyle {
-            kind: TerminalKind::Kitty,
-            option: Some("--directory="),
-        },
-        CommandLineStyle {
-            kind: TerminalKind::XTerm,
-            option: None,
-        },
+    let joined = |option: &str| vec![format!("{option}{}", folder.display())];
+    let styles: [(TerminalKind, Vec<String>); 15] = [
+        (TerminalKind::Console, joined("--working-directory=")),
+        (TerminalKind::GnomeTerminal, joined("--working-directory=")),
+        (TerminalKind::XfceTerminal, joined("--working-directory=")),
+        (TerminalKind::Konsole, joined("--workdir=")),
+        (TerminalKind::Kitty, joined("--directory=")),
+        (TerminalKind::Ghostty, joined("--working-directory=")),
+        (TerminalKind::Alacritty, joined("--working-directory=")),
+        (TerminalKind::Foot, joined("--working-directory=")),
+        (TerminalKind::Tilix, joined("--working-directory=")),
+        // Ptyxis ignores a folder unless asked for a window.
+        (
+            TerminalKind::Ptyxis,
+            ["--new-window".to_owned()]
+                .into_iter()
+                .chain(joined("--working-directory="))
+                .collect(),
+        ),
+        (
+            TerminalKind::Terminator,
+            ["--no-dbus".to_owned()]
+                .into_iter()
+                .chain(joined("--working-directory="))
+                .collect(),
+        ),
+        (
+            TerminalKind::WezTerm,
+            vec![
+                "start".to_owned(),
+                "--cwd".to_owned(),
+                folder.display().to_string(),
+            ],
+        ),
+        (TerminalKind::XdgTerminalExec, joined("--dir=")),
+        (TerminalKind::XTerm, Vec::new()),
+        (TerminalKind::UXTerm, Vec::new()),
     ];
 
-    for style in styles {
-        let executable = Path::new("/usr/bin").join(style.kind.program_name());
-        let terminal = Terminal::new(executable.clone(), style.kind).expect("absolute");
+    for (kind, options) in styles {
+        let executable = Path::new("/usr/bin").join(kind.program_name());
+        let terminal = Terminal::new(executable.clone(), kind).expect("absolute");
 
         let arguments = terminal_arguments(&terminal, root.path()).expect("arguments");
 
         let mut expected = vec![executable.into_os_string()];
-        let folder_argument = style.option.map(|option| format!("{option}{}", folder.display()));
-        expected.extend(folder_argument.map(Into::into));
-        assert_eq!(arguments, expected, "{:?}", style.kind);
+        expected.extend(options.into_iter().map(Into::into));
+        assert_eq!(arguments, expected, "{kind:?}");
     }
 }
 

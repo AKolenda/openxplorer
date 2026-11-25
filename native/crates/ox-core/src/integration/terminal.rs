@@ -12,7 +12,7 @@
 //! | Module | Responsibility |
 //! |---|---|
 //! | `emulator` | Which terminal: [`find_terminal`], [`Terminal`] |
-//! | `preference` | The desktop's configured terminal: [`desktop_terminal`] |
+//! | `preference` | The desktop's configured terminals: [`desktop_terminals`] |
 //! | `directory` | Which folder: [`prepare_directory`], [`checked_directory`] |
 //! | `launch` | Starting it: [`launch_terminal`] |
 //! | `command` | A chosen program run in it: [`command_in_terminal`] |
@@ -29,15 +29,28 @@ use std::future::Future;
 
 pub use command::{command_in_terminal, HOLD_SCRIPT};
 pub use directory::{checked_directory, prepare_directory, DirectoryChecks, PreparedDirectory};
-pub use emulator::{find_terminal, ExecutableSearch, Terminal, TerminalKind, SYSTEM_PATH};
+pub use emulator::{find_terminal, CommandStyle, ExecutableSearch, Terminal, TerminalKind, SYSTEM_PATH};
 pub use error::TerminalError;
 pub(crate) use launch::INHERITED_TERMINAL_VARIABLES;
 pub use launch::{launch_terminal, terminal_arguments, LaunchedTerminal};
-pub use preference::{desktop_terminal, DesktopTerminalConfig};
+pub use preference::{desktop_terminals, DesktopTerminalConfig, PreferredTerminal};
 
 use super::sandbox::Sandbox;
 use super::worker::on_worker;
 use crate::transfer::Cancellation;
+
+/// The terminal of this session (OPEN-018, OPEN-019): [`find_terminal`]
+/// among the host's programs as seen from `sandbox`, preferring the
+/// terminals the desktop is configured to use. Reads small files and
+/// `GSettings`; Open in Terminal calls it on a worker thread.
+///
+/// # Errors
+///
+/// As [`find_terminal`].
+pub fn session_terminal(sandbox: Sandbox) -> Result<Terminal, TerminalError> {
+    let preferred = desktop_terminals(&DesktopTerminalConfig::of_session());
+    find_terminal(&ExecutableSearch::for_sandbox(sandbox).preferring(preferred))
+}
 
 /// Prepares the folder of `uri`, finds the terminal and starts it, on a
 /// worker thread: the whole Open in Terminal request of the Python app's
@@ -60,8 +73,7 @@ where
 {
     on_worker(move || {
         let prepared = prepare_directory(&uri, &checks, &cancel)?;
-        let preferred = desktop_terminal(&DesktopTerminalConfig::of_session());
-        let terminal = find_terminal(&ExecutableSearch::for_sandbox(sandbox).preferring(preferred))?;
+        let terminal = session_terminal(sandbox)?;
         if cancel.is_cancelled() {
             return Err(TerminalError::Cancelled);
         }

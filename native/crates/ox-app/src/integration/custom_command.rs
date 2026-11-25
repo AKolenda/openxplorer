@@ -14,7 +14,7 @@ use std::ffi::OsString;
 use std::path::Path;
 
 use gtk::glib;
-use ox_core::integration::{command_in_terminal, find_terminal, spawn_program, ExecutableSearch, Sandbox};
+use ox_core::integration::{command_in_terminal, session_terminal, spawn_program, Sandbox};
 
 use super::applications::{LaunchTarget, PreparedLaunch};
 
@@ -89,17 +89,16 @@ pub(crate) fn command_arguments(text: &str, target: &LaunchTarget) -> Result<Vec
 pub(crate) fn run_custom_command(command: &CustomCommand, prepared: &PreparedLaunch) -> Result<(), String> {
     let mut arguments = command_arguments(&command.text, &prepared.target)?;
     let sandbox = Sandbox::detect();
-    if command.in_terminal {
-        let terminal =
-            find_terminal(&ExecutableSearch::for_sandbox(sandbox)).map_err(|error| error.to_string())?;
-        let hold = command.keep_open.then_some(HOLD_SCRIPT_NAME);
-        arguments = command_in_terminal(&terminal, hold, arguments);
-    }
     let folder = match &prepared.target {
         LaunchTarget::Path(path) if prepared.is_folder => path.clone(),
         LaunchTarget::Path(path) => path.parent().unwrap_or(Path::new("/")).to_path_buf(),
         LaunchTarget::Uri(_) => glib::home_dir(),
     };
+    if command.in_terminal {
+        let terminal = session_terminal(sandbox).map_err(|error| error.to_string())?;
+        let hold = command.keep_open.then_some(HOLD_SCRIPT_NAME);
+        arguments = command_in_terminal(&terminal, &folder, hold, arguments);
+    }
     spawn_program(&arguments, &folder, sandbox).map_err(|error| {
         ox_core::i18n::format_message(
             "The command could not be started: {error}",

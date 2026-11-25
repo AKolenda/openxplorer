@@ -7,8 +7,9 @@
 //! `gnome-xdg-terminals.list`, before the shared one, in the user's
 //! configuration folder before the system's), and GNOME's
 //! `org.gnome.desktop.default-applications.terminal` `exec` key when the
-//! user set it. Only a terminal the app knows is taken, and
-//! [`super::find_terminal`] still looks for it in the system folders only.
+//! user set it. [`super::find_terminal`] starts a listed terminal the app
+//! knows itself, and hands one it does not know to `xdg-terminal-exec`;
+//! either is looked for in the system folders only.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -52,15 +53,33 @@ impl DesktopTerminalConfig {
     }
 }
 
-/// The known terminal the desktop is configured to use, if any: the
-/// `xdg-terminals.list` choice first, then GNOME's.
-pub fn desktop_terminal(config: &DesktopTerminalConfig) -> Option<TerminalKind> {
-    listed_terminal(config).or_else(gnome_terminal)
+/// A terminal the desktop is configured to use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreferredTerminal {
+    /// An entry of an `xdg-terminals.list`, which `xdg-terminal-exec` can
+    /// start: the terminal it names, or `None` for one the app does not
+    /// know.
+    Listed(Option<TerminalKind>),
+    /// GNOME's `exec` key, naming a terminal the app knows.
+    Gnome(TerminalKind),
 }
 
-/// The first known terminal of the first `xdg-terminals.list` that names
-/// one; a list naming only other terminals leaves the choice to the next.
-fn listed_terminal(config: &DesktopTerminalConfig) -> Option<TerminalKind> {
+/// The terminals the desktop is configured to use, most preferred first:
+/// the entries of the `xdg-terminals.list` files, in the order
+/// `xdg-terminal-exec` tries them, then GNOME's choice.
+pub fn desktop_terminals(config: &DesktopTerminalConfig) -> Vec<PreferredTerminal> {
+    let mut terminals: Vec<PreferredTerminal> = listed_entries(config)
+        .iter()
+        .map(|entry| PreferredTerminal::Listed(kind_of_desktop_entry(entry)))
+        .collect();
+    terminals.extend(gnome_terminal().map(PreferredTerminal::Gnome));
+    terminals
+}
+
+/// The desktop entry IDs of every `xdg-terminals.list`, in the order
+/// `xdg-terminal-exec` tries them: folder by folder, the user's first, and
+/// in each folder the desktops' own lists before the shared one.
+fn listed_entries(config: &DesktopTerminalConfig) -> Vec<String> {
     let names = config
         .desktops
         .iter()
@@ -71,11 +90,9 @@ fn listed_terminal(config: &DesktopTerminalConfig) -> Option<TerminalKind> {
         .config_dirs
         .iter()
         .flat_map(|folder| names.iter().map(move |name| folder.join(name)))
-        .find_map(|path| {
-            read_list(&path)?
-                .iter()
-                .find_map(|entry| kind_of_desktop_entry(entry))
-        })
+        .filter_map(|path| read_list(&path))
+        .flatten()
+        .collect()
 }
 
 /// The entries of the list at `path`, or `None` when there is none.
@@ -88,11 +105,15 @@ fn read_list(path: &Path) -> Option<Vec<String>> {
     let entries = text
         .lines()
         .map(str::trim)
-        // A leading + or - marks an entry as added or excluded; `:` starts
-        // an action, such as `org.gnome.Terminal.desktop:new-window`.
-        .filter(|line| !line.is_empty() && !line.starts_with('#') && !line.starts_with('-'))
+        // A leading + or - marks an entry as added or excluded; `/` starts
+        // a directive, such as `/execarg_default:…`, and `:` an action,
+        // such as `org.gnome.Terminal.desktop:new-window`.
+        .filter(|line| {
+            !line.is_empty() && !line.starts_with('#') && !line.starts_with('-') && !line.starts_with('/')
+        })
         .map(|line| line.trim_start_matches('+'))
-        .map(|line| line.split(':').next().unwrap_or(line).to_owned());
+        .map(|line| line.split(':').next().unwrap_or(line).to_owned())
+        .filter(|entry| !entry.is_empty());
     Some(entries.collect())
 }
 
@@ -103,9 +124,16 @@ fn kind_of_desktop_entry(entry: &str) -> Option<TerminalKind> {
     match id {
         "org.gnome.Terminal" | "gnome-terminal" => Some(TerminalKind::GnomeTerminal),
         "org.gnome.Console" | "kgx" => Some(TerminalKind::Console),
+        "org.gnome.Ptyxis" | "ptyxis" => Some(TerminalKind::Ptyxis),
         "xfce4-terminal" | "org.xfce.terminal" => Some(TerminalKind::XfceTerminal),
         "org.kde.konsole" | "konsole" => Some(TerminalKind::Konsole),
         "kitty" => Some(TerminalKind::Kitty),
+        "com.mitchellh.ghostty" | "ghostty" => Some(TerminalKind::Ghostty),
+        "Alacritty" | "alacritty" | "org.alacritty.Alacritty" => Some(TerminalKind::Alacritty),
+        "org.wezfurlong.wezterm" | "wezterm" => Some(TerminalKind::WezTerm),
+        "org.codeberg.dnkl.foot" | "foot" => Some(TerminalKind::Foot),
+        "com.gexperts.Tilix" | "tilix" => Some(TerminalKind::Tilix),
+        "terminator" => Some(TerminalKind::Terminator),
         "xterm" | "debian-xterm" => Some(TerminalKind::XTerm),
         "uxterm" | "debian-uxterm" => Some(TerminalKind::UXTerm),
         _ => None,
@@ -140,9 +168,16 @@ mod tests {
         fs::write(path, text).expect("list");
     }
 
+    fn listed(config: &DesktopTerminalConfig) -> Vec<Option<TerminalKind>> {
+        listed_entries(config)
+            .iter()
+            .map(|entry| kind_of_desktop_entry(entry))
+            .collect()
+    }
+
     /// parity: OPEN-019
     #[test]
-    fn the_desktops_own_list_then_the_shared_one_names_the_terminal() {
+    fn the_desktops_own_list_then_the_shared_one_names_the_terminals_in_order() {
         let folder = tempfile::tempdir().expect("a temporary folder");
         write(
             &folder.path().join("system/xdg-terminals.list"),
@@ -150,27 +185,56 @@ mod tests {
         );
         write(
             &folder.path().join("user/gnome-xdg-terminals.list"),
-            "-org.kde.konsole.desktop\nalacritty.desktop\n+org.gnome.Console.desktop:new-window\n",
+            "-org.kde.konsole.desktop\n/execarg_default:foot.desktop:--\nrio.desktop\n\
+             +org.gnome.Console.desktop:new-window\n",
         );
 
         let gnome = config(folder.path(), &["zorin", "gnome"]);
         let other = config(folder.path(), &["kde"]);
 
-        assert_eq!(listed_terminal(&gnome), Some(TerminalKind::Console));
-        assert_eq!(listed_terminal(&other), Some(TerminalKind::GnomeTerminal));
-        assert_eq!(listed_terminal(&config(&folder.path().join("none"), &[])), None);
-
-        write(
-            &folder.path().join("user/xdg-terminals.list"),
-            "alacritty.desktop\n",
-        );
         assert_eq!(
-            listed_terminal(&other),
-            Some(TerminalKind::GnomeTerminal),
-            "a list of unknown terminals leaves the choice to the next"
+            listed(&gnome),
+            [
+                None,
+                Some(TerminalKind::Console),
+                Some(TerminalKind::GnomeTerminal)
+            ],
+            "excluded entries and directives are skipped; an unknown entry keeps its place"
         );
+        assert_eq!(listed(&other), [Some(TerminalKind::GnomeTerminal)]);
+        assert!(listed(&config(&folder.path().join("none"), &[])).is_empty());
 
         write(&folder.path().join("user/xdg-terminals.list"), "kitty.desktop\n");
-        assert_eq!(listed_terminal(&other), Some(TerminalKind::Kitty));
+        assert_eq!(
+            listed(&other),
+            [Some(TerminalKind::Kitty), Some(TerminalKind::GnomeTerminal)],
+            "the user's folder comes before the system's"
+        );
+    }
+
+    /// The desktop entry IDs of the terminals the app knows, as their
+    /// packages install them.
+    ///
+    /// parity: OPEN-019
+    #[test]
+    fn modern_terminals_are_known_by_their_desktop_entry_ids() {
+        let cases = [
+            ("com.mitchellh.ghostty.desktop", TerminalKind::Ghostty),
+            ("org.gnome.Ptyxis.desktop", TerminalKind::Ptyxis),
+            ("Alacritty.desktop", TerminalKind::Alacritty),
+            ("org.wezfurlong.wezterm.desktop", TerminalKind::WezTerm),
+            ("foot.desktop", TerminalKind::Foot),
+            ("org.codeberg.dnkl.foot.desktop", TerminalKind::Foot),
+            ("com.gexperts.Tilix.desktop", TerminalKind::Tilix),
+            ("terminator.desktop", TerminalKind::Terminator),
+            ("kitty.desktop", TerminalKind::Kitty),
+        ];
+
+        for (entry, kind) in cases {
+            assert_eq!(kind_of_desktop_entry(entry), Some(kind), "{entry}");
+        }
+        // footclient needs a running foot server, so xdg-terminal-exec
+        // starts it.
+        assert_eq!(kind_of_desktop_entry("footclient.desktop"), None);
     }
 }
