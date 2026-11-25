@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! General: where new windows open, the windows and tabs, the address
-//! bar, and moving tabs and files between windows and apps.
+//! bar, backing up the settings ([`super::backup`]), and moving tabs and
+//! files between windows and apps.
 //!
 //! Ports the "Windows & tabs" section of `appendV07Settings` in
 //! `v2.0.0:desktop/ui/app.js` (SET-009). "Open windows…" opens the menu of the
@@ -134,6 +135,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     general.append_group(&startup_group(page));
     general.append_group(&windows_group(page));
     general.append_group(&address_group(page));
+    general.append_group(&super::backup::group(page));
     general.append_group(&dragging_group());
     general
 }

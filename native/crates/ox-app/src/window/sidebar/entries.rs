@@ -474,6 +474,13 @@ pub(in crate::window) fn sidebar_entries(
     entries.push(network);
     entries.extend(network_rows);
     entries.extend(saved);
+    // A mapped network folder's letter goes while Settings turns the
+    // letters off; the row still opens and maps as before.
+    for entry in &mut entries {
+        if matches!(entry.menu, Some(PlaceMenu::Network(_))) {
+            entry.label = places.shown_label(&entry.label).to_owned();
+        }
+    }
     entries
 }
 
@@ -810,6 +817,49 @@ mod tests {
             Connection::Disconnected,
         );
         assert_eq!(share.icon, disconnected_drive);
+    }
+
+    /// With Settings' letters off, a mapped share's row is named by its
+    /// folder alone; it still opens the share, keeps its menu and the
+    /// mapped drive's picture, and a share without a letter is unchanged.
+    ///
+    /// parity: SET-022
+    #[test]
+    fn without_letters_a_mapped_share_is_named_by_its_folder() {
+        let mut settings = SettingsData {
+            shares: vec![
+                Bookmark {
+                    uri: "smb://studio-nas/projects".into(),
+                    label: "Studio NAS (Z:)".into(),
+                },
+                Bookmark {
+                    uri: "smb://studio-nas/media".into(),
+                    label: "Media (archive)".into(),
+                },
+            ],
+            ..SettingsData::default()
+        };
+        let with_letters = entries_for(&settings, &[]);
+        settings.preferences.show_drive_letters = false;
+        let without = entries_for(&settings, &[]);
+
+        let labels: Vec<&str> = without
+            .iter()
+            .filter(|entry| matches!(entry.menu, Some(PlaceMenu::Network(_))))
+            .map(|entry| entry.label.as_str())
+            .collect();
+        assert_eq!(labels, ["Studio NAS", "Media (archive)"]);
+        let lettered = |entries: &[SidebarEntry], label: &str| {
+            entries
+                .iter()
+                .find(|entry| entry.label == label)
+                .map(|entry| (entry.target.clone(), entry.icon))
+        };
+        assert_eq!(
+            lettered(&without, "Studio NAS"),
+            lettered(&with_letters, "Studio NAS (Z:)"),
+            "the same row, opening the same share with the same picture"
+        );
     }
 
     /// Each network row's tooltip is its UNC address and its state, as

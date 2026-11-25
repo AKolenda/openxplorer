@@ -16,7 +16,9 @@ use ox_core::network::{connect_share, ConnectedShare};
 use ox_core::settings::{BookmarkAction, BookmarkKind, BookmarkRequest, SettingsError};
 
 use crate::devices::Removal;
-use crate::dialogs::{drive_letter, map_network_dialog, network_location_dialog, MapRequest, ShareKeeping};
+use crate::dialogs::{
+    drive_letter, map_network_dialog_with, network_location_dialog, MapRequest, ShareKeeping,
+};
 use crate::network::user_recent_servers;
 use crate::places::network_row;
 use crate::settings_store::Change;
@@ -121,7 +123,8 @@ impl BrowserWindow {
                     .iter()
                     .filter_map(|row| drive_letter(&row.label))
                     .collect();
-                map_network_dialog(self, &taken, on_connect)
+                let with_letters = self.context().settings_data().preferences.show_drive_letters;
+                map_network_dialog_with(self, &taken, with_letters, on_connect)
             }
             ConnectDialog::AddNetworkLocation => network_location_dialog(self, on_connect),
         };

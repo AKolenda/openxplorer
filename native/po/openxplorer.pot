@@ -728,6 +728,10 @@ msgstr ""
 msgid "Specify the drive letter for the connection and the folder that you want to connect to:"
 msgstr ""
 
+#: crates/ox-app/src/dialogs/network_map.rs
+msgid "Specify the folder that you want to connect to:"
+msgstr ""
+
 #: crates/ox-app/src/dialogs/network_map.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/security_tab/advanced.rs crates/ox-app/src/properties/selection_view.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-core/src/grouping.rs
 msgid "Type"
 msgstr ""
@@ -3329,6 +3333,10 @@ msgid "Name column starts at Windows' width (256 px)"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "Names a network folder mapped to a drive letter with its letter, as in Projects (Z:). Off, it is just Projects everywhere, and Map network drive asks for no letter. Typing a letter such as Z: in the address bar still opens its folder."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Near the pointer (default)"
 msgstr ""
 
@@ -3386,6 +3394,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "Show a line under column titles"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Show letters on mapped network folders"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -3499,6 +3511,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "context menu style windows 10 11 classic compact"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "drive letter letters mapped network drive folder share smb z: navigation pane sidebar map network drive label"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -3627,6 +3643,93 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/archives.rs
 msgid "zip tar gz 7z 7-zip archive compressed browse extract"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "Back up settings"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "Could not export settings to {name}: {error}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "Could not import settings from {name}: {error}"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "Export settings"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "Export settings…"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "Import settings"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "Import settings…"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/backup.rs crates/ox-app/src/window/picker.rs
+msgid "Replace"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "Replace your OpenXplorer settings with the ones in {name}?"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "Replaces your OpenXplorer settings with the ones in a file saved with Export settings."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "Saves your OpenXplorer settings in one file you can take to another computer: views, layout, confirmations, icons, Quick access pins and network folders. Passwords, history and window sizes stay here."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "Settings exported to {name}."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "Settings files (JSON)"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "Settings imported from {name}."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "Settings imported from {name}. Not on this computer, kept as they are: {paths}."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "This file is too large to be a settings file."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/backup.rs crates/ox-core/src/settings/backup.rs
+msgid "This is not an OpenXplorer settings file. Nothing was changed."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "export save backup back up transfer settings preferences json new computer migrate"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "import load backup back up transfer settings preferences json new computer migrate"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/settings_page/backup.rs
+msgid "{count} more"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -7717,10 +7820,6 @@ msgstr ""
 msgid "Confirm Save As"
 msgstr ""
 
-#: crates/ox-app/src/window/picker.rs
-msgid "Replace"
-msgstr ""
-
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/picker.rs
 msgid "The folder “{folder}” does not exist."
@@ -10996,6 +11095,10 @@ msgstr ""
 
 #: crates/ox-core/src/settings.rs
 msgid "This folder's settings cannot be kept."
+msgstr ""
+
+#: crates/ox-core/src/settings/backup.rs
+msgid "This settings file is damaged. Nothing was changed."
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

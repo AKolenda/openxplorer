@@ -57,6 +57,24 @@ pub(crate) struct Places {
     /// Every network location, merged, as the sidebar lists them under
     /// Network.
     pub network: Vec<NetworkLocation>,
+    /// Whether mapped network folders are named with their drive letter
+    /// (Settings' "Show letters on mapped network folders"). The labels
+    /// above always keep it, since the address bar and Map network drive
+    /// read the letters from them; [`Places::shown_label`] drops it.
+    pub show_drive_letters: bool,
+}
+
+impl Places {
+    /// `label` of a network location as the user sees it: without its
+    /// drive letter, as in `Projects` for `Projects (Z:)`, while the
+    /// letters are off.
+    pub(crate) fn shown_label<'a>(&self, label: &'a str) -> &'a str {
+        if self.show_drive_letters {
+            label
+        } else {
+            ox_core::location::without_drive_letter(label)
+        }
+    }
 }
 
 /// Composes the sections from one snapshot.
@@ -90,6 +108,7 @@ pub(crate) fn compose(sources: PlaceSources<'_>) -> Places {
         drives,
         saved_shares,
         network,
+        show_drive_letters: sources.settings.preferences.show_drive_letters,
     }
 }
 

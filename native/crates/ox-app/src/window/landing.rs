@@ -356,10 +356,11 @@ fn local_disk() -> VolumeRow {
 /// A saved share's tile, as Windows 11 draws a mapped drive in This PC:
 /// its name with its server and letter, and, while it is connected, how
 /// full it is, else that it connects on open. Its address is its tooltip.
-fn share_tile(share: &SavedShare, locations: &LocationContext, cell: CellSize) -> Tile {
+/// `places` says whether its drive letter is shown.
+fn share_tile(share: &SavedShare, places: &Places, locations: &LocationContext, cell: CellSize) -> Tile {
     let uri = &share.bookmark.uri;
     let art = ArtImage::new(saved_share_art(share), TILES_ICON);
-    let name = share_card_name(&share.bookmark.label, uri);
+    let name = share_card_name(places.shown_label(&share.bookmark.label), uri);
     let (child, lines) = tile_frame(&art, &name, uri, cell);
     child.set_tooltip_text(Some(&locations.display_location(uri)));
     // Measuring never mounts: only a share that is mounted is asked.
@@ -1238,7 +1239,7 @@ fn this_pc(page: &gtk::Box, places: &Places, locations: &LocationContext, text_s
     tile_group(page, Group::DevicesAndDrives, drive_tiles);
     let share_tiles = places.saved_shares.iter();
     let share_tiles = share_tiles
-        .map(|share| share_tile(share, locations, cell))
+        .map(|share| share_tile(share, places, locations, cell))
         .collect();
     tile_group(page, Group::NetworkLocations, share_tiles);
 }

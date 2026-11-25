@@ -23,12 +23,14 @@
 //! refuses is never renamed: the change fails instead.
 //!
 //! The submodules split the work: `read` reads the file, `mutate` holds
-//! the changes, and `save` locks and writes. Reading and saving rely on
+//! the changes, and `save` locks and writes. [`backup`] writes the
+//! settings to a file of their own and reads them back. Reading and saving rely on
 //! the private-storage rules of `crate::private_storage`.
 //!
 //! The `winspace` directory name is a compatibility contract; do not rename
 //! it.
 
+pub mod backup;
 mod choices;
 mod error;
 mod file_icons;

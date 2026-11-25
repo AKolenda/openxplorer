@@ -46,9 +46,48 @@ pub fn mapped_drive_location(typed: &str, mappings: &[(char, String)]) -> Option
     ))
 }
 
+/// `label` without the drive letter Map network drive put at its end:
+/// `Projects (Z:)` reads `Projects`. Any other label is returned as it
+/// is, as is a label that is nothing but the letter. For Settings'
+/// "Show letters on mapped network folders" turned off; the saved label
+/// keeps its letter, so [`mapped_drive_location`] still finds it.
+pub fn without_drive_letter(label: &str) -> &str {
+    let Some(rest) = label.strip_suffix(":)") else {
+        return label;
+    };
+    let mut characters = rest.chars();
+    let letter = characters.next_back();
+    let Some(name) = characters.as_str().strip_suffix(" (") else {
+        return label;
+    };
+    let name = name.trim_end();
+    if letter.is_some_and(|letter| letter.is_ascii_alphabetic()) && !name.is_empty() {
+        name
+    } else {
+        label
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Only a letter in brackets at the end goes; the rest of the label
+    /// stays as the user wrote it.
+    ///
+    /// parity: SET-022
+    #[test]
+    fn a_label_loses_only_its_drive_letter() {
+        assert_eq!(without_drive_letter("Projects (Z:)"), "Projects");
+        assert_eq!(without_drive_letter("Media (nas) (M:)"), "Media (nas)");
+        assert_eq!(without_drive_letter("Projects"), "Projects");
+        assert_eq!(without_drive_letter("Projects (nas)"), "Projects (nas)");
+        assert_eq!(without_drive_letter("Projects (ZZ:)"), "Projects (ZZ:)");
+        assert_eq!(without_drive_letter("Projects(Z:)"), "Projects(Z:)");
+        assert_eq!(without_drive_letter("(Z:)"), "(Z:)");
+        assert_eq!(without_drive_letter(" (Z:)"), " (Z:)");
+        assert_eq!(without_drive_letter("Projects (1:)"), "Projects (1:)");
+    }
 
     fn mappings() -> Vec<(char, String)> {
         vec![

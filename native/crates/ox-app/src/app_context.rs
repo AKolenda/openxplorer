@@ -451,6 +451,42 @@ impl AppContext {
         self.change_settings(change, reply);
     }
 
+    /// Replaces the settings with those of the settings file `text`
+    /// (Settings > General > Import settings…) off the main thread.
+    /// Once saved, every window shows them: the theme, the font and the
+    /// text size are drawn again, the places, the item options and every
+    /// folder's style follow. `reply` hears the folders and files the
+    /// settings name that are not on this computer, or why nothing was
+    /// changed.
+    pub(crate) fn import_settings(
+        &self,
+        text: String,
+        reply: impl FnOnce(Result<Vec<String>, SettingsError>) + 'static,
+    ) {
+        let missing = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let found = Arc::clone(&missing);
+        let change: Change = Box::new(move |settings: &mut Settings| {
+            let paths = settings.import(&text)?;
+            *found.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = paths;
+            Ok(())
+        });
+        let context = self.downgrade();
+        let after = move |result: Result<(), SettingsError>| {
+            if let (Ok(()), Some(context)) = (&result, context.upgrade()) {
+                let preferences = context.settings_data().preferences;
+                let skin = context.skin();
+                skin.set_theme(preferences.theme);
+                skin.set_uses_desktop_font(preferences.desktop_font);
+                skin.set_neutral_selection_colors(preferences.neutral_selection_colors);
+                skin.set_text_size(crate::text_size::TextSize::from_percent(preferences.text_size));
+            }
+            let missing =
+                std::mem::take(&mut *missing.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
+            reply(result.map(|()| missing));
+        };
+        self.change_settings(change, self.announcing_folder_views(after));
+    }
+
     /// Saves every valid value of `update` off the main thread without
     /// telling the windows that the settings changed, for a preference
     /// only the window that changed it reads, such as the progress

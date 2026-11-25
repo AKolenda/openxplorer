@@ -314,6 +314,15 @@ pub struct Preferences {
     pub classic_menu_chosen: bool,
     /// Seconds between network location refreshes: 30, 60 or 300.
     pub network_interval: u32,
+    /// Mapped network folders show the drive letter Map network drive
+    /// gave them, as in "Projects (Z:)". On by default, as before; off,
+    /// they show as "Projects" wherever they are named, and Map network
+    /// drive asks for no letter. The letter stays in the saved label, so
+    /// typing `Z:` in the address bar keeps working. Not one of the
+    /// settings "Behave like Windows Explorer" sets: on Linux the letter
+    /// is only a label. Stored as `showDriveLetters`, only when off.
+    #[serde(rename = "showDriveLetters", skip_serializing_if = "is_true")]
+    pub show_drive_letters: bool,
     /// Percent: 80, 90, 100, 110, 125, 150, 175 or 200.
     pub text_size: u32,
     /// Sidebar width in pixels, once the user resized it.
@@ -772,6 +781,7 @@ impl Default for Preferences {
             item_counts_chosen: false,
             remote_previews_chosen: false,
             network_interval: DEFAULT_NETWORK_INTERVAL,
+            show_drive_letters: true,
             text_size: DEFAULT_TEXT_SIZE,
             sidebar_width: None,
             column_widths: None,
@@ -1053,6 +1063,7 @@ impl Preferences {
             self.classic_menu_chosen = menu == ContextMenu::Win10;
         }
         replace_if_some(&mut self.network_interval, network_interval);
+        replace_if_some(&mut self.show_drive_letters, update.show_drive_letters);
         replace_if_some(&mut self.text_size, text_size);
         replace_if_some(&mut self.show_full_path, update.show_full_path);
         replace_if_some(&mut self.editable_location, update.editable_location);
@@ -1291,6 +1302,8 @@ pub struct PreferencesUpdate {
     pub f6_like_windows: Option<bool>,
     /// New network refresh interval in seconds.
     pub network_interval: Option<u32>,
+    /// See [`Preferences::show_drive_letters`].
+    pub show_drive_letters: Option<bool>,
     /// The size new windows open at.
     pub window_size: Option<WindowSize>,
     /// The size Open and Save dialogs open at.
@@ -1501,6 +1514,7 @@ impl PreferencesUpdate {
             shift_f10_classic: flag("shiftF10Classic"),
             f6_like_windows: flag("f6LikeWindows"),
             network_interval: values.get("networkInterval").and_then(read_network_interval),
+            show_drive_letters: flag("showDriveLetters"),
             window_size: values.get("windowSize").and_then(WindowSize::from_json),
             dialog_size: values.get("dialogSize").and_then(WindowSize::from_json),
             show_full_path: flag("showFullPath"),

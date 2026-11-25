@@ -568,6 +568,7 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Hide expand arrows in the sidebar",
             "Show more items in the navigation pane",
             "Show Recent files in the navigation pane",
+            "Show letters on mapped network folders",
             "Show more items in the tab menu",
             "Right-click menu",
             "Buttons in the right-click menu",
