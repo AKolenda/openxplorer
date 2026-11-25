@@ -68,6 +68,8 @@ mod github;
 mod helper_report;
 mod identity;
 mod install_helper;
+#[cfg(feature = "fuzzing")]
+pub(crate) use install_helper::fuzz_request as fuzz_install_request;
 mod installation;
 mod instance;
 mod package;

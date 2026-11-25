@@ -44,6 +44,9 @@ pub mod drive;
 pub mod entry;
 pub mod folder_locations;
 pub mod format;
+#[cfg(feature = "fuzzing")]
+#[doc(hidden)]
+pub mod fuzzing;
 pub mod gio_node;
 pub mod grouping;
 pub mod i18n;

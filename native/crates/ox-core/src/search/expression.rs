@@ -35,6 +35,11 @@ const MAX_CLAUSES: usize = 64;
 /// Most terms one clause keeps.
 const MAX_TERMS_PER_CLAUSE: usize = 64;
 
+/// The deepest group of parentheses read as a group; groups inside it are
+/// read as if their parentheses were not there. A search typed by hand
+/// never nests this deep, and each level is read by a call of its own.
+const MAX_GROUP_DEPTH: usize = 32;
+
 /// What one term tests.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) enum Test {
@@ -271,6 +276,8 @@ pub(crate) fn parse(text: &str, normalise: &dyn Fn(&str) -> String) -> Clauses {
         tokens: &tokens,
         at: 0,
         normalise,
+        depth: 0,
+        flattened: 0,
     };
     let mut clauses = parser.sequence(None, false).unwrap_or_default();
     dedupe(&mut clauses);
@@ -310,6 +317,11 @@ struct Parser<'a> {
     tokens: &'a [Token],
     at: usize,
     normalise: &'a dyn Fn(&str) -> String,
+    /// How many groups the token read last is in.
+    depth: usize,
+    /// How many groups past [`MAX_GROUP_DEPTH`] are open, read as if their
+    /// parentheses were not there.
+    flattened: usize,
 }
 
 impl Parser<'_> {
@@ -323,9 +335,18 @@ impl Parser<'_> {
         while let Some(token) = self.tokens.get(self.at) {
             self.at += 1;
             let part = match token {
+                // The end of a group read flat ends nothing.
+                Token::Close if self.flattened > 0 => {
+                    self.flattened -= 1;
+                    continue;
+                }
                 Token::Close if in_group => break,
                 // An unmatched `)` is ignored.
                 Token::Close => continue,
+                Token::Open | Token::PropertyGroup(_) if self.depth >= MAX_GROUP_DEPTH => {
+                    self.flattened += 1;
+                    continue;
+                }
                 Token::Text {
                     text,
                     quoted_from: None,
@@ -347,8 +368,8 @@ impl Parser<'_> {
                     negate = !negate;
                     continue;
                 }
-                Token::Open => self.sequence(property, true),
-                Token::PropertyGroup(keyword) => self.sequence(self::property(keyword), true),
+                Token::Open => self.group(property),
+                Token::PropertyGroup(keyword) => self.group(self::property(keyword)),
                 Token::Text { text, quoted_from } => self
                     .term(text, *quoted_from, property)
                     .map(|term| vec![vec![term]]),
@@ -372,6 +393,14 @@ impl Parser<'_> {
             join = Join::And;
         }
         result
+    }
+
+    /// The group that starts here, up to its closing parenthesis.
+    fn group(&mut self, property: Option<Property>) -> Option<Clauses> {
+        self.depth += 1;
+        let group = self.sequence(property, true);
+        self.depth -= 1;
+        group
     }
 
     /// The term `text` stands for: a property with its value, a wildcard
@@ -475,9 +504,13 @@ fn or(one: &Clauses, two: &Clauses) -> Clauses {
             if clauses.len() == MAX_CLAUSES {
                 break 'pairs;
             }
-            let mut clause = first.clone();
-            clause.extend(second.iter().cloned());
-            clause.truncate(MAX_TERMS_PER_CLAUSE);
+            // Only the terms kept are copied.
+            let clause = first
+                .iter()
+                .chain(second)
+                .take(MAX_TERMS_PER_CLAUSE)
+                .cloned()
+                .collect();
             clauses.push(clause);
         }
     }
@@ -485,28 +518,153 @@ fn or(one: &Clauses, two: &Clauses) -> Clauses {
 }
 
 /// `NOT clauses`: one of the clauses fails, so for each clause all of its
-/// terms fail; written back as clauses.
+/// terms fail; written back as clauses: every choice of one negated term
+/// from each clause, in the order `OR` would join them, the first
+/// [`MAX_CLAUSES`] only. Each choice is made once, so a negated group costs
+/// no more than the clauses it gives.
 fn negated(clauses: Clauses) -> Clauses {
-    clauses
+    let choices: Vec<Vec<Term>> = clauses
         .into_iter()
         .map(|clause| {
             clause
                 .into_iter()
-                .map(|term| {
-                    vec![Term {
-                        negated: !term.negated,
-                        ..term
-                    }]
+                .map(|term| Term {
+                    negated: !term.negated,
+                    ..term
                 })
-                .collect::<Clauses>()
+                .collect()
         })
-        .reduce(|one, two| or(&one, &two))
-        .unwrap_or_default()
+        .collect();
+    if choices.is_empty() || choices.iter().any(Vec::is_empty) {
+        return Vec::new();
+    }
+    let mut picked = vec![0_usize; choices.len()];
+    let mut negated = Vec::new();
+    while negated.len() < MAX_CLAUSES {
+        let clause = picked
+            .iter()
+            .zip(&choices)
+            .take(MAX_TERMS_PER_CLAUSE)
+            .map(|(&index, terms)| terms[index].clone())
+            .collect();
+        negated.push(clause);
+        // The last clause's choice moves fastest, as `or` pairs them.
+        let Some(position) = (0..picked.len())
+            .rev()
+            .find(|&position| picked[position] + 1 < choices[position].len())
+        else {
+            break;
+        };
+        picked[position] += 1;
+        picked[position + 1..].fill(0);
+    }
+    negated
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Parentheses nested far deeper than anyone types are read without
+    /// running out of stack, and in a moment: the groups past the deepest
+    /// one followed are read as if their parentheses were not there
+    /// (found by fuzzing).
+    #[test]
+    fn groups_nested_past_the_deepest_followed_are_read_flat() {
+        let opened = "(".repeat(100_000);
+        assert_eq!(parse(&opened, &lower), Clauses::new());
+        let closed = format!("{}a{}", "(".repeat(100_000), ")".repeat(100_000));
+        assert_eq!(parse(&closed, &lower), vec![vec![word("a")]]);
+        let started = std::time::Instant::now();
+        let negated = parse(&"NOT (a ".repeat(3000), &lower);
+        assert!(negated.len() <= MAX_CLAUSES);
+        assert!(
+            started.elapsed() < std::time::Duration::from_millis(500),
+            "{:?}",
+            started.elapsed()
+        );
+        // Every word of a deep group is still required, and a closing
+        // parenthesis past the deepest group does not end the groups
+        // around it early.
+        let deep: String = (0..MAX_GROUP_DEPTH + 8).fold(String::new(), |mut text, level| {
+            let _ = std::fmt::Write::write_fmt(&mut text, format_args!("w{level} ("));
+            text
+        });
+        let deep = format!("{deep}last{} after", ")".repeat(MAX_GROUP_DEPTH + 8));
+        let clauses = parse(&deep, &lower);
+        assert_eq!(clauses.len(), MAX_GROUP_DEPTH + 8 + 2);
+        assert!(clauses.contains(&vec![word("last")]));
+        assert!(clauses.contains(&vec![word("after")]));
+        assert_eq!(
+            parse("a OR (b c)", &lower),
+            vec![vec![word("a"), word("b")], vec![word("a"), word("c")]]
+        );
+    }
+
+    /// `NOT` gives what joining each clause's negated terms with `OR` gives.
+    #[test]
+    fn a_negation_is_its_clauses_negated_terms_joined_with_or() {
+        let reference = |clauses: &Clauses| -> Clauses {
+            clauses
+                .iter()
+                .map(|clause| {
+                    clause
+                        .iter()
+                        .map(|term| vec![not(term.clone())])
+                        .collect::<Clauses>()
+                })
+                .reduce(|one, two| or(&one, &two))
+                .unwrap_or_default()
+        };
+        let mut seed = 0x5EED_u32;
+        for _ in 0..500 {
+            let mut next = |below: u32| {
+                seed ^= seed << 13;
+                seed ^= seed >> 17;
+                seed ^= seed << 5;
+                seed % below
+            };
+            let clauses: Clauses = (0..=next(5))
+                .map(|clause| {
+                    (0..=next(4))
+                        .map(|term| word(&format!("w{clause}{term}")))
+                        .collect()
+                })
+                .collect();
+            assert_eq!(negated(clauses.clone()), reference(&clauses), "{clauses:?}");
+        }
+        let wide: Clauses = (0..9)
+            .map(|clause| (0..3).map(|term| word(&format!("{clause}{term}"))).collect())
+            .collect();
+        assert_eq!(negated(wide.clone()), reference(&wide));
+        assert_eq!(negated(wide).len(), MAX_CLAUSES);
+    }
+
+    /// A query that negates groups inside groups is read in a moment: the
+    /// clauses it would multiply into are capped as they are made, not
+    /// after (found by fuzzing).
+    #[test]
+    fn negated_groups_inside_groups_are_read_quickly() {
+        let found = "re\"htory\"\u{d}01 \u{0}\u{c}\u{c}\u{0}\u{c}\u{fffd}t\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}NOT\u{c}\u{c}\u{c}(L\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}NOT\u{c}\u{c}\u{c}(L\u{c}\u{fffd}\u{c}\u{c}\u{c}\u{3}\u{c}\u{2}\u{c}\u{c}$\u{c}OR\u{c}\u{c}\u{c}\u{c}(\u{c}\u{c}!\u{c}\u{c}\u{c}\u{c}\u{c}NOT\u{c}W\u{fffd}\u{c}(L\u{c}\u{c}\u{c}\u{0}\u{0}\u{0}\u{c}\u{c}\u{c}\u{c}\u{0}\u{0}\u{0}\u{0}G*****\u{c}\u{c}\u{c}\u{c}D\u{1}P\u{1f}\u{c}!\u{c}\u{c}\u{fffd}\u{0}\u{0}\u{0}\u{c}\u{c}\u{c}NOT%%%%%t \u{0}\u{c}\u{c}\u{0}\u{c}\u{0}E\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}NOT\u{c}\u{c}\u{c}(L\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}NOT\u{c}\u{c}\u{c}(L\u{c}\u{c}\u{c}\u{c}\u{c}\u{3}\u{c}\u{2}\u{c}\u{c}\u{c}\u{c}OR\u{c}\u{c}\u{c}\u{c}(\u{c}\u{c}!\u{c}:\u{fffd}/\u{fffd}t d\u{c}\u{c}\u{c}(L\u{c}\u{c}\u{c}\u{c}\u{c}%%%%%%%%%%%%%%%%%%%%%%%%% fileext:\u{fffd}/\u{fffd}t d\u{fffd}\u{fffd}\u{fffd}%%%%%%%%%%%%%%t \u{0}\u{c}\u{c}\u{0}\u{c}\u{0}E\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}NOT\u{c}\u{c}\u{c}(L\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}\u{c}NOT\u{c}\u{c}\u{c}(L\u{c}\u{c}\u{c}\u{c}\u{c}\u{3}\u{c}\u{2}\u{c}\u{c}\u{c}\u{c}OR\u{c}\u{c}\u{c}\u{c}(\u{c}\u{c}!\u{c}:\u{fffd}/\u{fffd}t d\u{fffd}\u{fffd}\u{fffd}ed";
+        let nested = (0..12).fold(String::new(), |mut text, level| {
+            let _ = std::fmt::Write::write_fmt(
+                &mut text,
+                format_args!("NOT (a{level} b{level} OR c{level} d{level} "),
+            );
+            text
+        });
+        for query in [nested, found.to_owned()] {
+            let started = std::time::Instant::now();
+            let clauses = parse(&query, &lower);
+            assert!(clauses.len() <= MAX_CLAUSES);
+            assert!(clauses.iter().all(|clause| clause.len() <= MAX_TERMS_PER_CLAUSE));
+            assert!(
+                started.elapsed() < std::time::Duration::from_millis(200),
+                "{:?}",
+                started.elapsed()
+            );
+        }
+    }
 
     fn lower(text: &str) -> String {
         text.to_lowercase()

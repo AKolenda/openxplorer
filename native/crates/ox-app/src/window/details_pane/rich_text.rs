@@ -112,6 +112,14 @@ fn word_character(word: &str) -> Option<char> {
 }
 
 /// Whether `bytes` start as an RTF document does.
+/// Reads `bytes` as the Preview pane reads a rich text file, for the fuzz
+/// targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_rtf(bytes: &[u8]) {
+    let _ = is_rtf(bytes);
+    let _ = rtf_text(bytes);
+}
+
 pub(super) fn is_rtf(bytes: &[u8]) -> bool {
     bytes.trim_ascii_start().starts_with(b"{\\rtf")
 }

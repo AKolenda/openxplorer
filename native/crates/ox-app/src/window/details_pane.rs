@@ -41,7 +41,11 @@ use super::window_action::WindowAction;
 
 pub(super) use content::{describe_tiles, pane_content, PaneFacts};
 use content::{PaneContent, Preview};
+#[cfg(feature = "fuzzing")]
+pub(crate) use preview_page::fuzz_text;
 pub(super) use preview_page::PreviewRules;
+#[cfg(feature = "fuzzing")]
+pub(crate) use rich_text::fuzz_rtf;
 
 /// What the pane at the right shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

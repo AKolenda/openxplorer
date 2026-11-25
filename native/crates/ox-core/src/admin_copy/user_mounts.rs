@@ -353,6 +353,13 @@ fn utf8_length(text: &[u8]) -> usize {
 /// lines and lines with fewer than two fields are skipped, as by
 /// libmount. An entry without options has the defaults, which do not let
 /// users mount it.
+/// Reads `table` as an fstab and a utab, for the fuzz targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_tables(table: &[u8]) {
+    let _ = parse_fstab(table);
+    let _ = parse_utab(table);
+}
+
 fn parse_fstab(table: &[u8]) -> Vec<(Vec<u8>, PathBuf)> {
     table
         .split(|&byte| byte == b'\n')

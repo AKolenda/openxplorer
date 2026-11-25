@@ -1,0 +1,110 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Fuzz targets for the parsers of untrusted bytes, run with cargo-fuzz on a
+# nightly toolchain (see README.md). This crate is not a member of the
+# native workspace, so normal builds, tests and packages never compile it.
+[package]
+name = "ox-fuzz"
+version = "0.0.0"
+edition = "2021"
+license = "AGPL-3.0-only"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+ox-core = { path = "../crates/ox-core", features = ["fuzzing"] }
+ox-app = { path = "../crates/ox-app", features = ["fuzzing"] }
+tempfile = "3"
+
+# Its own workspace, so the native workspace does not adopt it.
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "archive_list"
+path = "fuzz_targets/archive_list.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "archive_extract"
+path = "fuzz_targets/archive_extract.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "core_text"
+path = "fuzz_targets/core_text.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "picture_headers"
+path = "fuzz_targets/picture_headers.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "picture_decode"
+path = "fuzz_targets/picture_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "media_details"
+path = "fuzz_targets/media_details.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "text_preview"
+path = "fuzz_targets/text_preview.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "core_formats"
+path = "fuzz_targets/core_formats.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "app_protocols"
+path = "fuzz_targets/app_protocols.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "media_streams"
+path = "fuzz_targets/media_streams.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "archive_fixup"
+path = "fuzz_targets/archive_fixup.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "archive_zipgen"
+path = "fuzz_targets/archive_zipgen.rs"
+test = false
+doc = false
+bench = false

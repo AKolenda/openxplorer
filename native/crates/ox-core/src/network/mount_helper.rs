@@ -29,6 +29,14 @@ use crate::location::python_strip;
 use crate::private_storage::KernelOpenFlags;
 
 mod arguments;
+
+/// Reads `arguments` as the mount helper's command line, and `line` as a
+/// line of the account database, for the fuzz targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_arguments(arguments: Vec<String>, line: &str) {
+    let _ = arguments::parse(arguments);
+    let _ = host::parse_passwd_entry(line);
+}
 mod host;
 mod setup;
 mod terminal;

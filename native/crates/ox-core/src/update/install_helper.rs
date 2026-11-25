@@ -403,6 +403,12 @@ fn say(output: impl Write + Send + 'static, text: String) {
 }
 
 /// Reads the command line: one version, or `--help`.
+/// Reads `arguments` as the helper's command line, for the fuzz targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_request(arguments: Vec<OsString>) {
+    let _ = read_request(arguments);
+}
+
 fn read_request(arguments: impl IntoIterator<Item = OsString>) -> Request {
     let arguments: Vec<OsString> = arguments.into_iter().take(2).collect();
     let [argument] = arguments.as_slice() else {

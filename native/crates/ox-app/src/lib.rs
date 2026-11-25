@@ -29,6 +29,9 @@ mod devices;
 mod dialog;
 mod dialogs;
 mod folder_view;
+#[cfg(feature = "fuzzing")]
+#[doc(hidden)]
+pub mod fuzzing;
 mod history;
 mod i18n;
 mod icons;

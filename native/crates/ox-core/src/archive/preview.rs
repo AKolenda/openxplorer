@@ -101,11 +101,12 @@ impl ArchiveBrowser {
         let index = unique_member(archive.members(), member)?;
         check_previewable(&archive.members()[index])?;
         // A missing or wrong password stops here, before any folder exists.
+        let declared_size = archive.members()[index].size;
         let mut source = archive.open_member(index, self.password.as_ref())?;
         remove_old_previews(&self.preview_root, PREVIEW_LIFETIME);
         let folder = create_preview_folder(&self.preview_root)?;
         let copy_path = folder.join(file_name);
-        match write_copy(&mut source, &copy_path, cancel) {
+        match write_copy(&mut source, &copy_path, declared_size, cancel) {
             Ok(()) => Ok(PreviewCopy {
                 path: copy_path,
                 member: member.to_owned(),
@@ -188,6 +189,7 @@ fn create_preview_folder(root: &Path) -> Result<PathBuf, ArchiveError> {
 fn write_copy(
     member: &mut MemberData<'_>,
     copy_path: &Path,
+    declared_size: u64,
     cancel: &Cancellation,
 ) -> Result<(), ArchiveError> {
     let mut copy = create_copy_file(copy_path)?;
@@ -204,6 +206,11 @@ fn write_copy(
             return Err(ArchiveError::PreviewLimitReached);
         }
         copy.write_all(&buffer[..count])?;
+    }
+    // ARC-017: a member that ends early is damaged or forged, and its copy
+    // would be silently cut short.
+    if total != declared_size {
+        return Err(ArchiveError::TruncatedMember);
     }
     copy.set_permissions(Permissions::from_mode(READ_ONLY_COPY_MODE))?;
     Ok(())

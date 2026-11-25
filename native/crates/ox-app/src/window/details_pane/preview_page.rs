@@ -210,6 +210,14 @@ pub(in crate::window) fn shown_text(text: &str) -> String {
     first_lines(&break_long_lines(text))
 }
 
+/// Reads `bytes` as the Preview pane reads a text file's start, cut short
+/// or whole, for the fuzz targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_text(bytes: &[u8]) {
+    let _ = decode_text(bytes, true);
+    let _ = decode_text(bytes, false);
+}
+
 /// The first [`LINE_COUNT_LIMIT`] lines of `text`.
 fn first_lines(text: &str) -> String {
     match text.match_indices('\n').nth(LINE_COUNT_LIMIT - 1) {

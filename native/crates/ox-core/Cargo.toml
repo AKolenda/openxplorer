@@ -27,6 +27,11 @@ path = "src/bin/openxplorer-admin-delete.rs"
 name = "openxplorer-install-update"
 path = "src/bin/openxplorer-install-update.rs"
 
+[features]
+# Entry points for the fuzz targets in native/fuzz (`ox_core::fuzzing`).
+# Off in every build of the app.
+fuzzing = []
+
 [dependencies]
 gio.workspace = true
 glib.workspace = true

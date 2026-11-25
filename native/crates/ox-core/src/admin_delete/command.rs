@@ -107,6 +107,12 @@ when it reads a line 'cancel' on standard input.
 ";
 
 /// Reads the command line.
+/// Reads `arguments` as the helper's command line, for the fuzz targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_request(arguments: Vec<OsString>) {
+    let _ = read_request(arguments);
+}
+
 fn read_request(arguments: impl IntoIterator<Item = OsString>) -> Request {
     let mut paths: Vec<OsString> = Vec::new();
     let mut item = None;

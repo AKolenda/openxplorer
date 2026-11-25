@@ -172,6 +172,20 @@ fn list(key: &glib::KeyFile, field: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Reads the file at `path` as a service menu, then builds each action's
+/// command for `uris`, for the fuzz targets.
+#[cfg(feature = "fuzzing")]
+pub(crate) fn fuzz_service_menu(path: &Path, uris: &[String]) {
+    for action in desktop_actions(path) {
+        let selection: Vec<(String, String)> = uris
+            .iter()
+            .map(|uri| (uri.clone(), "text/plain".to_owned()))
+            .collect();
+        let _ = action.accepts(&selection);
+        let _ = action.command(uris, "/home/alex/Documents");
+    }
+}
+
 fn desktop_actions(path: &Path) -> Vec<ServiceAction> {
     let Some(bytes) = definition(path) else {
         return Vec::new();
