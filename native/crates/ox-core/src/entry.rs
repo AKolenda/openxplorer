@@ -160,10 +160,10 @@ pub struct Entry {
     pub type_label: String,
     /// MIME type, when known.
     pub content_type: Option<String>,
-    /// `time::modified` in seconds since the Unix epoch; `None` when the
-    /// backend reports no time, or 0, which the Python app also showed as
-    /// unknown.
-    pub modified: Option<u64>,
+    /// `time::modified` in seconds since the Unix epoch, signed as GIO
+    /// keeps it, so 1 January 1970 and earlier dates show as Windows shows
+    /// them; `None` when the backend reports no time.
+    pub modified: Option<i64>,
     /// Hidden by name, by the folder's `.hidden` list or by the backend
     /// (`standard::is-hidden`).
     pub is_hidden: bool,
@@ -173,7 +173,7 @@ pub struct Entry {
     pub trash_orig_path: Option<PathBuf>,
     /// For items in `trash:///`: when they were deleted, in seconds since
     /// the Unix epoch.
-    pub trash_deletion_date: Option<u64>,
+    pub trash_deletion_date: Option<i64>,
     /// `access::can-rename`; `None` when the backend does not report it.
     pub can_rename: Option<bool>,
     /// `access::can-trash`; `None` when the backend does not report it.
@@ -248,7 +248,9 @@ impl Entry {
             size: if is_dir { None } else { size },
             type_label,
             content_type,
-            modified: modified.filter(|&seconds| seconds > 0),
+            modified: modified
+                .filter(|&seconds| seconds > 0)
+                .and_then(|seconds| i64::try_from(seconds).ok()),
             is_symlink: false,
             trash_orig_path: None,
             trash_deletion_date: None,

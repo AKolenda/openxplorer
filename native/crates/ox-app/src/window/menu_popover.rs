@@ -1757,6 +1757,9 @@ fn mark_slot(item: &MenuItem, check: CheckMark) -> gtk::Widget {
     };
     let image = icons::image(mark, ROW_GLYPH);
     image.add_css_class("menu-mark");
+    if item.dot_mark {
+        image.add_css_class("menu-dot");
+    }
     image.upcast()
 }
 

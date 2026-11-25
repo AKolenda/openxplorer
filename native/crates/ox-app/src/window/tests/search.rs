@@ -616,9 +616,13 @@ fn caching_the_folder_from_the_strip_searches_the_cache() {
 
     test.activate("cache-folder", None);
 
+    // Only this folder: the standard Quick access folders stay indexed.
     wait_until("the folder to stop being cached", || {
         let roots = test.context.search_cache().roots();
-        roots.iter().all(|root| !root.is_enabled())
+        roots
+            .iter()
+            .filter(|root| root.uri == fixture.uri())
+            .all(|root| !root.is_enabled())
     });
     assert_eq!(
         test.window.shown_message().as_str(),

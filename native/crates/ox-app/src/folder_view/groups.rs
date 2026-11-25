@@ -95,8 +95,8 @@ impl GroupClock {
 
     /// The period of `seconds`: its title and the rank that orders the
     /// periods oldest first.
-    fn period(&self, seconds: Option<u64>) -> Group {
-        let Some(time) = seconds.and_then(|seconds| i64::try_from(seconds).ok()) else {
+    fn period(&self, seconds: Option<i64>) -> Group {
+        let Some(time) = seconds else {
             return Group::numbered(&gettext("Unknown date"), i64::MIN);
         };
         let periods = [
@@ -197,7 +197,7 @@ fn work_out_group(grouping: Grouping, item: &FileItem, clocks: &GroupClocks) -> 
     #[cfg(test)]
     GROUPS_WORKED_OUT.with(|count| count.set(count.get() + 1));
     let entry = item.entry();
-    let period = |time: Option<u64>| {
+    let period = |time: Option<i64>| {
         let group = clocks.dates.group_of_time(time);
         Group::numbered(gettext_static(group.label()), group as i64)
     };
@@ -392,7 +392,7 @@ mod tests {
 
     fn modified_at(seconds: i64) -> FileItem {
         let mut entry = file_entry("a.txt");
-        entry.modified = u64::try_from(seconds).ok();
+        entry.modified = Some(seconds);
         FileItem::new(entry)
     }
 
@@ -439,7 +439,7 @@ mod tests {
             let clock = GroupClock::at(&now).expect("calendar boundaries");
             let late = glib::DateTime::new(&zone, 2026, month, day, 23, 30, 0.0).expect("late today");
             let tomorrow = late.add_days(1).expect("tomorrow");
-            let group = |date: &glib::DateTime| clock.period(u64::try_from(date.to_unix()).ok()).title;
+            let group = |date: &glib::DateTime| clock.period(Some(date.to_unix())).title;
             assert_eq!(group(&late), "Today");
             assert_eq!(group(&tomorrow), "In the future");
         }

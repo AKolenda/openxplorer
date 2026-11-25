@@ -289,13 +289,11 @@ impl GalleryScrubber {
 
     /// Shows `timeline` (fractions of the scroll, each with the date of
     /// the photo there) with the view at `position`.
-    pub(crate) fn show_timeline(&self, timeline: &[(f64, Option<u64>)], position: f64) {
+    pub(crate) fn show_timeline(&self, timeline: &[(f64, Option<i64>)], position: f64) {
         let marks: Vec<Mark> = timeline
             .iter()
             .map(|(fraction, date)| {
-                let local = date
-                    .and_then(|seconds| i64::try_from(seconds).ok())
-                    .and_then(|seconds| glib::DateTime::from_unix_local(seconds).ok());
+                let local = date.and_then(|seconds| glib::DateTime::from_unix_local(seconds).ok());
                 #[expect(
                     clippy::cast_possible_truncation,
                     clippy::cast_sign_loss,
@@ -405,18 +403,28 @@ impl GalleryScrubber {
         let thumb_y =
             arrow_height + (imp.position.get() * f64::from(track_height - thumb_height)).round() as i32;
         thumb.allocate(THUMB_WIDTH, thumb_height, -1, Some(translate(2, thumb_y)));
-        let mut last_y = f64::NEG_INFINITY;
-        for (label, (fraction, _)) in imp.years.borrow().iter().zip(self.year_starts()) {
-            let (_, label_height, _, _) = label.measure(gtk::Orientation::Vertical, width);
-            let y = f64::from(arrow_height) + fraction * f64::from(track_height - label_height).max(0.0);
-            let shows = y - last_y >= YEAR_SPACING;
-            label.set_child_visible(shows);
-            if shows {
-                last_y = y;
+        let labels = imp.years.borrow();
+        let heights: Vec<i32> = labels
+            .iter()
+            .map(|label| label.measure(gtk::Orientation::Vertical, width).1)
+            .collect();
+        let wanted: Vec<f64> = self
+            .year_starts()
+            .iter()
+            .zip(&heights)
+            .map(|((fraction, _), height)| {
+                f64::from(arrow_height) + fraction * f64::from(track_height - height).max(0.0)
+            })
+            .collect();
+        let lowest = f64::from(arrow_height + track_height - heights.iter().copied().max().unwrap_or(0));
+        let placed = spread_years(&wanted, f64::from(arrow_height), lowest);
+        for ((label, height), y) in labels.iter().zip(&heights).zip(placed) {
+            label.set_child_visible(y.is_some());
+            if let Some(y) = y {
                 #[expect(clippy::cast_possible_truncation, reason = "pixel positions")]
                 label.allocate(
                     (width - YEAR_INSET).max(1),
-                    label_height,
+                    *height,
                     -1,
                     Some(translate(YEAR_INSET, y.round() as i32)),
                 );
@@ -460,6 +468,44 @@ impl GalleryScrubber {
     pub(crate) fn step(&self, up: bool) {
         self.step_by(up);
     }
+}
+
+/// Where each year mark goes, from where it starts in the scroll,
+/// `wanted`, between `top` and `lowest`: marks closer than
+/// [`YEAR_SPACING`] move apart, down first and then back up from the
+/// bottom, so every year shows, as each has photos; only when the track
+/// has no room for them all is a year that would sit too close to the one
+/// above left out (`None`). Years with few photos used to be dropped while
+/// there was room, so the scale skipped years.
+fn spread_years(wanted: &[f64], top: f64, lowest: f64) -> Vec<Option<f64>> {
+    let count = wanted.len();
+    let room = lowest - top;
+    #[expect(clippy::cast_precision_loss, reason = "a few dozen years")]
+    let fits = count <= 1 || room >= YEAR_SPACING * (count - 1) as f64;
+    if !fits {
+        let mut last = f64::NEG_INFINITY;
+        return wanted
+            .iter()
+            .map(|&y| {
+                let shows = y - last >= YEAR_SPACING;
+                shows.then(|| {
+                    last = y;
+                    y
+                })
+            })
+            .collect();
+    }
+    let mut placed: Vec<f64> = Vec::with_capacity(count);
+    for &y in wanted {
+        let y = placed.last().map_or(y, |above| y.max(above + YEAR_SPACING));
+        placed.push(y.max(top));
+    }
+    let mut below = lowest + YEAR_SPACING;
+    for y in placed.iter_mut().rev() {
+        *y = y.min(below - YEAR_SPACING);
+        below = *y;
+    }
+    placed.into_iter().map(Some).collect()
 }
 
 fn translate(x: i32, y: i32) -> gtk::gsk::Transform {

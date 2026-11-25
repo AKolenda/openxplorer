@@ -18,7 +18,7 @@ use ox_core::location::{normalise_location, parent_location, validate_name, Item
 use ox_core::ops::CreatedItem;
 use ox_core::transfer::Cancellation;
 
-use crate::archive_view::{compressed_file_name, compression_success_text, ZIP_ENDING};
+use crate::archive_view::{compressed_file_name, left_out_text, ZIP_ENDING};
 use crate::dialog::{check_row, DialogFrame, DialogWidth};
 
 use super::transfer_panel::TransferKind;
@@ -238,10 +238,18 @@ impl BrowserWindow {
                         if let Ok(created) = &outcome {
                             window.remember_created_archive(created);
                         }
+                        let left_out = outcome.as_ref().ok().and_then(left_out_text);
                         let outcome = outcome
-                            .map(|created| compression_success_text(&created))
+                            .map(|_| String::new())
                             .map_err(|error| crate::archive_view::compression_failure_text(&error));
                         window.report_in_folder(&folder, outcome, crate::archive_view::COMPRESSION_STOPPED);
+                        // An archive that lacks selected items says so (ARC-023).
+                        if let Some(text) = left_out {
+                            window.show_result_dialog(
+                                &ox_core::i18n::gettext(crate::archive_view::ITEMS_LEFT_OUT),
+                                &text,
+                            );
+                        }
                     }
                 }
             }

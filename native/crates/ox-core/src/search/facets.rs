@@ -459,8 +459,9 @@ impl FacetMatcher {
     /// unknown size, passes no size.
     pub fn matches(&self, entry: &Entry) -> bool {
         let in_range = self.range.is_none_or(|(from, until)| {
-            let modified = entry.modified.and_then(|seconds| i64::try_from(seconds).ok());
-            modified.is_some_and(|seconds| (from..until).contains(&seconds))
+            entry
+                .modified
+                .is_some_and(|seconds| (from..until).contains(&seconds))
         });
         let in_size = self.size.is_none_or(|(from, until)| {
             !entry.is_dir && entry.size.is_some_and(|size| (from..=until).contains(&size))
@@ -480,7 +481,7 @@ mod tests {
         let file = gio::File::for_uri(&format!("file:///tmp/{name}"));
         let mut entry = entry_from_info(&file, &info);
         entry.content_type = Some(content_type.to_owned());
-        entry.modified = modified;
+        entry.modified = modified.and_then(|seconds| i64::try_from(seconds).ok());
         entry
     }
 

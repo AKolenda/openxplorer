@@ -248,7 +248,9 @@ popover.ox-menu.compact list > row {
   padding: 0 11px;
   border-radius: 4px;
 }
-popover.ox-menu.compact list > separator { margin: 1px 0; }
+/* 9px from row to row across a line, as Windows 11's context menu
+   spaces its groups (41px row to row there, 32px within a group). */
+popover.ox-menu.compact list > separator { margin: 4px 0; }
 /* Windows 11's labeled strip: up to six buttons of equal width, each an
    icon with its label under it, set apart by thin lines. */
 popover.ox-menu .context-strip { padding: 2px; border-bottom: 1px solid @ox_border; margin-bottom: 2px; }

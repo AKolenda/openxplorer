@@ -66,7 +66,7 @@ const EXIF_TYPES: [&str; 8] = [
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct KnownDate {
     size: Option<u64>,
-    modified: Option<u64>,
+    modified: Option<i64>,
     facts: PhotoFacts,
 }
 

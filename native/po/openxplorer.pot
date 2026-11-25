@@ -425,23 +425,52 @@ msgstr[1] ""
 msgid "{name} — Compressed folder"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/archive_view/compress.rs
-msgid "Compressed {item_count} items into {name}."
-msgstr ""
-
 #: crates/ox-app/src/archive_view/compress.rs
 msgid "Compression stopped"
 msgstr ""
 
-#. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/archive_view/compress.rs
-msgid "{compressed} {skipped_count} links or special files were left out."
+msgid "Some items were not compressed"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/compress.rs
+msgid "a link on a server or device"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/compress.rs
+msgid "a link to a folder that holds it"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/compress.rs
+msgid "a link whose target cannot be found"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/compress.rs
+msgid "a name that is not valid text"
+msgstr ""
+
+#: crates/ox-app/src/archive_view/compress.rs
+msgid "a special file, which holds no data"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/archive_view/compress.rs
 msgid "{error}\n\nNo existing file was replaced."
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/archive_view/compress.rs
+msgid "{name} ({reason})"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/archive_view/compress.rs
+msgid "{name} was created without these items:\n\n{items}"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/archive_view/compress.rs
+msgid "…and {count} more."
 msgstr ""
 
 #: crates/ox-app/src/archive_view/extract_dialog.rs crates/ox-app/src/window/compress_dialog.rs crates/ox-app/src/window/file_ops/links.rs crates/ox-app/src/window/place_editor.rs
@@ -2275,6 +2304,11 @@ msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/shortcut_tab.rs
 msgid "Target"
+msgstr ""
+
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/properties/general_tab.rs crates/ox-app/src/properties/selection_attributes.rs
+msgid "The item could not be hidden or shown. {error}"
 msgstr ""
 
 #: crates/ox-app/src/properties/general_tab.rs
@@ -4664,7 +4698,7 @@ msgid "Local changes update the index after a short debounce. Watching uses up t
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexed_folders.rs
-msgid "No folders are indexed yet. Add one below, or pin a folder to Quick access."
+msgid "No folders are indexed. Add one below. Folders pinned to Quick access are indexed while “Index pinned folders automatically” is on."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/indexed_folders.rs
@@ -4726,6 +4760,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/indexed_folders/root_row.rs
 msgid "Frequent"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/indexed_folders/root_row.rs
+msgid "Indexed, some folders could not be read"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
@@ -5664,19 +5702,15 @@ msgstr ""
 msgid "See more"
 msgstr ""
 
-#: crates/ox-app/src/window/command_bar.rs
+#: crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/gallery.rs
 msgid "Set as background"
-msgstr ""
-
-#: crates/ox-app/src/window/command_bar.rs
-msgid "Setting the desktop background is not available yet."
 msgstr ""
 
 #: crates/ox-app/src/window/command_bar.rs
 msgid "Settings (Ctrl+,)"
 msgstr ""
 
-#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs
+#: crates/ox-app/resources/ui/details-pane.ui crates/ox-app/src/window/command_bar.rs crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/share.rs
 msgid "Share"
 msgstr ""
 
@@ -6333,6 +6367,10 @@ msgstr ""
 msgid "{drive} is formatted."
 msgstr ""
 
+#: crates/ox-app/src/window/empty_page.rs crates/ox-core/src/system_error.rs
+msgid "Access is denied."
+msgstr ""
+
 #: crates/ox-app/src/window/empty_page.rs
 msgid "Create a folder or paste files here."
 msgstr ""
@@ -6363,7 +6401,19 @@ msgid "Photos in your Pictures folder show here."
 msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
+msgid "The file name or path is too long."
+msgstr ""
+
+#: crates/ox-app/src/window/empty_page.rs
 msgid "This archive can't be opened"
+msgstr ""
+
+#: crates/ox-app/src/window/empty_page.rs
+msgid "This folder can't be found. It may have been moved or deleted."
+msgstr ""
+
+#: crates/ox-app/src/window/empty_page.rs
+msgid "This folder can't be opened."
 msgstr ""
 
 #: crates/ox-app/src/window/empty_page.rs
@@ -7337,6 +7387,10 @@ msgstr ""
 msgid "Show all"
 msgstr ""
 
+#: crates/ox-app/src/window/gallery.rs
+msgid "This desktop has no way for apps to set its background: its desktop portal has no wallpaper service. Set the background in the desktop's own settings."
+msgstr ""
+
 #: crates/ox-app/src/window/gallery_locations.rs
 msgid "Add a folder to Gallery"
 msgstr ""
@@ -7967,9 +8021,17 @@ msgstr ""
 msgid "This service action changed or no longer matches the selection. Configure it again."
 msgstr ""
 
+#: crates/ox-app/src/window/share.rs
+msgid "Opening your email app…"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/share.rs
 msgid "Share can attach up to {count} files to one email."
+msgstr ""
+
+#: crates/ox-app/src/window/share.rs
+msgid "This desktop has no way to send files by email: no email app is set up, or its desktop portal has no email service. Set up an email app, then share again."
 msgstr ""
 
 #: crates/ox-app/src/window/shortcuts_window.rs
@@ -9774,6 +9836,10 @@ msgid "{error} The drive could not be mounted again."
 msgstr ""
 
 #: crates/ox-core/src/integration/email_portal.rs
+msgid "No email app is set up, so the email could not be written. Choose an email app in your desktop's settings, then share again."
+msgstr ""
+
+#: crates/ox-core/src/integration/email_portal.rs
 msgid "The email app could not be opened."
 msgstr ""
 
@@ -9901,6 +9967,14 @@ msgstr ""
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-core/src/integration/terminal/error.rs
 msgid "{terminal} could not start (exit {code}). Check your terminal installation and desktop session."
+msgstr ""
+
+#: crates/ox-core/src/integration/wallpaper_portal.rs
+msgid "The desktop background could not be set."
+msgstr ""
+
+#: crates/ox-core/src/integration/wallpaper_portal.rs
+msgid "The picture could not be opened."
 msgstr ""
 
 #: crates/ox-core/src/location.rs
@@ -10991,10 +11065,6 @@ msgstr ""
 
 #: crates/ox-core/src/system_error.rs
 msgid "A device which does not exist was specified."
-msgstr ""
-
-#: crates/ox-core/src/system_error.rs
-msgid "Access is denied."
 msgstr ""
 
 #: crates/ox-core/src/system_error.rs

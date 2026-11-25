@@ -33,7 +33,7 @@ fn local_now() -> glib::DateTime {
 
 /// A file's size and modification time, which tell whether it changed
 /// since a search of its contents read it.
-pub(super) type FileStamp = (Option<u64>, Option<u64>);
+pub(super) type FileStamp = (Option<u64>, Option<i64>);
 
 /// The size and modification time of `entry`.
 fn stamp(entry: &Entry) -> FileStamp {

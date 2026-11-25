@@ -25,7 +25,7 @@ use gtk::{gdk, glib};
 use ox_core::settings::Preferences;
 use ox_core::windows_glyphs::{GlyphRequest, LoadedGlyphs};
 
-use super::icon::ALL_ICONS;
+use super::icon::{ALL_ICONS, COMMAND_ROLES};
 use super::Icon;
 
 /// A glyph of Segoe Fluent Icons: its codepoint and the name Microsoft's
@@ -76,6 +76,12 @@ pub(crate) const fn windows_source(icon: Icon) -> WindowsSource {
         Icon::ArrowRedo => glyph(0xE7A6, "Redo"),
         Icon::ArrowRight => glyph(0xE72A, "Forward"),
         Icon::ArrowSort => glyph(0xE8CB, "Sort"),
+        // The command bar's rotate commands (Set as background is with
+        // Image). Windows 11 draws them as two-tone pictures, not font
+        // glyphs; these are the nearest glyphs of Microsoft's table, drawn
+        // in the bar's colour as Cut's is.
+        Icon::RotateLeft => glyph(0xE80D, "RotateMapLeft"),
+        Icon::RotateRight => glyph(0xE80C, "RotateMapRight"),
         Icon::ArrowUndo => glyph(0xE7A7, "Undo"),
         Icon::ArrowUp => glyph(0xE74A, "Up"),
         Icon::Bluetooth => glyph(0xE702, "Bluetooth"),
@@ -108,7 +114,8 @@ pub(crate) const fn windows_source(icon: Icon) -> WindowsSource {
         Icon::HardDrive => glyph(0xEDA2, "HardDrive"),
         Icon::History => glyph(0xE81C, "History"),
         Icon::Home => glyph(0xE80F, "Home"),
-        Icon::Image => glyph(0xE8B9, "Picture"),
+        // Set as background takes the same Picture glyph.
+        Icon::Image | Icon::SetAsBackground => glyph(0xE8B9, "Picture"),
         Icon::Info => glyph(0xE946, "Info"),
         Icon::Laptop => glyph(0xE7F8, "DeviceLaptopNoPic"),
         Icon::Link => glyph(0xE71B, "Link"),
@@ -313,7 +320,7 @@ fn glyph_icon_name(icon: Icon, size: i32) -> String {
     if em_of(icon, size) == size {
         return full_glyph_name(icon);
     }
-    let name = icon.name();
+    let name = glyph_key(icon);
     let stem = name.strip_prefix("ox-").unwrap_or(name);
     let stem = stem.strip_suffix("-symbolic").unwrap_or(stem);
     format!("ox-win-{stem}-box{size}-symbolic")
@@ -322,9 +329,27 @@ fn glyph_icon_name(icon: Icon, size: i32) -> String {
 /// The name of `icon`'s glyph drawn at an em filling its square, which
 /// any square can show: `ox-win-add-20-symbolic` for `ox-add-20-symbolic`.
 fn full_glyph_name(icon: Icon) -> String {
-    let name = icon.name();
+    let name = glyph_key(icon);
     let stem = name.strip_prefix("ox-").unwrap_or(name);
     format!("ox-win-{stem}")
+}
+
+/// The name `icon`'s glyph is kept under: its own file's name, or for a
+/// command role that draws another icon's file ([`COMMAND_ROLES`]), a
+/// name of its own, so its glyph never replaces that icon's.
+const fn glyph_key(icon: Icon) -> &'static str {
+    match icon {
+        Icon::RotateLeft => "ox-rotate-left-20-symbolic",
+        Icon::RotateRight => "ox-rotate-right-20-symbolic",
+        Icon::SetAsBackground => "ox-set-as-background-20-symbolic",
+        _ => icon.name(),
+    }
+}
+
+/// Every icon a glyph may stand for: the bundled icons and the command
+/// roles.
+fn glyph_icons() -> impl Iterator<Item = Icon> {
+    ALL_ICONS.into_iter().chain(COMMAND_ROLES)
 }
 
 /// The bundled icon a drawn icon name stands for: itself, or the icon a
@@ -345,14 +370,14 @@ fn icon_named(name: &str) -> Option<Icon> {
         format!("ox-{rest}")
     });
     let name = bundled.as_deref().unwrap_or(name);
-    ALL_ICONS.into_iter().find(|icon| icon.name() == name)
+    glyph_icons().find(|icon| glyph_key(*icon) == name)
 }
 
 /// What the font is asked for: each glyph at an em filling its square,
 /// and in each of [`PADDED_SQUARES`] where its em is smaller.
 fn glyph_requests() -> Vec<GlyphRequest> {
     let mut requests = Vec::new();
-    for icon in ALL_ICONS {
+    for icon in glyph_icons() {
         let Some(glyph) = glyph_of(icon) else {
             continue;
         };
@@ -466,7 +491,7 @@ pub(crate) fn drawn_name(icon: Icon, size: i32) -> &'static str {
         // keeping them for the life of the process is bounded.
         state
             .names
-            .entry((own, square))
+            .entry((glyph_key(icon), square))
             .or_insert_with(|| Box::leak(name.into_boxed_str()))
     })
 }
@@ -511,8 +536,7 @@ pub(crate) fn follow_preferences(preferences: &Preferences) {
             if state.generation != generation {
                 return false;
             }
-            let found = ALL_ICONS
-                .into_iter()
+            let found = glyph_icons()
                 .filter(|icon| glyph_of(*icon).is_some() && loaded.contains(&glyph_icon_name(*icon, 16)))
                 .count();
             state.status = Status::Ready {
@@ -530,10 +554,7 @@ pub(crate) fn follow_preferences(preferences: &Preferences) {
 
 /// How many bundled icons have a glyph of the font.
 pub(crate) fn glyph_count() -> usize {
-    ALL_ICONS
-        .into_iter()
-        .filter(|icon| glyph_of(*icon).is_some())
-        .count()
+    glyph_icons().filter(|icon| glyph_of(*icon).is_some()).count()
 }
 
 /// Where the glyphs of the chosen font stand now.

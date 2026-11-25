@@ -289,7 +289,7 @@ fn round_half_up(numerator: u128, denominator: u128) -> u128 {
 /// Local date for the Date modified column, for example `9/26/2026` in
 /// the US, `26.09.2026` in Germany or `2026年09月26日` in Japan; `—` when
 /// the time is unknown (`None`) or out of range.
-pub fn date_text(unix_seconds: Option<u64>) -> String {
+pub fn date_text(unix_seconds: Option<impl UnixSeconds>) -> String {
     unix_seconds
         .and_then(local_time)
         .and_then(|time| format_date(&time))
@@ -302,7 +302,7 @@ pub fn date_text(unix_seconds: Option<u64>) -> String {
 /// Germany; `Not provided` when the time is unknown (`None`) or out of
 /// range. See the module documentation for how this differs from the web
 /// UI.
-pub fn date_time_text(unix_seconds: Option<u64>) -> String {
+pub fn date_time_text(unix_seconds: Option<impl UnixSeconds>) -> String {
     unix_seconds
         .and_then(local_time)
         .and_then(|time| format_date_time(&time))
@@ -313,7 +313,7 @@ pub fn date_time_text(unix_seconds: Option<u64>) -> String {
 /// Windows Explorer and Dolphin show it: the [`date_text`] date and the
 /// locale's clock time without seconds, for example `9/26/2026 7:35 PM`
 /// in the US or `26.09.2026 19:35` in Germany; `—` when unknown.
-pub fn date_short_time_text(unix_seconds: Option<u64>) -> String {
+pub fn date_short_time_text(unix_seconds: Option<impl UnixSeconds>) -> String {
     unix_seconds
         .and_then(local_time)
         .and_then(|time| format_date_short_time_with(&time, locale_pattern::current(), clock_format()))
@@ -323,7 +323,7 @@ pub fn date_short_time_text(unix_seconds: Option<u64>) -> String {
 /// The Date modified column's text in `style`: "Today at 7:35 PM" or
 /// "Yesterday at 7:35 PM" for recent dates in [`DateStyle::Relative`],
 /// else [`date_short_time_text`] (VIEW-004).
-pub fn column_date_text(unix_seconds: Option<u64>, style: DateStyle) -> String {
+pub fn column_date_text(unix_seconds: Option<impl UnixSeconds>, style: DateStyle) -> String {
     column_date_text_at(unix_seconds, style, DateTime::now_local().ok().as_ref())
 }
 
@@ -331,7 +331,11 @@ pub fn column_date_text(unix_seconds: Option<u64>, style: DateStyle) -> String {
 /// at" count from `now`'s day, so a view that follows the calendar past
 /// midnight writes them from the moment it draws. Without `now` dates are
 /// written in full.
-pub fn column_date_text_at(unix_seconds: Option<u64>, style: DateStyle, now: Option<&DateTime>) -> String {
+pub fn column_date_text_at(
+    unix_seconds: Option<impl UnixSeconds>,
+    style: DateStyle,
+    now: Option<&DateTime>,
+) -> String {
     let relative = || {
         let time = local_time(unix_seconds?)?;
         relative_date::relative_text(&time, now?, locale_pattern::current(), clock_format())
@@ -346,7 +350,7 @@ pub fn column_date_text_at(unix_seconds: Option<u64>, style: DateStyle, now: Opt
 /// The Properties window's Accessed text: `Tuesday, October 20, 2026,
 /// 14:24:52`, with `Today` or `Yesterday` for the weekday of those days;
 /// `Not provided` when the time is unknown.
-pub fn long_date_time_text(unix_seconds: Option<u64>) -> String {
+pub fn long_date_time_text(unix_seconds: Option<impl UnixSeconds>) -> String {
     unix_seconds
         .and_then(local_time)
         .and_then(|time| {
@@ -360,7 +364,7 @@ pub fn long_date_time_text(unix_seconds: Option<u64>) -> String {
 /// it: `Monday, November 9, 2026, 4:02:34 PM`, always with the weekday,
 /// even for today and yesterday, on the locale's or the chosen clock;
 /// `Not provided` when the time is unknown.
-pub fn weekday_date_time_text(unix_seconds: Option<u64>) -> String {
+pub fn weekday_date_time_text(unix_seconds: Option<impl UnixSeconds>) -> String {
     unix_seconds
         .and_then(local_time)
         .and_then(|time| {
@@ -423,9 +427,34 @@ fn without_seconds(pattern: &str) -> String {
 
 /// The local time for a Unix timestamp; `None` for times a [`DateTime`]
 /// cannot hold.
-fn local_time(unix_seconds: u64) -> Option<DateTime> {
-    let seconds = i64::try_from(unix_seconds).ok()?;
-    DateTime::from_unix_local(seconds).ok()
+fn local_time(unix_seconds: impl UnixSeconds) -> Option<DateTime> {
+    DateTime::from_unix_local(unix_seconds.signed()?).ok()
+}
+
+/// A time in seconds since the Unix epoch: signed, as `time::modified`
+/// is, so a file from 1960 or from 1 January 1970 shows its date as
+/// Windows shows it, or unsigned, as other times are kept.
+pub trait UnixSeconds: Copy {
+    /// The seconds, signed; `None` past what an `i64` holds.
+    fn signed(self) -> Option<i64>;
+}
+
+impl UnixSeconds for i64 {
+    fn signed(self) -> Option<i64> {
+        Some(self)
+    }
+}
+
+impl UnixSeconds for i32 {
+    fn signed(self) -> Option<i64> {
+        Some(i64::from(self))
+    }
+}
+
+impl UnixSeconds for u64 {
+    fn signed(self) -> Option<i64> {
+        i64::try_from(self).ok()
+    }
 }
 
 #[cfg(test)]
@@ -634,8 +663,8 @@ mod tests {
     /// parity: VIEW-001
     #[test]
     fn unknown_times_use_the_web_placeholders() {
-        assert_eq!(date_text(None), "—");
-        assert_eq!(date_time_text(None), "Not provided");
+        assert_eq!(date_text(None::<i64>), "—");
+        assert_eq!(date_time_text(None::<i64>), "Not provided");
         assert_eq!(date_text(Some(u64::MAX)), "—");
         assert_eq!(date_time_text(Some(u64::MAX)), "Not provided");
     }
@@ -682,7 +711,7 @@ mod tests {
         );
         assert_eq!(without_seconds("%H:%M:%S"), "%H:%M");
         assert_eq!(without_seconds("%H시 %M분 %S초"), "%H시 %M분");
-        assert_eq!(date_short_time_text(None), "—");
+        assert_eq!(date_short_time_text(None::<i64>), "—");
     }
 
     /// The deliberate change from the web UI's `timestamp`, described in

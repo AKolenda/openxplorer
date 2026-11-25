@@ -36,7 +36,7 @@ pub(crate) fn cell_text(column: SortColumn, item: &FileItem, dates: DateStyle) -
     // "Today at" counts from the clock the date groups count from, so the
     // rows and their headings follow midnight together.
     let now = crate::folder_view::groups::local_now();
-    let date_text = |time: Option<u64>| format::column_date_text_at(time, dates, now.as_ref());
+    let date_text = |time: Option<i64>| format::column_date_text_at(time, dates, now.as_ref());
     match column {
         SortColumn::Name => entry.name.clone(),
         SortColumn::Modified => date_text(entry.modified),

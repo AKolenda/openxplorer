@@ -2251,7 +2251,7 @@ mod tests {
             ],
         );
         let window = &portal.test.window;
-        assert_eq!(window.title().as_deref(), Some("Save as"));
+        assert_eq!(window.title().as_deref(), Some("Save As"));
         let mut names = portal.test.names();
         names.sort();
         assert_eq!(

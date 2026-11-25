@@ -30,7 +30,7 @@ impl SearchHit {
             size: self.size,
             type_label: self.type_label,
             content_type: None,
-            modified: self.modified,
+            modified: self.modified.and_then(|seconds| i64::try_from(seconds).ok()),
             is_hidden: self.is_hidden,
             is_symlink: false,
             trash_orig_path: None,

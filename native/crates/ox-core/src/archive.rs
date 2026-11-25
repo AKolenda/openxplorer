@@ -76,7 +76,7 @@ pub use browse::{
 pub use copies::{
     copied_member, copies_root, copy_folder_name, prepare_copies_root, remove_old_copies, COPY_LIFETIME,
 };
-pub use create::{CompressionRequest, CreatedArchive, ZipCompressor};
+pub use create::{CompressionRequest, CreatedArchive, LeftOutItem, LeftOutReason, ZipCompressor};
 pub use error::ArchiveError;
 pub use extract::{
     lift_same_named_folder, lift_single_folder, private_extraction_name, ExtractedFolder, ExtractionLimits,

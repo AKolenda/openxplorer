@@ -69,7 +69,7 @@
                         </style>
                         <child>
                           <object class="OxArtImage" id="small_art">
-                            <property name="valign">start</property>
+                            <property name="valign">center</property>
                             <property name="accessible-role">presentation</property>
                           </object>
                         </child>
@@ -169,7 +169,7 @@
                       <!-- The names in a column of their own, the values beside
                            them, each row 10 pixels below the one before. -->
                       <object class="GtkGrid" id="properties">
-                        <property name="row-spacing">10</property>
+                        <property name="row-spacing">8</property>
                         <property name="column-spacing">12</property>
                       </object>
                     </child>

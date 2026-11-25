@@ -9,6 +9,7 @@
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -470,9 +471,15 @@ fn a_partial_or_failed_folder_count_is_never_shown_as_exact() {
     );
 }
 
+/// Whether the `.hidden` list of the folder at `folder` names `name`.
+fn hidden_list_names(folder: &Path, name: &str) -> bool {
+    fs::read_to_string(folder.join(".hidden")).is_ok_and(|list| list.lines().any(|line| line == name))
+}
+
 /// Edit... after Apply on General changes the item as it is now: Read-only
-/// stays, and after Hidden renamed the file Edit changes the file under its
-/// new name, never an unrelated file that took the old one.
+/// stays, and Hidden, which lists the name in the folder's `.hidden` list
+/// as Windows sets the attribute, leaves the name, so Edit changes the
+/// same file.
 ///
 /// parity: PROP-007
 #[gtk::test]
@@ -489,20 +496,19 @@ fn edit_after_general_changes_the_item_as_it_is_now() {
     check(&general_page, "Read-only").set_active(true);
     check(&general_page, "Hidden").set_active(true);
     press(&window, "Apply");
-    let hidden = fixture.path(".Notes 2.txt");
-    wait_until("the hidden name", || hidden.exists());
+    let hidden = path.clone();
+    wait_until("the hidden name", || {
+        hidden_list_names(fixture.root(), "Notes 2.txt")
+    });
     wait_until("Read-only", || mode_of(&hidden) == 0o444);
-    // Another file takes the old name.
-    fs::write(&path, b"unrelated").expect("a file");
-    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).expect("a known mode");
     window.select_tab("security");
     let security = tab(&window, "security");
     wait_until("the Security tab read again", || {
-        texts(&security).iter().any(|text| text.ends_with(".Notes 2.txt"))
+        texts(&security).iter().any(|text| text.ends_with("Notes 2.txt"))
     });
 
     press(&security, "Edit...");
-    let edit = sub_dialog(&window, "Permissions for .Notes 2.txt");
+    let edit = sub_dialog(&window, "Permissions for Notes 2.txt");
     let names = descendants::<gtk::ListBox>(&edit).remove(0);
     names.select_row(names.row_at_index(2).as_ref());
     let read = descendants::<gtk::CheckButton>(&edit)
@@ -515,7 +521,6 @@ fn edit_after_general_changes_the_item_as_it_is_now() {
     edit.ok_button().emit_clicked();
 
     wait_until("the change", || mode_of(&hidden) == 0o440);
-    assert_eq!(mode_of(&path), 0o600, "the unrelated file is untouched");
 }
 
 /// Tabs taller than the screen, as at a large text size, scroll inside
@@ -1150,8 +1155,10 @@ fn alt_and_an_underlined_letter_press_the_properties_controls() {
     press_alt(&mut pointer, gtk::gdk::Key::h);
     wait_until("Alt+H ticks Hidden", || hidden.is_active());
     press_alt(&mut pointer, gtk::gdk::Key::a);
-    let hidden_path = fixture.path(".Notes 2.txt");
-    wait_until("Alt+A applies", || hidden_path.exists());
+    let hidden_path = fixture.path("Notes 2.txt");
+    wait_until("Alt+A applies", || {
+        hidden_list_names(fixture.root(), "Notes 2.txt")
+    });
     wait_until("Read-only applied", || mode_of(&hidden_path) & 0o222 == 0);
 
     window.select_tab("security");
@@ -1206,15 +1213,16 @@ fn an_item_that_cannot_be_renamed_greys_its_name_and_hidden() {
     );
 }
 
-/// Hidden adds a leading dot to the name on Apply, and a taken name is
-/// refused with the normal message.
+/// Hidden lists the name in the folder's `.hidden` list on Apply, as
+/// Windows sets the Hidden attribute, and never renames the item, so
+/// links and other apps' lists still find it; clearing it takes the name
+/// off the list.
 ///
 /// parity: PROP-005
 #[gtk::test]
-fn hidden_renames_with_a_leading_dot() {
+fn hidden_lists_the_name_without_renaming() {
     let fixture = Fixture::standard();
-    fs::write(fixture.path("Taken.txt"), b"keep").expect("a file");
-    fs::write(fixture.path(".Taken.txt"), b"hidden").expect("a file");
+    fs::write(fixture.path(".hidden"), "Other.txt\n").expect("a list");
     let test = TestWindow::open(&fixture.uri());
     test.select_named("Notes 2.txt");
     test.activate("properties", None);
@@ -1223,22 +1231,26 @@ fn hidden_renames_with_a_leading_dot() {
     check(&general(&window), "Hidden").set_active(true);
     press(&window, "Apply");
 
-    wait_until("the hidden name", || fixture.path(".Notes 2.txt").exists());
-    assert!(!fixture.path("Notes 2.txt").exists());
-    wait_until("the new title", || window.title_text() == ".Notes 2 Properties");
-    assert_eq!(name_field(&window).text(), ".Notes 2");
+    wait_until("the name listed", || {
+        hidden_list_names(fixture.root(), "Notes 2.txt")
+    });
+    assert!(fixture.path("Notes 2.txt").exists(), "the name stays");
+    assert!(hidden_list_names(fixture.root(), "Other.txt"), "other lines stay");
+    assert_eq!(window.title_text(), "Notes 2 Properties");
+    // GLib reads the folder's list again only some seconds after it last
+    // read it, so the view follows within that time.
+    crate::test_support::harness::wait_for(std::time::Duration::from_secs(11));
+    wait_until("the view hides it", || {
+        !test.names().contains(&"Notes 2.txt".to_owned())
+    });
 
-    test.select_named("Taken.txt");
-    test.activate("properties", None);
-    let taken = test.wait_for_properties("Taken Properties");
-    check(&general(&taken), "Hidden").set_active(true);
-    taken.ok_button().emit_clicked();
-    let refusal = message_over(&taken);
-    assert!(!refusal.message_text().is_empty());
-    refusal.press("OK");
-    assert!(!taken.is_closed(), "a refused change keeps the window open");
-    assert_eq!(fs::read(fixture.path(".Taken.txt")).expect("kept"), b"hidden");
-    assert_eq!(fs::read(fixture.path("Taken.txt")).expect("kept"), b"keep");
+    check(&general(&window), "Hidden").set_active(false);
+    press(&window, "Apply");
+    wait_until("the name off the list", || {
+        !hidden_list_names(fixture.root(), "Notes 2.txt")
+    });
+    assert!(hidden_list_names(fixture.root(), "Other.txt"));
+    window.close();
 }
 
 /// The name renames the item on OK, refusing a taken name in a message
@@ -1691,8 +1703,8 @@ fn properties_of_several_items_total_them_and_change_them_together() {
 
 /// Several items' Read-only and Hidden are half ticked where the items
 /// differ, and OK or Apply gives every item the state chosen: Read-only
-/// takes write from every file, and Hidden adds a leading dot to each
-/// name, as one item's do, and the title follows the new names.
+/// takes write from every file, and Hidden lists every name in the
+/// folder's `.hidden` list, as one item's do, renaming nothing.
 ///
 /// parity: PROP-002
 #[gtk::test]
@@ -1731,15 +1743,12 @@ fn several_items_attributes_show_mixed_and_apply_to_every_item() {
     press(&window, "Apply");
 
     wait_until("every name hidden", || {
-        fixture.path(".Notes 2.txt").exists() && fixture.path(".Notes 10.txt").exists()
+        hidden_list_names(fixture.root(), "Notes 2.txt") && hidden_list_names(fixture.root(), "Notes 10.txt")
     });
-    wait_until("the new title", || {
-        window.title_text() == ".Notes 2.txt, .Notes 10.txt Properties"
-    });
-    for name in [".Notes 2.txt", ".Notes 10.txt"] {
+    assert_eq!(window.title_text(), "Notes 2.txt, Notes 10.txt Properties");
+    for name in ["Notes 2.txt", "Notes 10.txt"] {
         assert_eq!(mode_of(&fixture.path(name)) & 0o222, 0, "{name} is read-only");
     }
-    assert!(!fixture.path("Notes 2.txt").exists() && !fixture.path("Notes 10.txt").exists());
     assert!(hidden.is_active() && read_only.is_active());
     assert!(!window.apply_button().is_sensitive(), "nothing is left to apply");
     window.close();
@@ -2360,7 +2369,8 @@ fn a_file_without_snapshots_explains_that_none_were_found() {
             .any(|text| text == "There are no previous versions available.")
     });
     assert!(versions.texts().iter().any(|text| text == "File versions:"));
-    assert!(versions
+    // A file on this computer has no server to mention, as in Windows.
+    assert!(!versions
         .texts()
         .iter()
         .any(|text| text.starts_with("No matching previous versions were found")));

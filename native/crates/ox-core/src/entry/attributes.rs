@@ -24,18 +24,21 @@ pub(super) fn optional_boolean(info: &gio::FileInfo, attribute: &str) -> Option<
     info.has_attribute(attribute).then(|| info.boolean(attribute))
 }
 
-/// A time attribute (`time::modified`) in seconds since the Unix epoch;
-/// `None` when the backend did not report it.
-///
-/// A reported 0 is unknown too. The Python app sent 0 for a missing time
-/// and the web interface showed every 0 as unknown (`dateText` and
-/// `timestamp` in `v2.0.0:desktop/ui/app.js`), never as 1 January 1970.
-pub(super) fn time_attribute(info: &gio::FileInfo, attribute: &str) -> Option<u64> {
+/// A signed time attribute (`time::modified`) in seconds since the Unix
+/// epoch; `None` only when the backend did not report it. GIO keeps the
+/// signed seconds of `stat` in an unsigned attribute, so a date before 1970
+/// reads back as the same bits, and 0 is 1 January 1970, a real date, as
+/// Windows shows it (its file times count from 1601).
+pub(super) fn signed_time_attribute(info: &gio::FileInfo, attribute: &str) -> Option<i64> {
     if !info.has_attribute(attribute) {
         return None;
     }
-    let seconds = info.attribute_uint64(attribute);
-    (seconds != 0).then_some(seconds)
+    #[expect(
+        clippy::cast_possible_wrap,
+        reason = "GIO stores the signed seconds in these bits"
+    )]
+    let seconds = info.attribute_uint64(attribute) as i64;
+    Some(seconds)
 }
 
 /// A path attribute (`thumbnail::path`, `trash::orig-path`), byte for byte.

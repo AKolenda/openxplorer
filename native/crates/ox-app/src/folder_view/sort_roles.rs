@@ -105,8 +105,9 @@ impl SortRole {
 
 /// The date Gallery files a photo under: when it was taken, from its
 /// EXIF, else when it was last modified.
-pub(crate) fn photo_date(entry: &ox_core::entry::Entry) -> Option<u64> {
-    entry.meta.taken.or(entry.modified)
+pub(crate) fn photo_date(entry: &ox_core::entry::Entry) -> Option<i64> {
+    let taken = entry.meta.taken.and_then(|seconds| i64::try_from(seconds).ok());
+    taken.or(entry.modified)
 }
 
 /// The extension of a file called `name`; folders and names without a dot
@@ -164,7 +165,7 @@ mod tests {
     use super::*;
     use crate::test_support::file_entry;
 
-    fn item_owned_by(name: &str, owner: Option<&str>, created: Option<u64>) -> FileItem {
+    fn item_owned_by(name: &str, owner: Option<&str>, created: Option<i64>) -> FileItem {
         let mut entry = file_entry(name);
         entry.meta.owner = owner.map(str::to_owned);
         entry.meta.created = created;

@@ -95,13 +95,12 @@ fn an_indexed_folder_shows_its_state_and_leaves_the_suggestions() {
 
     settings.test.index_folder(&folder);
 
+    // The standard Quick access folders are indexed too, as pins.
     wait_until("the page to list the folder", || {
         settings
             .indexed_folders()
             .shown_labels()
-            .first()
-            .map(String::as_str)
-            == Some("Indexed")
+            .contains(&"Indexed".to_owned())
     });
     let row = settings.indexed_row("Indexed");
     assert_eq!(label_with_class(&row, "status-chip"), "Ready");
@@ -116,7 +115,11 @@ fn an_indexed_folder_shows_its_state_and_leaves_the_suggestions() {
         "{suggested:?}"
     );
     let card = descendants::<StatusCard>(&settings.page.category_section(Category::Search));
-    assert_eq!(card[0].title(), "Instant search is on for 1 folder");
+    assert!(
+        card[0].title().starts_with("Instant search is on for "),
+        "{}",
+        card[0].title()
+    );
     settings
         .page
         .show_view(SettingsView::Subpage(Subpage::IndexedFolders));

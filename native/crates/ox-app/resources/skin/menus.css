@@ -79,6 +79,13 @@ popover.ox-menu list > row:disabled image.accent-glyph { color: @ox_text_disable
 popover.ox-menu list > row:disabled image { -gtk-icon-palette: success @ox_text_disabled; }
 /* The mark column: a check mark for a toggle, a dot for a choice. */
 popover.ox-menu list > row image.menu-mark { color: @ox_text; }
+/* Windows 11 draws a chosen choice's dot 19px in from the menu's edge
+   and its icon 21px after the dot (measured on its View menu): the dot
+   sits 2px left of the mark column's middle, and the column keeps 1px
+   more before the icons. */
+popover.ox-menu list > row image.menu-dot { -gtk-icon-transform: translateX(-2px); }
+popover.ox-menu list > row image.menu-mark,
+popover.ox-menu list > row .menu-mark-slot { margin-right: 1px; }
 popover.ox-menu list > separator { min-height: 1px; margin: 4px 5px; background-color: @ox_border; }
 /* A row whose submenu is open stays highlighted while the pointer is in the
    submenu, as Windows 11 keeps Show highlighted under View > Show. */

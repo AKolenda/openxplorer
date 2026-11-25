@@ -58,7 +58,7 @@ const LIMITS_NOTE: &str = crate::i18n::message_id(
 
 /// What the "Indexed folders" group says while the index keeps nothing.
 const NOTHING_INDEXED: &str =
-    crate::i18n::message_id("No folders are indexed yet. Add one below, or pin a folder to Quick access.");
+    crate::i18n::message_id("No folders are indexed. Add one below. Folders pinned to Quick access are indexed while “Index pinned folders automatically” is on.");
 
 const ADD_FOLDER: RowText = RowText {
     title: "Add a folder",

@@ -147,7 +147,7 @@ pub(in crate::window) fn preview_page(selection: &[FileItem], rules: PreviewRule
     let kind = content_type.split('/').next().unwrap_or_default();
     let file = PreviewFile {
         uri: uri.to_owned(),
-        modified: entry.modified,
+        modified: entry.modified.and_then(|seconds| u64::try_from(seconds).ok()),
         local_only: !rules.remote_previews,
     };
     if is_rich_text(content_type, &entry.name) {

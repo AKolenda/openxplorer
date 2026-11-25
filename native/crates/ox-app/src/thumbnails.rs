@@ -216,7 +216,8 @@ impl PreviewRequest {
         Some(Self {
             uri: entry.uri.clone(),
             content_type: entry.content_type.clone()?,
-            modified: entry.modified,
+            // The thumbnail cache keeps unsigned times, as its MTime is.
+            modified: entry.modified.and_then(|seconds| u64::try_from(seconds).ok()),
             pixels,
             local_only: false,
             target_uri: stands_for(entry).map(str::to_owned),

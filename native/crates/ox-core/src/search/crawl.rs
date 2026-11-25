@@ -23,7 +23,7 @@ const MAX_DEPTH: usize = 128;
 const TOO_DEEP_MESSAGE: &str = "Some directories exceed the 128-level traversal limit.";
 
 /// Put before the first error of a scan that could not read everything.
-const UNREADABLE_PREFIX: &str = "Some folders could not be read. ";
+pub const UNREADABLE_PREFIX: &str = "Some folders could not be read. ";
 
 /// How often a running scan reports its progress.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(800);

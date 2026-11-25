@@ -321,6 +321,12 @@ impl CommandBar {
             "new-command",
             new_menu(Vec::new()),
         );
+        // Windows 11 opens New's menu with its left edge 1 pixel left of
+        // the button's (measured on its capture); the shared menus open
+        // 1 pixel right of it, so New's moves 2 pixels left.
+        if let Some(popover) = new_button.popover() {
+            popover.set_offset(NEW_MENU_SHIFT, popover.offset().1);
+        }
         group.append(&new_button);
         imp.new_button
             .set(new_button)
@@ -1021,22 +1027,19 @@ fn photo_commands() -> Vec<(gtk::Widget, Option<OverflowEntry>)> {
     };
     let (background, background_entry) = photo_command(
         ox_core::i18n::gettext("Set as background"),
-        Icon::Image,
+        Icon::SetAsBackground,
         WindowAction::SetAsBackground,
         "set-background-command",
     );
-    background.set_tooltip_text(Some(&ox_core::i18n::gettext(
-        "Setting the desktop background is not available yet.",
-    )));
     let (rotate_left, rotate_left_entry) = photo_command(
         ox_core::i18n::gettext("Rotate left"),
-        Icon::ArrowCounterclockwise,
+        Icon::RotateLeft,
         WindowAction::RotateLeft,
         "rotate-left-command",
     );
     let (rotate_right, rotate_right_entry) = photo_command(
         ox_core::i18n::gettext("Rotate right"),
-        Icon::ArrowClockwise,
+        Icon::RotateRight,
         WindowAction::RotateRight,
         "rotate-right-command",
     );
@@ -1087,6 +1090,9 @@ fn text_menu_content(label: &str, glyph: Icon) -> gtk::Box {
 
 /// A command with a label that opens `entries`; `css_class` names it for
 /// the stylesheet and the tests.
+/// How far New's menu opens left of where the shared menus open.
+const NEW_MENU_SHIFT: i32 = -2;
+
 fn text_menu_button(label: &str, glyph: Icon, css_class: &str, entries: Vec<MenuEntry>) -> gtk::MenuButton {
     let button = gtk::MenuButton::builder()
         .child(&text_menu_content(label, glyph))

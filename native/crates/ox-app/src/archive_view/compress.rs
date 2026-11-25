@@ -8,7 +8,7 @@
 //! and so on while a name is taken. The archive is written privately and
 //! published under its name without replacing anything.
 
-use ox_core::archive::{ArchiveError, CreatedArchive};
+use ox_core::archive::{ArchiveError, CreatedArchive, LeftOutReason};
 
 /// The title of the dialog of a failed compression.
 pub(crate) const COMPRESSION_STOPPED: &str = crate::i18n::message_id("Compression stopped");
@@ -54,26 +54,53 @@ pub(crate) fn compression_failure_text(error: &ArchiveError) -> String {
     )
 }
 
-/// The toast after compressing: `Compressed 3 items into Photos.zip.`,
-/// and how many links or special files were left out.
-pub(crate) fn compression_success_text(archive: &CreatedArchive) -> String {
-    let compressed = ox_core::i18n::format_message(
-        "Compressed {item_count} items into {name}.",
-        &[
-            ("item_count", &archive.item_count.to_string()),
-            ("name", &archive.name),
-        ],
-    );
-    if archive.skipped_count == 0 {
-        return compressed;
+/// The title of the message after a compression that left items out.
+pub(crate) const ITEMS_LEFT_OUT: &str = crate::i18n::message_id("Some items were not compressed");
+
+/// How many left-out items the message names before it counts the rest.
+const MAX_NAMED_LEFT_OUT: usize = 20;
+
+/// The message after compressing, when the archive lacks items the user
+/// selected: it names each one and why, as Windows' Compressed (zipped)
+/// Folder names a file it could not add, rather than leaving an
+/// incomplete archive without a word. `None` when nothing was left out.
+pub(crate) fn left_out_text(archive: &CreatedArchive) -> Option<String> {
+    if archive.left_out.is_empty() {
+        return None;
     }
-    ox_core::i18n::format_message(
-        "{compressed} {skipped_count} links or special files were left out.",
-        &[
-            ("compressed", &compressed),
-            ("skipped_count", &archive.skipped_count.to_string()),
-        ],
-    )
+    let mut lines: Vec<String> = archive
+        .left_out
+        .iter()
+        .take(MAX_NAMED_LEFT_OUT)
+        .map(|item| {
+            ox_core::i18n::format_message(
+                "{name} ({reason})",
+                &[("name", &item.name), ("reason", &left_out_reason(item.reason))],
+            )
+        })
+        .collect();
+    let more = archive.left_out.len().saturating_sub(MAX_NAMED_LEFT_OUT);
+    if more > 0 {
+        lines.push(ox_core::i18n::format_message(
+            "…and {count} more.",
+            &[("count", &more.to_string())],
+        ));
+    }
+    Some(ox_core::i18n::format_message(
+        "{name} was created without these items:\n\n{items}",
+        &[("name", &archive.name), ("items", &lines.join("\n"))],
+    ))
+}
+
+/// Why an item is not in the archive, in a few words.
+fn left_out_reason(reason: LeftOutReason) -> String {
+    match reason {
+        LeftOutReason::SpecialFile => ox_core::i18n::gettext("a special file, which holds no data"),
+        LeftOutReason::TargetMissing => ox_core::i18n::gettext("a link whose target cannot be found"),
+        LeftOutReason::Loop => ox_core::i18n::gettext("a link to a folder that holds it"),
+        LeftOutReason::RemoteLink => ox_core::i18n::gettext("a link on a server or device"),
+        LeftOutReason::UnreadableName => ox_core::i18n::gettext("a name that is not valid text"),
+    }
 }
 
 #[cfg(test)]

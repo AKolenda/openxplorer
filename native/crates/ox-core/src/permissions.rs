@@ -14,6 +14,7 @@
 //! lists the choices.
 
 mod accounts;
+pub mod hidden_list;
 
 /// Reads `text` as `/etc/passwd` or `/etc/group`, for the fuzz targets.
 #[cfg(feature = "fuzzing")]

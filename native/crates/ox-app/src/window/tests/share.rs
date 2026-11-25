@@ -29,38 +29,34 @@ fn share_button(test: &TestWindow) -> gtk::Button {
     button_for(test, "win.share")
 }
 
+/// Share shows, as in Windows 11, also where no Email portal can take
+/// files: one without Email, nobody answering, or Email version 1, which
+/// takes no attachments. A click then says why, and asks no portal.
+///
 /// parity: CMD-037
 #[gtk::test]
-fn the_share_button_is_named_share_and_hidden_without_an_email_portal() {
+fn share_shows_without_an_email_portal_and_says_why() {
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
     let button = share_button(&test);
     assert_eq!(button.tooltip_text().as_deref(), Some("Share"));
     let settings_only = SettingsPortal::serving(&[]);
-
-    use_portal(&test, &settings_only.name());
-    assert!(!button.is_visible(), "a portal without Email cannot share");
-    use_portal(&test, crate::window::share::NO_PORTAL);
-    assert!(!button.is_visible(), "nobody answers under that name");
-}
-
-/// Version 1 of the Email portal has no `attachment_fds`, which version
-/// 2 brought, so it would open an email without the files: Share shows
-/// only from version 2.
-///
-/// parity: CMD-037
-#[gtk::test]
-fn share_needs_an_email_portal_that_takes_attachments() {
-    let fixture = Fixture::standard();
-    let test = laid_out(&fixture.uri());
-    let button = share_button(&test);
     let first = EmailPortal::of_version(1, 0);
-    let second = EmailPortal::of_version(2, 0);
+    for portal in [
+        settings_only.name(),
+        crate::window::share::NO_PORTAL.to_owned(),
+        first.name(),
+    ] {
+        use_portal(&test, &portal);
+        assert!(button.is_visible(), "{portal}: Share shows");
+    }
+    select_names(&test, &["Notes 2.txt"]);
+    assert!(button.is_sensitive(), "a file can be shared");
 
-    use_portal(&test, &first.name());
-    assert!(!button.is_visible(), "version 1 takes no attachments");
-    use_portal(&test, &second.name());
-    assert!(button.is_visible(), "version 2 does");
+    button.emit_clicked();
+    let message = test.wait_for_dialog("the reason");
+    assert_eq!(message.title(), "Share");
+    assert!(first.calls().is_empty(), "version 1 is not asked");
 }
 
 /// parity: CMD-037
@@ -112,7 +108,12 @@ fn with_an_email_portal_share_attaches_the_selected_files() {
     expected.sort();
     assert_eq!(attachments, expected);
     wait_for_frames(&test.window, 3);
-    assert_eq!(test.window.shown_message().as_str(), "", "nothing to report");
+    assert_eq!(
+        test.window.shown_message().as_str(),
+        "Opening your email app…",
+        "only that the email app opens"
+    );
+    assert!(test.shown_dialog().is_none(), "nothing to report");
 }
 
 /// Windows cannot share a folder; nor can Share send an item of the
@@ -145,11 +146,18 @@ fn a_failed_email_shows_the_error_and_cancelling_shows_nothing() {
     select_names(&test, &["Notes 2.txt"]);
 
     share_button(&test).emit_clicked();
-    wait_until("the error", || !test.window.shown_message().is_empty());
-    assert_eq!(
-        test.window.shown_message().as_str(),
-        "The email app could not be opened."
+    // A failure is a message to read, in a dialog of its own.
+    let dialog = test.wait_for_dialog("the error");
+    let shown = super::item_dialogs::texts(&dialog);
+    assert!(
+        shown.contains(
+            &"No email app is set up, so the email could not be written. Choose an email app in your \
+              desktop's settings, then share again."
+                .to_owned()
+        ),
+        "{shown:?}"
     );
+    super::item_dialogs::press(&dialog, "OK");
 
     let fixture = Fixture::standard();
     let test = laid_out(&fixture.uri());
@@ -159,7 +167,7 @@ fn a_failed_email_shows_the_error_and_cancelling_shows_nothing() {
     share_button(&test).emit_clicked();
     wait_until("the portal to be asked", || !cancelled.calls().is_empty());
     wait_for_frames(&test.window, 3);
-    assert_eq!(test.window.shown_message().as_str(), "", "the user chose to");
+    assert!(test.shown_dialog().is_none(), "the user chose to");
 }
 
 /// One email takes at most 16 files, as one D-Bus message carries at
@@ -199,13 +207,17 @@ fn a_file_the_email_address_would_misread_is_refused_by_name() {
     select_names(&test, &[name]);
 
     share_button(&test).emit_clicked();
-    wait_until("the reason", || !test.window.shown_message().is_empty());
-    assert_eq!(
-        test.window.shown_message().as_str(),
-        format!(
-            "“{name}” cannot be attached to an email because its path has &, #, ?, % or a \
-             control character, which the email app could misread. Rename or move it, then share it again."
-        )
+    // A refusal is a message to read, in a dialog of its own.
+    let dialog = test.wait_for_dialog("the reason");
+    let reason = format!(
+        "“{name}” cannot be attached to an email because its path has &, #, ?, % or a \
+         control character, which the email app could misread. Rename or move it, then share it again."
+    );
+    let shown = super::item_dialogs::texts(&dialog);
+    assert!(shown.contains(&reason), "{shown:?}");
+    assert!(
+        test.window.shown_message().is_empty(),
+        "nothing says the email app opens"
     );
     assert!(portal.calls().is_empty(), "the portal is not asked");
 }

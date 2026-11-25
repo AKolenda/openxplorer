@@ -54,6 +54,9 @@ pub(crate) struct IndexerStart {
     /// The Quick access pins at start-up, for the one-time indexing of
     /// folders pinned before pinned folders were indexed (SRCH-040).
     pub pins: Vec<Bookmark>,
+    /// The standard folders Quick access shows pinned, indexed once per
+    /// cache as pins (SRCH-040).
+    pub standard_folders: Vec<Bookmark>,
 }
 
 /// The index service once its thread has started it, or why it could not
@@ -185,7 +188,7 @@ fn run(
         }
     };
     let _ = slot.set(Ok(Arc::clone(&service)));
-    index_existing_pins(&service, &start.pins);
+    index_existing_pins(&service, &start.pins, &start.standard_folders);
     update_frequent_roots(&service, start.settings.auto_index);
     tick_until_stopped(&service, start.settings, updates, observer);
 }
@@ -205,9 +208,12 @@ fn start_service(
 
 /// Indexes the folders pinned before pinned folders were indexed, once per
 /// cache (SRCH-040), as the switch says.
-fn index_existing_pins(service: &IndexService, pins: &[Bookmark]) {
+fn index_existing_pins(service: &IndexService, pins: &[Bookmark], standard_folders: &[Bookmark]) {
     let indexing = service.index().pin_indexing();
-    let result = indexing.and_then(|indexing| service.index_existing_pins(pins, indexing));
+    let result = indexing.and_then(|indexing| {
+        service.index_existing_pins(pins, indexing)?;
+        service.index_standard_folders(standard_folders, indexing)
+    });
     if let Err(error) = result {
         glib::g_warning!(LOG_DOMAIN, "Could not index the pinned folders: {error}");
     }
@@ -275,6 +281,7 @@ mod tests {
             location: CacheLocation::Directory(directory.path().join("cache")),
             settings: IndexSettings::default(),
             pins: Vec::new(),
+            standard_folders: Vec::new(),
         };
         let (observer, events) = mpsc::channel();
         let indexer = Indexer::spawn(start, || {}, Some(observer)).expect("the thread starts");

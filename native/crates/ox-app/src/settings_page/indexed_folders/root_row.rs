@@ -99,7 +99,7 @@ pub(super) fn root_row(root: &IndexRoot, path: &str, is_network: bool, page: &Se
     let meta = parts::value_label(&names_and_updates(root));
     meta.set_tooltip_text(Some(&status_tooltip(root)));
     row.append(&meta);
-    row.append(&status_chip(root.status));
+    row.append(&status_chip(root));
     for button in root_buttons(root, page) {
         row.append(&button);
     }
@@ -149,11 +149,23 @@ fn origin_tag(glyph: Icon, name: &str) -> gtk::Box {
     tag
 }
 
-/// The chip that shows `status` in its words.
-fn status_chip(status: RootStatus) -> gtk::Label {
+/// The chip that shows the folder's status in its words. A folder on this
+/// computer whose scan only skipped folders it could not read is indexed,
+/// not offline: it says so, and the tooltip names the folder.
+fn status_chip(root: &IndexRoot) -> gtk::Label {
+    let status = root.status;
     let tone = ChipTone::of(status);
+    let only_unreadable = root
+        .error
+        .as_deref()
+        .is_some_and(|error| error.starts_with(ox_core::search::UNREADABLE_PREFIX));
+    let text = if status == RootStatus::Incomplete && root.uri.starts_with("file:") && only_unreadable {
+        ox_core::i18n::gettext("Indexed, some folders could not be read")
+    } else {
+        status.as_str().to_owned()
+    };
     gtk::Label::builder()
-        .label(status.as_str())
+        .label(&text)
         .valign(gtk::Align::Center)
         .css_classes(["status-chip", tone.css_class()])
         .build()
