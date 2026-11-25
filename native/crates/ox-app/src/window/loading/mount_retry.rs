@@ -91,7 +91,11 @@ impl BrowserWindow {
             return;
         }
         if let Err(error) = mounted {
-            self.refuse_listing(id, mode, listing_error(error));
+            let error = listing_error(error);
+            // From a folder, Windows says "Network Error" and stays.
+            if !self.leave_unreachable_share(id, &start.uri, mode, &error) {
+                self.refuse_listing(id, mode, error);
+            }
             return;
         }
         // An SFTP server opens at the account's home: the tab is there now.
@@ -159,7 +163,8 @@ mod tests {
     use super::*;
 
     /// A cancelled mount ends the listing quietly; GIO's refusals keep
-    /// their kind, and the service's own refusals their words.
+    /// their kind, in Windows' words, and the service's own refusals their
+    /// words.
     #[test]
     fn a_failed_mount_is_reported_as_the_listing_reports_errors() {
         let not_found = gtk::glib::Error::new(gtk::gio::IOErrorEnum::NotFound, "No such share");
@@ -167,7 +172,7 @@ mod tests {
         assert_eq!(listing_error(NetworkError::Cancelled), EntryError::Cancelled);
         assert_eq!(
             listing_error(NetworkError::Gio(not_found)),
-            EntryError::NotFound("No such share".into())
+            EntryError::NotFound("The system cannot find the file specified.".into())
         );
         assert_eq!(
             listing_error(NetworkError::ServerSigningOut),

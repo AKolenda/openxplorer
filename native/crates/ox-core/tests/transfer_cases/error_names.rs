@@ -28,13 +28,14 @@ fn lock(folder: &Path) -> Option<RestoreOwnerAccess> {
     Some(access)
 }
 
-/// Asserts `error` names `real` and the system's reason, and nothing of
+/// Asserts `error` names `real` and the system's reason in Windows'
+/// words, and nothing of
 /// the staging.
 fn assert_names(error: &str, real: &Path) {
     assert!(!error.contains(".winspace-transfer"), "{error}");
     assert!(!error.contains("payload"), "{error}");
     assert!(error.contains(&real.display().to_string()), "{error}");
-    assert!(error.contains("Permission denied"), "{error}");
+    assert!(error.contains("Access is denied."), "{error}");
 }
 
 /// The case seen on a test build: pasting `one.txt` into a `chmod 555`
@@ -109,11 +110,12 @@ impl Provider for RefusesB {
         if node.display_name() != "b.txt" {
             return node.local_copy_file(target, cancel, progress);
         }
-        Err(TransferError::failed(format!(
+        let message = format!(
             "Error opening file {} ({}): Permission denied",
             local_path_of(target).display(),
             target.uri(),
-        )))
+        );
+        Err(glib::Error::new(gio::IOErrorEnum::PermissionDenied, &message).into())
     }
 }
 
@@ -143,7 +145,7 @@ fn an_entry_inside_a_folder_is_asked_about_by_its_real_path() {
     let asked = asked.lock().expect("question log").clone();
     assert_eq!(asked.len(), 1, "{asked:?}");
     assert_names(&asked[0], &real);
-    assert!(asked[0].contains(&file_uri(&real)), "{}", asked[0]);
+    assert!(!asked[0].contains("file://"), "a path, never a URI: {}", asked[0]);
     assert_eq!(result.errors.len(), 1, "{result:?}");
     assert_names(&result.errors[0], &real);
     assert_eq!(list(&fixture.destination_folder.join("tree")), ["a.txt", "sub"]);

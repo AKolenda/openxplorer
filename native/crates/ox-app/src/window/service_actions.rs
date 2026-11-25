@@ -221,8 +221,9 @@ impl BrowserWindow {
                 launcher.setenv(key, value, true);
             }
             let argv: Vec<&std::ffi::OsStr> = command.argv.iter().map(AsRef::as_ref).collect();
-            let child = launcher.spawn(&argv).map_err(|error| error.to_string())?;
-            child.wait_check_future().await.map_err(|error| error.to_string())
+            let said = |error: glib::Error| ox_core::system_error::message_of(&error);
+            let child = launcher.spawn(&argv).map_err(said)?;
+            child.wait_check_future().await.map_err(said)
         }
         .await;
         if let Err(error) = result {

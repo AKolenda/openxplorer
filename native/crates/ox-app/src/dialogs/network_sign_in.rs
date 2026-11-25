@@ -51,9 +51,9 @@ const REVEAL_GLYPH: i32 = 17;
 const NOTE_GLYPH: i32 = 13;
 
 /// What the description says after the server refused the previous
-/// account; a first sign-in has no description, as in Windows.
-const RETRY_SIGN_IN: &str =
-    crate::i18n::message_id("The previous sign-in was not accepted. Check your username and password.");
+/// account, in Windows' words (`ERROR_LOGON_FAILURE`); a first sign-in has
+/// no description, as in Windows.
+const RETRY_SIGN_IN: &str = crate::i18n::message_id("The user name or password is incorrect.");
 /// The note while "Remember my credentials" is checked.
 const SAVED_PERMANENTLY: &str = crate::i18n::message_id("Saved in your system keyring for future sign-ins.");
 /// The note while it is unchecked, or cannot be checked.

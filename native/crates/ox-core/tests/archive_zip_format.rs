@@ -142,7 +142,10 @@ fn a_member_needing_a_newer_zip_version_is_a_bad_zip() {
         error,
         ArchiveError::Format(ZipFormatError::UnsupportedVersion(64))
     );
-    assert_eq!(error.to_string(), "zip file version 6.4");
+    assert_eq!(
+        error.to_string(),
+        "This ZIP archive uses a feature that isn't supported. To open it, use a different archive app."
+    );
 }
 
 /// A local header that names another file than the central directory is
@@ -160,10 +163,7 @@ fn a_local_header_naming_another_file_is_refused() {
         header: b"report.exe".to_vec(),
     };
     assert_eq!(error, ArchiveError::Format(expected));
-    assert_eq!(
-        error.to_string(),
-        "File name in directory 'report.txt' and header b'report.exe' differ."
-    );
+    assert_eq!(error.to_string(), "The Compressed (zipped) Folder is invalid.");
 }
 
 /// Member data that runs into the next member is the overlapping-members
@@ -186,7 +186,7 @@ fn data_running_into_the_next_member_is_refused_as_a_zip_bomb() {
 
     let expected = ZipFormatError::OverlappedEntries("a.txt".to_owned());
     assert_eq!(error, ArchiveError::Format(expected));
-    assert!(error.to_string().contains("possible zip bomb"));
+    assert_eq!(error.to_string(), "The Compressed (zipped) Folder is invalid.");
     fixture.assert_no_output();
 }
 

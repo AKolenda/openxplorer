@@ -3,7 +3,8 @@
 //! ejecting, signing out or discovering servers.
 //!
 //! The messages are the Python app's (`v2.0.0:desktop/winspace.py` and
-//! `v2.0.0:desktop/gio_backend.py`); GIO's own errors keep GIO's message.
+//! `v2.0.0:desktop/gio_backend.py`); GIO's own errors are said in Windows'
+//! words ([`SystemError`](crate::system_error::SystemError)).
 
 use super::keyring::KeyringError;
 use crate::location::LocationError;
@@ -15,8 +16,8 @@ pub enum NetworkError {
     #[error(transparent)]
     Location(#[from] LocationError),
     /// GIO or `GVfs` refused, for example a wrong password or an offline
-    /// server; the message is GIO's.
-    #[error(transparent)]
+    /// server; the message is Windows' for the same failure.
+    #[error("{}", crate::system_error::SystemError::from_network(.0).message())]
     Gio(#[from] glib::Error),
     /// The operation was cancelled or timed out; not an error to show.
     #[error("{}", crate::i18n::gettext("Operation cancelled."))]
@@ -142,7 +143,7 @@ mod tests {
         assert!(cancelled.is_cancelled());
         assert!(NetworkError::Cancelled.is_cancelled());
         assert!(!refused.is_cancelled());
-        assert_eq!(refused.to_string(), "Access denied");
+        assert_eq!(refused.to_string(), "Access is denied.");
     }
 
     /// parity: NET-021

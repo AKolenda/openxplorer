@@ -131,7 +131,7 @@ pub(crate) enum MountHelperError {
         reason: String,
     },
     /// The file system refused an operation on `path`.
-    #[error("{error}: {}", path.display())]
+    #[error("{}: {}", path.display(), crate::system_error::describe_io(error))]
     Io {
         /// The file or directory.
         path: PathBuf,

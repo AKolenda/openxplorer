@@ -6,8 +6,10 @@
 //! `error_payload` in `v2.0.0:desktop/gio_backend.py` that transfers rely on.
 
 use crate::location::LocationError;
+use crate::system_error::{describe, describe_io};
 
-/// A transfer failure. `Display` is the user-facing message.
+/// A transfer failure. `Display` is the user-facing message: a backend's
+/// error in Windows' words ([`SystemError`](crate::system_error::SystemError)), never GIO's message.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum TransferError {
     /// The user cancelled: returned by [`Cancellation::check`]. The engine
@@ -91,7 +93,7 @@ impl TransferError {
 /// [`Cancellation`](super::Cancellation) is cancelled.
 impl From<glib::Error> for TransferError {
     fn from(error: glib::Error) -> Self {
-        let message = error.message().to_owned();
+        let message = describe(&error);
         match error.kind::<gio::IOErrorEnum>() {
             Some(gio::IOErrorEnum::NotFound) => Self::NotFound(message),
             Some(gio::IOErrorEnum::Exists) => Self::Exists(message),
@@ -111,7 +113,7 @@ impl From<glib::Error> for TransferError {
 /// GIO's do.
 impl From<std::io::Error> for TransferError {
     fn from(error: std::io::Error) -> Self {
-        let message = error.to_string();
+        let message = describe_io(&error);
         match error.kind() {
             std::io::ErrorKind::NotFound => Self::NotFound(message),
             std::io::ErrorKind::AlreadyExists => Self::Exists(message),
@@ -190,8 +192,14 @@ mod tests {
             },
         ];
         for case in cases {
-            let error = glib::Error::new(case.code, "m");
-            assert_eq!(TransferError::from(error), case.expected);
+            let error = TransferError::from(glib::Error::new(case.code, "m"));
+            assert_eq!(
+                std::mem::discriminant(&error),
+                std::mem::discriminant(&case.expected),
+                "{:?}",
+                case.code
+            );
+            assert_ne!(error.to_string(), "m", "{:?}", case.code);
         }
     }
 
@@ -223,7 +231,8 @@ mod tests {
     }
 
     /// A write to a drive mounted read-only shows the system's own error,
-    /// from GIO and from local I/O alike, as Windows Explorer does.
+    /// from GIO and from local I/O alike, in Windows' words, as Windows
+    /// Explorer does.
     ///
     /// parity: DEV-015
     #[test]
@@ -232,10 +241,8 @@ mod tests {
             gio::IOErrorEnum::ReadOnly,
             "Read-only file system",
         ));
-        let read_only = std::io::Error::from_raw_os_error(30);
-        let expected = read_only.to_string();
-        let from_io = TransferError::from(read_only);
-        assert_eq!(from_gio.to_string(), "Read-only file system");
-        assert_eq!(from_io.to_string(), expected);
+        let from_io = TransferError::from(std::io::Error::from_raw_os_error(30));
+        assert_eq!(from_gio.to_string(), "The media is write protected.");
+        assert_eq!(from_io.to_string(), "The media is write protected.");
     }
 }

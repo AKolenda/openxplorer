@@ -27,7 +27,7 @@ pub(super) async fn link_destination(uri: &str) -> Result<String, String> {
             glib::Priority::DEFAULT,
         )
         .await
-        .map_err(|error| error.message().to_owned())?;
+        .map_err(|error| ox_core::system_error::describe(&error))?;
     let name = info.display_name();
     let Some(target) = info.symlink_target() else {
         return Err(ox_core::i18n::format_message(

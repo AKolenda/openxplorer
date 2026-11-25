@@ -87,16 +87,21 @@ impl TransferPanel {
         text.set_wrap_mode(gtk::pango::WrapMode::WordChar);
         question.append(&text);
         question.append(&view.card);
-        let details = PropertyGrid::new();
-        for (name, value) in &view.details {
-            // Plain text, never focused or selected when the question
-            // shows (PropertyGrid's values are selectable elsewhere).
-            details.add_row(name, value).set_selectable(false);
-        }
-        let details = details.widget().clone();
-        details.add_css_class("failure-details");
-        details.set_visible(imp.window.upgrade().is_some_and(|window| window.shows_details()));
-        question.append(&details);
+        // A question without details has none to show: the window's More
+        // details shows greyed while it asks, as Windows' does.
+        let details = (!view.details.is_empty()).then(|| {
+            let grid = PropertyGrid::new();
+            for (name, value) in &view.details {
+                // Plain text, never focused or selected when the question
+                // shows (PropertyGrid's values are selectable elsewhere).
+                grid.add_row(name, value).set_selectable(false);
+            }
+            let details = grid.widget().clone();
+            details.add_css_class("failure-details");
+            details.set_visible(imp.window.upgrade().is_some_and(|window| window.shows_details()));
+            question.append(&details);
+            details.upcast::<gtk::Widget>()
+        });
         let for_all = view.for_all.then(|| {
             let check =
                 gtk::CheckButton::with_label(&ox_core::i18n::gettext("Do this for all current items"));
@@ -155,7 +160,7 @@ impl TransferPanel {
         )));
         self.insert_child_after(&question, Some(&*imp.space_question));
         imp.failure_question.replace(Some(question));
-        imp.failure_details.replace(Some(details.upcast()));
+        imp.failure_details.replace(details);
         imp.failure_answer.replace(Some(sender));
         let cancelled = imp
             .cancel
@@ -186,6 +191,12 @@ impl TransferPanel {
     /// True while the action asks about a failed item.
     pub(crate) fn asks_about_failure(&self) -> bool {
         self.imp().failure_question.borrow().is_some()
+    }
+
+    /// True while the action asks about a failed item and has no details
+    /// for More details, which then shows greyed.
+    pub(crate) fn asks_without_details(&self) -> bool {
+        self.asks_about_failure() && self.imp().failure_details.borrow().is_none()
     }
 
     /// Shows or hides the failure question's More details.

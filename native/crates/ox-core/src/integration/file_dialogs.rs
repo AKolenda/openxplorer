@@ -297,7 +297,7 @@ pub enum FileDialogError {
     )]
     PortalMoved,
     /// Reading, writing or removing a file failed.
-    #[error("{error}: {}", path.display())]
+    #[error("{}: {}", path.display(), crate::system_error::describe_io(error))]
     Io {
         /// The file the operation was on.
         path: PathBuf,

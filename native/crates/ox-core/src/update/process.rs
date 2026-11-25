@@ -272,7 +272,10 @@ fn text(bytes: Option<&glib::Bytes>) -> String {
 
 /// A GIO error starting or waiting for `program`.
 fn process_error(program: &str, error: &glib::Error) -> UpdateError {
-    UpdateError::io(program, std::io::Error::other(error.message().to_owned()))
+    UpdateError::io(
+        program,
+        std::io::Error::other(crate::system_error::message_of(error)),
+    )
 }
 
 #[cfg(test)]

@@ -244,10 +244,7 @@ fn a_retry_says_why_and_a_server_that_cannot_save_offers_no_remember() {
 
     let retry = fixture.ask_password(&operation, flags);
 
-    assert_shows(
-        &retry,
-        &["The previous sign-in was not accepted. Check your username and password."],
-    );
+    assert_shows(&retry, &["The user name or password is incorrect."]);
     let remember = descendants::<gtk::CheckButton>(&retry);
     assert!(!remember[0].is_active() && !remember[0].is_sensitive());
     fixture.prompts.finish(&operation, MountOutcome::Failed);

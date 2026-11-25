@@ -490,7 +490,7 @@ fn restore_previous_reports_dialogs_it_could_not_give_back() {
 
     let message = default_apps.test.window.shown_message_text();
     assert!(
-        message.ends_with(&file.display().to_string()),
+        message.contains(&file.display().to_string()),
         "the failure names the configuration: {message}"
     );
     assert!(

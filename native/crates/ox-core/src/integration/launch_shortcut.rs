@@ -241,7 +241,8 @@ pub struct KdeShortcuts;
 impl KdeShortcuts {
     /// Calls `method` with `arguments` and returns the reply.
     fn call(method: &str, arguments: &glib::Variant) -> Result<glib::Variant, ShortcutError> {
-        let unreachable = |error: glib::Error| ShortcutError::Unreachable(error.message().to_owned());
+        let unreachable =
+            |error: glib::Error| ShortcutError::Unreachable(crate::system_error::message_of(&error));
         let connection =
             gio::bus_get_sync(gio::BusType::Session, gio::Cancellable::NONE).map_err(unreachable)?;
         connection

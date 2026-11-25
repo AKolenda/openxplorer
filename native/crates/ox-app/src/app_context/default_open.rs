@@ -128,10 +128,15 @@ async fn launch(prepared: &PreparedOpen, window: &gtk::Window) -> Result<(), Str
                 .launch(&[file], Some(&context))
                 .map_err(|_| ox_core::i18n::gettext_static(NOT_ACCEPTED).to_owned())
         }
-        Launcher::DesktopPortal => gtk::FileLauncher::new(Some(&file))
+        // Closing the desktop's app chooser is the user's answer, not a
+        // failure to report.
+        Launcher::DesktopPortal => match gtk::FileLauncher::new(Some(&file))
             .launch_future(Some(window))
             .await
-            .map_err(|error| error.to_string()),
+        {
+            Err(error) if error.matches(gtk::DialogError::Dismissed) => Ok(()),
+            launched => launched.map_err(|error| ox_core::system_error::message_of(&error)),
+        },
     }
 }
 

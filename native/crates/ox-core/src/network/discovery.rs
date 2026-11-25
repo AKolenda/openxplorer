@@ -207,7 +207,7 @@ async fn discover() -> Result<Discovery, NetworkError> {
         // Nothing could be read: the browser cannot be used at all.
         Some(error) if entries.is_empty() => return Err(error.into()),
         failure => failure
-            .map(|error| error.message().to_owned())
+            .map(|error| crate::system_error::message_of(&error))
             .into_iter()
             .collect(),
     };

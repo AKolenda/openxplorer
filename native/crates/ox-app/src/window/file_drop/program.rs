@@ -297,7 +297,7 @@ impl BrowserWindow {
                 glib::Priority::DEFAULT,
             )
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| ox_core::system_error::message_of(&error))?;
         let path = local_path(&program.uri)
             .ok_or_else(|| ox_core::i18n::gettext_static(NO_LOCAL_PATH).to_owned())?;
         let may_run = match program.kind {

@@ -763,7 +763,7 @@ mod tests {
             stage.uri()
         );
         assert!(error.starts_with(&expected), "{error}");
-        assert!(error.ends_with("Permission denied"), "{error}");
+        assert!(error.ends_with("Access is denied."), "{error}");
     }
 
     /// A phone that discarded a cancelled upload answers "not found" for
@@ -815,6 +815,6 @@ mod tests {
             error.contains(&locked.join("New document.txt").display().to_string()),
             "{error}"
         );
-        assert!(error.contains("Permission denied"), "{error}");
+        assert!(error.contains("Access is denied."), "{error}");
     }
 }

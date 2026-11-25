@@ -175,7 +175,7 @@ pub enum UpdateError {
         reason: StorageRefusal,
     },
     /// A file-system or process error on `path`.
-    #[error("{error}: {}", path.display())]
+    #[error("{}: {}", path.display(), crate::system_error::describe_io(error))]
     Io {
         /// The file, folder or program.
         path: PathBuf,

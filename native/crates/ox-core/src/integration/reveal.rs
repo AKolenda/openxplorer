@@ -106,7 +106,7 @@ pub enum RevealError {
     #[error("{}", crate::i18n::format_message("An existing user override needs review before enabling OpenXplorer: {path}", &[("path", &.0.display().to_string())]))]
     ForeignOverride(PathBuf),
     /// Reading, writing or removing a file failed.
-    #[error("{error}: {}", path.display())]
+    #[error("{}: {}", path.display(), crate::system_error::describe_io(error))]
     Io {
         /// The file the operation was on.
         path: PathBuf,

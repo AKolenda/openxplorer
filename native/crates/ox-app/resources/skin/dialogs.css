@@ -43,6 +43,9 @@ window.ox.ox-dialog .dialog-title {
   margin-bottom: 12px;
 }
 window.ox.ox-dialog .dialog-message { color: @ox_muted; margin-bottom: 12px; }
+/* A heading under a title bar of its own, as Windows' "Network Error"
+   draws its main instruction, is blue. */
+window.ox.ox-dialog.main-instruction .dialog-title { color: @ox_command_blue; font-weight: 400; }
 window.ox.ox-dialog .field-label { color: @ox_text; margin: 8px 0 4px 0; }
 
 /* A text input: 35 high, 4px corners, the chrome fill and the stronger

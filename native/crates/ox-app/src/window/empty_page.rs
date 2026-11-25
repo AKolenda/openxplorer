@@ -12,6 +12,7 @@ use gtk::prelude::*;
 use ox_core::entry::EntryError;
 use ox_core::i18n::{format_message, gettext};
 use ox_core::location::{is_server_location, is_smb_location, is_smb_server, split_location};
+use ox_core::system_error::SystemError;
 
 use crate::icons::{self, Icon};
 
@@ -60,8 +61,9 @@ impl EmptyState {
     /// What the page says about `uri`, which `error` kept from being
     /// listed. A share or server that refused the connection or dropped
     /// off the network is named in plain words, as Windows Explorer names
-    /// it ("\\\\server\\share is unavailable."), with the system's message
-    /// ("Software caused connection abort") under Details. Every other
+    /// it ("\\\\server\\share is unavailable."), with Windows' error code
+    /// and words under Details ("Error code: 0x80070079", "The semaphore
+    /// timeout period has expired."). Every other
     /// error is already said for people, and is shown as it is.
     pub(super) fn unavailable(uri: &str, error: &EntryError) -> EmptyState {
         // Only an archive that can't be read gets the archive page; a
@@ -97,7 +99,7 @@ impl EmptyState {
                  turned on, and then try again.",
                 &[("location", &location)],
             ),
-            details: (!raw.trim().is_empty()).then(|| raw.clone()),
+            details: (!raw.trim().is_empty()).then(|| network_details(raw)),
         }
     }
 
@@ -116,6 +118,23 @@ impl EmptyState {
         } else {
             EmptyState::EmptyFolder
         }
+    }
+}
+
+/// What Details says about a share that cannot be reached, as Windows'
+/// "Network Error" says it under "See details": the error code, then its
+/// words. A message that is not one of the system's errors is shown as it
+/// is.
+fn network_details(message: &str) -> String {
+    match SystemError::from_sentence(message).map(SystemError::on_network) {
+        Some(error) => format_message(
+            "Error code: {code}\n{message}",
+            &[
+                ("code", &format!("0x{:08X}", error.hresult())),
+                ("message", &error.message()),
+            ],
+        ),
+        None => message.to_owned(),
     }
 }
 
@@ -367,6 +386,43 @@ mod tests {
         assert_eq!(
             EmptyState::empty_listing("file:///tmp/empty"),
             EmptyState::EmptyFolder
+        );
+    }
+    /// A share that stopped answering is named as Windows names it, and
+    /// Details holds Windows' error code and its words, never GIO's or
+    /// Samba's message: a server that does not answer or refuses is "The
+    /// network name cannot be found.", as Windows 11 says it.
+    ///
+    /// parity: VIEW-047
+    #[test]
+    fn an_unreachable_share_shows_the_windows_error_code_under_details() {
+        let error = EntryError::from(gtk::glib::Error::new(
+            gtk::gio::IOErrorEnum::Failed,
+            "Failed to mount Windows share: Connection timed out",
+        ));
+        let EmptyState::Unavailable { message, details } = EmptyState::unavailable("smb://nas/Team", &error)
+        else {
+            panic!("the unavailable page");
+        };
+        assert!(
+            message.contains("is unavailable. Make sure you are connected"),
+            "{message}"
+        );
+        assert_eq!(
+            details.as_deref(),
+            Some("Error code: 0x80070043\nThe network name cannot be found.")
+        );
+        let refused = EntryError::from(gtk::glib::Error::new(
+            gtk::gio::IOErrorEnum::Failed,
+            "Failed to mount Windows share: Connection refused",
+        ));
+        let EmptyState::Unavailable { details, .. } = EmptyState::unavailable("smb://nas/Team", &refused)
+        else {
+            panic!("the unavailable page");
+        };
+        assert_eq!(
+            details.as_deref(),
+            Some("Error code: 0x80070043\nThe network name cannot be found.")
         );
     }
 }

@@ -320,7 +320,10 @@ impl ProgressWindow {
         if self.icon_name().as_deref() != Some(icon) {
             self.set_icon_name(Some(icon));
         }
-        let asking = matches!(actions.as_slice(), [action] if action.asks_about_names());
+        let asking = matches!(
+            actions.as_slice(),
+            [action] if action.asks_about_names() || action.asks_without_details()
+        );
         self.offer_details(!asking);
     }
 

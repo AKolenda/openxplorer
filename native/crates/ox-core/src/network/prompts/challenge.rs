@@ -70,8 +70,8 @@ pub struct PasswordChallenge {
     pub can_save: bool,
     /// "Connect as guest" is offered.
     pub can_sign_in_as_guest: bool,
-    /// The previous sign-in was not accepted ("The previous sign-in was
-    /// not accepted. Check your username and password.").
+    /// The previous sign-in was not accepted ("The user name or password is
+    /// incorrect.").
     pub is_retry: bool,
 }
 

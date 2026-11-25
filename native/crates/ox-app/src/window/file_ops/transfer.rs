@@ -390,13 +390,13 @@ async fn folder_items(uri: &str) -> Result<Vec<String>, String> {
             gtk::glib::Priority::DEFAULT,
         )
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| ox_core::system_error::message_of(&error))?;
     let mut items = Vec::new();
     loop {
         let batch = listing
             .next_files_future(256, gtk::glib::Priority::DEFAULT)
             .await
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| ox_core::system_error::message_of(&error))?;
         if batch.is_empty() {
             return Ok(items);
         }

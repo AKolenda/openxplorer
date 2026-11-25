@@ -168,7 +168,8 @@ fn a_rename_refused_because_the_name_was_taken_meanwhile_reports_the_taken_name(
 }
 
 /// A rename the device refused without changing anything reports the
-/// device's own error; it is never counted as done.
+/// error, in the words Windows has for a phone's unexplained refusal
+/// ("Unspecified error"), never libmtp's; it is never counted as done.
 ///
 /// parity: XFER-024
 #[test]
@@ -179,10 +180,7 @@ fn a_refused_rename_reports_the_devices_error() {
 
     let moved = device.node(".stage").move_native(&device.node("a"), None);
 
-    assert_eq!(
-        moved,
-        Err(TransferError::failed("libmtp error: could not rename"))
-    );
+    assert_eq!(moved, Err(TransferError::failed("Unspecified error")));
     assert_eq!(device.items(), [".stage"]);
 }
 
