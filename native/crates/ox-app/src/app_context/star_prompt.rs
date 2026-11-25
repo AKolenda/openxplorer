@@ -30,7 +30,8 @@ impl AppContext {
 
     /// Whether the star prompt is due and no window has shown it yet.
     pub(crate) fn star_prompt_due(&self) -> bool {
-        self.imp().star_prompt_due.get() && !self.settings_data().preferences.star_prompt_dismissed
+        let preferences = self.settings_data().preferences;
+        self.imp().star_prompt_due.get() && preferences.ask_for_star && !preferences.star_prompt_dismissed
     }
 
     /// Takes the star prompt for one window: true at most once a session,

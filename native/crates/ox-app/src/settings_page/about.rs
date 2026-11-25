@@ -92,6 +92,13 @@ const UPDATE_BUTTON: RowText = RowText {
     keywords: "update button command bar toolbar accent restart show hide notify",
 };
 
+const ASK_FOR_STAR: RowText = RowText {
+    title: "Ask for a GitHub star",
+    description: "After a few starts, a card asks once a session whether you would star OpenXplorer \
+                  on GitHub, until you dismiss it. Off: the card never shows.",
+    keywords: "github star prompt card ask rate enjoying nag popup reminder dismiss",
+};
+
 const LICENSE_AND_SOURCE: ActionGroup = ActionGroup {
     heading: crate::i18n::message_id("License & source"),
     text: RowText {
@@ -145,6 +152,7 @@ pub(super) fn build(page: &SettingsPage) -> SettingsSection {
         updates.add_row(&passwordless_row(page, setting.clone()));
     }
     updates.add_row(&update_button_row(page));
+    updates.add_row(&ask_for_star_row(page));
     about.append_group(&updates);
     follow_updates(page, &updates_row);
     about.append_group(&help_group());
@@ -198,6 +206,20 @@ fn update_button_row(page: &SettingsPage) -> SettingRow {
         read: |preferences| preferences.show_update_button,
         write: |on| PreferencesUpdate {
             show_update_button: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    row
+}
+
+/// "Ask for a GitHub star": whether the star prompt may pop up.
+fn ask_for_star_row(page: &SettingsPage) -> SettingRow {
+    let row = SettingRow::new(ASK_FOR_STAR);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.ask_for_star,
+        write: |on| PreferencesUpdate {
+            ask_for_star: Some(on),
             ..PreferencesUpdate::default()
         },
     };

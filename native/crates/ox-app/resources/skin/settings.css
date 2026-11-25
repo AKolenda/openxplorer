@@ -276,6 +276,11 @@ window.ox .settings switch:disabled > slider { background-color: @ox_text_disabl
 window.ox .settings switch:checked:disabled { background-color: @ox_text_disabled; }
 window.ox .settings switch:checked:disabled > slider { background-color: @ox_bg; }
 window.ox .settings switch:focus-visible { box-shadow: 0 0 0 2px @ox_focus_outer; }
+/* "Behave like Windows Explorer" while one of its settings differs
+   (src/settings_page/windows_mode.rs): on, but only outlined in the
+   accent, as Windows draws a partly ticked box. */
+window.ox .settings switch.mixed:checked { background-color: transparent; border-color: @ox_accent; }
+window.ox .settings switch.mixed:checked > slider { background-color: @ox_accent; }
 
 /* ---- Theme cards (.themes): a preview over a radio button ---- */
 .theme-card { color: @ox_text; }

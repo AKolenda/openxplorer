@@ -57,6 +57,14 @@ const TAB_SWITCHES_PANES: RowText = RowText {
     keywords: "switch between split panes with tab split view tab key switch pane focus keyboard",
 };
 
+const FIXED_PROPERTIES: RowText = RowText {
+    title: "Keep Properties windows a fixed size (like Windows)",
+    description: "Every Properties window, for a file, a folder, a drive, a shortcut or several items, \
+                  opens at the same size and cannot be resized, as in Windows. Off: it opens at that \
+                  size and can be made larger.",
+    keywords: "properties window size fixed resize resizable larger same size dialog windows 380 520",
+};
+
 const OPEN_WINDOWS: RowText = RowText {
     title: "Open windows",
     description: "Every OpenXplorer window by title; choose one to bring it to the front.",
@@ -132,6 +140,7 @@ const DRAGGING_NOTE: &str = crate::i18n::message_id(
 pub(super) fn build(page: &SettingsPage) -> SettingsSection {
     let category = Category::General;
     let general = SettingsSection::new(category.title(), category.lead(), PageKind::Category);
+    general.append_group(&super::windows_mode::group(page));
     general.append_group(&startup_group(page));
     general.append_group(&windows_group(page));
     general.append_group(&address_group(page));
@@ -174,6 +183,16 @@ fn windows_group(page: &SettingsPage) -> SettingsGroup {
     external.add_control(&page.preference_switch(in_new_window), ControlName::RowTitle);
     group.add_row(&external);
     add_split_view_rows(page, &group);
+    let fixed = SettingRow::new(FIXED_PROPERTIES);
+    let keep_fixed = PreferenceBinding {
+        read: |preferences| preferences.fixed_properties_size,
+        write: |on| PreferencesUpdate {
+            fixed_properties_size: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    fixed.add_control(&page.preference_switch(keep_fixed), ControlName::RowTitle);
+    group.add_row(&fixed);
     let listing = SettingRow::new(OPEN_WINDOWS);
     listing.add_control(&open_windows_button(), ControlName::OwnLabel);
     group.add_row(&listing);

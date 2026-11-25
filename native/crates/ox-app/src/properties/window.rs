@@ -268,7 +268,8 @@ impl PropertiesWindow {
     /// shows, on every tab: Windows sizes a property sheet once and never
     /// changes it. The pages scroll inside it when they need more room, as
     /// at a larger text size. The user can make it larger, never smaller,
-    /// from its edges and corners. Other windows built on this one, such as
+    /// from its edges and corners, unless Settings keeps it at that size.
+    /// Other windows built on this one, such as
     /// Folder Options and the Security tab's dialogs, take their content's
     /// height and keep it, as Windows draws each at its own size.
     pub(crate) fn hold_sheet_size(&self) {
@@ -292,6 +293,14 @@ impl PropertiesWindow {
             .get()
             .map_or(WINDOW_HEIGHT, |tallest| WINDOW_HEIGHT.min(tallest - 2));
         holder.set_height(height - self.title_bar_height());
+        // Settings > General > "Keep Properties windows a fixed size (like
+        // Windows)": one size for every item, never resized.
+        if self
+            .opener()
+            .is_some_and(|opener| opener.keeps_properties_fixed())
+        {
+            return;
+        }
         self.set_resizable(true);
         crate::resize_edges::install(self);
     }

@@ -2346,6 +2346,44 @@ mod tests {
         assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
     }
 
+    /// Another app's Open or Save dialog never shows the GitHub star
+    /// prompt, even while it is due and Settings allows it, and leaves it
+    /// due for a browser window.
+    ///
+    /// parity: INT-032, UPD-023
+    #[gtk::test]
+    fn an_open_dialog_never_shows_the_star_prompt() {
+        let fixture = Fixture::empty();
+        let portal = Portal::new();
+        let answer = portal.call(
+            "OpenFile",
+            &[(
+                "current_folder",
+                path_variant(&fixture.root().display().to_string()),
+            )],
+        );
+        let context = &portal.test.context;
+        for start in 1..=6 {
+            context.count_launch_for_star_prompt();
+            wait_until("the start to be counted", || {
+                context.settings_data().preferences.star_prompt_launches == start
+            });
+        }
+        assert!(
+            context.settings_data().preferences.ask_for_star,
+            "on, as by default"
+        );
+        assert!(context.star_prompt_due());
+
+        let window = &portal.test.window;
+        window.offer_star_prompt();
+
+        assert!(!window.star_prompt().is_visible(), "never in a file dialog");
+        assert!(context.star_prompt_due(), "still due for a browser window");
+        window.cancel_picking();
+        assert_eq!(Portal::finish(&answer).0, RESPONSE_CANCELLED);
+    }
+
     /// An Open or Save dialog has no Share, even where the desktop can
     /// share, as Windows' file dialogs have none.
     ///

@@ -48,6 +48,15 @@ const TEXT_SIZE: RowText = RowText {
                scaling is unchanged.",
 };
 
+const CTRL_PLUS_MINUS: RowText = RowText {
+    title: "Ctrl+plus and Ctrl+minus change text size",
+    description: "Ctrl+plus and Ctrl+minus on the main keyboard make text larger and smaller. Off: \
+                  they do nothing, as in Windows; Ctrl+plus on the number pad still sizes the \
+                  Details columns to fit, and Text size still changes it.",
+    keywords: "ctrl plus minus equal keyboard shortcut keys text size larger smaller number pad \
+               numpad keypad columns fit windows",
+};
+
 const DESKTOP_FONT: RowText = RowText {
     title: "Use the desktop font",
     description: "Text uses your desktop's interface font and size instead of Segoe UI.",
@@ -290,6 +299,16 @@ fn theme_group(page: &SettingsPage) -> SettingsGroup {
     let text_size = SettingRow::new(TEXT_SIZE);
     text_size.add_control(&text_size_choice(page), ControlName::RowTitle);
     group.add_row(&text_size);
+    let keys = SettingRow::new(CTRL_PLUS_MINUS);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.ctrl_plus_minus_text_size,
+        write: |on| PreferencesUpdate {
+            ctrl_plus_minus_text_size: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    keys.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    group.add_row(&keys);
     group.add_row(&desktop_font_row(page));
     group.add_row(&neutral_selection_colors_row(page));
     group.add_row(&language_row());

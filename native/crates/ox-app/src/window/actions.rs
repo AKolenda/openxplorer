@@ -572,6 +572,10 @@ pub(crate) fn follow_text_size_keys(dialog: &impl IsA<gtk::Window>) {
             let trigger = gtk::ShortcutTrigger::parse_string(&accelerator);
             let name = WindowAction::TextSize(step).detailed_name();
             let run = gtk::CallbackAction::new(move |dialog, _| {
+                // A key the setting turned off does nothing here either.
+                if !MAIN_PLUS_MINUS_ON.get() && Step::is_main_plus_minus(&accelerator) {
+                    return glib::Propagation::Proceed;
+                }
                 let mut owner = dialog.downcast_ref::<gtk::Window>().and_then(owner_of);
                 while let Some(window) = owner {
                     if window.activate_action(&name, None).is_ok() {
@@ -598,6 +602,25 @@ fn owner_of(window: &gtk::Window) -> Option<gtk::Window> {
     })
 }
 
+thread_local! {
+    /// Whether the main keyboard's Ctrl+plus and Ctrl+minus change the
+    /// text size, as [`set_text_size_keys`] last set them; dialogs follow
+    /// it too ([`follow_text_size_keys`]).
+    static MAIN_PLUS_MINUS_ON: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+/// Gives the text-size actions their keys: with Ctrl+plus and Ctrl+minus
+/// on the main keyboard only when `main_plus_minus`, as Settings >
+/// Appearance > "Ctrl+plus and Ctrl+minus change text size" says.
+pub(crate) fn set_text_size_keys(app: &gtk::Application, main_plus_minus: bool) {
+    MAIN_PLUS_MINUS_ON.set(main_plus_minus);
+    for step in Step::ALL {
+        let keys = step.accelerators_with(main_plus_minus);
+        let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+        app.set_accels_for_action(&WindowAction::TextSize(step).detailed_name(), &keys);
+    }
+}
+
 /// Installs the keyboard shortcuts of the window actions that work from
 /// any focus.
 pub(crate) fn install_accelerators(app: &gtk::Application) {
@@ -606,11 +629,7 @@ pub(crate) fn install_accelerators(app: &gtk::Application) {
     }
     app.set_accels_for_action(&AppAction::Quit.detailed_name(), QUIT_ACCELERATORS);
     app.set_accels_for_action(&WindowAction::Properties.detailed_name(), PROPERTIES_ACCELERATORS);
-    for step in Step::ALL {
-        let keys = step.accelerators();
-        let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
-        app.set_accels_for_action(&WindowAction::TextSize(step).detailed_name(), &keys);
-    }
+    set_text_size_keys(app, true);
     let action = WindowAction::View.detailed_name();
     for view in FolderView::NAMED {
         if let Some((accelerator, _)) = view.shortcut() {

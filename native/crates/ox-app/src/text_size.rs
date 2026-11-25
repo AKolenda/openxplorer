@@ -96,6 +96,10 @@ impl Default for TextSize {
     }
 }
 
+/// The main keyboard's plus and minus keys of [`Step::keys`], shifted or
+/// not, which "Ctrl+plus and Ctrl+minus change text size" turns off.
+const MAIN_PLUS_MINUS: [&str; 4] = ["plus", "equal", "minus", "underscore"];
+
 /// A text-size keyboard or menu command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Step {
@@ -148,6 +152,13 @@ impl Step {
         }
     }
 
+    /// Whether `accelerator`, such as `<Primary>equal`, is Ctrl with the
+    /// main keyboard's plus or minus.
+    pub(crate) fn is_main_plus_minus(accelerator: &str) -> bool {
+        let key = accelerator.strip_prefix("<Primary>").unwrap_or(accelerator);
+        MAIN_PLUS_MINUS.contains(&key)
+    }
+
     /// The GTK accelerators for [`Self::keys`].
     ///
     /// Application accelerators run before the focused widget sees the
@@ -155,7 +166,18 @@ impl Step {
     /// Ctrl+Insert copy binding. The web app's capture-phase handler did
     /// the same.
     pub(crate) fn accelerators(self) -> Vec<String> {
-        self.keys().iter().map(|key| format!("<Primary>{key}")).collect()
+        self.accelerators_with(true)
+    }
+
+    /// [`Self::accelerators`], without Ctrl+plus and Ctrl+minus on the
+    /// main keyboard unless `main_plus_minus`: Settings > Appearance >
+    /// "Ctrl+plus and Ctrl+minus change text size" off, where they do
+    /// nothing, as in Windows 11 File Explorer. The number pad's minus and
+    /// Ctrl+0 keep working.
+    pub(crate) fn accelerators_with(self, main_plus_minus: bool) -> Vec<String> {
+        let keys = self.keys().iter();
+        let kept = keys.filter(|key| main_plus_minus || !MAIN_PLUS_MINUS.contains(key));
+        kept.map(|key| format!("<Primary>{key}")).collect()
     }
 }
 
@@ -269,6 +291,24 @@ mod tests {
         assert_eq!(step_for("KP_Subtract"), Some(Step::Decrease));
         assert_eq!(step_for("KP_0"), Some(Step::Reset));
         assert_eq!(step_for("KP_Insert"), Some(Step::Reset));
+    }
+
+    /// "Ctrl+plus and Ctrl+minus change text size" off leaves out the main
+    /// keyboard's plus and minus, as Windows 11 File Explorer has neither;
+    /// the number pad's minus and Ctrl+0 stay.
+    ///
+    /// parity: SET-020
+    #[test]
+    fn the_main_plus_and_minus_keys_can_be_left_out() {
+        assert!(Step::Increase.accelerators_with(false).is_empty());
+        assert!(Step::is_main_plus_minus("<Primary>equal"));
+        assert!(!Step::is_main_plus_minus("<Primary>KP_Subtract"));
+        assert_eq!(Step::Decrease.accelerators_with(false), ["<Primary>KP_Subtract"]);
+        assert_eq!(Step::Reset.accelerators_with(false), Step::Reset.accelerators());
+        assert_eq!(
+            Step::Increase.accelerators_with(true),
+            Step::Increase.accelerators()
+        );
     }
 
     /// Ported from `v2.0.0:desktop/tests/text_size.test.cjs::Ctrl+C not captured`
