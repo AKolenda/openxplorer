@@ -25,6 +25,7 @@
 
 mod menu_group;
 pub(in crate::window) mod menus;
+mod overflow;
 
 use gtk::glib;
 use gtk::prelude::*;
@@ -35,7 +36,7 @@ use crate::icons::{self, Icon};
 use crate::theme::AppearanceExt;
 
 use super::breakpoints::WindowWidth;
-use super::menu_popover::{name_menu_button, MenuEntry, MenuPopover};
+use super::menu_popover::{name_menu_button, MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 
 use menus::{appearance_items, more_menu};
@@ -43,6 +44,7 @@ pub(super) use menus::{disconnect_network_drive, FolderPin, MoreMenuState, MoreP
 pub(super) use menus::{
     gallery_view_menu, group_by_menu, new_menu, search_options_menu, sort_menu, view_menu,
 };
+use overflow::OverflowLayout;
 
 /// The glyph of an icon-only command: 16 pixels, as Windows 11 draws its
 /// command bar (ui-spec.md I01; the web app's were 18).
@@ -121,6 +123,45 @@ const EDIT_COMMANDS: [IconCommand; 6] = [
 /// The tooltip of Settings.
 const SETTINGS_TOOLTIP: &str = crate::i18n::message_id("Settings (Ctrl+,)");
 
+/// What a command becomes at the top of "…" when it does not fit in
+/// the bar: built when the menu is, so it shows the command's label and
+/// menu as they are then.
+#[derive(Clone)]
+struct OverflowEntry(std::rc::Rc<dyn Fn() -> MenuEntry>);
+
+impl std::fmt::Debug for OverflowEntry {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("OverflowEntry")
+    }
+}
+
+impl OverflowEntry {
+    /// An item that runs `action`.
+    fn item(label: String, glyph: Icon, action: WindowAction) -> Self {
+        Self(std::rc::Rc::new(move || {
+            MenuItem::new(&label, glyph, action).into()
+        }))
+    }
+
+    /// An item that opens what `menu` lists now beside "…", enabled while
+    /// its first item's action is.
+    fn submenu(label: String, glyph: Icon, menu: MenuPopover) -> Self {
+        Self(std::rc::Rc::new(move || {
+            let entries = menu.entries();
+            let action = menu.items().first().map_or(
+                super::menu_popover::MenuAction::Window(WindowAction::View),
+                |item| item.action,
+            );
+            MenuItem::submenu(&label, glyph, action, entries).into()
+        }))
+    }
+
+    /// The entry, as it is now.
+    fn entry(&self) -> MenuEntry {
+        (self.0)()
+    }
+}
+
 mod imp {
     use std::cell::{Cell, OnceCell, RefCell};
 
@@ -196,6 +237,11 @@ mod imp {
         /// The "…" menu, which offers Map network drive only in This
         /// PC and Network.
         pub(super) more_menu: OnceCell<crate::window::menu_popover::MenuPopover>,
+        /// Lays the commands out, leaving out those that do not fit.
+        pub(super) overflow: OnceCell<super::OverflowLayout>,
+        /// Each command that can move into "…", in the bar's order, with
+        /// what it becomes there.
+        pub(super) overflow_entries: RefCell<Vec<(gtk::Widget, super::OverflowEntry)>>,
         /// What the "…" menu shows now: Map network drive or not, Pin
         /// or Unpin.
         pub(super) more_state: RefCell<super::MoreMenuState>,
@@ -241,6 +287,7 @@ mod imp {
             crate::i18n::translate_template(&*self.obj(), "command-bar.ui");
             let bar = self.obj();
             bar.add_file_commands();
+            bar.lay_out_commands();
             bar.finish_right_commands();
             bar.group_menus();
         }
@@ -276,6 +323,14 @@ impl CommandBar {
         group.append(&separator());
         for command in &EDIT_COMMANDS {
             let button = icon_button(command);
+            self.offer_in_more(
+                &button,
+                OverflowEntry::item(
+                    ox_core::i18n::gettext(command.name),
+                    command.glyph,
+                    command.action,
+                ),
+            );
             if command.action == WindowAction::Share {
                 button.set_visible(false);
                 imp.share_button
@@ -293,6 +348,14 @@ impl CommandBar {
         }
         group.append(&separator());
         let extract = extract_all_button();
+        self.offer_in_more(
+            &extract,
+            OverflowEntry::item(
+                ox_core::i18n::gettext("Extract all"),
+                Icon::FolderZip,
+                WindowAction::ExtractAll,
+            ),
+        );
         group.append(&extract);
         imp.extract_button
             .set(extract)
@@ -303,6 +366,7 @@ impl CommandBar {
             "sort-command",
             sort_menu(),
         );
+        self.offer_menu_in_more(&sort, &ox_core::i18n::gettext("Sort"), Icon::ArrowSort);
         group.append(&sort);
         imp.sort_button
             .set(sort)
@@ -313,6 +377,7 @@ impl CommandBar {
             "view-command",
             view_menu(),
         );
+        self.offer_menu_in_more(&view, &ox_core::i18n::gettext("View"), Icon::Grid);
         group.append(&view);
         imp.view_popover
             .set(
@@ -321,6 +386,15 @@ impl CommandBar {
                     .expect("View has its menu"),
             )
             .expect("constructed runs once per object");
+        self.add_place_commands();
+    }
+
+    /// The commands shown only in some places, after View: Gallery's
+    /// Collection and photo commands, the Recycle Bin's, a search's, then
+    /// "…".
+    fn add_place_commands(&self) {
+        let imp = self.imp();
+        let group = &*imp.file_commands;
         let collection_menu = MenuPopover::new(Vec::new());
         let collection_label = ox_core::i18n::gettext("Collection");
         let collection = gtk::MenuButton::builder()
@@ -331,18 +405,32 @@ impl CommandBar {
             .visible(false)
             .build();
         name_menu_button(&collection, &collection_label);
+        self.offer_menu_in_more(&collection, &collection_label, Icon::Image);
         group.append(&collection);
         imp.collection
             .set((collection, collection_menu))
             .expect("constructed runs once per object");
         let photo_commands = photo_commands();
-        for command in &photo_commands {
+        for (command, entry) in &photo_commands {
+            if let Some(entry) = entry {
+                self.offer_in_more(command, entry.clone());
+            }
             group.append(command);
         }
+        let photo_commands = photo_commands.into_iter().map(|(command, _)| command).collect();
         imp.photo_commands
             .set(photo_commands)
             .expect("constructed runs once per object");
         let recycle_bin = RecycleBinCommands::new();
+        self.offer_in_more(
+            &recycle_bin.empty,
+            OverflowEntry::item(
+                ox_core::i18n::gettext("Empty Recycle Bin"),
+                Icon::DeleteDismiss,
+                WindowAction::EmptyRecycleBin,
+            ),
+        );
+        self.offer_in_more(&recycle_bin.restore, recycle_bin.restore_entry());
         group.append(&recycle_bin.separator);
         group.append(&recycle_bin.empty);
         group.append(&recycle_bin.restore);
@@ -350,6 +438,19 @@ impl CommandBar {
             .set(recycle_bin)
             .expect("constructed runs once per object");
         let search = SearchCommands::new();
+        self.offer_menu_in_more(
+            &search.options,
+            &ox_core::i18n::gettext("Search options"),
+            Icon::SearchSettings,
+        );
+        self.offer_in_more(
+            &search.close,
+            OverflowEntry::item(
+                ox_core::i18n::gettext("Close search"),
+                Icon::Dismiss16,
+                WindowAction::CloseSearch,
+            ),
+        );
         group.append(&search.options);
         group.append(&search.close);
         imp.search_commands
@@ -368,10 +469,111 @@ impl CommandBar {
         if *imp.more_state.borrow() == state {
             return;
         }
-        if let Some(menu) = imp.more_menu.get() {
-            menu.set_entries(more_menu(&state));
-        }
         imp.more_state.replace(state);
+        self.refresh_more_menu();
+    }
+
+    /// Lets `command` move into "…" as `entry` when it does not fit.
+    fn offer_in_more(&self, command: &impl IsA<gtk::Widget>, entry: OverflowEntry) {
+        self.imp()
+            .overflow_entries
+            .borrow_mut()
+            .push((command.clone().upcast(), entry));
+    }
+
+    /// Lets the menu button `command` move into "…" as a submenu named
+    /// `label` listing what its menu does.
+    fn offer_menu_in_more(&self, command: &gtk::MenuButton, label: &str, glyph: Icon) {
+        let Some(menu) = command.popover().and_downcast::<MenuPopover>() else {
+            return;
+        };
+        self.offer_in_more(command, OverflowEntry::submenu(label.to_owned(), glyph, menu));
+    }
+
+    /// Lays the commands out so those that do not fit move into "…", and
+    /// rebuilds "…" whenever other commands moved, or as it opens, when
+    /// what the commands it lists show may have changed.
+    fn lay_out_commands(&self) {
+        let imp = self.imp();
+        let layout = OverflowLayout::install(
+            &imp.file_commands,
+            glib::clone!(
+                #[weak(rename_to = bar)]
+                self,
+                move || bar.refresh_more_menu()
+            ),
+        );
+        imp.overflow
+            .set(layout)
+            .expect("constructed runs once per object");
+        let more = imp.file_commands.last_child().and_downcast::<gtk::MenuButton>();
+        if let Some(more) = more {
+            more.connect_active_notify(glib::clone!(
+                #[weak(rename_to = bar)]
+                self,
+                move |more| {
+                    // Only the commands that moved in can have changed
+                    // their labels (Restore's) since the menu was built.
+                    if more.is_active() && !bar.commands_in_more().is_empty() {
+                        bar.refresh_more_menu();
+                    }
+                }
+            ));
+        }
+    }
+
+    /// The commands "…" lists first: those the bar left out for lack of
+    /// room and those a compact window hides, in the bar's order.
+    fn commands_in_more(&self) -> Vec<MenuEntry> {
+        let imp = self.imp();
+        let left_out = imp
+            .overflow
+            .get()
+            .map(OverflowLayout::left_out)
+            .unwrap_or_default();
+        let compact = imp.compact.get();
+        let hidden_when_compact = imp.hidden_when_compact.borrow();
+        let share = imp
+            .share_button
+            .get()
+            .map(|share| share.clone().upcast::<gtk::Widget>());
+        imp.overflow_entries
+            .borrow()
+            .iter()
+            .filter(|(command, _)| {
+                let hidden_for_room = compact
+                    && (hidden_when_compact.contains(command)
+                        || (share.as_ref() == Some(command) && imp.share_offered.get()));
+                left_out.contains(command) || hidden_for_room
+            })
+            .map(|(_, entry)| entry.entry())
+            .collect()
+    }
+
+    /// Builds "…": the commands that did not fit, then its own items.
+    fn refresh_more_menu(&self) {
+        let imp = self.imp();
+        let Some(menu) = imp.more_menu.get() else {
+            return;
+        };
+        let mut entries = self.commands_in_more();
+        if !entries.is_empty() {
+            entries.push(MenuEntry::Divider);
+        }
+        entries.extend(more_menu(&imp.more_state.borrow()));
+        if menu.entries() != entries {
+            menu.set_entries(entries);
+        }
+    }
+
+    /// The commands left out of the bar for lack of room, for tests.
+    #[cfg(test)]
+    pub(super) fn commands_left_out(&self) -> Vec<gtk::Widget> {
+        self.imp()
+            .overflow
+            .get()
+            .map(OverflowLayout::left_out)
+            .unwrap_or_default()
     }
 
     /// Gives Update, the appearance toggle, Settings and the Details
@@ -502,6 +704,15 @@ impl CommandBar {
         }
         imp.compact.set(band.is_compact());
         self.show_share();
+        if let Some(layout) = imp.overflow.get() {
+            let gap = if band >= WindowWidth::Medium {
+                overflow::NARROW_GAP
+            } else {
+                overflow::GAP
+            };
+            layout.set_gap(gap);
+        }
+        self.refresh_more_menu();
     }
 
     /// Offers Share, or hides it where the desktop cannot share.
@@ -696,6 +907,8 @@ pub(super) struct RecycleBinCommands {
     empty: gtk::Button,
     restore: gtk::Button,
     restore_label: gtk::Label,
+    /// What Restore restores now.
+    target: std::rc::Rc<std::cell::Cell<RestoreTarget>>,
 }
 
 impl RecycleBinCommands {
@@ -723,7 +936,18 @@ impl RecycleBinCommands {
             empty,
             restore,
             restore_label,
+            target: std::rc::Rc::new(std::cell::Cell::new(target)),
         }
+    }
+
+    /// Restore as "…" lists it when it does not fit: named for what it
+    /// restores now.
+    fn restore_entry(&self) -> OverflowEntry {
+        let target = std::rc::Rc::clone(&self.target);
+        OverflowEntry(std::rc::Rc::new(move || {
+            let target = target.get();
+            MenuItem::new(target.label(), Icon::ArrowCounterclockwise, target.action()).into()
+        }))
     }
 
     /// Shows the commands with Restore restoring `restore`, or hides them
@@ -736,6 +960,7 @@ impl RecycleBinCommands {
         let Some(target) = restore else {
             return;
         };
+        self.target.set(target);
         let label = target.label();
         if self.restore_label.text() != label {
             self.restore_label.set_text(label);
@@ -781,10 +1006,14 @@ impl SearchCommands {
 /// Set as background (grayed: not done), Rotate left and Rotate right
 /// after a separator, as Windows 11's Gallery shows them while photos are
 /// selected; hidden until then (HOME-030).
-fn photo_commands() -> Vec<gtk::Widget> {
+fn photo_commands() -> Vec<(gtk::Widget, Option<OverflowEntry>)> {
     let photo_separator = separator();
-    let (background, _) = text_button(
-        &ox_core::i18n::gettext("Set as background"),
+    let photo_command = |label: String, glyph: Icon, action: WindowAction, css_class: &str| {
+        let (button, _) = text_button(&label, glyph, action, css_class);
+        (button, OverflowEntry::item(label, glyph, action))
+    };
+    let (background, background_entry) = photo_command(
+        ox_core::i18n::gettext("Set as background"),
         Icon::Image,
         WindowAction::SetAsBackground,
         "set-background-command",
@@ -792,25 +1021,25 @@ fn photo_commands() -> Vec<gtk::Widget> {
     background.set_tooltip_text(Some(&ox_core::i18n::gettext(
         "Setting the desktop background is not available yet.",
     )));
-    let (rotate_left, _) = text_button(
-        &ox_core::i18n::gettext("Rotate left"),
+    let (rotate_left, rotate_left_entry) = photo_command(
+        ox_core::i18n::gettext("Rotate left"),
         Icon::ArrowCounterclockwise,
         WindowAction::RotateLeft,
         "rotate-left-command",
     );
-    let (rotate_right, _) = text_button(
-        &ox_core::i18n::gettext("Rotate right"),
+    let (rotate_right, rotate_right_entry) = photo_command(
+        ox_core::i18n::gettext("Rotate right"),
         Icon::ArrowClockwise,
         WindowAction::RotateRight,
         "rotate-right-command",
     );
-    let photo_commands: Vec<gtk::Widget> = vec![
-        photo_separator.upcast(),
-        background.upcast(),
-        rotate_left.upcast(),
-        rotate_right.upcast(),
+    let photo_commands: Vec<(gtk::Widget, Option<OverflowEntry>)> = vec![
+        (photo_separator.upcast(), None),
+        (background.upcast(), Some(background_entry)),
+        (rotate_left.upcast(), Some(rotate_left_entry)),
+        (rotate_right.upcast(), Some(rotate_right_entry)),
     ];
-    for command in &photo_commands {
+    for (command, _) in &photo_commands {
         command.set_visible(false);
     }
     photo_commands

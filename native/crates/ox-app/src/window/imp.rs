@@ -150,6 +150,15 @@ pub(crate) struct BrowserWindow {
     /// How many times its 100% size the window's text is drawn, which
     /// widens the sidebar's default width; 0 until it is drawn.
     pub(super) sidebar_text_scale: Cell<f64>,
+    /// The sidebar width the user chose, or the text size's default,
+    /// which the window shows whenever it is wide enough; `None` until
+    /// the sidebar is first placed.
+    pub(super) sidebar_wanted: Cell<Option<i32>>,
+    /// While the window itself moves the sidebar to fit its width, which
+    /// is not a width anyone chose.
+    pub(super) fitting_sidebar: Cell<bool>,
+    /// Whether a fit of the sidebar to the window's width waits to run.
+    pub(super) sidebar_fit_pending: Cell<bool>,
     /// The modifiers held at the last key press or click in a folder view,
     /// which decide how an activated folder opens (TAB-026).
     pub(super) view_modifiers: Cell<Option<gtk::gdk::ModifierType>>,

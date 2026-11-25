@@ -146,7 +146,13 @@ impl ChoiceList {
     /// A bordered button with the chosen option's label and a chevron,
     /// which opens the list.
     fn new_button(&self) -> gtk::MenuButton {
-        let label = gtk::Label::builder().xalign(0.0).hexpand(true).build();
+        // A choice longer than the row has room for ends in "…" rather
+        // than widening the page; the list shows it whole.
+        let label = gtk::Label::builder()
+            .xalign(0.0)
+            .hexpand(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .build();
         let content = gtk::Box::new(gtk::Orientation::Horizontal, 8);
         content.append(&label);
         content.append(&icons::image(Icon::ChevronDown16, CHEVRON_GLYPH));

@@ -297,11 +297,16 @@ fn the_command_bar_keeps_its_right_group_and_shows_details_as_selected() {
         place.right() - 15,
         "at the right end"
     );
-    let scroller = descendants::<gtk::ScrolledWindow>(bar)
+    // The commands never scroll out of sight: those that do not fit move
+    // into "…" (command_bar/overflow.rs).
+    let group = descendants::<gtk::Box>(bar)
         .into_iter()
-        .next()
-        .expect("the commands scroll");
-    assert_eq!(scroller.hscrollbar_policy(), gtk::PolicyType::External);
+        .find(|group| group.has_css_class("command-group"))
+        .expect("the commands");
+    assert!(
+        group.ancestor(gtk::ScrolledWindow::static_type()).is_none(),
+        "the commands are not in a scroller"
+    );
     assert!(details.is_active(), "the details pane is open");
     let colour = painted_colour(&details, 2, details.height() / 2);
     assert_same_colour(colour, css_colour("#e8f1fb"), "the selected colour");

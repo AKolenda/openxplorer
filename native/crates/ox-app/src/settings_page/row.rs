@@ -100,6 +100,9 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             crate::i18n::translate_template(&*self.obj(), "settings-row.ui");
+            // Controls wider than the row together, at a large text size
+            // in a narrow window, go onto further lines.
+            super::super::wrap_layout::wrap_children_of(&*self.control_slot);
         }
     }
     impl WidgetImpl for SettingRow {}

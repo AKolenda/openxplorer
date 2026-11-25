@@ -740,6 +740,11 @@ impl MenuPopover {
         }
     }
 
+    /// The entries, dividers included, as the menu shows them now.
+    pub(in crate::window) fn entries(&self) -> Vec<MenuEntry> {
+        self.imp().entries.borrow().clone()
+    }
+
     /// The items, one per row, without the dividers.
     pub(in crate::window) fn items(&self) -> Vec<MenuItem> {
         items_of(&self.imp().entries.borrow()).cloned().collect()

@@ -212,6 +212,7 @@ impl BrowserWindow {
             None => self.default_sidebar_width(),
         };
         workspace.set_position(start);
+        self.remember_wanted_sidebar_width();
         self.save_sidebar_width_after_drags();
         self.keep_sidebar_within_limit();
         self.reset_sidebar_on_double_click();
@@ -304,7 +305,62 @@ impl BrowserWindow {
             return;
         }
         let wanted = self.default_sidebar_width();
-        workspace.set_position(wanted.min(limit));
+        // The new default is what the sidebar takes back when the window
+        // is wide enough.
+        self.imp().sidebar_wanted.set(Some(wanted));
+        self.set_fitted_sidebar_position(wanted.min(limit));
+    }
+
+    /// Notes every width the sidebar is given, by a drag, the keyboard or
+    /// a reset, as the one to show while there is room, except the
+    /// window's own fits to its width.
+    fn remember_wanted_sidebar_width(&self) {
+        self.imp().sidebar_wanted.set(Some(self.workspace().position()));
+        self.workspace().connect_position_notify(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |workspace| {
+                if !window.imp().fitting_sidebar.get() {
+                    window.imp().sidebar_wanted.set(Some(workspace.position()));
+                }
+            }
+        ));
+    }
+
+    /// Moves the sidebar to `position` to fit the window, without taking
+    /// it for the width wanted.
+    fn set_fitted_sidebar_position(&self, position: i32) {
+        let imp = self.imp();
+        imp.fitting_sidebar.set(true);
+        self.workspace().set_position(position);
+        imp.fitting_sidebar.set(false);
+    }
+
+    /// Narrows the sidebar to leave the folder pane its room in a window
+    /// that narrowed, and widens it back to the width wanted as the window
+    /// widens, as Windows' navigation pane gives way to the files; nothing
+    /// is saved. Runs after the allocation under way, as moving the pane
+    /// during one would start it again.
+    pub(super) fn fit_sidebar_to_window(&self) {
+        let imp = self.imp();
+        if imp.sidebar_fit_pending.replace(true) {
+            return;
+        }
+        glib::idle_add_local_once(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move || {
+                window.imp().sidebar_fit_pending.set(false);
+                let (Some(wanted), Some(limit)) = (window.imp().sidebar_wanted.get(), window.sidebar_limit())
+                else {
+                    return;
+                };
+                let fitted = wanted.min(limit);
+                if window.workspace().position() != fitted {
+                    window.set_fitted_sidebar_position(fitted);
+                }
+            }
+        ));
     }
 
     /// Shows the default sidebar and the columns' default widths, without

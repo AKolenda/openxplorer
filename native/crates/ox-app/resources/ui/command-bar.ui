@@ -17,21 +17,15 @@
     </accessibility>
     <child>
       <!-- New, Cut to Move to Trash, Sort, View and More options, added
-           from the tables in Rust. They scroll without a scroll bar, so
-           the window can be narrower than all the commands (the web bar
-           clips them); the buttons after them stay at the right. -->
-      <object class="GtkScrolledWindow">
-        <property name="hscrollbar-policy">external</property>
-        <property name="vscrollbar-policy">never</property>
-        <property name="propagate-natural-width">true</property>
+           from the tables in Rust. The commands that do not fit move
+           into More options (src/window/command_bar/overflow.rs), so the
+           window can be narrower than all the commands; the buttons
+           after them stay at the right. -->
+      <object class="GtkBox" id="file_commands">
         <property name="hexpand">true</property>
-        <property name="child">
-          <object class="GtkBox" id="file_commands">
-            <style>
-              <class name="command-group"/>
-            </style>
-          </object>
-        </property>
+        <style>
+          <class name="command-group"/>
+        </style>
       </object>
     </child>
     <child>

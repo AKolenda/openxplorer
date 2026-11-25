@@ -48,6 +48,7 @@ mod startup;
 mod status_card;
 mod troubleshooting;
 mod window_decorations;
+mod wrap_layout;
 
 #[cfg(test)]
 mod tests;
