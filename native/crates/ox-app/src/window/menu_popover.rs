@@ -2051,13 +2051,9 @@ fn legacy_item_content(item: &MenuItem, check: CheckMark, look: RowLook) -> gtk:
         }
         image.upcast()
     } else {
-        // An empty column of the icon's width: an empty box is drawn
-        // narrower than it asks to be.
-        gtk::DrawingArea::builder()
-            .content_width(edge)
-            .content_height(edge)
-            .build()
-            .upcast()
+        // An empty column of the icon's width, held open by the size
+        // request below.
+        gtk::Box::new(gtk::Orientation::Horizontal, 0).upcast()
     };
     glyph.set_size_request(edge, edge);
     glyph.set_valign(gtk::Align::Center);
