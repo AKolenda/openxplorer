@@ -113,11 +113,13 @@ impl BrowserWindow {
                     return;
                 }
                 window.imp().file_operations.borrow_mut().templates = Some(list);
+                let new = crate::window::command_bar::new_menu(window.template_menu_entries());
                 if let Some(menu) = window.command_bar().new_menu_popover() {
-                    menu.set_entries(crate::window::command_bar::new_menu(
-                        window.template_menu_entries(),
-                    ));
+                    menu.set_entries(new.clone());
                 }
+                // A folder menu that opened before the read keeps its place
+                // and gets the templates too (OPS-003).
+                window.update_open_new_menus(&new);
             }
         ));
     }

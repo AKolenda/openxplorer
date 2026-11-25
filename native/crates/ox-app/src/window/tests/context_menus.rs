@@ -551,9 +551,7 @@ fn right_clicking_blank_space_opens_the_folder_menu_and_new_opens_beside_it() {
         [
             "Folder",
             "Shortcut",
-            "-",
             "Bitmap image",
-            "Rich Text Document",
             "Text Document",
             "Compressed (zipped) Folder",
         ]
@@ -731,7 +729,7 @@ fn the_compact_folder_menu_opens_its_submenus_beside_it() {
     test.window.right_click(None);
     let menu = test.window.context_menu();
     assert_eq!(menu.style(), MenuStyle::Compact);
-    assert_eq!(menu.row_labels()[..4], ["View", "Sort by", "Group by", "Refresh"]);
+    assert_eq!(menu.row_labels()[..3], ["View", "Sort by", "Group by"]);
     assert_eq!(
         menu.row_labels().last().map(String::as_str),
         Some("Show more options")

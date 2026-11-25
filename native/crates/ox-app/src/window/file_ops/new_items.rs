@@ -65,6 +65,11 @@ impl NewFile {
             NewFile::Document(NewDocument::CompressedFolder) => {
                 crate::i18n::message_id("Creating a compressed (zipped) folder…")
             }
+            NewFile::Document(
+                NewDocument::OpenDocumentPresentation
+                | NewDocument::OpenDocumentSpreadsheet
+                | NewDocument::OpenDocumentText,
+            ) => crate::i18n::message_id("Creating a document…"),
             NewFile::Template(_) => crate::i18n::message_id("Creating a file…"),
         };
         ox_core::i18n::gettext_static(label)
@@ -79,6 +84,9 @@ fn document_base_name(document: NewDocument) -> &'static str {
         NewDocument::RichTextDocument => crate::i18n::message_id("New Rich Text Document"),
         NewDocument::TextDocument => crate::i18n::message_id("New Text Document"),
         NewDocument::CompressedFolder => crate::i18n::message_id("New Compressed (zipped) Folder"),
+        NewDocument::OpenDocumentPresentation => crate::i18n::message_id("New OpenDocument Presentation"),
+        NewDocument::OpenDocumentSpreadsheet => crate::i18n::message_id("New OpenDocument Spreadsheet"),
+        NewDocument::OpenDocumentText => crate::i18n::message_id("New OpenDocument Text"),
     };
     ox_core::i18n::gettext_static(name)
 }

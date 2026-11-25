@@ -432,10 +432,8 @@ fn write_local_stage(
     // The system's reason after the stage's path, which `naming` turns
     // into the new file's.
     let located = |error: std::io::Error| {
-        naming(
-            std::io::Error::new(error.kind(), format!("{}: {error}", path.display())).into(),
-            staged,
-        )
+        let message = format!("{}: {}", path.display(), system_reason(&error));
+        naming(std::io::Error::new(error.kind(), message).into(), staged)
     };
     let mut file = std::fs::OpenOptions::new()
         .write(true)
@@ -460,6 +458,18 @@ fn write_local_stage(
     drop(file);
     // OPS-048: a stage that could not be written in full is deleted.
     written.map_err(|error| discard_stage(&GioNode::from_file(stage.clone()), error))
+}
+
+/// The system's words for `error` ("Permission denied"), as GIO gives
+/// them, without the error number Rust adds ("(os error 13)").
+fn system_reason(error: &std::io::Error) -> String {
+    let text = error.to_string();
+    match error.raw_os_error() {
+        Some(code) => text
+            .strip_suffix(&format!(" (os error {code})"))
+            .map_or_else(|| text.clone(), str::to_owned),
+        None => text,
+    }
 }
 
 /// Deletes a stage file this operation created after `cause` stopped it,
@@ -569,7 +579,7 @@ mod tests {
             publish_new_file(
                 &folder,
                 &target,
-                document.contents(),
+                &document.contents(),
                 &OperationContext::default(),
             )
             .expect("the new document");
@@ -617,6 +627,35 @@ mod tests {
             .permissions()
             .mode();
         assert_eq!(mode & 0o777, 0o600, "the other file keeps its mode");
+    }
+
+    /// A new file this computer refuses names the new file and the
+    /// system's reason, as GIO's errors do for a new folder ("Error
+    /// creating directory …: Permission denied"), without Rust's error
+    /// number ("(os error 13)"). A link planted at the stage's name is
+    /// refused for every account, root included.
+    ///
+    /// parity: OPS-002
+    #[test]
+    fn a_refused_new_file_says_the_systems_reason_without_its_number() {
+        let temp = tempfile::tempdir().expect("a temporary folder");
+        let folder = gio::File::for_path(temp.path());
+        let staged = StagedName::new(".winspace-new-c", &[], "New Text Document.txt");
+        std::os::unix::fs::symlink(temp.path().join("elsewhere"), temp.path().join(".winspace-new-c"))
+            .expect("a planted link");
+
+        let refused = write_private_stage(
+            &folder.child(".winspace-new-c"),
+            b"",
+            &OperationContext::default(),
+            &staged,
+        )
+        .expect_err("a link is never followed");
+
+        let message = refused.to_string();
+        assert!(message.contains("New Text Document.txt"), "{message}");
+        assert!(!message.contains("os error"), "{message}");
+        assert!(!message.contains(".winspace-new-"), "{message}");
     }
 
     #[test]

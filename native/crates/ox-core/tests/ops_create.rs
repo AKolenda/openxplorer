@@ -433,7 +433,7 @@ fn a_numbered_document_takes_the_next_free_name_before_the_extension() {
     ] {
         assert_eq!(
             fs::read(temp.path().join(name)).unwrap(),
-            NewDocument::TextDocument.contents(),
+            &*NewDocument::TextDocument.contents(),
             "{name}"
         );
     }
@@ -554,6 +554,21 @@ fn each_new_document_is_made_under_its_windows_name_with_its_content() {
             NewDocument::CompressedFolder,
             "New Compressed (zipped) Folder (2).zip",
         ),
+        (
+            "New OpenDocument Text",
+            NewDocument::OpenDocumentText,
+            "New OpenDocument Text.odt",
+        ),
+        (
+            "New OpenDocument Spreadsheet",
+            NewDocument::OpenDocumentSpreadsheet,
+            "New OpenDocument Spreadsheet.ods",
+        ),
+        (
+            "New OpenDocument Presentation",
+            NewDocument::OpenDocumentPresentation,
+            "New OpenDocument Presentation.odp",
+        ),
     ];
     fs::write(temp.path().join("New Compressed (zipped) Folder.zip"), b"kept").unwrap();
 
@@ -564,7 +579,7 @@ fn each_new_document_is_made_under_its_windows_name_with_its_content() {
         assert_eq!(created.uri, file_uri(&temp.path().join(file_name)));
         assert_eq!(
             fs::read(temp.path().join(file_name)).unwrap(),
-            document.contents(),
+            &*document.contents(),
             "{file_name}"
         );
     }
@@ -581,6 +596,20 @@ fn each_new_document_is_made_under_its_windows_name_with_its_content() {
         .list(&zip, "", &context.cancel)
         .expect("an empty ZIP lists");
     assert!(listing.entries.is_empty());
+    // An OpenDocument file is a ZIP package the archive reader lists.
+    for (file_name, part) in [
+        ("New OpenDocument Text.odt", "content.xml"),
+        ("New OpenDocument Spreadsheet.ods", "styles.xml"),
+        ("New OpenDocument Presentation.odp", "mimetype"),
+    ] {
+        let package = file_uri(&temp.path().join(file_name));
+        let listing = browser
+            .list(&package, "", &context.cancel)
+            .expect("an OpenDocument package lists as a ZIP");
+        let names: Vec<&str> = listing.entries.iter().map(|entry| entry.name.as_str()).collect();
+        assert!(names.contains(&part), "{file_name}: {names:?}");
+        assert!(names.contains(&"META-INF"), "{file_name}: {names:?}");
+    }
 }
 
 /// A template New lists is copied under its file name, then the next

@@ -20,7 +20,7 @@ The full list of keys is in Settings > About > Keyboard shortcuts (Ctrl+?).
 
 ## Files and folders
 
-- New in the command bar lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Rich Text Document, Text Document and Compressed (zipped) Folder, then the files in your Templates folder. A new item is made at once as, for example, "New Text Document.txt" (or "New Text Document (2).txt" when that name is taken), then renamed in place: type its name and press Enter.
+- New in the command bar lists what Windows 11 lists: Folder, Shortcut, Bitmap image, Text Document and Compressed (zipped) Folder, with Rich Text Document while an app opens RTF files and OpenDocument Presentation, Spreadsheet and Text while an office suite such as LibreOffice is installed, then the files in your Templates folder. A new item is made at once as, for example, "New Text Document.txt" (or "New Text Document (2).txt" when that name is taken), then renamed in place: type its name and press Enter.
 - Cut, Copy and Paste work with other file managers. Paste on one selected folder pastes into that folder.
 - Rename with F2. Select several items to rename them together. As in Windows, \ / : * ? " < > | can’t be typed in a name, and a file given a name that is taken is offered the next free number, such as Report (2).txt.
 - Delete or Ctrl+D moves items to the Recycle Bin; Shift+Delete deletes them permanently after asking. Locations without a Recycle Bin offer a confirmed permanent delete.

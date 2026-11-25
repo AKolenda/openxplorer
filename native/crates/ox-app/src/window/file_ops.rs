@@ -74,6 +74,10 @@ mod name_dialog;
 mod names;
 mod new_items;
 mod numbered_rename;
+mod opendocuments;
+pub(in crate::window) use opendocuments::document_entries;
+#[cfg(test)]
+pub(crate) use opendocuments::pretend_document_applications;
 mod pasted_content;
 mod progress;
 mod recycle_bin;

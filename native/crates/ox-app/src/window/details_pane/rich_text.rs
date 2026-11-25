@@ -467,8 +467,8 @@ mod tests {
     #[test]
     fn a_new_rich_text_document_has_one_empty_paragraph() {
         let new = ox_core::ops::NewDocument::RichTextDocument.contents();
-        assert!(is_rtf(new));
-        assert_eq!(rtf_text(new), "\n");
+        assert!(is_rtf(&new));
+        assert_eq!(rtf_text(&new), "\n");
         assert!(!is_rtf(b"plain text"));
     }
 

@@ -158,12 +158,12 @@ fn the_edit_commands_follow_the_selection_with_their_python_tooltips() {
 }
 
 /// The New menu, laid out as Windows 11's, a divider as `-`.
-const NEW_MENU: [&str; 7] = [
+/// The New menu as Windows 11 lists it without WordPad or an office
+/// suite (VM check 2026-11-22): no separators and no shortcut text.
+const NEW_MENU: [&str; 5] = [
     "Folder",
     "Shortcut",
-    "-",
     "Bitmap image",
-    "Rich Text Document",
     "Text Document",
     "Compressed (zipped) Folder",
 ];
