@@ -180,6 +180,48 @@ impl StripPosition {
     }
 }
 
+/// How the Details view draws the sorted column's title
+/// (`preferences.columnHeaderStyle`, VIEW-014).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColumnHeaderStyle {
+    /// The app's own: a chevron after the sorted title, which is bright,
+    /// and the accent with a line under it for any sort other than Name
+    /// ascending (owner decision 2026-11-21).
+    #[default]
+    OpenXplorer,
+    /// Windows 11 File Explorer's: only a small gray chevron centered
+    /// over the sorted column, above its title, which keeps its color.
+    Windows,
+}
+
+impl ColumnHeaderStyle {
+    /// Every style, the default first.
+    pub const ALL: [ColumnHeaderStyle; 2] = [ColumnHeaderStyle::OpenXplorer, ColumnHeaderStyle::Windows];
+
+    /// The value stored in `settings.json`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            ColumnHeaderStyle::OpenXplorer => "openxplorer",
+            ColumnHeaderStyle::Windows => "windows",
+        }
+    }
+
+    /// The style stored as `key`, or `None` for anything else.
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|style| style.as_str() == key)
+    }
+
+    /// True for the app's own style, the default, which is not stored.
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "serde passes the field by reference"
+    )]
+    pub(super) fn is_openxplorer(&self) -> bool {
+        *self == ColumnHeaderStyle::OpenXplorer
+    }
+}
+
 /// How a ZIP opens when the app opens archives itself
 /// (`preferences.zipOpening`, ARC-026).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize)]

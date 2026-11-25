@@ -50,7 +50,7 @@ mod view_properties;
 use std::path::{Path, PathBuf};
 
 pub use crate::private_storage::{StorageError, StorageRefusal};
-pub use choices::{Appearance, ContextMenu, StripPosition, Theme, View, ZipOpening};
+pub use choices::{Appearance, ColumnHeaderStyle, ContextMenu, StripPosition, Theme, View, ZipOpening};
 pub use error::SettingsError;
 pub use file_icons::{
     file_name_ending, is_file_icon, is_file_icon_kind, FileIcons, FILE_ICON_ARTS, FILE_ICON_KINDS,
