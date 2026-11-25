@@ -16,7 +16,7 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::location::{file_uri, location_kind, LocationKind, VirtualPlace};
 use ox_core::session::SavedWindows;
-use ox_core::settings::{Appearance, Settings};
+use ox_core::settings::Settings;
 
 use super::clock_format::ClockSetting;
 use crate::app_context::AppContext;
@@ -26,7 +26,7 @@ use crate::text_size::TextSize;
 use crate::theme::accent::AccentSetting;
 use crate::theme::contrast::ContrastSetting;
 use crate::theme::desktop_text::DesktopTextWatch;
-use crate::theme::system::{self, SystemScheme};
+use crate::theme::system::{GtkDesktop, SystemScheme};
 use crate::theme::Skin;
 use crate::window::BrowserWindow;
 
@@ -116,24 +116,24 @@ impl AppState {
     /// desktop's colour scheme. `None` without a display.
     pub(super) fn new(app: &gtk::Application, settings: Settings) -> Option<Self> {
         let display = gtk::gdk::Display::default()?;
-        // Installing the skin forces GTK's dark preference off, so it is
-        // read first.
-        let gtk_preference = system::gtk_preference(&display);
+        // Installing the skin forces GTK's own theme and its dark
+        // preference off, so what GTK says of the desktop is read first.
+        let gtk_desktop = GtkDesktop::read(&display);
         let skin = Skin::install(&display);
-        Some(Self::with_skin(app, skin, gtk_preference, settings))
+        Some(Self::with_skin(app, skin, &gtk_desktop, settings))
     }
 
-    /// The application state around an installed `skin`. `gtk_preference`
-    /// is GTK's dark preference from before the skin was installed, which
-    /// the desktop's appearance falls back to.
-    fn with_skin(app: &gtk::Application, skin: Skin, gtk_preference: Appearance, settings: Settings) -> Self {
+    /// The application state around an installed `skin`. `gtk_desktop` is
+    /// what GTK said of the desktop's style before the skin was installed,
+    /// which the desktop's appearance falls back to.
+    fn with_skin(app: &gtk::Application, skin: Skin, gtk_desktop: &GtkDesktop, settings: Settings) -> Self {
         let preferences = &settings.data().preferences;
         skin.set_theme(preferences.theme);
         skin.set_uses_desktop_font(preferences.desktop_font);
         skin.set_neutral_selection_colors(preferences.neutral_selection_colors);
         skin.set_text_size(TextSize::from_percent(preferences.text_size));
         let desktop_text = follow_desktop_text(&skin);
-        let system_scheme = follow_system_scheme(&skin, gtk_preference);
+        let system_scheme = follow_system_scheme(&skin, gtk_desktop);
         let contrast_setting = follow_contrast(&skin);
         let accent_setting = follow_accent(&skin);
         let clock_setting = ClockSetting::follow();
@@ -528,14 +528,14 @@ fn attach_desktop_integration(app: &gtk::Application, context: &AppContext) {
 }
 
 /// Applies the desktop's light or dark scheme to `skin` now and on every
-/// change; `gtk_preference` decides when the desktop's keys do not.
-fn follow_system_scheme(skin: &Skin, gtk_preference: Appearance) -> Rc<SystemScheme> {
+/// change; `gtk_desktop` decides when the desktop's settings do not.
+fn follow_system_scheme(skin: &Skin, gtk_desktop: &GtkDesktop) -> Rc<SystemScheme> {
     let on_change = glib::clone!(
         #[weak]
         skin,
         move |appearance| skin.set_desktop_appearance(appearance)
     );
-    let scheme = SystemScheme::new(gtk_preference, on_change);
+    let scheme = SystemScheme::new(gtk_desktop, on_change);
     skin.set_desktop_appearance(scheme.appearance());
     scheme
 }
@@ -587,7 +587,7 @@ mod tests {
 
     use ox_core::integration::{FileManagerMethod, FileManagerRequest};
     use ox_core::location::SETTINGS_URI;
-    use ox_core::settings::{PreferencesUpdate, Theme};
+    use ox_core::settings::{Appearance, PreferencesUpdate, Theme};
     use tempfile::TempDir;
 
     use super::super::command_line::CommandRequest;
@@ -624,11 +624,11 @@ mod tests {
         /// until it is dropped.
         fn with_settings_folder(settings: TempDir) -> Self {
             // The private test display's GTK settings do not prefer dark.
-            let gtk_preference = Appearance::Light;
+            let gtk_desktop = GtkDesktop::preferring(Appearance::Light);
             let state = AppState::with_skin(
                 &application(),
                 skin(),
-                gtk_preference,
+                &gtk_desktop,
                 Settings::open(settings.path()),
             );
             state.context.record_launches();
