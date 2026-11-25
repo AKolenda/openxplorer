@@ -11945,6 +11945,10 @@ msgid "Brave's downloads, its Save page as and Save as PDF, and its upload dialo
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Copies to USB sticks and FUSE drives work, and a move keeps its originals until the copy is on the drive. Right-click menus, \"Show more options\", the address bar, Network, views, Tiles, the Details pane, Open with, New, shortcuts, the clipboard, tabs, error messages and drives behave as in Windows 11. Screen readers, the keyboard and high contrast are better supported. Office and OpenDocument files show in the Preview pane. Settings can be exported and imported, and one switch, \"Behave like Windows Explorer\", sets every setting that has a Windows behavior."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
 msgid "Copies, drags and new folders work as in Windows Explorer: a copy is named “name - Copy”, a plain drag moves within a drive and copies to another, and New folder makes the folder at once to rename in place. Properties shows Size on disk, a rename that changes the extension asks first, and Super+E can open OpenXplorer on KDE Plasma. An empty folder looks as it does in Windows and takes right-click, paste and drops, New and Paste are off in a folder you cannot write to, Apply to all folders uses the choices in the dialog, and Show after moving items to the Recycle Bin opens it."
 msgstr ""
 
@@ -11958,6 +11962,10 @@ msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml
 msgid "First packaged native preview of the GTK 4 interface, for trying it beside the current OpenXplorer."
+msgstr ""
+
+#: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml
+msgid "Folder Options can now open items with a single click, pointing at an item selects it, and \"Open in Terminal\" opens the terminal the desktop is set to use, including Ghostty and any terminal xdg-terminal-exec knows. The System theme follows a dark KDE Plasma, Cinnamon, Xfce or MATE desktop, not only GNOME."
 msgstr ""
 
 #: packaging/data/io.winspace.Development.Native.metainfo.xml packaging/data/io.winspace.Development.metainfo.xml

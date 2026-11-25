@@ -1,3 +1,59 @@
+# 2.0.26 — 2026-11-25
+
+Items can now open with a single click, "Open in Terminal" opens the desktop's own terminal, and the System theme follows dark desktops beyond GNOME. A series of 32 changes makes copying, menus, views, the address bar, errors, accessibility, shortcuts and drives behave as in Windows 11 File Explorer.
+
+## What's Changed
+* fix(appearance): Follow a dark desktop on KDE, Cinnamon, Xfce and MATE, not only GNOME by @AKolenda in https://github.com/AKolenda/openxplorer/pull/395
+* fix(transfers): Copy to USB sticks, keep a move's originals until its copy is on the drive, and stop a file drag crash by @addition-official in https://github.com/AKolenda/openxplorer/pull/396
+* fix(undo): Ask when Undo Move finds the old name taken, and make extraction undoable by @addition-official in https://github.com/AKolenda/openxplorer/pull/397
+* fix(rename): Keep a typed name on a click away, merge folders as Windows asks and refuse the same characters everywhere by @addition-official in https://github.com/AKolenda/openxplorer/pull/398
+* fix(sidebar): Fix pinning, drops, saved width, eject failures and expanding in the navigation pane by @addition-official in https://github.com/AKolenda/openxplorer/pull/399
+* fix(address-bar): Match Windows 11's address bar menu, typed paths, standard folders and history by @addition-official in https://github.com/AKolenda/openxplorer/pull/400
+* fix(menus): Match Windows 11's right-click menus, Small icons, Properties and status bar by @addition-official in https://github.com/AKolenda/openxplorer/pull/401
+* feat(network): Make Network work like Windows with one row per device, a discovery banner and computers in the navigation pane by @addition-official in https://github.com/AKolenda/openxplorer/pull/402
+* fix(views): Head groups in the icon sizes and List, fill Small icons by rows and fix Home and reflow in grouped views by @addition-official in https://github.com/AKolenda/openxplorer/pull/403
+* fix(open-with): Open files, choose apps and change defaults as Windows 11 does by @addition-official in https://github.com/AKolenda/openxplorer/pull/404
+* fix(layout): Keep commands, Settings and thumbnails usable in narrow windows, at large text and on high scales by @addition-official in https://github.com/AKolenda/openxplorer/pull/405
+* fix(home): Act on Recent and Favorites files, and drag Quick access tiles into a new order by @addition-official in https://github.com/AKolenda/openxplorer/pull/406
+* feat(new): Offer the OpenDocument types in New, and show a new item that sorts last in a long folder by @addition-official in https://github.com/AKolenda/openxplorer/pull/407
+* fix(details-pane): Make the Details pane and status bar read as Windows 11's and stop decoding every photo passed by @addition-official in https://github.com/AKolenda/openxplorer/pull/408
+* perf(startup): Open later windows without reading the whole executable, and let go of picture decoders and previews by @addition-official in https://github.com/AKolenda/openxplorer/pull/409
+* fix(tabs): Reopen every window, keep both panes of a moved split tab, and put the keyboard in new tabs by @addition-official in https://github.com/AKolenda/openxplorer/pull/410
+* fix(errors): Say every system error in Windows 11's words, with Windows' error codes by @addition-official in https://github.com/AKolenda/openxplorer/pull/411
+* fix(clipboard): Keep copied files after the last window and paste shares and odd names into other apps by @addition-official in https://github.com/AKolenda/openxplorer/pull/412
+* fix(shortcuts): Open shortcuts' targets, ask Problem with Shortcut and add the Create Shortcut wizard by @addition-official in https://github.com/AKolenda/openxplorer/pull/413
+* fix(drives): Handle pulled-out and busy drives, rename drives and case-only names, and add opt-in permanent delete by @addition-official in https://github.com/AKolenda/openxplorer/pull/414
+* fix(a11y): Make the app heard by screen readers, usable from the keyboard and readable in high contrast by @addition-official in https://github.com/AKolenda/openxplorer/pull/415
+* feat(details): Offer Windows' column header style as a setting by @addition-official in https://github.com/AKolenda/openxplorer/pull/416
+* fix(parsers): Fuzz the readers of untrusted bytes and fix what the fuzzing found by @addition-official in https://github.com/AKolenda/openxplorer/pull/417
+* feat(preview): Show Office and OpenDocument files in the Preview pane and as thumbnails by @addition-official in https://github.com/AKolenda/openxplorer/pull/418
+* fix(previews): Keep idle picture decoders alive and write "Today at" dates from the new day by @addition-official in https://github.com/AKolenda/openxplorer/pull/419
+* feat(icons): Draw icons and glyphs from Windows files the user chooses by @addition-official in https://github.com/AKolenda/openxplorer/pull/420
+* fix(views): Space icon views, Tiles and Content as Windows 11 measures, and add two Details column settings by @addition-official in https://github.com/AKolenda/openxplorer/pull/421
+* fix(native): Fix a crash, a silent recursive change, freezes and smaller gaps found in the 2.0 audit by @addition-official in https://github.com/AKolenda/openxplorer/pull/422
+* fix(native): Keep compressed folders complete and fix Open, Share, indexing, Hidden and error pages by @addition-official in https://github.com/AKolenda/openxplorer/pull/423
+* feat(thumbnails): Show a revisited folder's thumbnails at once from the shared cache, and a folder's contents in its icon by @addition-official in https://github.com/AKolenda/openxplorer/pull/424
+* feat(settings): Export and import settings, and let mapped network folders drop their drive letters by @addition-official in https://github.com/AKolenda/openxplorer/pull/425
+* feat(settings): Add "Behave like Windows Explorer", one switch for every setting with a Windows behavior by @addition-official in https://github.com/AKolenda/openxplorer/pull/426
+* feat(menus): Draw the classic right-click menu as Windows 11's Win32 menu by @addition-official in https://github.com/AKolenda/openxplorer/pull/427
+* feat(folder-options): Let a single click open items, as Windows' "Click items as follows" does by @AKolenda in https://github.com/AKolenda/openxplorer/pull/429
+* fix(terminal): Open the terminal the desktop is set to use, Ghostty and xdg-terminal-exec included by @AKolenda in https://github.com/AKolenda/openxplorer/pull/430
+
+## Packages
+Download them from the assets below.
+
+| Package | For |
+| --- | --- |
+| `openxplorer_2.0.26_all.deb` | Zorin OS 18, Ubuntu 24.04 and newer, Debian 13 (OpenXplorer 1.1.x offers it in **Check for updates**) |
+| `openxplorer-2.0.26-1.fc*.x86_64.rpm` | Fedora |
+| `openxplorer-2.0.26-1.opensuse_tumbleweed.x86_64.rpm` | openSUSE Tumbleweed |
+| `openxplorer-2.0.26-1-x86_64.pkg.tar.zst` | Arch Linux |
+| `io.winspace.Development.flatpak` | Any distribution with Flatpak |
+| `openxplorer-2.0.26-source.zip` | Corresponding source (AGPL-3.0-only) |
+| `SHA256SUMS` | Checksums of every file above |
+
+**Full Changelog**: https://github.com/AKolenda/openxplorer/compare/v2.0.25...v2.0.26
+
 # 2.0.25 — 2026-11-24
 
 Google Drive and OneDrive accounts signed in under GNOME Online Accounts now show as drives that can be browsed and copied from, read-only for now. The system's own window title bar can also be turned on instead of the app's.
