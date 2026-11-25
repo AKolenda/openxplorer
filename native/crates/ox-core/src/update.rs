@@ -86,7 +86,7 @@ pub use diagnosis::{AssociationStatus, Associations, Diagnosis, ShowInFolder};
 pub use error::{InstanceError, UpdateError};
 pub use github::GitHubReleases;
 pub use helper_report::{HelperFailure, HelperReport};
-pub use identity::{InstalledBuild, RuntimeIdentity, RUNTIME_PROTOCOL};
+pub use identity::{ExecutableFile, InstalledBuild, RuntimeIdentity, RUNTIME_PROTOCOL};
 pub use install_helper::{
     install_as_root, install_update_command, RootInstallParts, ENVIRONMENT, INSTALL_HELPER_COMMAND,
     STAGING_FOLDER,

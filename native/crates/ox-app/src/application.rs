@@ -187,10 +187,12 @@ mod imp {
                     crate::crash_guard::survived_start();
                 });
             }
+            crate::startup_trace::mark("startup");
             self.parent_startup();
             app.name_for_the_desktop();
             if let Some(state) = AppState::new(app.upcast_ref(), Settings::open_default()) {
                 self.state.set(state).expect("GTK starts an application once");
+                crate::startup_trace::mark("state");
             }
             if let Launch::Interactive = app.launch() {
                 app.report_unfinished_operations();
@@ -547,6 +549,9 @@ pub fn run() -> glib::ExitCode {
     if let Some(status) = crate::picture_guard::run_as_drawer(&arguments) {
         return status;
     }
+    // After the helper processes the app starts again of itself, which
+    // write no steps of a start.
+    crate::startup_trace::mark("main");
     crate::crash_guard::install_panic_hook();
     ox_core::i18n::install(crate::config::I18N_DOMAIN);
     let launch = match SnapshotRequest::from_environment() {

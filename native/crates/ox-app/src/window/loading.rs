@@ -522,6 +522,7 @@ impl BrowserWindow {
         }
         self.apply_measured_folder_sizes(id);
         if self.imp().session.borrow().is_active(id) {
+            crate::startup_trace::window_listed(self);
             self.restore_selection(id);
             self.update_content();
             self.update_details_pane();

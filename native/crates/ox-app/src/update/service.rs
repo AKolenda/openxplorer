@@ -9,11 +9,12 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use gtk::gio;
 use ox_core::update::{
-    InstalledBuild, ReleaseVersion, RuntimeIdentity, SessionLauncher, UpdateService, UpdateServiceParts,
-    Updater, RUNTIME_PROTOCOL,
+    ExecutableFile, InstalledBuild, ReleaseVersion, RuntimeIdentity, SessionLauncher, UpdateService,
+    UpdateServiceParts, Updater, RUNTIME_PROTOCOL,
 };
 
 /// The file the kernel keeps for the running executable. Reading it gives
@@ -82,7 +83,36 @@ pub(super) async fn for_executable(executable: PathBuf) -> UpdateService {
 ///
 /// Any error reading the running executable.
 pub(crate) fn running_identity(version: ReleaseVersion) -> io::Result<RuntimeIdentity> {
-    RuntimeIdentity::of_executable(Path::new(RUNNING_EXECUTABLE), &version.to_string())
+    // The running file never changes while it runs, so it is read once:
+    // the `runtime-info` action and the update service both ask, and each
+    // read cost the whole executable, tens of megabytes, at every start.
+    static DIGEST: OnceLock<Result<String, io::ErrorKind>> = OnceLock::new();
+    let digest = DIGEST.get_or_init(|| {
+        #[cfg(test)]
+        EXECUTABLE_READS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        crate::startup_trace::mark("executable-digest");
+        RuntimeIdentity::of_executable(Path::new(RUNNING_EXECUTABLE), &version.to_string())
+            .map(|identity| identity.build)
+            .map_err(|error| error.kind())
+    });
+    match digest {
+        Ok(build) => Ok(RuntimeIdentity {
+            version: version.to_string(),
+            protocol: RUNTIME_PROTOCOL,
+            build: build.clone(),
+        }),
+        Err(kind) => Err(io::Error::from(*kind)),
+    }
+}
+
+/// How often the running executable was read, for tests.
+#[cfg(test)]
+pub(crate) static EXECUTABLE_READS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+/// The executable file this process runs ([`ExecutableFile`]), or `None`
+/// when it cannot be looked at.
+pub(crate) fn running_file() -> Option<ExecutableFile> {
+    ExecutableFile::of_path(Path::new(RUNNING_EXECUTABLE)).ok()
 }
 
 /// An identity that matches no build: this version, without a digest.

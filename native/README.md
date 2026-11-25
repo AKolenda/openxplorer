@@ -136,6 +136,17 @@ manual acceptance work that local tests cannot cover.
 The [browsing milestone validation record](VALIDATION.md) lists the local checks
 actually run and their limitations.
 
+To see where a start spends its time, run the app with `OX_STARTUP_TRACE=1`:
+it writes `ox-startup <step> <microseconds>` to standard error for `main`,
+`startup`, `state`, `built`, `presented`, `painted` (the first frame),
+`listed` (the first tab's files), `list-painted` and `idle`, and
+`window-built`, `window-painted` and `window-listed` for later windows, and
+`executable-digest` when a process reads the digest of its whole executable. The
+times are GLib's monotonic clock (`CLOCK_MONOTONIC`), so a launcher that reads
+the same clock before it starts the process can subtract them.
+`crates/ox-app/tests/startup.rs` holds the first window and another window to
+time budgets this way, and checks that a later launch reads no digest.
+
 ## Icons
 
 Every icon is an unmodified file from Microsoft's MIT-licensed Fluent UI System

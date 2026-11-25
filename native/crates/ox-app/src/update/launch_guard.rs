@@ -16,7 +16,7 @@ use std::io::Write;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::update::{
-    InstanceError, InstanceGuard, InstanceStatus, LaunchMode, RuntimeIdentity, SessionBus,
+    InstanceBus, InstanceError, InstanceGuard, InstanceStatus, LaunchMode, RuntimeIdentity, SessionBus,
     RUNTIME_INFO_ACTION,
 };
 
@@ -170,13 +170,38 @@ fn quit_running_instance() -> Result<(), InstanceError> {
 /// The Show in folder service never asks: it runs at login, unseen.
 ///
 /// Reading this build's identity reads the whole executable, so it is
-/// done only when another instance runs.
+/// done only when another instance runs, and a normal launch skips it when
+/// that instance runs this very file.
 fn require_current(mode: LaunchMode, is_service: bool) -> Result<(), InstanceError> {
     let guard = InstanceGuard::new(SessionBus::connect(APP_ID)?);
-    if ox_core::update::InstanceBus::owner(guard.bus())?.is_none() {
+    require_current_on(&guard, mode, is_service, this_identity)
+}
+
+/// [`require_current`] on `guard`'s bus, reading this build's identity
+/// with `identity` when it is needed.
+fn require_current_on<B: InstanceBus>(
+    guard: &InstanceGuard<B>,
+    mode: LaunchMode,
+    is_service: bool,
+    identity: impl FnOnce() -> RuntimeIdentity,
+) -> Result<(), InstanceError> {
+    let Some(owner) = guard.bus().owner()? else {
+        return Ok(());
+    };
+    // The instance runs this very file, so this very build: a normal
+    // launch goes on without reading tens of megabytes to learn it. While
+    // a process runs its executable the file cannot be rewritten, and an
+    // upgrade puts another file in its place ([`ExecutableFile`]).
+    let runs_this_file = || {
+        guard
+            .bus()
+            .reported_executable(&owner)
+            .is_some_and(|running| super::service::running_file().as_ref() == Some(&running))
+    };
+    if mode == LaunchMode::Normal && runs_this_file() {
         return Ok(());
     }
-    let installed = this_identity();
+    let installed = identity();
     let confirm: &dyn Fn(&InstanceStatus) -> bool = &confirm_restart;
     let confirm = (!is_service).then_some(confirm);
     guard.require_current(&installed, mode, confirm).map(drop)
@@ -215,8 +240,9 @@ fn confirm_restart(status: &InstanceStatus) -> bool {
 }
 
 /// The stateful `runtime-info` application action, whose state is this
-/// build's identity as JSON (INT-022). A later launch reads it over D-Bus
-/// to tell whether this process runs the installed build.
+/// build's identity as JSON (INT-022), naming the executable file the
+/// process runs. A later launch reads it over D-Bus to tell whether this
+/// process runs the installed build.
 #[derive(Debug)]
 pub(crate) struct RuntimeInfo;
 
@@ -226,13 +252,16 @@ impl RuntimeInfo {
     /// digest, which matches no build.
     pub(crate) fn install(app: &impl IsA<gio::ActionMap>) {
         let version = running_version();
-        let state = unknown_identity(version).to_action_state();
+        // The file this process runs is named at once: a later launch of
+        // that same file needs neither its digest nor to wait for it.
+        let file = super::service::running_file();
+        let state = unknown_identity(version).to_action_state_naming(file.as_ref());
         let action = gio::SimpleAction::new_stateful(RUNTIME_INFO_ACTION, None, &state.to_variant());
         app.add_action(&action);
         glib::spawn_future_local(async move {
             let identity = gio::spawn_blocking(move || running_identity(version)).await;
             if let Ok(Ok(identity)) = identity {
-                action.set_state(&identity.to_action_state().to_variant());
+                action.set_state(&identity.to_action_state_naming(file.as_ref()).to_variant());
             }
         });
     }
@@ -240,6 +269,8 @@ impl RuntimeInfo {
 
 #[cfg(test)]
 mod tests {
+    use ox_core::update::ExecutableFile;
+
     use super::*;
 
     fn arguments(words: &[&str]) -> Vec<String> {
@@ -297,6 +328,75 @@ mod tests {
         );
     }
 
+    /// A running instance answering as [`InstanceBus`] does, which says
+    /// what it runs and notes whether it was asked to quit.
+    struct RunningInstance {
+        identity: RuntimeIdentity,
+        file: Option<ExecutableFile>,
+        asked_to_quit: std::cell::Cell<bool>,
+    }
+
+    impl InstanceBus for RunningInstance {
+        fn owner(&self) -> Result<Option<String>, InstanceError> {
+            Ok((!self.asked_to_quit.get()).then(|| ":1.7".to_owned()))
+        }
+
+        fn reported_identity(&self, _owner: &str) -> Option<RuntimeIdentity> {
+            Some(self.identity.clone())
+        }
+
+        fn reported_executable(&self, _owner: &str) -> Option<ExecutableFile> {
+            self.file.clone()
+        }
+
+        fn request_quit(&self, _owner: &str) -> Result<(), InstanceError> {
+            self.asked_to_quit.set(true);
+            Ok(())
+        }
+    }
+
+    fn instance_running(file: Option<ExecutableFile>) -> InstanceGuard<RunningInstance> {
+        InstanceGuard::new(RunningInstance {
+            identity: running_identity(running_version()).expect("the test binary is readable"),
+            file,
+            asked_to_quit: std::cell::Cell::new(false),
+        })
+    }
+
+    fn this_file() -> ExecutableFile {
+        super::super::service::running_file().expect("the test binary can be looked at")
+    }
+
+    /// Another file, an instance that names none (an older release) and
+    /// `--restart` still compare builds as before (UPD-008, UPD-009).
+    ///
+    /// parity: UPD-008, UPD-009
+    #[test]
+    fn a_launch_of_another_file_still_compares_builds() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let other = folder.path().join("openxplorer");
+        std::fs::write(&other, b"another build").expect("a file can be written");
+        let other = ExecutableFile::of_path(&other).expect("the file can be looked at");
+        for running in [Some(other), None] {
+            let guard = instance_running(running);
+            let digest_read = std::cell::Cell::new(false);
+            let outcome = require_current_on(&guard, LaunchMode::Normal, false, || {
+                digest_read.set(true);
+                this_identity()
+            });
+            assert!(outcome.is_ok(), "the same build runs: {outcome:?}");
+            assert!(digest_read.get(), "another file is compared by its digest");
+        }
+
+        let guard = instance_running(Some(this_file()));
+        let outcome = require_current_on(&guard, LaunchMode::Restart, false, this_identity);
+        assert!(outcome.is_ok(), "{outcome:?}");
+        assert!(
+            guard.bus().asked_to_quit.get(),
+            "--restart replaces even this build"
+        );
+    }
+
     /// parity: INT-022
     #[gtk::test]
     fn the_runtime_info_action_reports_this_builds_identity() {
@@ -308,5 +408,14 @@ mod tests {
             let text = state.and_then(|state| state.get::<String>());
             text.and_then(|text| RuntimeIdentity::from_action_state(&text)) == Some(expected.clone())
         });
+        let state = actions
+            .action_state(RUNTIME_INFO_ACTION)
+            .and_then(|state| state.get::<String>())
+            .expect("the action has a text state");
+        assert_eq!(
+            ExecutableFile::from_action_state(&state),
+            Some(this_file()),
+            "the report still names the file once the digest is in"
+        );
     }
 }
