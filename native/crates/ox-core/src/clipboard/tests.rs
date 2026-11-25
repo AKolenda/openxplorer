@@ -258,7 +258,7 @@ fn refused_uri_lists() -> Vec<RefusedPayload> {
         RefusedPayload::uri_list("a web address", CUT_MARKER, b"https://example.test/file".to_vec()),
         RefusedPayload::uri_list("a share root", CUT_MARKER, b"smb://studio-nas/Shared".to_vec()),
         RefusedPayload::uri_list("credentials", CUT_MARKER, b"smb://user:pass@nas/share/a".to_vec()),
-        RefusedPayload::uri_list("an encoded line break", CUT_MARKER, b"file:///tmp/a%0Ab".to_vec()),
+        RefusedPayload::uri_list("an encoded NUL", CUT_MARKER, b"file:///tmp/a%00b".to_vec()),
         RefusedPayload::uri_list("its size", CUT_MARKER, oversized_payload()),
         RefusedPayload::uri_list("more than 100,000 items", None, too_many_items),
     ]
@@ -633,14 +633,16 @@ fn share_roots_cannot_be_copied_and_keep_the_location_message() {
     );
 }
 
-/// An item another program named with bytes that are not UTF-8 is copied
-/// to the clipboard with its name escaped as it is, while one whose name
-/// holds a line break is still refused: no payload carries an escaped
-/// control character.
+/// Items other programs named with bytes that are not UTF-8, or with a
+/// line break or a tab, go on the clipboard as a drag carries them: every
+/// file-list format holds their names escaped (`%0A`), so no line of a
+/// list is added, and the selection publishes no text, whose lines must
+/// be its items. A list another application published with such a name
+/// pastes too, as Nautilus copies them.
 ///
-/// parity: CLIP-005, OPS-035
+/// parity: CLIP-004, CLIP-005, OPS-035
 #[test]
-fn a_latin1_name_goes_on_the_clipboard_but_a_line_break_does_not() {
+fn names_with_a_line_break_or_latin1_bytes_go_on_the_clipboard_escaped() {
     let latin1 = "file:///tmp/ox-test/Caf%E9%20menu.txt".to_owned();
     let files = ClipboardFiles::new(ClipboardMode::Copy, std::slice::from_ref(&latin1), &context())
         .expect("a Latin-1 name");
@@ -649,9 +651,35 @@ fn a_latin1_name_goes_on_the_clipboard_but_a_line_break_does_not() {
         "file:///tmp/ox-test/Line%0Abreak.txt",
         "file:///tmp/ox-test/Tab%09.txt",
     ] {
-        assert!(
-            ClipboardFiles::new(ClipboardMode::Copy, &[uri.to_owned()], &context()).is_err(),
-            "{uri}"
+        let files = ClipboardFiles::new(
+            ClipboardMode::Cut,
+            &[uri.to_owned(), README_URI.to_owned()],
+            &context(),
+        )
+        .unwrap_or_else(|error| panic!("{uri}: {error}"));
+        assert_eq!(files.uris(), [uri, README_URI]);
+        let formats: Vec<&str> = files
+            .encode(&context())
+            .iter()
+            .map(|payload| payload.mime_type)
+            .collect();
+        assert_eq!(formats, [CUSTOM, GNOME, URI_LIST, KDE_CUT], "no text: {uri}");
+        assert_eq!(
+            published(&files, URI_LIST),
+            format!("{uri}\r\n{README_URI}\r\n").into_bytes(),
+            "one line per item"
         );
+        let gnome = format!("cut\n{uri}\n{README_URI}");
+        let pasted = decode(FileListFormat::Gnome, gnome.as_bytes()).expect("another app's list");
+        assert_eq!(pasted.uris(), [uri, README_URI]);
     }
+    assert!(
+        ClipboardFiles::new(
+            ClipboardMode::Copy,
+            &["file:///tmp/ox-test/Nul%00.txt".to_owned()],
+            &context()
+        )
+        .is_err(),
+        "no name holds NUL"
+    );
 }

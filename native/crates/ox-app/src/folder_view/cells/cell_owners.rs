@@ -38,8 +38,10 @@ use crate::thumbnails::PreviewPolicy;
 use crate::window::widget_tree::toggle_class;
 
 /// The CSS class of a cell whose item a cut put on the clipboard. The
-/// stylesheet draws such cells at half opacity (`.file-row.cut{opacity:.5}`
-/// in `v2.0.0:desktop/ui/style.css`).
+/// stylesheet draws the icon of such cells at half opacity and keeps the
+/// name and details at full strength, as Windows 11 File Explorer does
+/// (`.cut .item-art`; the Python app faded the whole row,
+/// `.file-row.cut{opacity:.5}` in `v2.0.0:desktop/ui/style.css`).
 const CUT_CSS_CLASS: &str = "cut";
 
 /// The CSS class of a cell whose item is hidden, shown only while "Show

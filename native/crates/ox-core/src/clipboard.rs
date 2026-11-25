@@ -32,10 +32,13 @@ mod lines;
 mod pasted;
 
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::location::{breaks_a_line, require_item_uri, LocationContext, LocationError};
+use crate::location::{
+    breaks_a_line, file_uri, is_smb_location, require_item_uri, LocationContext, LocationError,
+};
 
 pub use decode::{decode, FileListFormat};
 pub use pasted::{image_extension, PastedImage, IMAGE_MIME_TYPES, TEXTURE_EXTENSION, TOO_LARGE_TO_PASTE};
@@ -69,6 +72,14 @@ pub const TEXT: &str = "text/plain;charset=utf-8";
 /// `x-kde-cutselection`, without the `application/` prefix, which KDE never
 /// offers or asks for, so its cuts become copies in Dolphin and back.
 pub const KDE_CUT: &str = "application/x-kde-cutselection";
+/// KDE's list of the items' own addresses, published beside [`URI_LIST`]
+/// only when that list gives a mounted share's items as local files
+/// ([`ClipboardFiles::encode_exporting`]).
+///
+/// `KUrlMimeData::urlsFromMimeData` in KIO prefers it to the standard list,
+/// so Dolphin and other KDE apps keep reaching a share through its `smb://`
+/// address, as a drag lets them (DND-004).
+pub const KDE_URI_LIST: &str = "application/x-kde4-urilist";
 /// Maximum size accepted from an external clipboard: room for
 /// [`MAX_ITEMS`] addresses of about 330 bytes each, so a paste of the
 /// largest selection this app copies is never refused for its size.
@@ -206,19 +217,15 @@ impl ClipboardFiles {
         for uri in uris {
             // Safety rule (validated items): only canonical file and folder
             // URIs enter a selection, so no payload can carry credentials, a
-            // share or device root, or an encoded line break into the GNOME
-            // or URI-list formats (`validate_clipboard` in
+            // share or device root, or a raw line break into the GNOME or
+            // URI-list formats (`validate_clipboard` in
             // v2.0.0:desktop/file_clipboard.py, `require_item_uri` in v2.0.0:desktop/core.py).
             // `require_item_uri` lets an item already listed keep a line
-            // break in its name; the clipboard still refuses an escaped
-            // control character, as typed addresses do.
+            // break or a tab in its name, escaped (`%0A`), as a drag carries
+            // it: each list still has one line per item, and such a
+            // selection publishes no text ([`Self::text`]). NUL and an
+            // escaped `/` stay refused.
             let uri = require_item_uri(uri)?;
-            if crate::location::has_control_character(&crate::location::unquote_lossy(&uri)) {
-                return Err(LocationError::new(crate::i18n::gettext(
-                    "Encoded control characters are not allowed.",
-                ))
-                .into());
-            }
             if seen.insert(uri.clone()) {
                 canonical.push(uri);
             }
@@ -271,9 +278,38 @@ impl ClipboardFiles {
     /// A consumed, empty selection has no file formats and should clear the
     /// clipboard instead of publishing an invalid empty file list.
     pub fn encode(&self, locations: &LocationContext) -> Vec<ClipboardPayload> {
+        self.encode_exporting(locations, |_| None)
+    }
+
+    /// [`Self::encode`], with each SMB item whose share is mounted given
+    /// to other applications as its local file: `local_path` finds its
+    /// path in the mount, and is asked about SMB items only.
+    ///
+    /// A browser's upload, an email attachment and a terminal open local
+    /// files only, and read [`URI_LIST`]: there a mounted share's item is
+    /// its `file://` path, as a drag offers it (DND-004), so it pastes as
+    /// it does from Windows Explorer's `\\server\share`. Every other format
+    /// keeps the share's own address: this app's format, which its windows
+    /// paste, GNOME's, which `GVfs` reads directly, and [`KDE_URI_LIST`],
+    /// published only when the standard list differs, which KDE apps
+    /// prefer. A list of local paths over [`MAX_BYTES`] is left as the
+    /// addresses.
+    pub fn encode_exporting(
+        &self,
+        locations: &LocationContext,
+        local_path: impl Fn(&str) -> Option<PathBuf>,
+    ) -> Vec<ClipboardPayload> {
         if self.uris.is_empty() {
             return Vec::new();
         }
+        let exported: Vec<String> = self
+            .uris
+            .iter()
+            .map(|uri| exported_uri(uri, &local_path))
+            .collect();
+        let own_list = encode_uri_list(&self.uris);
+        let exported_list = encode_uri_list(&exported);
+        let exports_any = exported != self.uris && exported_list.len() <= MAX_BYTES;
         let mut payloads = vec![
             ClipboardPayload {
                 mime_type: CUSTOM,
@@ -283,11 +319,22 @@ impl ClipboardFiles {
                 mime_type: GNOME,
                 bytes: encode_gnome(self.mode, &self.uris).into_bytes(),
             },
-            ClipboardPayload {
-                mime_type: URI_LIST,
-                bytes: encode_uri_list(&self.uris).into_bytes(),
-            },
         ];
+        if exports_any {
+            payloads.push(ClipboardPayload {
+                mime_type: URI_LIST,
+                bytes: exported_list.into_bytes(),
+            });
+            payloads.push(ClipboardPayload {
+                mime_type: KDE_URI_LIST,
+                bytes: own_list.into_bytes(),
+            });
+        } else {
+            payloads.push(ClipboardPayload {
+                mime_type: URI_LIST,
+                bytes: own_list.into_bytes(),
+            });
+        }
         if let Some(text) = self.text(locations) {
             // A selection this app made was measured by ClipboardFiles::new,
             // but one decoded from another owner was not, and the move that
@@ -318,11 +365,11 @@ impl ClipboardFiles {
     /// ends a line is no line, so the selection publishes no text rather than
     /// a payload whose lines are not items, which a terminal would paste as
     /// more than was copied. A control character is one, and so is U+2028 or
-    /// U+2029 ([`breaks_a_line`]), which an editor honours as a line break.
-    /// No URI can bring a control character, since [`Self::new`] refuses
-    /// refuses an encoded one; a device's label could, and the app cleans a
-    /// label as it reads it. This is the guard behind the public `devices`
-    /// field that keeps such a name from ever becoming a second line.
+    /// U+2029 ([`breaks_a_line`]), which an editor honors as a line break.
+    /// An item another program named with a line break or a tab brings one
+    /// (its URI holds it escaped, as `%0A`), and so could a device's label,
+    /// which the app cleans as it reads it: this is the guard that keeps
+    /// such a name from ever becoming a second line.
     fn text(&self, locations: &LocationContext) -> Option<String> {
         let lines: Vec<String> = self
             .uris
@@ -353,6 +400,15 @@ fn new_token() -> String {
 /// the first line. `uris` is never empty here.
 fn encode_gnome(mode: ClipboardMode, uris: &[String]) -> String {
     format!("{}\n{}", mode.gnome_verb(), uris.join("\n"))
+}
+
+/// The address another application gets for `uri`: the local file of a
+/// mounted share's item, which `local_path` finds, else `uri` itself.
+fn exported_uri(uri: &str, local_path: &impl Fn(&str) -> Option<PathBuf>) -> String {
+    if !is_smb_location(uri) {
+        return uri.to_owned();
+    }
+    local_path(uri).map_or_else(|| uri.to_owned(), |path| file_uri(&path))
 }
 
 /// Encodes validated URIs as a CRLF-separated, terminated URI list.

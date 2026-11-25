@@ -141,6 +141,11 @@ pub(crate) enum CellLayout {
     ContentRow,
 }
 
+/// The CSS class of an item's icon, custom icon or folder picture: what
+/// fades while a cut has the item on the clipboard, as Windows 11 fades a
+/// cut item's icon and keeps its name and details (CLIP-002).
+const ITEM_ART_CLASS: &str = "item-art";
+
 /// The CSS class of a cell that shows a grid slot with no item: a group's
 /// heading, its line or a blank (VIEW-071).
 const GROUP_SLOT_CLASS: &str = "group-slot";
@@ -320,6 +325,14 @@ mod imp {
             self.parent_constructed();
             let cell = self.obj();
             self.icon_frame.set_child(Some(&self.image));
+            // The art a cut fades, and nothing else of the item (CLIP-002).
+            for art in [
+                self.image.upcast_ref::<gtk::Widget>(),
+                self.custom_icon.upcast_ref(),
+                self.folder_picture.upcast_ref(),
+            ] {
+                art.add_css_class(super::ITEM_ART_CLASS);
+            }
             self.custom_icon.set_content_fit(gtk::ContentFit::Contain);
             self.custom_icon.set_visible(false);
             self.icon_frame.add_overlay(&self.custom_icon);

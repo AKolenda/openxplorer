@@ -20,6 +20,7 @@
 //! being formatted and the quick writes, which wait for each other in
 //! every window ([`write_holds`]).
 
+mod clipboard_keeper;
 mod default_open;
 mod desktop_bookmarks;
 mod external_open;
@@ -163,6 +164,14 @@ mod imp {
         /// The progress window of the running file operations, while one
         /// is open.
         pub(super) progress_window: RefCell<Option<crate::window::ProgressWindow>>,
+        /// Keeps the application running while it owns the desktop's
+        /// clipboard, so what Copy and Cut put there outlives the last
+        /// window (CLIP-010).
+        pub(super) clipboard_keeper: RefCell<Option<super::clipboard_keeper::Keeper>>,
+        /// The items pastes of the latest cut moved, and that cut's token:
+        /// a clipboard manager that puts the cut back offers no cut
+        /// (CLIP-008).
+        pub(super) moved_cut: RefCell<super::clipboard_keeper::MovedCut>,
         /// GNOME's privacy settings, which say what may be remembered of
         /// the files opened, when the desktop has them.
         pub(super) privacy: RefCell<Option<gtk::gio::Settings>>,

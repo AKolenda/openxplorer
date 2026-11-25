@@ -17,6 +17,8 @@ mod choose_details;
 mod chrome;
 mod clipboard;
 mod clipboard_interop;
+mod clipboard_lifetime;
+mod clipboard_shares;
 mod clipboard_switches;
 mod closing;
 mod column_fitting;
