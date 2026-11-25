@@ -245,7 +245,7 @@ impl BrowserWindow {
     }
 
     /// Whether a band is drawn now.
-    fn band_is_shown(&self) -> bool {
+    pub(super) fn band_is_shown(&self) -> bool {
         self.imp()
             .rubber_band
             .borrow()
