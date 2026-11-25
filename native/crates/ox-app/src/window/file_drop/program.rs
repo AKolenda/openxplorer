@@ -37,9 +37,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::Entry;
-use ox_core::integration::{
-    command_in_terminal, find_terminal, spawn_program, ExecutableSearch, Sandbox, Terminal,
-};
+use ox_core::integration::{command_in_terminal, session_command_terminal, spawn_program, Sandbox, Terminal};
 use ox_core::network::local_path;
 
 use super::launcher;
@@ -184,7 +182,8 @@ pub(super) async fn keeps_permissions(uri: &str) -> bool {
 
 /// The command that gives `items` to the program at `program`: the
 /// program itself for a binary, or `terminal` running it through the hold
-/// script for a script. Each item stays one argument, whatever its name.
+/// script, in the program's folder, for a script. Each item stays one
+/// argument, whatever its name.
 pub(super) fn program_command(
     program: &Path,
     kind: ProgramKind,
@@ -195,10 +194,15 @@ pub(super) fn program_command(
     command.extend(items.iter().cloned());
     match (kind, terminal) {
         (ProgramKind::Script, Some(terminal)) => {
-            command_in_terminal(terminal, Some(HOLD_SCRIPT_NAME), command)
+            command_in_terminal(terminal, program_folder(program), Some(HOLD_SCRIPT_NAME), command)
         }
         _ => command,
     }
+}
+
+/// The folder a dropped-on program runs in: its own.
+fn program_folder(program: &Path) -> &Path {
+    program.parent().unwrap_or(Path::new("/"))
 }
 
 /// The argument that names the dropped item at `uri`: its local path, or
@@ -394,14 +398,13 @@ impl BrowserWindow {
             ),
             ProgramKind::Binary | ProgramKind::Script => {
                 let terminal = match program.kind {
-                    ProgramKind::Script => Some(
-                        find_terminal(&ExecutableSearch::for_sandbox(sandbox))
-                            .map_err(|error| error.to_string())?,
-                    ),
+                    ProgramKind::Script => {
+                        Some(session_command_terminal(sandbox).map_err(|error| error.to_string())?)
+                    }
                     _ => None,
                 };
                 let command = program_command(path, program.kind, &arguments, terminal.as_ref());
-                (command, path.parent().unwrap_or(Path::new("/")).to_path_buf())
+                (command, program_folder(path).to_path_buf())
             }
         };
         spawn_program(&command, &folder, sandbox).map_err(|error| error.to_string())?;
@@ -580,6 +583,7 @@ mod tests {
 
         let expected: Vec<OsString> = [
             "/usr/bin/gnome-terminal",
+            "--working-directory=/home/ada",
             "--",
             "/bin/sh",
             "-c",

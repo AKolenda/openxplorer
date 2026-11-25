@@ -157,9 +157,11 @@ pub use reveal::{
 };
 pub use sandbox::Sandbox;
 pub use terminal::{
-    checked_directory, command_in_terminal, find_terminal, launch_terminal, open_terminal_in_background,
-    prepare_directory, terminal_arguments, DirectoryChecks, ExecutableSearch, LaunchedTerminal,
-    PreparedDirectory, Terminal, TerminalError, TerminalKind, HOLD_SCRIPT, SYSTEM_PATH,
+    checked_directory, command_in_terminal, desktop_terminals, find_command_terminal, find_terminal,
+    launch_terminal, open_terminal_in_background, prepare_directory, session_command_terminal,
+    session_terminal, terminal_arguments, DesktopTerminalConfig, DirectoryChecks, ExecutableSearch,
+    LaunchedTerminal, PreferredTerminal, PreparedDirectory, Terminal, TerminalError, TerminalKind,
+    HOLD_SCRIPT, SYSTEM_PATH,
 };
 pub use wallpaper_portal::{
     open_picture, set_wallpaper_file, wallpaper_portal_version, WallpaperError, WALLPAPER_INTERFACE,

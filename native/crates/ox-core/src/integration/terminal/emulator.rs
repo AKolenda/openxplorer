@@ -3,14 +3,17 @@
 //!
 //! Ports `TERMINALS`, `SYSTEM_PATH`, `Terminal` and `find_terminal` in
 //! `v2.0.0:desktop/terminal_integration.py` (OPEN-018, OPEN-020), with the
-//! desktop's configured terminal first (OPEN-019). kitty is a native
-//! addition to the ported list.
+//! desktop's configured terminal first (OPEN-019). kitty, Ptyxis, Ghostty,
+//! Alacritty, `WezTerm`, foot, Tilix and Terminator are native additions to
+//! the ported list, and `xdg-terminal-exec` starts a configured terminal
+//! the app does not know.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use rustix::fs::Access;
 
+use super::preference::PreferredTerminal;
 use super::TerminalError;
 use crate::integration::sandbox::Sandbox;
 
@@ -38,26 +41,85 @@ pub enum TerminalKind {
     GnomeTerminal,
     /// GNOME Console (`kgx`).
     Console,
+    /// Ptyxis (`ptyxis`), GNOME's terminal on Fedora and Ubuntu.
+    Ptyxis,
     /// Xfce Terminal (`xfce4-terminal`).
     XfceTerminal,
     /// Konsole (`konsole`).
     Konsole,
     /// kitty (`kitty`).
     Kitty,
+    /// Ghostty (`ghostty`).
+    Ghostty,
+    /// Alacritty (`alacritty`).
+    Alacritty,
+    /// `WezTerm` (`wezterm`).
+    WezTerm,
+    /// foot (`foot`), a Wayland terminal.
+    Foot,
+    /// Tilix (`tilix`).
+    Tilix,
+    /// Terminator (`terminator`).
+    Terminator,
     /// `XTerm` (`xterm`).
     XTerm,
     /// `XTerm` with Unicode (`uxterm`).
     UXTerm,
+    /// `xdg-terminal-exec`, which starts the terminal the desktop's
+    /// `xdg-terminals.list` names. Not in [`TerminalKind::ALL`]: it is
+    /// used for a configured terminal the app does not know, and when no
+    /// known terminal is installed.
+    XdgTerminalExec,
+}
+
+/// How a terminal is told the program to run in it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CommandStyle {
+    /// The program and its arguments follow this option, each its own
+    /// argument.
+    After(&'static str),
+    /// The program and its arguments are the terminal's trailing
+    /// arguments.
+    Trailing,
+    /// The program and its arguments follow this option as one string,
+    /// each quoted, which the terminal splits again with
+    /// `g_shell_parse_argv` (Tilix joins several arguments itself, without
+    /// quoting them all).
+    QuotedAfter(&'static str),
+    /// The options come first; then the program and its arguments, each
+    /// quoted for `/bin/sh` and joined with spaces, are the value of the
+    /// option ending in `=`, which the terminal runs with `/bin/sh -c`.
+    ///
+    /// Ghostty before 1.2 joins the arguments after `-e` with spaces and
+    /// runs the result with `/bin/sh -c`, unquoted, while 1.2 and later
+    /// run them as they are; its `--initial-command=` value without a
+    /// `direct:` or `shell:` prefix is a `/bin/sh -c` command in both. The
+    /// options stand in for what `-e` implies: a Ghostty of its own,
+    /// never a running one, that quits with its window, and no shell
+    /// integration rewriting the command.
+    ShellCommand {
+        /// Options that come before the command.
+        options: &'static [&'static str],
+        /// The option the quoted command is joined to.
+        option: &'static str,
+    },
 }
 
 impl TerminalKind {
     /// Every terminal, in the order they are preferred.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 14] = [
         Self::GnomeTerminal,
         Self::Console,
+        Self::Ptyxis,
         Self::XfceTerminal,
         Self::Konsole,
         Self::Kitty,
+        Self::Ghostty,
+        Self::Alacritty,
+        Self::WezTerm,
+        Self::Foot,
+        Self::Tilix,
+        Self::Terminator,
         Self::XTerm,
         Self::UXTerm,
     ];
@@ -67,11 +129,19 @@ impl TerminalKind {
         match self {
             Self::GnomeTerminal => "gnome-terminal",
             Self::Console => "kgx",
+            Self::Ptyxis => "ptyxis",
             Self::XfceTerminal => "xfce4-terminal",
             Self::Konsole => "konsole",
             Self::Kitty => "kitty",
+            Self::Ghostty => "ghostty",
+            Self::Alacritty => "alacritty",
+            Self::WezTerm => "wezterm",
+            Self::Foot => "foot",
+            Self::Tilix => "tilix",
+            Self::Terminator => "terminator",
             Self::XTerm => "xterm",
             Self::UXTerm => "uxterm",
+            Self::XdgTerminalExec => "xdg-terminal-exec",
         }
     }
 
@@ -80,34 +150,82 @@ impl TerminalKind {
         match self {
             Self::GnomeTerminal => crate::i18n::gettext_static("GNOME Terminal"),
             Self::Console => crate::i18n::gettext_static("Console"),
+            Self::Ptyxis => crate::i18n::gettext_static("Ptyxis"),
             Self::XfceTerminal => crate::i18n::gettext_static("Xfce Terminal"),
             Self::Konsole => crate::i18n::gettext_static("Konsole"),
             Self::Kitty => crate::i18n::gettext_static("kitty"),
+            Self::Ghostty => crate::i18n::gettext_static("Ghostty"),
+            Self::Alacritty => crate::i18n::gettext_static("Alacritty"),
+            Self::WezTerm => crate::i18n::gettext_static("WezTerm"),
+            Self::Foot => crate::i18n::gettext_static("foot"),
+            Self::Tilix => crate::i18n::gettext_static("Tilix"),
+            Self::Terminator => crate::i18n::gettext_static("Terminator"),
             Self::XTerm => crate::i18n::gettext_static("XTerm"),
             Self::UXTerm => crate::i18n::gettext_static("UXTerm"),
+            // The terminal it starts is the desktop's choice.
+            Self::XdgTerminalExec => crate::i18n::gettext_static("Terminal"),
+        }
+    }
+
+    /// Options that come first: they make the terminal open a new window
+    /// of its own, whatever already runs.
+    ///
+    /// `WezTerm` takes its `start` subcommand. Ptyxis ignores a starting
+    /// folder unless asked for a new window. Terminator without D-Bus
+    /// runs a program as given instead of handing it to a running
+    /// Terminator, which would join its arguments into a shell command.
+    pub fn leading_options(self) -> &'static [&'static str] {
+        match self {
+            Self::WezTerm => &["start"],
+            Self::Ptyxis => &["--new-window"],
+            Self::Terminator => &["--no-dbus"],
+            _ => &[],
         }
     }
 
     /// The option that names the starting folder, or `None` for the
-    /// `XTerm` family, which starts in its working directory.
+    /// `XTerm` family, which starts in its working directory. The folder
+    /// is joined to an option ending in `=` and follows any other as the
+    /// next argument, as in `xdg-terminal-exec`'s `X-TerminalArgDir`.
     pub fn working_directory_option(self) -> Option<&'static str> {
         match self {
-            Self::GnomeTerminal | Self::Console | Self::XfceTerminal => Some("--working-directory="),
+            Self::GnomeTerminal
+            | Self::Console
+            | Self::Ptyxis
+            | Self::XfceTerminal
+            | Self::Ghostty
+            | Self::Alacritty
+            | Self::Foot
+            | Self::Tilix
+            | Self::Terminator => Some("--working-directory="),
             Self::Konsole => Some("--workdir="),
             Self::Kitty => Some("--directory="),
+            Self::WezTerm => Some("--cwd"),
+            Self::XdgTerminalExec => Some("--dir="),
             Self::XTerm | Self::UXTerm => None,
         }
     }
 
-    /// The option after which the terminal runs the rest of its arguments
-    /// as a command; `None` for kitty, which takes the program to run as
-    /// its trailing arguments.
-    pub fn command_option(self) -> Option<&'static str> {
+    /// How the terminal is told the program to run in it.
+    /// `xdg-terminal-exec` is never given one: [`find_command_terminal`]
+    /// passes it over.
+    pub(super) fn command_style(self) -> CommandStyle {
         match self {
-            Self::GnomeTerminal | Self::Console => Some("--"),
-            Self::XfceTerminal => Some("-x"),
-            Self::Konsole | Self::XTerm | Self::UXTerm => Some("-e"),
-            Self::Kitty => None,
+            Self::GnomeTerminal | Self::Console | Self::Ptyxis | Self::WezTerm | Self::XdgTerminalExec => {
+                CommandStyle::After("--")
+            }
+            Self::XfceTerminal | Self::Terminator => CommandStyle::After("-x"),
+            Self::Konsole | Self::Alacritty | Self::XTerm | Self::UXTerm => CommandStyle::After("-e"),
+            Self::Kitty | Self::Foot => CommandStyle::Trailing,
+            Self::Tilix => CommandStyle::QuotedAfter("-e"),
+            Self::Ghostty => CommandStyle::ShellCommand {
+                options: &[
+                    "--gtk-single-instance=false",
+                    "--quit-after-last-window-closed=true",
+                    "--shell-integration=none",
+                ],
+                option: "--initial-command=",
+            },
         }
     }
 
@@ -161,8 +279,8 @@ impl Terminal {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutableSearch {
     root: PathBuf,
-    /// The terminal the desktop is configured to use, tried first.
-    preferred: Option<TerminalKind>,
+    /// The terminals the desktop is configured to use, tried first.
+    preferred: Vec<PreferredTerminal>,
 }
 
 impl ExecutableSearch {
@@ -175,14 +293,15 @@ impl ExecutableSearch {
     pub fn under(root: &Path) -> Self {
         Self {
             root: root.to_owned(),
-            preferred: None,
+            preferred: Vec::new(),
         }
     }
 
-    /// Tries `preferred`, the desktop's configured terminal, before the
-    /// Debian alternative and the preference order.
+    /// Tries `preferred`, the desktop's configured terminals in order
+    /// (see [`super::desktop_terminals`]), before the Debian alternative and
+    /// the preference order.
     #[must_use]
-    pub fn preferring(mut self, preferred: Option<TerminalKind>) -> Self {
+    pub fn preferring(mut self, preferred: Vec<PreferredTerminal>) -> Self {
         self.preferred = preferred;
         self
     }
@@ -232,29 +351,76 @@ impl ExecutableSearch {
 /// The terminal to open (OPEN-018, OPEN-019): the desktop's configured
 /// terminal when it is installed, then Debian's `x-terminal-emulator`
 /// alternative when it points to a known terminal, otherwise the first
-/// installed of [`TerminalKind::ALL`]. `$PATH` and `$TERMINAL` are never
-/// read.
+/// installed of [`TerminalKind::ALL`], and last `xdg-terminal-exec`.
+///
+/// The configured terminals are tried in order. One the app knows and
+/// finds in the system folders is started directly. At the first
+/// `xdg-terminals.list` entry it cannot start itself, because it does not
+/// know the terminal or does not find it, `xdg-terminal-exec` takes over
+/// when it is installed: it reads the same lists and starts the first
+/// terminal of them that is installed. Every program, `xdg-terminal-exec`
+/// included, is looked for in [`SYSTEM_PATH`] only; `$PATH` and
+/// `$TERMINAL` are never read.
+///
+/// For running a program in the terminal, use [`find_command_terminal`].
 ///
 /// # Errors
 ///
 /// [`TerminalError::NoTerminal`] when no known terminal is installed.
 pub fn find_terminal(search: &ExecutableSearch) -> Result<Terminal, TerminalError> {
-    let preferred = search.preferred.and_then(|kind| {
+    find_terminal_through(search, true)
+}
+
+/// The terminal to run a program in (OPEN-019, OPEN-020): as
+/// [`find_terminal`], but only a terminal the app starts itself, never
+/// `xdg-terminal-exec`.
+///
+/// Safety rule "names are never code": `xdg-terminal-exec` hands the
+/// program to the terminal with that terminal's own `-e`, and some, such
+/// as Ghostty before 1.2, join what follows `-e` into a `/bin/sh -c`
+/// command, so a dropped file's name or a custom command's argument could
+/// run as shell code. The app's own adapters pass each argument so that
+/// it stays one.
+///
+/// # Errors
+///
+/// [`TerminalError::NoTerminal`] when no known terminal is installed.
+pub fn find_command_terminal(search: &ExecutableSearch) -> Result<Terminal, TerminalError> {
+    find_terminal_through(search, false)
+}
+
+/// [`find_terminal`], with `xdg-terminal-exec` taking over only when
+/// `through_xdg_terminal_exec`.
+fn find_terminal_through(
+    search: &ExecutableSearch,
+    through_xdg_terminal_exec: bool,
+) -> Result<Terminal, TerminalError> {
+    let installed = |kind: TerminalKind| {
         let executable = search.find(kind.program_name())?;
         Some(Terminal { executable, kind })
-    });
-    if let Some(terminal) = preferred {
-        return Ok(terminal);
+    };
+    for preferred in &search.preferred {
+        let (kind, listed) = match *preferred {
+            PreferredTerminal::Listed(kind) => (kind, true),
+            PreferredTerminal::Gnome(kind) => (Some(kind), false),
+        };
+        if let Some(terminal) = kind.and_then(installed) {
+            return Ok(terminal);
+        }
+        if listed && through_xdg_terminal_exec {
+            if let Some(terminal) = installed(TerminalKind::XdgTerminalExec) {
+                return Ok(terminal);
+            }
+        }
     }
     if let Some(terminal) = debian_alternative(search) {
         return Ok(terminal);
     }
+    let last_resort = through_xdg_terminal_exec.then_some(TerminalKind::XdgTerminalExec);
     TerminalKind::ALL
         .into_iter()
-        .find_map(|kind| {
-            let executable = search.find(kind.program_name())?;
-            Some(Terminal { executable, kind })
-        })
+        .chain(last_resort)
+        .find_map(installed)
         .ok_or(TerminalError::NoTerminal)
 }
 
