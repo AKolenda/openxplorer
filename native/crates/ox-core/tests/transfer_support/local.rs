@@ -324,4 +324,8 @@ impl Node for LocalNode {
     fn filesystem(&self, _cancel: Option<&Cancellation>) -> Option<FilesystemInfo> {
         self.provider.filesystem(self)
     }
+
+    fn flush(&self) -> Result<(), TransferError> {
+        self.provider.flush(self)
+    }
 }

@@ -127,6 +127,14 @@ pub trait Provider: Send + Sync + 'static {
         }
     }
 
+    /// [`Node::flush`]: nothing to write out by default.
+    fn flush(&self, node: &LocalNode) -> Result<(), TransferError> {
+        match self.base() {
+            Some(base) => base.flush(node),
+            None => Ok(()),
+        }
+    }
+
     /// [`Node::filesystem`]: nothing reported by default.
     fn filesystem(&self, node: &LocalNode) -> Option<FilesystemInfo> {
         self.base().and_then(|base| base.filesystem(node))

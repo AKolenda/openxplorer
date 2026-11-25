@@ -71,6 +71,9 @@ mod index;
 mod limits;
 mod live;
 mod mounts;
+#[cfg(test)]
+pub(crate) use mounts::parse_mounts;
+pub(crate) use mounts::{mount_for_path as mount_holding, read_mounts, Mount};
 mod ownership;
 mod pattern;
 mod pins;

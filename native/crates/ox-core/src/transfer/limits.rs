@@ -10,6 +10,7 @@
 
 use std::ffi::{OsStr, OsString};
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
+use std::path::Path;
 
 use super::cancellation::Cancellation;
 use super::error::TransferError;
@@ -74,6 +75,34 @@ pub fn stores_symbolic_links(kind: Option<&str>) -> bool {
         )
     });
     StorageRules::of(kind).stores_links && !is_smb_mount
+}
+
+/// The type of the file system that holds `path`, for its storage rules:
+/// GIO's `filesystem::type` (`gio_kind`), except that GIO names every FUSE
+/// file system `fuse` from the kernel's magic number. For those the mount
+/// table in `mounts` tells a disk apart: `fuseblk` (NTFS through ntfs-3g
+/// or exFAT through exfat-fuse, on a device) and the FUSE subtypes of
+/// Windows' file systems (`fuse.exfat`, `fuse.ntfs-3g`, `fuse.fusefat`).
+pub(crate) fn mounted_kind(
+    gio_kind: Option<&str>,
+    path: Option<&Path>,
+    mounts: &[crate::search::Mount],
+) -> Option<String> {
+    let (Some("fuse"), Some(path)) = (gio_kind, path) else {
+        return gio_kind.map(String::from);
+    };
+    let mount_type = crate::search::mount_holding(path, mounts).map(|mount| mount.filesystem_type.as_str());
+    let subtype = mount_type
+        .and_then(|kind| kind.split_once('.'))
+        .map(|(_, subtype)| subtype);
+    let kind = match (mount_type, subtype) {
+        (Some("fuseblk"), None) => "fuseblk",
+        (_, Some("ntfs" | "ntfs-3g" | "ntfs3")) => "ntfs",
+        (_, Some("exfat" | "exfat-fuse")) => "exfat",
+        (_, Some("fusefat" | "vfat" | "msdos")) => "vfat",
+        _ => "fuse",
+    };
+    Some(kind.to_owned())
 }
 
 impl StorageRules {
@@ -413,5 +442,35 @@ mod tests {
             assert_eq!(fixed, OsStr::new(storable), "{name}");
             assert_eq!(ntfs.name_problem(&fixed), None, "{name} becomes storable");
         }
+    }
+
+    /// GIO names every FUSE file system `fuse`, from the kernel's magic
+    /// number, so a USB stick in NTFS through ntfs-3g (`fuseblk` in the
+    /// mount table) or in exFAT through exfat-fuse took no Windows name
+    /// rules, and `a:b.txt` was written where Windows cannot open it. The
+    /// mount table's type tells them apart.
+    /// parity: XFER-028
+    #[test]
+    fn a_fuse_drive_takes_the_rules_of_the_file_system_in_the_mount_table() {
+        let table = b"36 25 0:41 / /media/oxtest/USB\\040STICK rw,relatime - fuseblk /dev/sdb1 rw\n\
+            37 25 0:42 / /media/oxtest/CARD rw - fuse.exfat /dev/sdc1 rw\n\
+            38 25 0:43 / /media/oxtest/OLD rw - fuse.fusefat /dev/sdd1 rw\n\
+            39 25 0:44 / /home/oxtest/Phone rw - fuse.jmtpfs jmtpfs rw\n";
+        let mounts = crate::search::parse_mounts(table);
+        let kind = |path: &str| mounted_kind(Some("fuse"), Some(Path::new(path)), &mounts);
+        assert_eq!(kind("/media/oxtest/USB STICK/Photos").as_deref(), Some("fuseblk"));
+        assert_eq!(kind("/media/oxtest/CARD").as_deref(), Some("exfat"));
+        assert_eq!(kind("/media/oxtest/OLD/a").as_deref(), Some("vfat"));
+        assert_eq!(kind("/home/oxtest/Phone/DCIM").as_deref(), Some("fuse"));
+        assert_eq!(
+            mounted_kind(Some("ext4"), Some(Path::new("/media/oxtest/CARD")), &mounts).as_deref(),
+            Some("ext4"),
+            "only GIO's fuse is looked up"
+        );
+        assert_eq!(mounted_kind(Some("fuse"), None, &mounts).as_deref(), Some("fuse"));
+        let rules = |path: &str| StorageRules::of(kind(path).as_deref());
+        assert!(rules("/media/oxtest/USB STICK").forbids_name(OsStr::new("a:b.txt")));
+        assert!(!rules("/media/oxtest/CARD").stores_links);
+        assert!(!rules("/home/oxtest/Phone").forbids_name(OsStr::new("a:b.txt")));
     }
 }

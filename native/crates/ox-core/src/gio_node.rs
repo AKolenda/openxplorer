@@ -40,8 +40,8 @@ use gio::prelude::*;
 
 use crate::location::split_location;
 use crate::transfer::{
-    check_cancelled, clean_staging, Cancellation, FilesystemInfo, ItemIdentity, Node, NodeInfo, NodeKind,
-    TransferError, WriteGuard,
+    check_cancelled, clean_staging, mounted_kind, Cancellation, FilesystemInfo, ItemIdentity, Node, NodeInfo,
+    NodeKind, TransferError, WriteGuard,
 };
 
 /// A file or folder addressed through GIO, including `GVfs` remote backends.
@@ -318,6 +318,15 @@ impl Node for GioNode {
         Ok(())
     }
 
+    fn flush(&self) -> Result<(), TransferError> {
+        // Only real local items: a GVfs FUSE path of a share or phone is
+        // written through by its backend.
+        let Some(path) = self.file.path().filter(|_| self.file.has_uri_scheme("file")) else {
+            return Ok(());
+        };
+        flush_file_system(&path)
+    }
+
     fn filesystem(&self, cancel: Option<&Cancellation>) -> Option<FilesystemInfo> {
         let filesystem = self
             .file
@@ -333,10 +342,16 @@ impl Node for GioNode {
             .ok()
             .and_then(|info| info.attribute_string("id::filesystem"))
             .map(String::from);
-        let kind = filesystem
+        let gio_kind = filesystem
             .as_ref()
-            .and_then(|info| info.attribute_string("filesystem::type"))
-            .map(String::from);
+            .and_then(|info| info.attribute_string("filesystem::type"));
+        // XFER-028: GIO names every FUSE drive `fuse`; the mount table
+        // tells an NTFS or exFAT USB stick apart.
+        let mounts = match gio_kind.as_deref() {
+            Some("fuse") => crate::search::read_mounts().unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        let kind = mounted_kind(gio_kind.as_deref(), self.file.path().as_deref(), &mounts);
         let free = filesystem
             .as_ref()
             .filter(|info| info.has_attribute("filesystem::free"))
@@ -344,6 +359,21 @@ impl Node for GioNode {
         // Nothing reported when both queries failed.
         (filesystem.is_some() || id.is_some()).then_some(FilesystemInfo { kind, free, id })
     }
+}
+
+/// Writes out the file system that holds the item at `path` with
+/// `syncfs(2)`, through its folder: the item itself may be a link.
+///
+/// # Errors
+///
+/// The folder cannot be opened, or the drive reports a write error.
+fn flush_file_system(path: &std::path::Path) -> Result<(), TransferError> {
+    use rustix::fs::{Mode, OFlags};
+    let folder = path.parent().unwrap_or(path);
+    let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC;
+    let opened = rustix::fs::open(folder, flags, Mode::empty()).map_err(std::io::Error::from)?;
+    rustix::fs::syncfs(&opened).map_err(std::io::Error::from)?;
+    Ok(())
 }
 
 /// True when both URIs name the same host or device, like comparing

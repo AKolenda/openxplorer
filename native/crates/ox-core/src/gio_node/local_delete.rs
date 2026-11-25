@@ -37,8 +37,8 @@ use rustix::fs::{self, AtFlags, Dir, FileType, Mode, OFlags, Stat};
 
 use crate::safe_walk::{identity_of, mount_of, require_same_item, require_still_named, Mount};
 use crate::transfer::{
-    check_cancelled, nesting_error, Cancellation, ItemIdentity, NodeKind, TransferError, WriteGuard,
-    MAX_DEPTH, PRIVATE_DIRECTORY_MODE, STAGING_LEVELS,
+    check_cancelled, keep_without_modes, nesting_error, Cancellation, ItemIdentity, NodeKind, TransferError,
+    WriteGuard, MAX_DEPTH, PRIVATE_DIRECTORY_MODE, STAGING_LEVELS,
 };
 
 /// Permanently deletes the local item at `path` and everything inside it.
@@ -325,7 +325,10 @@ impl Deletion<'_> {
         self.require_drive(mount_of(folder.as_fd(), c"", AtFlags::EMPTY_PATH)?, path, depth)?;
         if self.folders == FolderAccess::MadePrivate {
             // Through the pinned descriptor, so the mode lands on this folder.
-            fs::fchmod(&folder, Mode::from_raw_mode(PRIVATE_DIRECTORY_MODE))?;
+            // A file system without Unix modes (a FAT stick) refuses, and
+            // the engine's own folder there is emptied as it is.
+            let changed = fs::fchmod(&folder, Mode::from_raw_mode(PRIVATE_DIRECTORY_MODE));
+            keep_without_modes(changed.map_err(std::io::Error::from), || Ok(opened.st_uid))?;
         }
         for entry in Dir::read_from(&folder)? {
             check_cancelled(self.cancel)?;
