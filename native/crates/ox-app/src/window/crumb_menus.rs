@@ -292,9 +292,11 @@ impl BrowserWindow {
         // which rebuilds the crumbs while the menu is still attached.
         let bar = self.address_bar();
         let bounds = anchor.compute_bounds(bar)?;
-        let popover = MenuPopover::new(entries);
+        // The bar keeps one crumb menu and shows it again each time
+        // ([`MenuPopover::kept_by`]).
+        let popover = MenuPopover::kept_by(bar, "crumb-menu");
+        popover.set_entries(entries);
         popover.set_autohide(autohide);
-        popover.set_parent(bar);
         #[expect(clippy::cast_possible_truncation, reason = "widget bounds are small")]
         let pointing = gdk::Rectangle::new(
             bounds.x() as i32,
@@ -308,15 +310,13 @@ impl BrowserWindow {
         // the crumb Down opened it from; GTK moved it on to the next
         // control, the search box.
         let opener = GtkWindowExt::focus(self).map(|focus| focus.downgrade());
-        popover.connect_closed(glib::clone!(
+        popover.after_close(glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |popover| {
-                let closed = popover.clone();
                 let chose = popover.chose_an_item();
                 let opener = opener.clone();
                 glib::idle_add_local_once(move || {
-                    closed.unparent();
                     let opener = opener.and_then(|opener| opener.upgrade());
                     if let Some(opener) = opener.filter(|opener| !chose && opener.is_drawable()) {
                         if GtkWindowExt::focus(&window).as_ref() != Some(&opener) {

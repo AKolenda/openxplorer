@@ -420,7 +420,8 @@ fn choosing_a_folder_from_a_crumb_menu_goes_there() {
     });
     test.wait_for_listing("Letters");
     wait_for(std::time::Duration::from_millis(100));
-    assert!(descendants::<MenuPopover>(address).is_empty(), "the menu is gone");
+    // The bar keeps its menu, closed, to show it again.
+    assert!(!menu.is_visible(), "the menu is closed");
 }
 
 /// As in Windows Explorer, the wheel over a crumb never switches to the

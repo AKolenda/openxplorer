@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! One entry per visible application for Open with, and the code-editor
-//! shortcuts of the context menu.
+//! shortcuts and the default text editor of the context menu.
 //!
 //! Ports `v2.0.0:desktop/app_catalog.py` (OPEN-011, OPEN-015). Nothing here
 //! launches an application or changes a default.
@@ -92,6 +92,29 @@ pub fn editor_shortcuts<A: ApplicationInfo>(
             icon: editor.icon(),
         })
         .collect()
+}
+
+/// The default text editor, which the item menu offers as "Edit in
+/// <name>" for a text file, as Windows offers Notepad whatever opens the
+/// file: `default`, the default application for plain text, when it is a
+/// text editor (`TextEditor` in its desktop file's `Categories`), else the
+/// first text editor among `others`, in their order. The app itself and
+/// what [`unique_applications`] never offers are left out.
+pub fn default_text_editor<A: ApplicationInfo>(
+    default: Option<A>,
+    others: impl IntoIterator<Item = A>,
+) -> Option<EditorShortcut> {
+    default.into_iter().chain(others).find_map(|application| {
+        let id = application.id().filter(|id| !id.is_empty())?;
+        let is_editor = application
+            .categories()
+            .is_some_and(|categories| categories.split(';').any(|category| category == "TextEditor"));
+        (is_editor && is_offered(&application, &id)).then(|| EditorShortcut {
+            name: application.display_name(),
+            icon: application.icon(),
+            id,
+        })
+    })
 }
 
 /// How strongly a launcher represents its name: lower is preferred. The

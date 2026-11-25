@@ -422,10 +422,15 @@ fn open_tile_menu(test: &TestWindow, tile: &gtk::FlowBoxChild) -> MenuPopover {
     menu
 }
 
-/// Closes `menu` and waits for it to let go of the pane.
+/// Closes `menu` and waits until it has; the pane keeps it, to show it
+/// again (`MenuPopover::kept_by`).
 fn close_menu(menu: &MenuPopover) {
     menu.popdown();
-    wait_until("the menu to let go of the pane", || menu.parent().is_none());
+    wait_until("the menu to close", || !menu.is_visible());
+    crate::test_support::harness::wait_for_frames(
+        menu.parent().as_ref().expect("the pane keeps the menu"),
+        2,
+    );
 }
 
 /// A drive tile's menu is the file list's right-click menu, in its

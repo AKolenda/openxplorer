@@ -9,7 +9,9 @@
 //! the window binds Explorer's four named sizes to Ctrl+Shift+1..4. The
 //! compact layout is Dolphin's Compact view and Explorer's List layout
 //! (VIEW-008): the same grid turned on its side, so the items fill columns
-//! top to bottom and the view scrolls sideways. Tiles and Content
+//! top to bottom and the view scrolls sideways. Small icons is laid out
+//! the same way, as Windows 11 lays it out, with narrower columns: its
+//! 16-pixel icons sit left of their names, not above them. Tiles and Content
 //! (VIEW-071) are the same grid with other cells: Tiles in as many columns
 //! of 256-pixel tiles as fit, Content in one column of rows that span the
 //! width, both scrolling down. A grouped folder's Tiles and Content keep
@@ -71,6 +73,13 @@ impl GridLayout {
     const fn shows_groups(self) -> bool {
         matches!(self, GridLayout::Tiles | GridLayout::Content)
     }
+
+    /// Whether the items fill columns top to bottom and the view scrolls
+    /// sideways: List, and Small icons, which Windows 11 lays out as List
+    /// with narrower columns, each 16-pixel icon left of its name.
+    pub(crate) const fn flows_sideways(self) -> bool {
+        matches!(self, GridLayout::Compact | GridLayout::Icons(IconSize::SMALL))
+    }
 }
 
 /// The grouped model the grid shows, if any, shared with the cells'
@@ -96,6 +105,7 @@ impl TileRegistries {
     fn factory(&self, layout: GridLayout) -> gtk::SignalListItemFactory {
         let factory = gtk::SignalListItemFactory::new();
         let (cell_layout, icon_pixels) = match layout {
+            GridLayout::Icons(IconSize::SMALL) => (CellLayout::SmallIconItem, IconSize::SMALL.pixels()),
             GridLayout::Icons(size) => (CellLayout::IconTile, size.pixels()),
             GridLayout::Compact => (CellLayout::CompactItem, COMPACT_ICON_SIZE),
             GridLayout::Tiles => (CellLayout::Tile, TILES_ICON),
@@ -367,13 +377,14 @@ impl IconView {
         self.fit_lines();
     }
 
-    /// The adjustment of the scroll position: the horizontal one in the
-    /// compact layout, which scrolls sideways, else the vertical one.
+    /// The adjustment of the scroll position: the horizontal one in List
+    /// and Small icons, which scroll sideways, else the vertical one.
     pub(crate) fn scroll_adjustment(&self) -> gtk::Adjustment {
         let scroller = &self.imp().scroller;
-        match self.layout() {
-            GridLayout::Compact => scroller.hadjustment(),
-            GridLayout::Icons(_) | GridLayout::Tiles | GridLayout::Content => scroller.vadjustment(),
+        if self.layout().flows_sideways() {
+            scroller.hadjustment()
+        } else {
+            scroller.vadjustment()
         }
     }
 
@@ -427,14 +438,16 @@ impl IconView {
         let imp = self.imp();
         let text_size = imp.text_size.get();
         let width = imp.scroller.width();
-        let lines = match imp.layout.get() {
-            GridLayout::Icons(size) => cell_size(size, text_size).columns_in(width),
-            GridLayout::Compact => {
+        let layout = imp.layout.get();
+        let lines = match layout {
+            _ if layout.flows_sideways() => {
                 let rows = imp.scroller.height() / compact_row(text_size).max(1);
                 u32::try_from(rows.max(1)).unwrap_or(1)
             }
+            GridLayout::Icons(size) => cell_size(size, text_size).columns_in(width),
             GridLayout::Tiles => tiles_cell(text_size).columns_in(width),
-            GridLayout::Content => 1,
+            // List flows sideways above; Content is one column.
+            GridLayout::Compact | GridLayout::Content => 1,
         };
         if imp.grid.max_columns() != lines {
             imp.grid.set_max_columns(lines);
@@ -461,7 +474,12 @@ impl IconView {
         let (class, orientation) = match layout {
             GridLayout::Icons(size) => {
                 imp.icon_size.set(size);
-                (size.css_class(), gtk::Orientation::Vertical)
+                let orientation = if layout.flows_sideways() {
+                    gtk::Orientation::Horizontal
+                } else {
+                    gtk::Orientation::Vertical
+                };
+                (size.css_class(), orientation)
             }
             GridLayout::Compact => (COMPACT_CLASS, gtk::Orientation::Horizontal),
             GridLayout::Tiles => (TILES_CLASS, gtk::Orientation::Vertical),

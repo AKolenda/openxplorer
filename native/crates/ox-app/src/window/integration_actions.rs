@@ -426,10 +426,17 @@ impl BrowserWindow {
             self,
             async move {
                 let editors = integration.editor_shortcuts().await;
+                // The text editor of "Edit in" is no code editor: its name
+                // is the installed application's.
                 let name = editors
                     .iter()
                     .find(|editor| editor.id == editor_id)
-                    .map_or_else(|| editor_id.clone(), |editor| editor.name.clone());
+                    .map(|editor| editor.name.clone())
+                    .or_else(|| {
+                        integration::installed_application(&editor_id)
+                            .map(|app| app.display_name().to_string())
+                    })
+                    .unwrap_or_else(|| editor_id.clone());
                 let prepared = integration::prepare_launch(subject.uri, editor_id.clone()).await;
                 let launched = prepared
                     .and_then(|prepared| launcher(&editor_id, &prepared, integration::DefaultChoice::Keep));

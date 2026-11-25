@@ -350,6 +350,13 @@ gridview.files > child:focus-visible:not(.renaming) {
 gridview.files.compact { padding: 4px 8px 8px 12px; }
 gridview.files.compact > child { padding: 0 8px 0 6px; margin: 0 2px 0 0; border-radius: 4px; }
 gridview.files.compact > child > box { margin: 0; border-spacing: 0; }
+/* Small icons (Ctrl+Shift+4) as Windows 11 lays them out: List's rows,
+   each 16px icon left of its name, in columns 310px apart at 100% with
+   4px between items. Their width and height follow the text size
+   (src/theme/fonts.rs). */
+gridview.files.icons-small { padding: 4px 8px 8px 12px; }
+gridview.files.icons-small > child { padding: 0 2px; margin: 0; border-radius: 4px; }
+gridview.files.icons-small > child > box { margin: 0; border-spacing: 0; }
 
 /* ---- Tiles and Content (Explorer's, VIEW-071) ---- */
 /* Both draw an item's padding, hover, selection and focus ring on its

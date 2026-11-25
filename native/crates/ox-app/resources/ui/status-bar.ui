@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-only -->
 <!-- The status bar (footer.statusbar in v2.0.0:desktop/ui/index.html), as
-     Windows 11 File Explorer's: the item count, a divider and the
-     selection, the type-to-select hint, then at the right the build,
+     Windows 11 File Explorer's: the item count, a divider, the
+     selection and a divider after it, the type-to-select hint, then at the right the build,
      "Check for updates" and the two view buttons
      (src/window/status_bar.rs). -->
 <interface>
@@ -47,6 +47,18 @@
           <object class="GtkLabel" id="selection">
             <property name="xalign">0</property>
             <property name="ellipsize">end</property>
+          </object>
+        </child>
+        <child>
+          <!-- The same line after the selection, as Windows ends it:
+               "15 items | 1 item selected 4 bytes |". -->
+          <object class="GtkSeparator" id="selection_end_divider">
+            <property name="orientation">vertical</property>
+            <property name="visible">false</property>
+            <property name="valign">center</property>
+            <style>
+              <class name="selection-divider"/>
+            </style>
           </object>
         </child>
       </object>

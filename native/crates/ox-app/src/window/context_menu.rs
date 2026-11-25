@@ -42,9 +42,10 @@ use super::BrowserWindow;
 use crate::folder_view::grid::GroupSlot;
 
 use entries::{
-    background_menu, compact_background_menu, item_menu, recycle_bin_background_menu, recycle_bin_item_menu,
-    zip_background_menu, zip_item_menu, BackgroundSubmenus, Comparison, ContextMenu, ItemFacts, ItemLocation,
-    ItemShape,
+    background_menu, compact_background_menu, compact_recycle_bin_background_menu,
+    compact_recycle_bin_item_menu, compact_zip_background_menu, item_menu, page_background_menu,
+    recycle_bin_background_menu, recycle_bin_item_menu, zip_background_menu, zip_item_menu,
+    BackgroundSubmenus, Comparison, ContextMenu, ItemFacts, ItemLocation, ItemShape, UndoRedo,
 };
 pub(super) use entries::{classic_look, more_options_item, SendToDrive, SendToTargets};
 
@@ -194,6 +195,14 @@ impl BrowserWindow {
             return;
         };
         self.imp().menu_heading.replace(None);
+        // Inside a ZIP, an item's menu is Windows 11's short classic one,
+        // whichever style is chosen.
+        let in_zip = self.command_facts().folder.is_zip;
+        let style = if in_zip && !self.folder_pane().model().selected_items().is_empty() {
+            MenuStyle::Classic
+        } else {
+            style
+        };
         let mut menu = self.menu_for_selection(style);
         if let Some(heading) = heading {
             let mut entries = self.heading_menu_for(heading);
@@ -204,7 +213,7 @@ impl BrowserWindow {
         // Service actions run programs on files: the Recycle Bin's items
         // and those inside a ZIP (ARC-026) are not files they can open.
         let folder = self.command_facts().folder;
-        if !folder.is_recycle_bin && !folder.is_zip {
+        if !folder.is_recycle_bin && !folder.is_zip && self.page_shown().is_none() {
             self.append_service_actions(&mut extras, style == MenuStyle::Classic);
         }
         if self.administrator_target().is_some() {
@@ -231,12 +240,26 @@ impl BrowserWindow {
     fn menu_for_selection(&self, style: MenuStyle) -> ContextMenu {
         let items = self.folder_pane().model().selected_items();
         let facts = self.command_facts();
-        if facts.folder.is_zip {
-            let entries = if items.is_empty() {
-                zip_background_menu()
-            } else {
-                zip_item_menu()
-            };
+        let compact = style == MenuStyle::Compact;
+        let entries = if facts.folder.is_zip {
+            match (items.is_empty(), compact) {
+                (false, _) => zip_item_menu(),
+                (true, true) => compact_zip_background_menu(&self.undo_redo(), self.background_submenus()),
+                (true, false) => zip_background_menu(),
+            }
+        } else if let Some(page) = self.page_shown().filter(|_| items.is_empty()) {
+            let properties = page == Page::ThisPc && integration::system_information().is_some();
+            page_background_menu(
+                page,
+                &self.undo_redo(),
+                properties,
+                self.background_submenus(),
+                style,
+            )
+        } else {
+            Vec::new()
+        };
+        if !entries.is_empty() {
             return ContextMenu {
                 entries,
                 strip: Vec::new(),
@@ -244,6 +267,9 @@ impl BrowserWindow {
         }
         let in_recycle_bin = facts.folder.is_recycle_bin;
         let entries = match (items.first(), in_recycle_bin) {
+            (None, true) if compact => {
+                compact_recycle_bin_background_menu(&self.undo_redo(), self.background_submenus())
+            }
             (None, true) => recycle_bin_background_menu(),
             (None, false) if style == MenuStyle::Compact => {
                 self.refresh_template_menu();
@@ -271,6 +297,10 @@ impl BrowserWindow {
                     },
                 )
             }
+            (Some(first), true) if compact => {
+                let facts = self.item_facts(first.entry(), items.len() == 1);
+                return compact_recycle_bin_item_menu(&facts);
+            }
             (Some(_), true) => recycle_bin_item_menu(items.len() == 1),
             (Some(first), false) if style == MenuStyle::Compact && self.shows_gallery() => {
                 let facts = self.item_facts(first.entry(), items.len() == 1);
@@ -285,9 +315,60 @@ impl BrowserWindow {
                 return item_menu(&facts, style);
             }
         };
+        // No terminal opens on a page such as Network or Gallery, as the
+        // navigation pane's menus say (OPEN-017).
+        let shown = self.current_uri().unwrap_or_default();
+        let entries = if items.is_empty() && !super::place_menus::terminal_opens_at(&shown) {
+            gray_terminal(entries)
+        } else {
+            entries
+        };
         ContextMenu {
             entries,
             strip: Vec::new(),
+        }
+    }
+
+    /// The widget whose context menu shows for the page shown: the
+    /// landing page's scroller on Home and This PC, else the file list's
+    /// view or the empty page.
+    fn menu_widget(&self) -> gtk::Widget {
+        let pane = self.folder_pane();
+        let landing = pane.landing().ancestor(gtk::ScrolledWindow::static_type());
+        match landing {
+            Some(scroll) if pane.page() == Some(super::folder_pane::PanePage::Landing) => scroll,
+            _ => pane.input_widget(),
+        }
+    }
+
+    /// The page whose blank space a menu opens on: This PC, Home or
+    /// Network, as shown now.
+    fn page_shown(&self) -> Option<Page> {
+        self.current_uri()
+            .and_then(|uri| Page::from_uri(&uri))
+            .filter(|page| matches!(page, Page::ThisPc | Page::Home | Page::Network))
+    }
+
+    /// Undo and Redo, named for their step, where each can run now.
+    fn undo_redo(&self) -> UndoRedo {
+        let can = |action: WindowAction| {
+            self.lookup_action(action.name())
+                .is_some_and(|action| action.is_enabled())
+        };
+        UndoRedo {
+            undo: can(WindowAction::Undo).then(|| self.journal_label(JournalDirection::Undo)),
+            redo: can(WindowAction::Redo).then(|| self.journal_label(JournalDirection::Redo)),
+        }
+    }
+
+    /// The folder menus' View, Sort by, Group by and New submenus.
+    fn background_submenus(&self) -> BackgroundSubmenus {
+        self.refresh_template_menu();
+        BackgroundSubmenus {
+            view: self.background_view_menu(),
+            sort: sort_menu(),
+            group: group_by_menu(),
+            new: new_menu(self.template_menu_entries()),
         }
     }
 
@@ -324,6 +405,11 @@ impl BrowserWindow {
             is_symlink: entry.is_symlink,
             comparison: Comparison::Unavailable,
             editors: self.context().desktop_integration().known_editor_shortcuts(),
+            text_editor: if is_single && !entry.is_dir {
+                integration::text_editor_for(entry.content_type.as_deref())
+            } else {
+                None
+            },
             applications: if is_single {
                 let content_type = entry.content_type.as_deref();
                 integration::menu_applications(
@@ -345,13 +431,11 @@ impl BrowserWindow {
         }
     }
 
-    /// What a file's menu says of Favorites while Home shows them
-    /// (HOME-014): the real file, a Recent row's included, and whether it
-    /// is one already.
+    /// What a file's menu says of Favorites (HOME-014): the real file, a
+    /// Recent row's included, and whether it is one already. Every file's
+    /// menu offers it, as Windows 11's does, whatever Home shows.
     fn favorite_fact(&self, entry: &Entry, is_single: bool) -> Option<(String, bool)> {
-        // Gallery's photo menu always offers it, as Windows 11's does.
-        let offered = self.context().settings_data().preferences.home_quick_access || self.shows_gallery();
-        if !is_single || entry.is_dir || !offered {
+        if !is_single || entry.is_dir {
             return None;
         }
         let uri = entry.meta.recent_target.as_deref().unwrap_or(&entry.uri);
@@ -456,7 +540,7 @@ impl BrowserWindow {
 
     /// "Show more options": the classic menu where the compact one was.
     pub(super) fn show_more_options(&self) {
-        let view = self.folder_pane().input_widget();
+        let view = self.menu_widget();
         let Some(point) = context_menu_of(&view).and_then(|popover| popover.pointing_to().1.into()) else {
             return;
         };
@@ -469,7 +553,7 @@ impl BrowserWindow {
     /// The folder menu's "New…", "Sort by" and "View": `entries`, the
     /// command bar's menu, where the folder menu was.
     fn show_menu_in_place(&self, entries: Vec<MenuEntry>) {
-        let view = self.folder_pane().input_widget();
+        let view = self.menu_widget();
         let Some(popover) = context_menu_of(&view) else {
             return;
         };
@@ -533,13 +617,13 @@ impl BrowserWindow {
     /// The context menu of the view shown, for tests.
     #[cfg(test)]
     pub(super) fn context_menu(&self) -> MenuPopover {
-        context_menu_of(&self.folder_pane().input_widget()).expect("every view has a context menu")
+        context_menu_of(&self.menu_widget()).expect("every view has a context menu")
     }
 
     /// Opens the submenu labelled `label` of the open context menu, for
     /// the snapshot hook's `submenu=` step; false when there is none.
     pub(crate) fn open_context_submenu(&self, label: &str) -> bool {
-        context_menu_of(&self.folder_pane().input_widget())
+        context_menu_of(&self.menu_widget())
             .is_some_and(|menu| menu.is_visible() && menu.open_submenu_labelled(label))
     }
 
@@ -633,6 +717,21 @@ fn whole_pixels(coordinate: f32) -> i32 {
     coordinate as i32
 }
 
+/// `entries` with Open in Terminal grayed out, where no terminal opens.
+fn gray_terminal(entries: Vec<MenuEntry>) -> Vec<MenuEntry> {
+    entries
+        .into_iter()
+        .map(|entry| match entry {
+            MenuEntry::Item(item)
+                if item.action == super::menu_popover::MenuAction::Window(WindowAction::OpenInTerminal) =>
+            {
+                MenuEntry::Item(item.disabled_when(true))
+            }
+            other => other,
+        })
+        .collect()
+}
+
 /// The context menu popover attached to `view`.
 fn context_menu_of(view: &gtk::Widget) -> Option<MenuPopover> {
     children(view).find_map(|child| child.downcast::<MenuPopover>().ok())
@@ -699,10 +798,11 @@ pub(super) fn menu_style_for(preferred: MenuStyle, modifiers: gdk::ModifierType)
     }
 }
 
-/// Adds `extras`, the service actions and "Open as administrator…", to the
-/// end of a menu, or in Windows 11's compact menu above its last item,
-/// "Show more options", in a group of their own, as Explorer puts the
-/// commands other programs add there.
+/// Adds `extras`, the service actions and "Open as administrator…", in a
+/// group of their own: in Windows 11's compact menu above its last item,
+/// "Show more options", as Explorer puts the commands other programs add
+/// there; in the classic menu above Properties, which ends Windows'
+/// classic menu; at the end of a menu with neither.
 fn add_extras(entries: &mut Vec<MenuEntry>, extras: Vec<MenuEntry>) {
     if extras.is_empty() {
         return;
@@ -714,18 +814,33 @@ fn add_extras(entries: &mut Vec<MenuEntry>, extras: Vec<MenuEntry>) {
                 if item.action == super::menu_popover::MenuAction::Window(WindowAction::ShowMoreOptions)
         )
     });
-    match more {
-        Some(at) => {
-            let group = std::iter::once(MenuEntry::Divider).chain(extras);
-            // Before the divider that sets "Show more options" apart.
-            let before = if at > 0 && matches!(entries[at - 1], MenuEntry::Divider) {
-                at - 1
-            } else {
-                at
-            };
-            entries.splice(before..before, group);
+    if let Some(at) = more {
+        let group = std::iter::once(MenuEntry::Divider).chain(extras);
+        // Before the divider that sets "Show more options" apart.
+        let before = if at > 0 && matches!(entries[at - 1], MenuEntry::Divider) {
+            at - 1
+        } else {
+            at
+        };
+        entries.splice(before..before, group);
+    } else {
+        // The classic menu ends with Properties, as Windows' does.
+        let properties = entries.iter().rposition(|entry| {
+            matches!(
+                entry,
+                MenuEntry::Item(item)
+                    if item.action == super::menu_popover::MenuAction::Window(WindowAction::Properties)
+            )
+        });
+        match properties {
+            Some(at) => {
+                let after_divider = at == 0 || matches!(entries[at - 1], MenuEntry::Divider);
+                let lead = (!after_divider).then_some(MenuEntry::Divider);
+                let group = lead.into_iter().chain(extras).chain([MenuEntry::Divider]);
+                entries.splice(at..at, group);
+            }
+            None => entries.extend(extras),
         }
-        None => entries.extend(extras),
     }
 }
 
@@ -765,8 +880,9 @@ mod tests {
     }
 
     /// The service actions and "Open as administrator…" go above "Show
-    /// more options" in a group of their own, and at the end of a menu
-    /// without it.
+    /// more options" in a group of their own, in the classic menu above
+    /// Properties, which ends it as Windows' does, and at the end of a
+    /// menu without either.
     ///
     /// parity: CMD-010
     #[test]
@@ -788,9 +904,36 @@ mod tests {
                 "Show more options"
             ]
         );
-        let mut classic = vec![entry("Properties", WindowAction::Properties)];
+        // The classic menu ends with Properties, as Windows' does: the
+        // extras go above it, in a group of their own.
+        let mut classic = vec![
+            entry("Copy", WindowAction::Copy),
+            MenuEntry::Divider,
+            entry("Properties", WindowAction::Properties),
+        ];
         add_extras(&mut classic, extras());
-        assert_eq!(labels(&classic), ["Properties", "Open as administrator…"]);
+        assert_eq!(
+            labels(&classic),
+            ["Copy", "-", "Open as administrator…", "-", "Properties"]
+        );
+        let mut background = vec![
+            entry("Previous versions", WindowAction::PreviousVersions),
+            entry("Properties", WindowAction::Properties),
+        ];
+        add_extras(&mut background, extras());
+        assert_eq!(
+            labels(&background),
+            [
+                "Previous versions",
+                "-",
+                "Open as administrator…",
+                "-",
+                "Properties"
+            ]
+        );
+        let mut without = vec![entry("Copy", WindowAction::Copy)];
+        add_extras(&mut without, extras());
+        assert_eq!(labels(&without), ["Copy", "Open as administrator…"]);
         let mut unchanged = classic.clone();
         add_extras(&mut unchanged, Vec::new());
         assert_eq!(unchanged, classic, "no extras, no divider");

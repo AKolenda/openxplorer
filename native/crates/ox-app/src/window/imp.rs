@@ -191,6 +191,9 @@ pub(crate) struct BrowserWindow {
     /// The place menu last opened on a page (a This PC tile), its folder
     /// pane and where in it, for "Show more options".
     pub(super) place_menu: RefCell<Option<super::place_menus::OpenPlaceMenu>>,
+    /// Where the rows of the Back or Forward history menu open now, for
+    /// a middle-click on one.
+    pub(super) history_targets: RefCell<Vec<super::history_menu::StepTarget>>,
     /// What every window shares: the skin, settings and places. It
     /// comes from the application, so [`super::BrowserWindow::new`]
     /// sets it.

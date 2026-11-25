@@ -5,7 +5,8 @@
 //! in `v2.0.0:desktop/ui/app.js`, laid out as Windows 11 File Explorer's
 //! status bar: the item count ("6 items"), a thin divider and the
 //! selection ("1 item selected  19.0\u{a0}KB", the size only when every
-//! selected item is a file), the type-to-select hint, then at the right
+//! selected item is a file) with a divider after it, as Windows ends it,
+//! the type-to-select hint, then at the right
 //! "Check for updates" while a check found a newer release or a restart
 //! to finish one (the build it names is hidden, as Windows 11 Explorer's
 //! status bar has none), and the Details and Large icons view buttons, the
@@ -133,6 +134,9 @@ mod imp {
         /// The selection (`#status-selected`).
         #[template_child]
         pub(super) selection: TemplateChild<gtk::Label>,
+        /// The thin line after the selection, as Windows ends it.
+        #[template_child]
+        pub(super) selection_end_divider: TemplateChild<gtk::Separator>,
         /// The type-to-select hint.
         #[template_child]
         pub(super) typeahead_hint: TemplateChild<gtk::Label>,
@@ -270,7 +274,8 @@ impl StatusBar {
         check_updates.tooltip_text().unwrap_or_default().to_string()
     }
 
-    /// Shows the item count and, after the divider, the selection.
+    /// Shows the item count and, between two dividers, the selection, as
+    /// Windows writes "15 items | 1 item selected 4 bytes |".
     pub(super) fn set_counts(&self, subject: StatusSubject, selected: SelectionSummary) {
         let imp = self.imp();
         imp.count.set_text(&count_text(subject));
@@ -279,6 +284,7 @@ impl StatusBar {
             StatusSubject::Folder { .. } | StatusSubject::Search(_) => selection_text(selected),
         };
         imp.selection_divider.set_visible(!selection.is_empty());
+        imp.selection_end_divider.set_visible(!selection.is_empty());
         imp.selection.set_visible(!selection.is_empty());
         imp.selection.set_text(&selection);
     }
@@ -340,6 +346,15 @@ impl StatusBar {
     #[cfg(test)]
     pub(super) fn shows_selection_divider(&self) -> bool {
         self.imp().selection_divider.is_visible()
+    }
+
+    /// Whether the divider after the selection shows, right after the
+    /// selection's text, for tests.
+    #[cfg(test)]
+    pub(super) fn shows_trailing_divider(&self) -> bool {
+        let imp = self.imp();
+        let divider = imp.selection_end_divider.upcast_ref::<gtk::Widget>();
+        imp.selection.next_sibling().as_ref() == Some(divider) && divider.is_visible()
     }
 
     /// The type-to-select hint's label, for tests.

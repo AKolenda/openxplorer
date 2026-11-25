@@ -158,14 +158,12 @@ impl BrowserWindow {
         if entries.is_empty() {
             return None;
         }
-        let popover = MenuPopover::new(entries);
-        popover.set_parent(self.status_bar());
+        // The status bar keeps its menu and shows it again each time
+        // ([`MenuPopover::kept_by`]).
+        let popover = MenuPopover::kept_by(self.status_bar(), "status-bar-menu");
+        popover.set_entries(entries);
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         popover.set_pointing_to(Some(&gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
-        popover.connect_closed(|popover| {
-            let closed = popover.clone();
-            glib::idle_add_local_once(move || closed.unparent());
-        });
         popover.popup();
         Some(popover)
     }

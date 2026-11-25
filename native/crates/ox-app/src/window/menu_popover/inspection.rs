@@ -173,6 +173,11 @@ impl MenuPopover {
             .collect()
     }
 
+    /// What the strip's buttons run, shown or not, for tests.
+    pub(in crate::window) fn strip_items(&self) -> Vec<super::MenuItem> {
+        self.imp().strip_items.borrow().clone()
+    }
+
     /// The text drawn under each strip button's icon, for tests.
     pub(crate) fn strip_texts(&self) -> Vec<String> {
         crate::window::widget_tree::children(self.strip())

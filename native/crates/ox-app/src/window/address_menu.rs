@@ -96,15 +96,13 @@ impl AddressBar {
             .and_then(|window| window.current_uri())
             .unwrap_or_default();
         let uri = self.crumb_location_at(x, y).unwrap_or(shown);
-        let popover = MenuPopover::new(location_menu(&uri));
-        popover.set_parent(self);
+        // The bar keeps one menu and shows it again each time
+        // ([`MenuPopover::kept_by`]).
+        let popover = MenuPopover::kept_by(self, "location-menu");
+        popover.set_entries(location_menu(&uri));
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let point = gdk::Rectangle::new(x as i32, y as i32, 1, 1);
         popover.set_pointing_to(Some(&point));
-        popover.connect_closed(|popover| {
-            let closed = popover.clone();
-            glib::idle_add_local_once(move || closed.unparent());
-        });
         popover.popup();
         popover
     }

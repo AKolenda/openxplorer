@@ -28,7 +28,7 @@ const MENU_LENGTH: usize = 12;
 
 /// Where a step of the history leads: its location, and the search it
 /// shows there, if any.
-type StepTarget = (String, Option<SearchStep>);
+pub(super) type StepTarget = (String, Option<SearchStep>);
 
 /// The steps a history menu offers from `history`'s current location in
 /// `direction`, nearest first, each with the location it leads to and
@@ -200,21 +200,24 @@ impl BrowserWindow {
         if entries.is_empty() {
             return None;
         }
-        let popover = MenuPopover::new(entries);
-        popover.connect_row_middle_click(glib::clone!(
-            #[weak(rename_to = window)]
-            self,
-            move |index, modifiers| {
-                if let Some(target) = targets.get(index) {
-                    window.open_target_in_tab(target, modifiers);
+        // The button keeps its menu and shows it again each time
+        // ([`MenuPopover::kept_by`]); a middle-click opens the row's step
+        // from the targets of the menu shown now.
+        let popover = MenuPopover::kept_by(button, "history-menu");
+        if popover.items().is_empty() {
+            popover.connect_row_middle_click(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                move |index, modifiers| {
+                    let target = window.imp().history_targets.borrow().get(index).cloned();
+                    if let Some(target) = target {
+                        window.open_target_in_tab(&target, modifiers);
+                    }
                 }
-            }
-        ));
-        popover.set_parent(button);
-        popover.connect_closed(|popover| {
-            let closed = popover.clone();
-            glib::idle_add_local_once(move || closed.unparent());
-        });
+            ));
+        }
+        self.imp().history_targets.replace(targets);
+        popover.set_entries(entries);
         popover.popup();
         Some(popover)
     }

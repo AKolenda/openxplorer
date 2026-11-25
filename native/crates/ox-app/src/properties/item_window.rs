@@ -532,6 +532,10 @@ fn follow_default_app(window: &PropertiesWindow, opens_with: &gtk::Label, conten
         };
         if let Some(app) = gtk::gio::AppInfo::default_for_type(&content_type, false) {
             label.set_text(&app.display_name());
+            if let Some(icon) = label.prev_sibling().and_downcast::<gtk::Image>() {
+                let shown = ox_core::integration::ApplicationInfo::icon(&app);
+                super::general_tab::show_app_icon(&icon, true, shown.as_deref());
+            }
         }
     });
 }

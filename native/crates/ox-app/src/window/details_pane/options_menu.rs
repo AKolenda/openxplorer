@@ -112,14 +112,12 @@ impl DetailsPane {
 
     /// The menu as a popover at (`x`, `y`).
     pub(in crate::window) fn show_options_menu(&self, x: f64, y: f64) -> MenuPopover {
-        let popover = MenuPopover::new(entries(&self.options()));
-        popover.set_parent(self);
+        // The pane keeps one menu and shows it again each time
+        // ([`MenuPopover::kept_by`]).
+        let popover = MenuPopover::kept_by(self, "details-options-menu");
+        popover.set_entries(entries(&self.options()));
         #[expect(clippy::cast_possible_truncation, reason = "a pointer position fits in i32")]
         popover.set_pointing_to(Some(&gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
-        popover.connect_closed(|popover| {
-            let popover = popover.clone();
-            glib::idle_add_local_once(move || popover.unparent());
-        });
         popover.popup();
         popover
     }

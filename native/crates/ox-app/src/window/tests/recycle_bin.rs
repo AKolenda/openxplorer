@@ -69,6 +69,9 @@ fn the_recycle_bin_lists_trashed_items_and_restore_puts_them_back() {
     });
     select_names(&test, &["Budget for restoring.txt"]);
 
+    // The classic menu ("Show more options"); the compact one is checked
+    // in page_menus.rs.
+    super::context_menus::choose_menu_style(&test, ox_core::settings::ContextMenu::Win10);
     test.window
         .right_click(test.window.folder_model().first_selected());
     let labels = test.window.context_menu().row_labels();
@@ -341,6 +344,8 @@ fn empty_recycle_bin_asks_then_deletes_everything_in_it() {
     let test = TestWindow::open(TRASH_URI);
     wait_until("the trashed files to be listed", || test.names().len() == count);
 
+    // The classic menu; the compact one is checked in page_menus.rs.
+    super::context_menus::choose_menu_style(&test, ox_core::settings::ContextMenu::Win10);
     test.window.right_click(None);
     let labels = test.window.context_menu().row_labels();
     test.window.context_menu().popdown();
