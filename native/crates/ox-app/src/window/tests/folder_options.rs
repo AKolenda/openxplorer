@@ -26,7 +26,7 @@ fn hides_place(test: &TestWindow, uri: &str) -> bool {
 /// General: Browse folders' "Open each folder in its own window" opens a
 /// folder opened from the file list, by double-click or by Open on its
 /// context menu, in a new window and leaves this one where it is; Click
-/// items as follows offers only Double-click, which is chosen; Privacy's
+/// items as follows has Double-click chosen, as in Windows; Privacy's
 /// check boxes hide Recent files and Recent locations from the navigation
 /// pane; and Clear forgets the recent files and the typed addresses at
 /// once, before OK.
@@ -39,7 +39,6 @@ fn the_general_tab_opens_folders_in_their_own_window_and_clears_history() {
     let options = open_folder_options(&test);
     let general = |label: &str| option_check(&options, "General", label);
     assert!(general("Open each folder in the same window").is_active());
-    assert!(!general("Single-click to open an item (point to select)").is_sensitive());
     assert!(general("Double-click to open an item (single-click to select)").is_active());
     assert!(general("Show recently used files").is_active());
     assert!(general("Show frequently used folders").is_active());
@@ -106,6 +105,79 @@ fn the_general_tab_opens_folders_in_their_own_window_and_clears_history() {
             "{way}: this window stays"
         );
     }
+}
+
+/// General: Click items as follows starts at Windows' Double-click, its
+/// underline choices grayed out until Single-click is chosen; OK turns
+/// single-click on in every open window at once, underlining every name
+/// with "consistent with my browser", and Restore Defaults brings
+/// Double-click back, which every window follows too.
+///
+/// parity: SEL-018, VIEW-020
+#[gtk::test]
+fn click_items_as_follows_turns_single_click_on_in_every_window() {
+    use crate::window::single_click::ClickMode;
+
+    const SINGLE: &str = "Single-click to open an item (point to select)";
+    const DOUBLE: &str = "Double-click to open an item (single-click to select)";
+    const ALWAYS: &str = "Underline icon titles consistent with my browser";
+    const ON_POINT: &str = "Underline icon titles only when I point at them";
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let other = test.open_beside(&fixture.uri_of("Documents"));
+    let follow = |mode: ClickMode| {
+        for window in [&test.window, &other.window] {
+            wait_until("every window to follow", || window.click_mode() == mode);
+            let view = window.folder_pane().view_widget();
+            let single = matches!(mode, ClickMode::Single { .. });
+            let always = mode
+                == ClickMode::Single {
+                    underline_always: true,
+                };
+            assert_eq!(view.has_css_class("single-click"), single);
+            assert_eq!(view.has_css_class("underlined-titles"), always);
+        }
+    };
+
+    let options = open_folder_options(&test);
+    let general = |label: &str| option_check(&options, "General", label);
+    assert!(general(DOUBLE).is_active(), "Windows' default");
+    assert!(general(ON_POINT).is_active(), "Windows' default underline");
+    for underline in [ALWAYS, ON_POINT] {
+        assert!(
+            !general(underline).is_sensitive(),
+            "{underline}: grayed for Double-click"
+        );
+    }
+    general(SINGLE).set_active(true);
+    for underline in [ALWAYS, ON_POINT] {
+        assert!(
+            general(underline).is_sensitive(),
+            "{underline}: chosen with Single-click"
+        );
+    }
+    general(ALWAYS).set_active(true);
+    close_folder_options(&test, &options, "OK");
+    wait_until("the choices to be saved", || {
+        let preferences = test.context.settings_data().preferences;
+        preferences.single_click_open && preferences.underline_titles_always
+    });
+    follow(ClickMode::Single {
+        underline_always: true,
+    });
+
+    let options = open_folder_options(&test);
+    let general = |label: &str| option_check(&options, "General", label);
+    assert!(general(SINGLE).is_active() && general(ALWAYS).is_active());
+    tab_button(&options, "General", "Restore Defaults").emit_clicked();
+    assert!(general(DOUBLE).is_active() && general(ON_POINT).is_active());
+    assert!(!general(ALWAYS).is_sensitive());
+    close_folder_options(&test, &options, "OK");
+    wait_until("the defaults to be saved", || {
+        let preferences = test.context.settings_data().preferences;
+        !preferences.single_click_open && !preferences.underline_titles_always
+    });
+    follow(ClickMode::Double);
 }
 
 /// Privacy's "Show recently used files" and "Show frequently used

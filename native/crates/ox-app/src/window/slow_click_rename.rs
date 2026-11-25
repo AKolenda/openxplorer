@@ -13,6 +13,8 @@
 //! while renaming is not allowed there. The rename is for the item
 //! clicked, in the pane clicked: it never starts on another item that
 //! comes to stand at its position, nor in the other pane of a split tab.
+//! In Folder Options' single-click mode the click opens the item instead
+//! (SEL-018).
 
 use std::cell::{Cell, RefCell};
 use std::time::{Duration, Instant};
@@ -211,6 +213,10 @@ impl BrowserWindow {
     /// the name of the only selected item.
     pub(super) fn name_pressed(&self, press: NamePress) {
         self.cancel_slow_click_rename();
+        // A single click opens the item there (SEL-018).
+        if self.single_click_opens() {
+            return;
+        }
         let now = Instant::now();
         let earlier = self.imp().slow_click_rename.last_press.replace(Some(now));
         if earlier.is_some_and(|earlier| now.duration_since(earlier) < double_click_interval()) {

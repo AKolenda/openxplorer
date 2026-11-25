@@ -8,9 +8,10 @@
 //! General: "Open `OpenXplorer` to" (Windows' "Open File Explorer to",
 //! named for the app), the start places the app has (Home,
 //! This PC, or a folder chosen in Settings); Browse folders, the same
-//! window or a window of each folder's own; Click items as follows, where
-//! only Double-click can be chosen, as the app has no single-click mode
-//! (SEL-018); Privacy, whether the navigation pane shows Recent files
+//! window or a window of each folder's own; Click items as follows, a
+//! single click that opens an item the pointer selects, or a double-click,
+//! and with a single click whether item names are always underlined or
+//! only the one pointed at (SEL-018, [`super::single_click`]); Privacy, whether the navigation pane shows Recent files
 //! ("Show recently used files") and Recent locations ("Show frequently
 //! used folders"), grayed out while Settings' "Show more items in the
 //! navigation pane" is off, as the pane then lists neither (SIDE-034),
@@ -71,9 +72,6 @@ const RESET_QUESTION: &str = message_id("Do you want to reset all folders to the
 const PRIVACY_NEEDS_MORE_ITEMS: &str =
     message_id("These apply when “Show more items in the navigation pane” is on in Settings > Appearance.");
 
-/// Why Click items as follows offers only Double-click.
-const NO_SINGLE_CLICK: &str = message_id("OpenXplorer opens items with a double-click.");
-
 /// One of Windows' options that the app has too: a check box, or a choice
 /// of two.
 struct Setting {
@@ -122,6 +120,45 @@ fn browse_folders() -> Setting {
         read: |preferences| preferences.open_folders_in_own_window,
         write: |update, _, on| update.open_folders_in_own_window = Some(on),
     }
+}
+
+/// Click items as follows, on the General tab: Single-click or
+/// Double-click, and with Single-click how item names are underlined. Its
+/// group box is its heading, and Windows puts the underline choices
+/// between the two clicks ([`OptionsForm::add_to`]).
+fn click_items() -> [Setting; 2] {
+    [
+        Setting {
+            label: message_id("Click items as follows"),
+            choices: Some([
+                (
+                    message_id("_Single-click to open an item (point to select)"),
+                    true,
+                ),
+                (
+                    message_id("Double-click to open an item (single-click to select)"),
+                    false,
+                ),
+            ]),
+            read: |preferences| preferences.single_click_open,
+            write: |update, _, on| update.single_click_open = Some(on),
+        },
+        Setting {
+            label: message_id("Click items as follows"),
+            choices: Some([
+                (
+                    message_id("Underline icon titles consistent with my _browser"),
+                    true,
+                ),
+                (
+                    message_id("Underline icon titles only when I _point at them"),
+                    false,
+                ),
+            ]),
+            read: |preferences| preferences.underline_titles_always,
+            write: |update, _, on| update.underline_titles_always = Some(on),
+        },
+    ]
 }
 
 /// Privacy's check boxes, on the General tab: whether the navigation pane
@@ -506,7 +543,19 @@ impl OptionsForm {
             preferences,
         ));
         general.append(&browse);
-        general.append(&click_items_group());
+        let (click, column) = icon_group(&gettext("Click items as follows"), Icon::Open);
+        let [clicks, underline] = click_items();
+        let clicks = ShownSetting::add(clicks, Tab::General, &column, preferences);
+        // The underline choices stand between Single-click and
+        // Double-click, indented under Single-click, as in Windows.
+        let underline_column = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        underline_column.set_margin_start(CHOICE_INDENT);
+        let underline = ShownSetting::add(underline, Tab::General, &underline_column, preferences);
+        column.insert_child_after(&underline_column, Some(&clicks.on));
+        follow_single_click(&clicks.on, &underline);
+        settings.push(clicks);
+        settings.push(underline);
+        general.append(&click);
         let (privacy, column) = icon_group(&gettext("Privacy"), Icon::ShieldLock);
         let privacy_start = settings.len();
         for setting in privacy_settings() {
@@ -733,31 +782,21 @@ fn open_file_explorer_to(
     (start, places)
 }
 
-/// Click items as follows, as Windows lists it, where only Double-click
-/// can be chosen: the file list has no single-click mode (SEL-018), so
-/// Single-click and its underline choices are greyed out and say why.
-fn click_items_group() -> gtk::Frame {
-    let (group, column) = icon_group(&gettext("Click items as follows"), Icon::Open);
-    let single = option_check(&gettext("Single-click to open an item (point to select)"));
-    let consistent = option_check(&gettext("Underline icon titles consistent with my browser"));
-    let on_point = option_check(&gettext("Underline icon titles only when I point at them"));
-    let double = option_check(&gettext("Double-click to open an item (single-click to select)"));
-    on_point.set_group(Some(&consistent));
-    on_point.set_active(true);
-    double.set_group(Some(&single));
-    double.set_active(true);
-    let reason = gettext_static(NO_SINGLE_CLICK);
-    for underline in [&consistent, &on_point] {
-        underline.set_margin_start(CHOICE_INDENT);
-    }
-    for unavailable in [&single, &consistent, &on_point] {
-        unavailable.set_sensitive(false);
-        unavailable.set_tooltip_text(Some(reason));
-    }
-    for button in [&single, &consistent, &on_point, &double] {
-        column.append(button);
-    }
-    group
+/// Lets the underline choices be chosen while `single_click` is, and
+/// grays them out while Double-click is, as Windows does; they keep their
+/// choice for Single-click.
+fn follow_single_click(single_click: &gtk::CheckButton, underline: &ShownSetting) {
+    let buttons: Vec<gtk::CheckButton> = std::iter::once(&underline.on)
+        .chain(underline.off.as_ref())
+        .cloned()
+        .collect();
+    let follow = move |single_click: &gtk::CheckButton| {
+        for button in &buttons {
+            button.set_sensitive(single_click.is_active());
+        }
+    };
+    follow(single_click);
+    single_click.connect_toggled(follow);
 }
 
 /// "Clear `OpenXplorer` history" and its Clear button, on one line.
@@ -1040,6 +1079,7 @@ mod tests {
     #[test]
     fn every_option_reads_and_writes_its_preference() {
         let settings = std::iter::once(browse_folders())
+            .chain(click_items())
             .chain(privacy_settings())
             .chain(advanced_settings())
             .chain(search_settings());

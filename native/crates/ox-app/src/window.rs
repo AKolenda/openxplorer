@@ -163,6 +163,7 @@ mod sidebar;
 mod sidebar_hiding;
 mod sidebar_resizer;
 mod sidebar_toggle;
+mod single_click;
 mod slow_click_rename;
 mod slow_delay;
 mod slow_location;

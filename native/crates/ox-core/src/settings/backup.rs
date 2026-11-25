@@ -453,6 +453,7 @@ mod tests {
             "absoluteDates": false, "perFolderViews": false, "selectionMarker": true,
             "itemChecksOnCtrl": false, "expandableFolders": true, "compactView": true,
             "showExtensions": true, "previewPane": true, "openFoldersInOwnWindow": true,
+            "singleClickOpen": true, "underlineTitlesAlways": true,
             "hideInfotips": true, "hideStatusBar": true, "hidePreviewHandlers": true,
             "typeIntoSearchBox": true, "searchContents": true, "showSearchFilterBar": true,
             "pastePicturesAsFiles": false, "copyPathsAsText": false,

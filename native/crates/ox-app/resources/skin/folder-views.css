@@ -211,6 +211,12 @@ columnview.files .row-icon { margin-top: 1px; }
    Explorer and Dolphin draw them (VIEW-026). A cut hidden item's icon
    fades further (0.6 x 0.5), so the cut still shows. */
 .files .hidden-item { opacity: 0.6; }
+/* Folder Options' single-click mode (SEL-018): the names are underlined
+   always ("Underline icon titles consistent with my browser") or only
+   the one pointed at (.pointed, "only when I point at them"), as Windows
+   underlines its icon titles. */
+.single-click.underlined-titles .item-name,
+.single-click .pointed .item-name { text-decoration-line: underline; }
 
 /* The rubber band the window draws over the views (SEL-012). */
 .folder-pane-overlay > .rubber-band {

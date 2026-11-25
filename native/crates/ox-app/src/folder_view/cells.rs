@@ -178,6 +178,10 @@ pub(crate) enum CellLayout {
 /// cut item's icon and keeps its name and details (CLIP-002).
 const ITEM_ART_CLASS: &str = "item-art";
 
+/// The CSS class of an item's name, which Folder Options' single-click
+/// mode underlines (SEL-018).
+const ITEM_NAME_CLASS: &str = "item-name";
+
 /// The CSS class of a cell that shows a grid slot with no item: a group's
 /// heading, its line or a blank (VIEW-071).
 const GROUP_SLOT_CLASS: &str = "group-slot";
@@ -405,6 +409,8 @@ mod imp {
             self.folder_contents.set_valign(gtk::Align::Center);
             self.icon_frame.add_overlay(&self.folder_contents);
             cell.append(&self.icon_frame);
+            // Underlined in Folder Options' single-click mode (SEL-018).
+            self.label.add_css_class(super::ITEM_NAME_CLASS);
             cell.append(&self.label);
         }
     }

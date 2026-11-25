@@ -120,6 +120,7 @@ mod shortcuts;
 mod sidebar;
 mod sidebar_layout;
 mod sidebar_sections;
+mod single_click;
 mod slow_locations;
 mod split_view;
 mod stopping;

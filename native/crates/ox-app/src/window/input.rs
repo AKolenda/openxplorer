@@ -249,7 +249,8 @@ impl BrowserWindow {
         ));
     }
 
-    /// Enter and double-click open the activated item. When it is one of
+    /// Enter and double-click open the activated item, and in Folder
+    /// Options' single-click mode a single click ([`super::single_click`]). When it is one of
     /// several selected items, all of them open, as Dolphin's
     /// `itemsActivated` does (OPEN-003); an item outside a selection of
     /// several is never opened.
@@ -298,8 +299,10 @@ impl BrowserWindow {
     /// opened alone goes to a new window too, as in Windows
     /// ([`BrowserWindow::activate_item`]).
     pub(super) fn activate_from_view(&self, position: u32) {
-        // DND-007: the press or release of a drag never opens an item.
-        if self.are_item_clicks_paused() {
+        // DND-007: the press or release of a drag never opens an item, and
+        // in single-click mode the second press of a double-click opens
+        // nothing more (SEL-018).
+        if self.are_item_clicks_paused() || self.swallows_activation() {
             return;
         }
         let modifiers = self
@@ -323,7 +326,7 @@ impl BrowserWindow {
 
     /// Gives `view` type-to-select, the window's key handling, prefix
     /// resets on clicks, deselection by a click on blank space, rename by
-    /// a slow second click on a name,
+    /// a slow second click on a name, Folder Options' single-click mode,
     /// middle-click to open a folder, the context menu, and file drag and
     /// drop.
     fn folder_input(&self, view: &gtk::Widget) {
@@ -341,6 +344,7 @@ impl BrowserWindow {
         view.add_controller(keys);
         view.add_controller(self.blank_space_press(view));
         self.attach_slow_click_rename(view);
+        self.attach_single_click(view);
         // After the press, which clears the selection the band starts from.
         self.attach_rubber_band(view);
         view.add_controller(self.folder_middle_click(view));

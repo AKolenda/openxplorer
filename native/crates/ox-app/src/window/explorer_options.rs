@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! What Folder Options' own choices do in a window (VIEW-021), the ones
 //! no other part of the app sets: folders opened in a window of their own,
-//! the infotips, the status bar, the Preview pane's contents, typing into
+//! how a click opens an item (SEL-018), the infotips, the status bar, the Preview pane's contents, typing into
 //! the search box, searching names and contents, and Clear File Explorer
 //! history. Every window follows the saved choices as soon as they are
 //! saved, through [`BrowserWindow::follow_item_preferences`].
@@ -18,6 +18,7 @@ use super::BrowserWindow;
 impl BrowserWindow {
     /// Follows the saved choices of Folder Options that only it sets.
     pub(super) fn follow_folder_options(&self, preferences: &Preferences) {
+        self.follow_click_mode(preferences);
         for pane in self.folder_panes() {
             pane.owners().set_hides_infotips(preferences.hide_infotips);
         }

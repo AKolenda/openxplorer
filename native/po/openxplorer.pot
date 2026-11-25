@@ -7424,10 +7424,6 @@ msgid "Open each folder in the s_ame window"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "OpenXplorer opens items with a double-click."
-msgstr ""
-
-#: crates/ox-app/src/window/folder_options.rs
 msgid "Privacy"
 msgstr ""
 
@@ -7464,19 +7460,15 @@ msgid "Show status bar"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "Single-click to open an item (point to select)"
-msgstr ""
-
-#: crates/ox-app/src/window/folder_options.rs
 msgid "These apply when “Show more items in the navigation pane” is on in Settings > Appearance."
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "Underline icon titles consistent with my browser"
+msgid "Underline icon titles consistent with my _browser"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
-msgid "Underline icon titles only when I point at them"
+msgid "Underline icon titles only when I _point at them"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
@@ -7497,6 +7489,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/folder_options.rs
 msgid "_Reset Folders"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_options.rs
+msgid "_Single-click to open an item (point to select)"
 msgstr ""
 
 #: crates/ox-app/src/window/folder_pane/parts.rs

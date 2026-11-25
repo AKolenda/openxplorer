@@ -411,6 +411,9 @@ pub(crate) struct BrowserWindow {
     pub(super) network_info_bar: OnceCell<super::network_info_bar::NetworkInfoBar>,
     /// The rename a slow second click on a name scheduled (OPS-011).
     pub(super) slow_click_rename: super::slow_click_rename::SlowClickRename,
+    /// Folder Options' single-click mode: the item pressed and the one
+    /// the pointer is on (SEL-018).
+    pub(super) single_click: super::single_click::SingleClick,
     /// Measured folder sizes and the running folder-size scan.
     pub(super) size_scans: super::folder_size_scan::SizeScans,
 }
