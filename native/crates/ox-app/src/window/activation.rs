@@ -18,7 +18,7 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::{self, Entry, EntryError, EntryKind};
 use ox_core::integration;
-use ox_core::location::VirtualPlace;
+use ox_core::location::{typed_address, VirtualPlace};
 use ox_core::ops::is_recycle_bin_item;
 
 use crate::dialog::Dialog;
@@ -555,25 +555,38 @@ impl BrowserWindow {
     /// Opens the address `text`, given as `source` says.
     fn open_address(&self, text: &str, source: AddressSource) {
         let typed = text.trim();
-        if is_web_address(typed) {
+        // As in Windows' address bar, a path may come between double
+        // quotes, as Copy as path copies it, and %NAME% (or $NAME) stands
+        // for an environment variable; the history keeps what was typed.
+        let expanded = typed_address(typed, |name| std::env::var(name).ok());
+        let address = expanded.trim();
+        if is_web_address(address) {
             self.accept_address(typed, source);
-            self.open_web_address(typed);
+            self.open_web_address(address);
             return;
         }
         let current = self.current_uri();
-        let place = self.place_titled(typed);
+        let place = self.place_titled(address);
         let unchanged_page = place.is_some() && place == current;
         // The Recycle Bin's, Recent's and Recent locations' own addresses
         // open them as the pages' do (SIDE-034).
-        let is_page_uri = locations::is_home_alias(typed)
-            || Page::from_uri(typed).is_some()
-            || super::navigation::listed_place(VirtualPlace::from_uri(typed)).is_some();
+        let is_page_uri = locations::is_home_alias(address)
+            || Page::from_uri(address).is_some()
+            || super::navigation::listed_place(VirtualPlace::from_uri(address)).is_some();
         if unchanged_page || is_page_uri {
             self.accept_address(typed, source);
-            self.navigate_or_report(typed);
+            self.navigate_or_report(address);
             return;
         }
-        let folder = match self.resolve_relative(text) {
+        // A standard folder's name opens it from any folder, before a
+        // folder of that name in the current one, as typing "Documents"
+        // in Windows 11 File Explorer opens the user's Documents.
+        if let Some(standard) = self.standard_folder_titled(address) {
+            self.accept_address(typed, source);
+            self.navigate_or_report(&standard);
+            return;
+        }
+        let folder = match self.resolve_relative(address) {
             Ok(folder) => folder,
             Err(error) => {
                 match place {

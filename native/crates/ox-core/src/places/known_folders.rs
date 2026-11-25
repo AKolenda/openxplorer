@@ -84,6 +84,12 @@ impl KnownFolder {
         crate::i18n::gettext_static(self.default_name())
     }
 
+    /// The English name, which the address bar takes in any language, as
+    /// Windows takes "Documents" (NAV-033).
+    pub const fn english_name(self) -> &'static str {
+        self.default_name()
+    }
+
     /// The stable fallback directory name, used when XDG has no configured path.
     const fn default_name(self) -> &'static str {
         match self {

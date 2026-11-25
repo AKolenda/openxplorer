@@ -88,9 +88,9 @@ impl BrowserWindow {
     /// window shows them.
     pub(super) fn clear_explorer_history(&self) {
         self.context().clear_recent_files();
+        self.context().forget_typed_addresses();
         crate::folder_view::recent_locations::clear_recent_locations();
         for window in self.browser_windows() {
-            window.address_bar().forget_typed_history();
             let shows_recent = window
                 .current_uri()
                 .is_some_and(|uri| [RECENT_URI, RECENT_LOCATIONS_URI].contains(&uri.as_str()));
