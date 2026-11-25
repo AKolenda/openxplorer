@@ -158,7 +158,7 @@ pub use reveal::{
 pub use sandbox::Sandbox;
 pub use terminal::{
     checked_directory, command_in_terminal, desktop_terminals, find_terminal, launch_terminal,
-    open_terminal_in_background, prepare_directory, session_terminal, terminal_arguments, CommandStyle,
+    open_terminal_in_background, prepare_directory, session_terminal, terminal_arguments,
     DesktopTerminalConfig, DirectoryChecks, ExecutableSearch, LaunchedTerminal, PreferredTerminal,
     PreparedDirectory, Terminal, TerminalError, TerminalKind, HOLD_SCRIPT, SYSTEM_PATH,
 };

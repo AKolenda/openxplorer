@@ -5,9 +5,10 @@
 //!
 //! Safety rule "names are never code": the program and its arguments
 //! follow the terminal's command option as they are (for Tilix, which
-//! splits one string itself, each quoted so it splits back exactly); the
-//! terminal's shell runs one fixed script that calls the program with its arguments as
-//! positional parameters.
+//! splits one string itself, and Ghostty, which hands one string to
+//! `/bin/sh -c`, each quoted so it splits back exactly); the terminal's
+//! shell runs one fixed script that calls the program with its arguments
+//! as positional parameters.
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -58,17 +59,31 @@ pub fn command_in_terminal(
         // `g_shell_parse_argv`, which undoes `g_shell_quote` exactly.
         CommandStyle::QuotedAfter(option) => {
             wrapped.push(option.into());
-            let mut quoted = OsString::new();
-            for (index, argument) in program.iter().enumerate() {
-                if index > 0 {
-                    quoted.push(" ");
-                }
-                quoted.push(glib::shell_quote(argument));
-            }
-            wrapped.push(quoted);
+            wrapped.push(quoted_command(&program));
+        }
+        // `/bin/sh -c` splits the quoted words back exactly, and nothing
+        // in them is expanded.
+        CommandStyle::ShellCommand { options, option } => {
+            wrapped.extend(options.iter().map(OsString::from));
+            let mut argument = OsString::from(option);
+            argument.push(quoted_command(&program));
+            wrapped.push(argument);
         }
     }
     wrapped
+}
+
+/// `program`, each argument quoted with `g_shell_quote` (single quotes,
+/// as `/bin/sh` reads them) and joined with spaces.
+fn quoted_command(program: &[OsString]) -> OsString {
+    let mut quoted = OsString::new();
+    for (index, argument) in program.iter().enumerate() {
+        if index > 0 {
+            quoted.push(" ");
+        }
+        quoted.push(glib::shell_quote(argument));
+    }
+    quoted
 }
 
 /// True for an absolute path without control characters, which every
@@ -106,7 +121,13 @@ mod tests {
             ),
             (
                 TerminalKind::Ghostty,
-                &["--working-directory=/home/ada/My scripts", "-e", "/usr/bin/htop"],
+                &[
+                    "--working-directory=/home/ada/My scripts",
+                    "--gtk-single-instance=false",
+                    "--quit-after-last-window-closed=true",
+                    "--shell-integration=none",
+                    "--initial-command='/usr/bin/htop'",
+                ],
             ),
             (
                 TerminalKind::Alacritty,
@@ -176,6 +197,54 @@ mod tests {
             .to_vec();
         expected.extend(program);
         assert_eq!(split, expected);
+    }
+
+    /// Ghostty runs its command with `/bin/sh -c`: before 1.2 every `-e`
+    /// command, joined unquoted, and in every version an
+    /// `--initial-command=`. Each argument is quoted, so the shell gives
+    /// the program exactly the names it was given and runs none of them.
+    ///
+    /// parity: OPEN-020, SAFE-015
+    #[test]
+    fn ghostty_gets_the_program_as_one_shell_command_that_runs_it_exactly() {
+        let ghostty = Terminal::new("/usr/bin/ghostty".into(), TerminalKind::Ghostty).expect("absolute");
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let witness = folder.path().join("PWNED");
+        let arguments = vec![
+            OsString::from("/home/ada/run it.sh"),
+            OsString::from(format!(
+                "it's \"quoted\" $(touch {0}) `touch {0}` \\ ;&| *",
+                witness.display()
+            )),
+            OsString::from("two\nlines"),
+            OsString::new(),
+        ];
+        let mut program = vec![OsString::from("printf"), OsString::from("%s\\0")];
+        program.extend(arguments.clone());
+
+        let wrapped = command_in_terminal(&ghostty, folder.path(), None, program);
+
+        assert!(!wrapped.iter().any(|argument| argument == "-e"), "{wrapped:?}");
+        let command = wrapped
+            .last()
+            .and_then(|argument| argument.to_str())
+            .and_then(|argument| argument.strip_prefix("--initial-command="))
+            .expect("the command is the last argument");
+        let output = std::process::Command::new("/bin/sh")
+            .args(["-c", command])
+            .current_dir(folder.path())
+            .output()
+            .expect("sh runs");
+        assert!(output.status.success(), "{output:?}");
+        let printed: Vec<OsString> = output
+            .stdout
+            .split(|byte| *byte == 0)
+            .map(|part| OsString::from(String::from_utf8_lossy(part).into_owned()))
+            .collect();
+        let mut expected = arguments;
+        expected.push(OsString::new());
+        assert_eq!(printed, expected, "each argument arrives as it is");
+        assert!(!witness.exists(), "nothing in a name runs");
     }
 
     #[test]

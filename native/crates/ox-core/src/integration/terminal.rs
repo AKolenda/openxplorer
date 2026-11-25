@@ -29,7 +29,7 @@ use std::future::Future;
 
 pub use command::{command_in_terminal, HOLD_SCRIPT};
 pub use directory::{checked_directory, prepare_directory, DirectoryChecks, PreparedDirectory};
-pub use emulator::{find_terminal, CommandStyle, ExecutableSearch, Terminal, TerminalKind, SYSTEM_PATH};
+pub use emulator::{find_terminal, ExecutableSearch, Terminal, TerminalKind, SYSTEM_PATH};
 pub use error::TerminalError;
 pub(crate) use launch::INHERITED_TERMINAL_VARIABLES;
 pub use launch::{launch_terminal, terminal_arguments, LaunchedTerminal};
@@ -48,7 +48,7 @@ use crate::transfer::Cancellation;
 ///
 /// As [`find_terminal`].
 pub fn session_terminal(sandbox: Sandbox) -> Result<Terminal, TerminalError> {
-    let preferred = desktop_terminals(&DesktopTerminalConfig::of_session());
+    let preferred = desktop_terminals(&DesktopTerminalConfig::of_session(sandbox));
     find_terminal(&ExecutableSearch::for_sandbox(sandbox).preferring(preferred))
 }
 

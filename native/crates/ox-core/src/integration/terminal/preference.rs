@@ -5,7 +5,8 @@
 //! Two settings name one: the `xdg-terminals.list` files of
 //! `xdg-terminal-exec` (a desktop's own list, such as
 //! `gnome-xdg-terminals.list`, before the shared one, in the user's
-//! configuration folder before the system's), and GNOME's
+//! configuration folder before the system's, and the distribution's lists
+//! in the data folders last), and GNOME's
 //! `org.gnome.desktop.default-applications.terminal` `exec` key when the
 //! user set it. [`super::find_terminal`] starts a listed terminal the app
 //! knows itself, and hands one it does not know to `xdg-terminal-exec`;
@@ -17,9 +18,18 @@ use std::path::{Path, PathBuf};
 use gio::prelude::*;
 
 use super::TerminalKind;
+use crate::integration::sandbox::Sandbox;
 
 /// The file `xdg-terminal-exec` reads the preferred terminals from.
 const TERMINALS_LIST: &str = "xdg-terminals.list";
+
+/// The subfolder of each system data folder that holds the
+/// distribution's lists.
+const DATA_SUBFOLDER: &str = "xdg-terminal-exec";
+
+/// The variable Flatpak sets to the host's `XDG_CONFIG_HOME`, when the
+/// host sets that.
+const HOST_CONFIG_HOME_VARIABLE: &str = "HOST_XDG_CONFIG_HOME";
 
 /// GNOME's terminal setting.
 const GNOME_TERMINAL_SCHEMA: &str = "org.gnome.desktop.default-applications.terminal";
@@ -32,18 +42,48 @@ const LIST_SIZE_LIMIT: u64 = 64 * 1024;
 pub struct DesktopTerminalConfig {
     /// The configuration folders, the user's first.
     pub config_dirs: Vec<PathBuf>,
+    /// The system data folders, most preferred first; the lists in their
+    /// `xdg-terminal-exec` subfolders come after every configuration
+    /// folder's.
+    pub data_dirs: Vec<PathBuf>,
     /// The desktops of `XDG_CURRENT_DESKTOP`, such as `zorin` and `gnome`.
     pub desktops: Vec<String>,
 }
 
 impl DesktopTerminalConfig {
-    /// The configuration of this session.
-    pub fn of_session() -> Self {
-        let mut config_dirs = vec![glib::user_config_dir()];
-        config_dirs.extend(glib::system_config_dirs());
+    /// The configuration of this session, as the host's
+    /// `xdg-terminal-exec` reads it.
+    ///
+    /// Inside Flatpak the XDG folders are the sandbox's own, so the host's
+    /// are read where `--filesystem=host` shows them: its configuration
+    /// home (`HOST_XDG_CONFIG_HOME`, otherwise `~/.config`) at the same
+    /// path, and `/etc/xdg` and the default data folders under
+    /// `/run/host`. The host's `XDG_CONFIG_DIRS` and `XDG_DATA_DIRS` do not
+    /// reach the sandbox, so their defaults stand in; `XDG_CURRENT_DESKTOP`
+    /// does.
+    pub fn of_session(sandbox: Sandbox) -> Self {
+        let (config_dirs, data_dirs) = match sandbox {
+            Sandbox::Host => {
+                let mut config_dirs = vec![glib::user_config_dir()];
+                config_dirs.extend(glib::system_config_dirs());
+                (config_dirs, glib::system_data_dirs())
+            }
+            Sandbox::Flatpak => {
+                let root = sandbox.host_root();
+                let user = std::env::var_os(HOST_CONFIG_HOME_VARIABLE)
+                    .map(PathBuf::from)
+                    .filter(|folder| folder.is_absolute())
+                    .unwrap_or_else(|| glib::home_dir().join(".config"));
+                (
+                    vec![user, root.join("etc/xdg")],
+                    vec![root.join("usr/local/share"), root.join("usr/share")],
+                )
+            }
+        };
         let desktops = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
         Self {
             config_dirs,
+            data_dirs,
             desktops: desktops
                 .split(':')
                 .filter(|desktop| !desktop.is_empty())
@@ -77,8 +117,10 @@ pub fn desktop_terminals(config: &DesktopTerminalConfig) -> Vec<PreferredTermina
 }
 
 /// The desktop entry IDs of every `xdg-terminals.list`, in the order
-/// `xdg-terminal-exec` tries them: folder by folder, the user's first, and
-/// in each folder the desktops' own lists before the shared one.
+/// `xdg-terminal-exec` tries them: folder by folder, the user's
+/// configuration first and the data folders' `xdg-terminal-exec`
+/// subfolders last, and in each folder the desktops' own lists before the
+/// shared one.
 fn listed_entries(config: &DesktopTerminalConfig) -> Vec<String> {
     let names = config
         .desktops
@@ -86,9 +128,12 @@ fn listed_entries(config: &DesktopTerminalConfig) -> Vec<String> {
         .map(|desktop| format!("{desktop}-{TERMINALS_LIST}"))
         .chain(std::iter::once(TERMINALS_LIST.to_owned()));
     let names: Vec<String> = names.collect();
+    let data_folders = config.data_dirs.iter().map(|folder| folder.join(DATA_SUBFOLDER));
     config
         .config_dirs
         .iter()
+        .cloned()
+        .chain(data_folders)
         .flat_map(|folder| names.iter().map(move |name| folder.join(name)))
         .filter_map(|path| read_list(&path))
         .flatten()
@@ -105,13 +150,11 @@ fn read_list(path: &Path) -> Option<Vec<String>> {
     let entries = text
         .lines()
         .map(str::trim)
-        // A leading + or - marks an entry as added or excluded; `/` starts
-        // a directive, such as `/execarg_default:…`, and `:` an action,
-        // such as `org.gnome.Terminal.desktop:new-window`.
-        .filter(|line| {
-            !line.is_empty() && !line.starts_with('#') && !line.starts_with('-') && !line.starts_with('/')
-        })
-        .map(|line| line.trim_start_matches('+'))
+        // A leading - excludes an entry from the fallback search and a
+        // leading + protects it from that exclusion; neither prefers it.
+        // `/` starts a directive, such as `/execarg_default:…`, and `:` an
+        // action, such as `org.gnome.Terminal.desktop:new-window`.
+        .filter(|line| !line.is_empty() && !line.starts_with(['#', '-', '+', '/']))
         .map(|line| line.split(':').next().unwrap_or(line).to_owned())
         .filter(|entry| !entry.is_empty());
     Some(entries.collect())
@@ -159,6 +202,7 @@ mod tests {
     fn config(folder: &Path, desktops: &[&str]) -> DesktopTerminalConfig {
         DesktopTerminalConfig {
             config_dirs: vec![folder.join("user"), folder.join("system")],
+            data_dirs: vec![folder.join("local-data"), folder.join("data")],
             desktops: desktops.iter().map(|desktop| (*desktop).to_owned()).collect(),
         }
     }
@@ -194,12 +238,8 @@ mod tests {
 
         assert_eq!(
             listed(&gnome),
-            [
-                None,
-                Some(TerminalKind::Console),
-                Some(TerminalKind::GnomeTerminal)
-            ],
-            "excluded entries and directives are skipped; an unknown entry keeps its place"
+            [None, Some(TerminalKind::GnomeTerminal)],
+            "excluded and protected entries and directives are skipped; an unknown entry keeps its place"
         );
         assert_eq!(listed(&other), [Some(TerminalKind::GnomeTerminal)]);
         assert!(listed(&config(&folder.path().join("none"), &[])).is_empty());
@@ -209,6 +249,48 @@ mod tests {
             listed(&other),
             [Some(TerminalKind::Kitty), Some(TerminalKind::GnomeTerminal)],
             "the user's folder comes before the system's"
+        );
+    }
+
+    /// The distribution's lists in the data folders' `xdg-terminal-exec`
+    /// subfolders come after every configuration folder, in the same
+    /// order: folder by folder, the desktop's own list first.
+    ///
+    /// parity: OPEN-019
+    #[test]
+    fn the_distributions_lists_in_the_data_folders_come_last() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        write(
+            &folder.path().join("data/xdg-terminal-exec/xdg-terminals.list"),
+            "xterm.desktop\n",
+        );
+        write(
+            &folder
+                .path()
+                .join("data/xdg-terminal-exec/gnome-xdg-terminals.list"),
+            "org.gnome.Ptyxis.desktop\n",
+        );
+        write(
+            &folder
+                .path()
+                .join("local-data/xdg-terminal-exec/xdg-terminals.list"),
+            "foot.desktop\n",
+        );
+        write(&folder.path().join("data/xdg-terminals.list"), "kitty.desktop\n");
+        write(
+            &folder.path().join("system/xdg-terminals.list"),
+            "org.gnome.Terminal.desktop\n",
+        );
+
+        assert_eq!(
+            listed(&config(folder.path(), &["gnome"])),
+            [
+                Some(TerminalKind::GnomeTerminal),
+                Some(TerminalKind::Foot),
+                Some(TerminalKind::Ptyxis),
+                Some(TerminalKind::XTerm),
+            ],
+            "a list straight in a data folder is not read"
         );
     }
 

@@ -74,7 +74,7 @@ pub enum TerminalKind {
 
 /// How a terminal is told the program to run in it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CommandStyle {
+pub(super) enum CommandStyle {
     /// The program and its arguments follow this option, each its own
     /// argument.
     After(&'static str),
@@ -86,6 +86,23 @@ pub enum CommandStyle {
     /// `g_shell_parse_argv` (Tilix joins several arguments itself, without
     /// quoting them all).
     QuotedAfter(&'static str),
+    /// The options come first; then the program and its arguments, each
+    /// quoted for `/bin/sh` and joined with spaces, are the value of the
+    /// option ending in `=`, which the terminal runs with `/bin/sh -c`.
+    ///
+    /// Ghostty before 1.2 joins the arguments after `-e` with spaces and
+    /// runs the result with `/bin/sh -c`, unquoted, while 1.2 and later
+    /// run them as they are; its `--initial-command=` value without a
+    /// `direct:` or `shell:` prefix is a `/bin/sh -c` command in both. The
+    /// options stand in for what `-e` implies: a Ghostty of its own,
+    /// never a running one, that quits with its window, and no shell
+    /// integration rewriting the command.
+    ShellCommand {
+        /// Options that come before the command.
+        options: &'static [&'static str],
+        /// The option the quoted command is joined to.
+        option: &'static str,
+    },
 }
 
 impl TerminalKind {
@@ -190,17 +207,23 @@ impl TerminalKind {
     }
 
     /// How the terminal is told the program to run in it.
-    pub fn command_style(self) -> CommandStyle {
+    pub(super) fn command_style(self) -> CommandStyle {
         match self {
             Self::GnomeTerminal | Self::Console | Self::Ptyxis | Self::WezTerm | Self::XdgTerminalExec => {
                 CommandStyle::After("--")
             }
             Self::XfceTerminal | Self::Terminator => CommandStyle::After("-x"),
-            Self::Konsole | Self::Ghostty | Self::Alacritty | Self::XTerm | Self::UXTerm => {
-                CommandStyle::After("-e")
-            }
+            Self::Konsole | Self::Alacritty | Self::XTerm | Self::UXTerm => CommandStyle::After("-e"),
             Self::Kitty | Self::Foot => CommandStyle::Trailing,
             Self::Tilix => CommandStyle::QuotedAfter("-e"),
+            Self::Ghostty => CommandStyle::ShellCommand {
+                options: &[
+                    "--gtk-single-instance=false",
+                    "--quit-after-last-window-closed=true",
+                    "--shell-integration=none",
+                ],
+                option: "--initial-command=",
+            },
         }
     }
 
