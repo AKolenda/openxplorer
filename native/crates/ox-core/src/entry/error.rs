@@ -31,6 +31,11 @@ pub enum EntryError {
     /// The backend cannot list this location.
     #[error("{0}")]
     NotSupported(String),
+    /// The location's drive or connection stopped answering
+    /// (`G_IO_ERROR_NOT_CONNECTED`): a FUSE driver that quit, as when the
+    /// stick it read was pulled out, or a connection that dropped.
+    #[error("{0}")]
+    NotConnected(String),
     /// The work was cancelled; not an error to show.
     #[error("{}", crate::i18n::gettext("Operation cancelled."))]
     Cancelled,
@@ -61,7 +66,7 @@ impl EntryError {
             Self::NotDirectory(_) => "not-directory",
             Self::NotSupported(_) => "not-supported",
             Self::Cancelled => "cancelled",
-            Self::Location(_) | Self::NotPinnable | Self::Failed(_) => "error",
+            Self::Location(_) | Self::NotPinnable | Self::NotConnected(_) | Self::Failed(_) => "error",
         }
     }
 
@@ -84,6 +89,7 @@ impl From<glib::Error> for EntryError {
             Some(gio::IOErrorEnum::NotDirectory) => Self::NotDirectory(message),
             Some(gio::IOErrorEnum::NotSupported) => Self::NotSupported(message),
             Some(gio::IOErrorEnum::Cancelled) => Self::Cancelled,
+            Some(gio::IOErrorEnum::NotConnected) => Self::NotConnected(message),
             _ => Self::Failed(message),
         }
     }
@@ -129,6 +135,10 @@ mod tests {
             Case {
                 kind: gio::IOErrorEnum::Cancelled,
                 code: "cancelled",
+            },
+            Case {
+                kind: gio::IOErrorEnum::NotConnected,
+                code: "error",
             },
             Case {
                 kind: gio::IOErrorEnum::Failed,

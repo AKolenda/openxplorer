@@ -705,9 +705,15 @@ impl BrowserWindow {
         Some(tab.id)
     }
 
-    /// Opens the folder that contains the current one.
+    /// Opens the folder that contains the current one, or This PC from
+    /// the root of a drive (see [`up_from`]).
     pub(super) fn go_up(&self) {
-        let parent = self.current_uri().as_deref().and_then(parent_location);
+        let drives = super::location_view::DriveCrumb::of_volumes(&self.imp().volumes.borrow());
+        let full_path = self.shows_full_path();
+        let parent = self
+            .current_uri()
+            .as_deref()
+            .and_then(|uri| up_from(uri, &drives, full_path));
         if let Some(parent) = parent {
             self.navigate_or_report(&parent);
         }
@@ -729,6 +735,24 @@ impl BrowserWindow {
         }
         self.imp().locations.borrow().home_uri()
     }
+}
+
+/// Where Up leads from `uri`: the folder that contains it, but This PC
+/// from the root of one of `drives`, as Windows 11 File Explorer goes up
+/// from a USB drive to This PC, which the crumbs start at too, unless the
+/// address bar shows the `full_path`.
+pub(super) fn up_from(
+    uri: &str,
+    drives: &[super::location_view::DriveCrumb],
+    full_path: bool,
+) -> Option<String> {
+    let is_drive_root = drives
+        .iter()
+        .any(|drive| location::same_location(&drive.root, uri));
+    if is_drive_root && !full_path {
+        return Some(Page::ThisPc.uri().to_owned());
+    }
+    parent_location(uri)
 }
 
 /// The child of `ancestor` on the way down to `descendant`, as Up and the

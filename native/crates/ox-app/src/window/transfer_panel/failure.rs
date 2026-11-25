@@ -206,12 +206,15 @@ impl TransferPanel {
         }
     }
 
-    /// Takes the failure question away, once answered.
+    /// Takes the failure question away, once answered. The keyboard,
+    /// on the button that answered, is let go first (see
+    /// [`Self::release_keyboard_from`]).
     pub(super) fn remove_failure_question(&self) {
         let imp = self.imp();
         imp.failure_answer.replace(None);
         imp.failure_details.replace(None);
         if let Some(question) = imp.failure_question.take() {
+            self.release_keyboard_from(&question);
             self.remove(&question);
         }
     }
@@ -343,6 +346,18 @@ impl TransferPanel {
             })
             .filter_map(|shortcut| shortcut.action())
             .any(|action| action.activate(gtk::ShortcutActionFlags::empty(), &question, None))
+    }
+
+    /// The question's button labelled `label`, for tests.
+    #[cfg(test)]
+    pub(crate) fn failure_button(&self, label: &str) -> gtk::Button {
+        self.failure_buttons()
+            .into_iter()
+            .find(|(text, _)| text == label)
+            .map_or_else(
+                || panic!("the question has a {label} button"),
+                |(_, button)| button,
+            )
     }
 
     /// Presses the question's button labelled `label`, for tests.

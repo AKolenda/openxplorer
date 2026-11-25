@@ -347,6 +347,15 @@ pub struct Preferences {
     /// Ask before emptying the Recycle Bin.
     #[serde(skip_serializing_if = "is_true")]
     pub confirm_empty_trash: bool,
+    /// Delete on a removable drive (a USB stick, an SD card) deletes the
+    /// items permanently, after Windows' "Are you sure you want to
+    /// permanently delete this file?", as Windows 11 does, instead of
+    /// moving them to the drive's own Trash (OPS-018), where they keep
+    /// using its space until the Recycle Bin is emptied. Off by default,
+    /// the owner's choice, so stored as `deleteRemovablePermanently` only
+    /// when on.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub delete_removable_permanently: bool,
     /// Ask before closing a window with several tabs (Dolphin's
     /// `ConfirmClosingMultipleTabs`); off, as Explorer never asks.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -663,6 +672,7 @@ impl Default for Preferences {
             confirm_trash: false,
             confirm_delete: true,
             confirm_empty_trash: true,
+            delete_removable_permanently: false,
             confirm_close_tabs: false,
             ask_to_run_programs: false,
             run_installed_launchers: false,
@@ -769,6 +779,10 @@ impl Preferences {
         replace_if_some(&mut self.confirm_trash, update.confirm_trash);
         replace_if_some(&mut self.confirm_delete, update.confirm_delete);
         replace_if_some(&mut self.confirm_empty_trash, update.confirm_empty_trash);
+        replace_if_some(
+            &mut self.delete_removable_permanently,
+            update.delete_removable_permanently,
+        );
         replace_if_some(&mut self.recycle_replaced_files, update.recycle_replaced_files);
         replace_if_some(&mut self.confirm_close_tabs, update.confirm_close_tabs);
         replace_if_some(&mut self.ask_to_run_programs, update.ask_to_run_programs);
@@ -1124,6 +1138,8 @@ pub struct PreferencesUpdate {
     pub confirm_delete: Option<bool>,
     /// Ask before emptying the Recycle Bin.
     pub confirm_empty_trash: Option<bool>,
+    /// See [`Preferences::delete_removable_permanently`].
+    pub delete_removable_permanently: Option<bool>,
     /// See [`Preferences::recycle_replaced_files`].
     pub recycle_replaced_files: Option<bool>,
     /// Ask before closing a window with several tabs.
@@ -1285,6 +1301,7 @@ impl PreferencesUpdate {
             confirm_trash: flag("confirmTrash"),
             confirm_delete: flag("confirmDelete"),
             confirm_empty_trash: flag("confirmEmptyTrash"),
+            delete_removable_permanently: flag("deleteRemovablePermanently"),
             recycle_replaced_files: flag("recycleReplacedFiles"),
             confirm_close_tabs: flag("confirmCloseTabs"),
             ask_to_run_programs: flag("askToRunPrograms"),
@@ -1836,6 +1853,34 @@ mod tests {
         assert_eq!(stored["confirmTrash"], json!(true));
         assert_eq!(stored["confirmCloseTabs"], json!(true));
         assert!(stored.get("confirmDelete").is_none() && stored.get("fullPathInTitle").is_none());
+    }
+
+    /// Delete on a removable drive uses the drive's own Trash by default
+    /// (OPS-018); deleting there permanently, as Windows does, is a choice
+    /// stored only when made.
+    ///
+    /// parity: OPS-018
+    #[test]
+    fn deleting_on_removable_drives_permanently_is_opt_in() {
+        let mut preferences = Preferences::default();
+        assert!(
+            !preferences.delete_removable_permanently,
+            "the drive's Trash by default"
+        );
+        assert!(serde_json::to_value(&preferences)
+            .unwrap()
+            .get("deleteRemovablePermanently")
+            .is_none());
+
+        preferences
+            .apply(&PreferencesUpdate::from_json(&json!({"deleteRemovablePermanently": true})).unwrap());
+
+        assert!(preferences.delete_removable_permanently);
+        let stored = serde_json::to_value(&preferences).unwrap();
+        assert_eq!(stored["deleteRemovablePermanently"], json!(true));
+        let mut read = Preferences::default();
+        read.apply(&PreferencesUpdate::from_json(&stored).unwrap());
+        assert!(read.delete_removable_permanently, "read back");
     }
 
     /// The progress window's "More details" stays as it was last left,

@@ -109,11 +109,43 @@ pub(super) fn step_icon(uri: &str, home_uri: &str, is_search: bool) -> Icon {
 /// `renderNavigation` divides them. Inside the home folder they start at
 /// it, as "Home › Documents" in Dolphin and Explorer, unless `full_path`
 /// asks for the path from `/` (NAV-024).
+/// A mounted drive the address bar names in its crumbs, as This PC names
+/// it: its root, and its name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct DriveCrumb {
+    /// The drive's canonical root.
+    pub(super) root: String,
+    /// Its name, as This PC and the navigation pane show it.
+    pub(super) label: String,
+}
+
+impl DriveCrumb {
+    /// The drives among `volumes` whose crumbs start at them: mounted
+    /// drives on this computer other than Local Disk, which a path below
+    /// shows from `/`.
+    pub(super) fn of_volumes(volumes: &[crate::volumes::VolumeRow]) -> Vec<DriveCrumb> {
+        volumes
+            .iter()
+            .filter(|row| row.kind == crate::volumes::VolumeKind::Drive && !row.is_network())
+            .filter_map(|row| {
+                let root = row.uri()?;
+                (root.starts_with("file:") && !location::same_location(root, "file:///")).then(|| {
+                    DriveCrumb {
+                        root: root.to_owned(),
+                        label: row.label.clone(),
+                    }
+                })
+            })
+            .collect()
+    }
+}
+
 pub(super) fn crumb_buttons(
     locations: &LocationContext,
     uri: &str,
     full_path: bool,
     known_folders: &[Place],
+    drives: &[DriveCrumb],
 ) -> Vec<CrumbButton> {
     let mut breadcrumbs = locations.breadcrumbs(uri);
     let home = locations.home_uri();
@@ -134,13 +166,31 @@ pub(super) fn crumb_buttons(
         .iter()
         .position(|crumb| location::same_location(&crumb.uri, &home))
         .map(|index| (index, locations.title_for(&home)));
-    let start = standard_at
-        .or(home_at)
-        .filter(|&(index, _)| !full_path && index > 0);
-    let skipped = start.as_ref().map_or(0, |(index, _)| *index);
+    // A drive mounted on this computer, a USB stick most often, and what
+    // is inside it start at This PC and the drive, as Windows 11 File
+    // Explorer shows "This PC > USB Drive (E:) > Photos": the drive is
+    // the closest place, unless a standard folder or Home is inside it.
+    let drive_at = breadcrumbs.iter().enumerate().rev().find_map(|(index, crumb)| {
+        let drive = drives
+            .iter()
+            .find(|drive| location::same_location(&drive.root, &crumb.uri))?;
+        Some((index, drive.label.clone()))
+    });
+    let place_at = standard_at.or(home_at);
+    let is_drive_closest = drive_at
+        .as_ref()
+        .is_some_and(|(drive, _)| place_at.as_ref().is_none_or(|(place, _)| drive > place));
+    let start =
+        if is_drive_closest { drive_at } else { place_at }.filter(|&(index, _)| !full_path && index > 0);
+    let mut skipped = start.as_ref().map_or(0, |(index, _)| *index);
     if let Some((index, label)) = start {
         breadcrumbs.drain(..index);
         breadcrumbs[0].label = label;
+        if is_drive_closest {
+            let this_pc = Page::ThisPc;
+            breadcrumbs.insert(0, ox_core::location::Crumb::new(this_pc.title(), this_pc.uri()));
+            skipped -= 1;
+        }
     }
     breadcrumbs
         .into_iter()
@@ -185,7 +235,7 @@ fn listed_place_glyph(uri: &str) -> Option<Icon> {
 /// What a tab's icon depends on besides its location: the network
 /// locations of the navigation pane, the standard folders of Quick access
 /// and the roots of the mounted drives.
-type TabPlaces<'a> = (&'a [NetworkLocation], &'a [Place], &'a [String]);
+pub(in crate::window) type TabPlaces<'a> = (&'a [NetworkLocation], &'a [Place], &'a [String]);
 
 /// Whether `uri` is the root of the file system, which the navigation pane
 /// and This PC show as the Local Disk.
@@ -501,7 +551,8 @@ impl BrowserWindow {
         let is_search = self.current_uri().as_deref() == Some(uri) && self.shows_search_step();
         let locations = self.imp().locations.borrow();
         let known_folders = self.context().known_folders();
-        let mut crumbs = crumb_buttons(&locations, uri, full_path, &known_folders);
+        let drives = DriveCrumb::of_volumes(&self.imp().volumes.borrow());
+        let mut crumbs = crumb_buttons(&locations, uri, full_path, &known_folders, &drives);
         if is_search {
             crumbs.push(search_crumb(&locations, uri));
         }
@@ -594,7 +645,7 @@ mod tests {
     fn crumbs_start_at_home_unless_the_full_path_is_asked_for() {
         let locations = crate::locations::location_context("/home/demo".into(), &[]);
         let shown = |uri: &str, full_path: bool| -> Vec<(String, Option<&str>)> {
-            let crumbs = crumb_buttons(&locations, uri, full_path, &[]);
+            let crumbs = crumb_buttons(&locations, uri, full_path, &[], &[]);
             crumbs
                 .into_iter()
                 .map(|button| (button.crumb.label, button.divider_before))
@@ -616,6 +667,37 @@ mod tests {
         assert_eq!(
             outside,
             [crumb("/", None), crumb("srv", None), crumb("media", Some("/"))]
+        );
+    }
+
+    /// Up from the root of a USB stick opens This PC, where its crumbs
+    /// start, as in Windows 11 File Explorer; inside it, it opens the
+    /// parent folder, and with the full path shown it goes up the path.
+    ///
+    /// parity: NAV-024, DEV-004
+    #[test]
+    fn up_from_a_drives_root_opens_this_pc() {
+        let up_from = super::super::navigation::up_from;
+        let drives = [DriveCrumb {
+            root: "file:///media/demo/1A2B-3C4D".to_owned(),
+            label: "Holiday stick".to_owned(),
+        }];
+
+        assert_eq!(
+            up_from("file:///media/demo/1A2B-3C4D", &drives, false).as_deref(),
+            Some(ox_core::location::PC_URI)
+        );
+        assert_eq!(
+            up_from("file:///media/demo/1A2B-3C4D/Photos", &drives, false).as_deref(),
+            Some("file:///media/demo/1A2B-3C4D")
+        );
+        assert_eq!(
+            up_from("file:///media/demo/1A2B-3C4D", &drives, true).as_deref(),
+            Some("file:///media/demo")
+        );
+        assert_eq!(
+            up_from("file:///media/demo", &drives, false).as_deref(),
+            Some("file:///media")
         );
     }
 

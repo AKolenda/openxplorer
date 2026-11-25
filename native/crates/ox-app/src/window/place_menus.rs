@@ -185,15 +185,15 @@ const DEVICE_NOT_COPIED: &str =
     crate::i18n::message_id("A phone or camera cannot be copied. Open it and select what to copy.");
 
 /// Why a drive cannot be renamed from its menu.
-const DRIVE_NOT_RENAMED: &str = crate::i18n::message_id("Drive names cannot be changed here.");
+const DRIVE_NOT_RENAMED: &str = crate::i18n::message_id("Only a removable drive can be renamed here.");
 
 /// Copy and Rename, the icon strip Windows 11 shows on a drive. Copy
 /// copies the drive as Windows Explorer does: a paste of it into a folder
 /// makes a shortcut to the drive there, never a copy of what it holds
 /// ([`super::drive_shortcuts`]). A phone's or a camera's Copy is greyed
 /// out, saying why: its root has no path a shortcut could point to.
-/// Rename is greyed out: the app changes no drive's name.
-fn drive_strip(uri: &str) -> Vec<MenuItem> {
+/// Rename changes a removable drive's volume label ([`rename_drive_item`]).
+fn drive_strip(uri: &str, controls: MountControls) -> Vec<MenuItem> {
     vec![
         MenuItem::with_text_target(
             &ox_core::i18n::gettext("Copy"),
@@ -206,14 +206,29 @@ fn drive_strip(uri: &str) -> Vec<MenuItem> {
             is_device_location(uri),
             ox_core::i18n::gettext_static(DEVICE_NOT_COPIED),
         ),
-        MenuItem::with_text_target(
+        rename_drive_item(uri, controls),
+    ]
+}
+
+/// Rename for the drive at `uri`: it changes the volume label of a
+/// removable drive, as Windows' Rename of a drive does, and is grayed out,
+/// saying why, for Local Disk and other drives the app cannot relabel.
+fn rename_drive_item(uri: &str, controls: MountControls) -> MenuItem {
+    if controls.can_format {
+        return MenuItem::with_text_target(
             &ox_core::i18n::gettext("Rename"),
             Icon::Rename,
-            WindowAction::RenameFolder,
+            WindowAction::RenameDrive,
             uri,
-        )
-        .disabled_because(true, ox_core::i18n::gettext_static(DRIVE_NOT_RENAMED)),
-    ]
+        );
+    }
+    MenuItem::with_text_target(
+        &ox_core::i18n::gettext("Rename"),
+        Icon::Rename,
+        WindowAction::RenameFolder,
+        uri,
+    )
+    .disabled_because(true, ox_core::i18n::gettext_static(DRIVE_NOT_RENAMED))
 }
 
 /// Pin to Quick access for the drive at `uri`, or Unpin while it is
@@ -290,7 +305,7 @@ fn drive_menu(
             entries.extend(removals);
             entries.push(drive_pin_item(uri, facts.pinned));
             entries.push(properties);
-            (entries, drive_strip(uri))
+            (entries, drive_strip(uri, controls))
         }
         MenuStyle::Classic => {
             entries.push(drive_pin_item(uri, facts.pinned));
@@ -308,7 +323,7 @@ fn drive_menu(
                 entries.extend(drive_tools);
             }
             entries.push(MenuEntry::Divider);
-            entries.extend(drive_strip(uri).into_iter().map(MenuEntry::from));
+            entries.extend(drive_strip(uri, controls).into_iter().map(MenuEntry::from));
             entries.push(MenuEntry::Divider);
             entries.push(properties);
             (entries, Vec::new())

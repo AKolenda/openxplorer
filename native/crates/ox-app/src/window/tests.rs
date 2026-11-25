@@ -93,6 +93,7 @@ mod preview_player;
 mod properties_width;
 mod recent_rows;
 mod recycle_bin;
+mod removable_delete;
 mod rename_question;
 mod renaming;
 mod renaming_by_pointer;

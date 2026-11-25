@@ -19,8 +19,8 @@ use std::path::{Path, PathBuf};
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use ox_core::integration::{
-    available_file_systems, drive_facts, format_drive, DiskTool, DriveFacts, ExecutableSearch, FileSystem,
-    FormatError, FormatRequest, Formatted, Sandbox, UDISKS_NAME,
+    available_file_systems, drive_facts, format_drive, set_drive_label, DiskTool, DriveFacts,
+    ExecutableSearch, FileSystem, FormatError, FormatRequest, Formatted, Sandbox, UDISKS_NAME,
 };
 use ox_core::location::normalise;
 use ox_core::network::WriteActivity;
@@ -30,7 +30,7 @@ use super::actions::text_action;
 use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
-use crate::dialogs::{confirm_erase, format_drive_dialog};
+use crate::dialogs::{confirm_erase, format_drive_dialog, rename_drive_dialog};
 use crate::icons::Icon;
 use crate::window::Dialog;
 
@@ -54,6 +54,12 @@ const FORMATTING_ANOTHER: &str =
 
 /// Start's label while the drive is formatted.
 const FORMATTING: &str = crate::i18n::message_id("Formatting…");
+
+/// Shown when a drive has no block device whose label could be changed.
+const NOT_RENAMABLE: &str = crate::i18n::message_id("This drive cannot be renamed.");
+
+/// Rename's label while the drive's label is changed.
+const RENAMING: &str = crate::i18n::message_id("Renaming…");
 
 /// Shown for a location without a local path.
 const NO_LOCAL_PATH: &str = crate::i18n::message_id("This tool needs a location on this computer.");
@@ -131,6 +137,7 @@ impl BrowserWindow {
                 window.open_drive_in_disks(uri, DiskTool::OpenInDisks);
             }),
             text_action(WindowAction::FormatDrive, BrowserWindow::open_format_dialog),
+            text_action(WindowAction::RenameDrive, BrowserWindow::open_rename_drive_dialog),
             text_action(WindowAction::MountDiskImage, |window, uri| {
                 window.run_disk_tool_at(DiskTool::MountImage, uri);
             }),
@@ -336,6 +343,95 @@ impl BrowserWindow {
         });
     }
 
+    /// Rename for the drive mounted at `uri`: asks UDisks about it, then
+    /// shows the Rename dialog, which changes its volume label. Refused
+    /// while a drive is formatted, which may be this one.
+    fn open_rename_drive_dialog(&self, uri: &str) {
+        if self.context().formats_a_drive() {
+            self.show_message(ox_core::i18n::gettext_static(FORMATTING_ANOTHER));
+            return;
+        }
+        let mounts = self.volume_monitor().mounts();
+        let (Some(mount), Some(device)) = (mount_at(&mounts, uri), block_device_of(&mounts, uri)) else {
+            self.show_message(ox_core::i18n::gettext_static(NOT_RENAMABLE));
+            return;
+        };
+        let name = mount.name().to_string();
+        let (mount, uuid) = (mount.clone(), mount.volume().and_then(|volume| volume.uuid()));
+        let root = uri.to_owned();
+        let window = self.downgrade();
+        glib::spawn_future_local(async move {
+            let target = async {
+                let connection = gio::bus_get_future(udisks_bus())
+                    .await
+                    .map_err(FormatError::Unavailable)?;
+                let facts = drive_facts(&connection, UDISKS_NAME, &device).await?;
+                Ok::<_, FormatError>((connection, facts))
+            }
+            .await;
+            let Some(window) = window.upgrade() else {
+                return;
+            };
+            let mounted = window.volume_monitor().mounts().contains(&mount);
+            match target {
+                Ok((connection, facts)) if is_chosen_drive(mounted, uuid.as_deref(), &facts) => {
+                    window.show_rename_drive_dialog(&name, &root, connection, facts);
+                }
+                Ok(_) => window.show_message(&rename_error_text(&FormatError::NotFound)),
+                Err(error) => window.show_message(&rename_error_text(&error)),
+            }
+        });
+    }
+
+    /// Shows the Rename dialog for the drive `name` mounted at `root`
+    /// that `facts` describes; Rename sets the label through UDisks on
+    /// `connection` and closes the dialog, or says in it why the label was
+    /// not changed. A drive mounted again to be renamed, at a folder named
+    /// after its new label, takes the tabs that showed it there.
+    fn show_rename_drive_dialog(
+        &self,
+        name: &str,
+        root: &str,
+        connection: gio::DBusConnection,
+        facts: DriveFacts,
+    ) {
+        let shown = facts.clone();
+        let (window, root) = (self.downgrade(), root.to_owned());
+        let dialog = rename_drive_dialog(self, name, &shown, move |dialog, label| {
+            let (connection, facts) = (connection.clone(), facts.clone());
+            let (form, window, root) = (dialog.downgrade(), window.clone(), root.clone());
+            dialog.run(ox_core::i18n::gettext_static(RENAMING), async move {
+                let on_purpose = super::mounting::unmount_on_purpose(&root);
+                let renamed = set_drive_label(&connection, UDISKS_NAME, &facts, &label).await;
+                if let (Ok(relabelled), Some(window)) = (&renamed, window.upgrade()) {
+                    match &relabelled.remounted {
+                        Some(Ok(path)) => {
+                            let new_root = ox_core::location::file_uri(std::path::Path::new(path));
+                            window.move_tabs_to_new_root(&root, &new_root);
+                        }
+                        Some(Err(reason)) => window.show_message(&ox_core::i18n::format_message(
+                            "The drive was renamed, but it could not be mounted again: {reason}",
+                            &[("reason", reason.as_str())],
+                        )),
+                        None => {}
+                    }
+                }
+                drop(on_purpose);
+                let Some(dialog) = form.upgrade() else {
+                    return;
+                };
+                match renamed {
+                    Ok(_) => dialog.finish(),
+                    // A dismissed password prompt says nothing; Rename can
+                    // be pressed again.
+                    Err(FormatError::Cancelled) => dialog.show_error(""),
+                    Err(error) => dialog.show_error(&rename_error_text(&error)),
+                }
+            });
+        });
+        dialog.open();
+    }
+
     /// Opens Disks for the drive mounted at `uri`.
     fn open_drive_in_disks(&self, uri: &str, tool: DiskTool) {
         match block_device_of(&self.volume_monitor().mounts(), uri) {
@@ -400,6 +496,26 @@ pub(in crate::window) fn report_format_result(
     };
     if let Some(window) = open.or_else(another) {
         window.show_message(message);
+    }
+}
+
+/// Why a drive's label was not changed, in words about renaming where
+/// the format error's own are about formatting.
+fn rename_error_text(error: &FormatError) -> String {
+    match error {
+        FormatError::Unavailable(_) => {
+            ox_core::i18n::gettext("Renaming a drive needs the UDisks service, which is not available.")
+        }
+        FormatError::NotAuthorized => ox_core::i18n::gettext("You are not allowed to rename this drive."),
+        FormatError::Cancelled => ox_core::i18n::gettext("The drive was not renamed."),
+        FormatError::Failed(reason) => ox_core::i18n::format_message(
+            "Could not rename the drive: {error}",
+            &[("error", reason.as_str())],
+        ),
+        FormatError::NotFound
+        | FormatError::ReadOnly
+        | FormatError::Busy
+        | FormatError::NotMountedAgain { .. } => error.to_string(),
     }
 }
 

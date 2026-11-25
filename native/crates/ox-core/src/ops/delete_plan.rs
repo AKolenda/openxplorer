@@ -356,6 +356,27 @@ fn recycle_confirmation(subject: DeleteSubject) -> DeleteConfirmation {
 }
 
 impl DeletePlan {
+    /// The plan with the items inside any of `drives` (the roots of the
+    /// removable drives, a USB stick or an SD card) deleted permanently
+    /// instead of moved to the Trash, as Windows 11 deletes on a removable
+    /// drive; for the setting "Delete files on removable drives
+    /// permanently" (OPS-018). The other items keep their way, and each
+    /// list keeps its order.
+    #[must_use]
+    pub fn deleting_permanently_inside(self, drives: &[String]) -> Self {
+        let roots: Vec<gio::File> = drives.iter().map(|root| gio::File::for_uri(root)).collect();
+        let is_on_drive = |uri: &str| {
+            let item = gio::File::for_uri(uri);
+            roots.iter().any(|root| item.has_prefix(root))
+        };
+        let (to_delete, to_trash): (Vec<String>, Vec<String>) =
+            self.to_trash.into_iter().partition(|uri| is_on_drive(uri));
+        Self {
+            to_trash,
+            to_delete: self.to_delete.into_iter().chain(to_delete).collect(),
+        }
+    }
+
     /// The confirmation for this plan about `subject`, the items planned:
     /// Windows Explorer's question for the Recycle Bin or for a permanent
     /// delete, and for a mix, which Windows never meets in one folder, a
@@ -386,6 +407,58 @@ mod tests {
             to_trash: to_trash.iter().map(ToString::to_string).collect(),
             to_delete: to_delete.iter().map(ToString::to_string).collect(),
         }
+    }
+
+    /// With "Delete files on removable drives permanently" on, the items
+    /// on a removable drive are deleted permanently, and the question is
+    /// Windows' permanent one; items elsewhere still go to the Trash, and
+    /// a drive whose name only starts like another's is not inside it.
+    ///
+    /// parity: OPS-018
+    #[test]
+    fn items_on_a_removable_drive_can_be_deleted_permanently() {
+        let stick = "file:///media/demo/STICK".to_owned();
+        let planned = plan(
+            &[
+                "file:///media/demo/STICK/a.txt",
+                "file:///home/demo/b.txt",
+                "file:///media/demo/STICK/Photos",
+                "file:///media/demo/STICK2/c.txt",
+            ],
+            &["smb://nas/s/d"],
+        );
+
+        let changed = planned
+            .clone()
+            .deleting_permanently_inside(std::slice::from_ref(&stick));
+
+        assert_eq!(
+            changed,
+            plan(
+                &["file:///home/demo/b.txt", "file:///media/demo/STICK2/c.txt"],
+                &[
+                    "smb://nas/s/d",
+                    "file:///media/demo/STICK/a.txt",
+                    "file:///media/demo/STICK/Photos",
+                ],
+            )
+        );
+        assert_eq!(planned.clone().deleting_permanently_inside(&[]), planned);
+        let only_stick = plan(&["file:///media/demo/STICK/a.txt"], &[])
+            .deleting_permanently_inside(std::slice::from_ref(&stick));
+        assert_eq!(
+            only_stick.confirmation(DeleteSubject::File).body,
+            "Are you sure you want to permanently delete this file?"
+        );
+        let two = plan(
+            &["file:///media/demo/STICK/a.txt", "file:///media/demo/STICK/b.txt"],
+            &[],
+        )
+        .deleting_permanently_inside(&[stick]);
+        assert_eq!(
+            two.confirmation(DeleteSubject::Items(2)).body,
+            "Are you sure you want to permanently delete these 2 items?"
+        );
     }
 
     /// One plan, what it is about and the question Windows Explorer asks.

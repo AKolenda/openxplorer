@@ -92,6 +92,33 @@ pub(crate) fn format_drive_dialog(
     dialog
 }
 
+/// The Rename dialog of the drive `drive_name` that `facts` describes,
+/// over `parent`: its volume label, fitted to what its file system keeps
+/// as it is typed, and Rename, which calls `on_rename` with the dialog,
+/// to rename in, and the label typed. Windows renames a drive in place,
+/// in This PC; here the drive's menu opens this dialog.
+pub(crate) fn rename_drive_dialog(
+    parent: &impl IsA<gtk::Window>,
+    drive_name: &str,
+    facts: &DriveFacts,
+    on_rename: impl Fn(&Dialog, String) + 'static,
+) -> Dialog {
+    let title = ox_core::i18n::format_message("Rename {drive}", &[("drive", drive_name)]);
+    let dialog = Dialog::with_title_bar(parent, &title, "");
+    let current = facts
+        .file_system
+        .map_or_else(|| facts.label.clone(), |system| system.fitted_label(&facts.label));
+    let label = dialog.add_text_field(&ox_core::i18n::gettext("Volume label"), &current);
+    if let Some(system) = facts.file_system {
+        fit_label_field(&label, system);
+        fit_while_typing(&label, Rc::new(Cell::new(system)));
+    }
+    dialog.add_cancel_button();
+    dialog.add_button(&ox_core::i18n::gettext("Rename"), ButtonStyle::Accent);
+    dialog.connect_confirmed(move |dialog| on_rename(dialog, label.text().to_string()));
+    dialog
+}
+
 /// Limits the label `field` to what `file_system` keeps, cutting the
 /// text already typed.
 fn fit_label_field(field: &gtk::Entry, file_system: FileSystem) {

@@ -541,3 +541,131 @@ fn a_full_drive_asks_in_the_progress_window() {
     }
     test.window.end_operation();
 }
+
+/// Runs the main loop for `duration`, so the windows lay out and paint.
+fn run_for(duration: std::time::Duration) {
+    let until = std::time::Instant::now() + duration;
+    while std::time::Instant::now() < until {
+        crate::test_support::harness::settle();
+        thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
+/// Answering a question with a click, as on a copy onto a drive that
+/// refuses several names, never leaves the progress window's keyboard on
+/// the answered question once it is taken away: GTK then moved the
+/// keyboard on by itself after the next paint, walking the action's
+/// widgets while the old question was freed under it (Gtk-CRITICAL
+/// `gtk_widget_is_ancestor`, a widget read after it was freed).
+///
+/// parity: OPS-047
+#[gtk::test]
+fn an_answered_question_does_not_keep_the_keyboard() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let cancel = start_operation(&test);
+    let item = |name: &str| FailedItem {
+        mode: TransferMode::Copy,
+        name: name.into(),
+        error: "Invalid filename".into(),
+        more_items: true,
+        cause: FailureCause::Other,
+        uri: fixture.uri_of(name),
+        destination_folder: Some(fixture.uri_of("Documents")),
+        needed: None,
+        administrator: false,
+    };
+    let progress = ProgressWindow::of(&test.context);
+    for (name, button) in [
+        ("a:b.txt", "Skip"),
+        ("what?.txt", "Try Again"),
+        ("last.txt", "Cancel"),
+    ] {
+        let (worker, panel) = ask_in_action(&test, &cancel, &item(name));
+        run_for(std::time::Duration::from_millis(50));
+        // A click puts the keyboard on the button it presses.
+        let pressed = panel.failure_button(button);
+        assert!(pressed.grab_focus(), "{button} takes the keyboard");
+        panel.press_failure(button);
+        // Step the main loop until the question is taken away, and look at
+        // the keyboard before GTK's next paint could move it.
+        let context = gtk::glib::MainContext::default();
+        while panel.asks_about_failure() {
+            context.iteration(true);
+        }
+        let focus = gtk::prelude::GtkWindowExt::focus(&progress);
+        assert!(
+            focus.as_ref().is_none_or(|focus| focus.root().is_some()),
+            "{button}: the keyboard is on {focus:?}, outside the window"
+        );
+        worker.join().expect("the worker finishes");
+        run_for(std::time::Duration::from_millis(50));
+    }
+    test.window.end_operation();
+}
+
+/// After Skip on an item whose drive was pulled out, the copy says, as
+/// Windows 11 does (VM check of 2026-11-22), "Location is not available"
+/// in a message box over the progress window, with the red error icon,
+/// the destination folder and Windows' words, and OK alone, which ends
+/// the copy.
+///
+/// parity: OPS-047
+#[gtk::test]
+fn a_destination_that_went_away_is_said_to_be_unavailable() {
+    use crate::dialog::Dialog;
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let cancel = start_operation(&test);
+    let item = FailedItem {
+        mode: TransferMode::Copy,
+        name: String::new(),
+        error: "A device which does not exist was specified.".into(),
+        more_items: false,
+        cause: FailureCause::LocationUnavailable,
+        uri: "file:///media/demo/STICK/Many".into(),
+        destination_folder: Some("file:///media/demo/STICK/Many".into()),
+        needed: None,
+        administrator: false,
+    };
+    let asker = test.window.failure_asker(&cancel);
+    let worker = thread::spawn(move || asker.ask(&item));
+    let message_box = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|window| window.downcast::<Dialog>().ok())
+            .find(|dialog| {
+                dialog.is_visible() && dialog.title().as_deref() == Some("Location is not available")
+            })
+    };
+    wait_until("the message box", || message_box().is_some());
+    let dialog = message_box().expect("the message box");
+
+    assert_eq!(
+        dialog.message_text(),
+        "/media/demo/STICK/Many/ is unavailable. If the location is on this PC, make sure the device or drive \
+         is connected or the disc is inserted, and then try again. If the location is on a network, make sure \
+         you're connected to the network or Internet, and then try again. If the location still can't be \
+         found, it might have been moved or deleted."
+    );
+    assert_eq!(dialog.button_labels(), ["OK"]);
+    let error_icon = crate::test_support::harness::descendants::<gtk::Image>(&dialog)
+        .into_iter()
+        .any(|image| {
+            image.icon_name().as_deref() == Some("ox-dismiss-circle-32-color") && image.is_visible()
+        });
+    assert!(error_icon, "the red error icon");
+    assert_eq!(
+        dialog.transient_for().as_ref(),
+        Some(ProgressWindow::of(&test.context).upcast_ref::<gtk::Window>()),
+        "over the progress window"
+    );
+    dialog.press("OK");
+    // The box goes with its answer; holding it past its window would
+    // dispose it after that window.
+    drop(dialog);
+    wait_until("the worker to get its answer", || worker.is_finished());
+    worker.join().expect("the worker finishes");
+    test.window.end_operation();
+}

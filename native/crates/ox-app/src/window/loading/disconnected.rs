@@ -40,13 +40,55 @@ pub(in crate::window) fn disconnected_message() -> String {
 impl BrowserWindow {
     /// The mount at `root` went away: every tab showing a folder inside
     /// it says so.
+    ///
+    /// A drive on this computer, such as a USB stick pulled out, sends its
+    /// tabs to the Desktop at once, with no message, as Windows 11's
+    /// window on a stick does (checked in the VM on 2026-11-22); a share
+    /// says it was disconnected, with Try again. A drive the app unmounts
+    /// on purpose to mount it again, as Rename does, keeps its tabs for
+    /// that.
     pub(in crate::window) fn mount_removed(&self, root: &str) {
-        self.show_disconnected(|_, uri| is_inside(uri, root));
+        if self.is_local_drive(root) && !crate::window::mounting::is_unmounted_on_purpose(root) {
+            let desktop = self.desktop_location();
+            self.move_tabs_from(root, &desktop);
+        } else {
+            self.show_disconnected(|_, uri| is_inside(uri, root));
+        }
     }
 
     /// The watch of tab `id` saw its folder's drive or share unmounted.
     pub(in crate::window) fn folder_unmounted(&self, id: TabId) {
-        self.show_disconnected(|tab, _| tab == id);
+        let folder = {
+            let session = self.imp().session.borrow();
+            session.tab(id).map(|tab| tab.uri().to_owned())
+        };
+        match folder {
+            Some(folder) if self.is_local_drive(&folder) => {
+                let desktop = self.desktop_location();
+                self.move_tabs_from(&folder, &desktop);
+            }
+            _ => self.show_disconnected(|tab, _| tab == id),
+        }
+    }
+
+    /// Whether `uri` is on a drive of this computer rather than a share.
+    fn is_local_drive(&self, uri: &str) -> bool {
+        uri.starts_with("file:") && !self.imp().locations.borrow().is_network_location(uri)
+    }
+
+    /// The Desktop folder, where the tabs on a drive that was pulled out
+    /// go; the home folder where there is no Desktop folder.
+    pub(in crate::window) fn desktop_location(&self) -> String {
+        let desktop = self
+            .context()
+            .known_folders()
+            .into_iter()
+            .find(|place| place.known_folder == Some(ox_core::places::KnownFolder::Desktop))
+            .map(|place| place.uri)
+            .filter(|uri| {
+                gtk::prelude::FileExt::path(&gtk::gio::File::for_uri(uri)).is_some_and(|path| path.is_dir())
+            });
+        desktop.unwrap_or_else(|| self.imp().locations.borrow().home_uri())
     }
 
     /// Drops the rows of every listed tab that `is_gone` picks, stops

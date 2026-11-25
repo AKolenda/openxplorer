@@ -319,6 +319,8 @@ impl TransferPanel {
     pub(super) fn end_question(&self) {
         self.remove_failure_question();
         let imp = self.imp();
+        self.release_keyboard_from(&*imp.question);
+        self.release_keyboard_from(&*imp.space_question);
         imp.cancel_button.set_visible(true);
         imp.question_answer.replace(None);
         imp.space_answer.replace(None);

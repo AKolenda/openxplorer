@@ -27,7 +27,6 @@ use std::time::Duration;
 
 use gtk::gio::prelude::*;
 use gtk::prelude::*;
-#[cfg(test)]
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::{entry_from_info, Entry, EntryKind, ATTRIBUTES};
@@ -41,6 +40,7 @@ use ox_core::transfer::{Cancellation, ConflictPolicy, TransferMode};
 use super::FileCommand;
 use crate::dialog::Dialog;
 use crate::icons::{Art, ArtImage};
+use crate::volumes::{VolumeKind, VolumeState};
 use crate::window::BrowserWindow;
 use crate::window::ButtonStyle;
 
@@ -285,6 +285,13 @@ impl BrowserWindow {
             return;
         };
         let preferences = self.context().settings_data().preferences;
+        // OPS-018: on a removable drive, the drive's own Trash unless the
+        // settings say to delete there permanently, as Windows does.
+        let plan = if preferences.delete_removable_permanently {
+            plan.deleting_permanently_inside(&self.removable_drive_roots())
+        } else {
+            plan
+        };
         let asks = (!plan.to_trash.is_empty() && preferences.confirm_trash)
             || (!plan.to_delete.is_empty() && preferences.confirm_delete);
         if asks
@@ -302,6 +309,25 @@ impl BrowserWindow {
             self.run_deletion(&removal(TransferMode::Delete, plan.to_delete), next)
                 .await;
         }
+    }
+
+    /// The roots of the mounted removable drives (a USB stick, an SD
+    /// card), as Send to and Format tell them: a drive that can be ejected
+    /// or powered off.
+    fn removable_drive_roots(&self) -> Vec<String> {
+        self.imp()
+            .volumes
+            .borrow()
+            .iter()
+            .filter_map(|row| match &row.state {
+                VolumeState::Mounted { uri, controls }
+                    if row.kind == VolumeKind::Drive && (controls.can_eject || controls.can_stop) =>
+                {
+                    Some(uri.clone())
+                }
+                _ => None,
+            })
+            .collect()
     }
 
     /// Shift+Delete: asks, then deletes the selection permanently, even
