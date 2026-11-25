@@ -22,6 +22,7 @@ use super::choice_list::ChoiceButton;
 use super::group::SettingsGroup;
 use super::pages::Category;
 use super::parts;
+use super::radio_cards::RadioCards;
 use super::row::{ControlName, RowLayout, SettingRow};
 use super::search::RowText;
 use super::section::{PageKind, SettingsSection};
@@ -80,6 +81,15 @@ const SHIFT_F10_CLASSIC: RowText = RowText {
                   as a right-click and the Menu key, as in Windows 11.",
     keywords: "shift f10 keyboard key context menu right-click classic windows 10 11 compact \
                show more options",
+};
+
+const F6_LIKE_WINDOWS: RowText = RowText {
+    title: "F6 moves like Windows",
+    description: "When on, F6 moves only between the tabs, the navigation pane, the file list, the \
+                  Details pane and the status bar, as in Windows 11, and Tab reaches the address bar, \
+                  search box and command bar. When off, F6 visits those three too.",
+    keywords: "f6 shift+f6 keyboard focus panes regions cycle windows 11 address bar search box \
+               command bar tab",
 };
 
 const HIDE_EXPAND_ARROWS: RowText = RowText {
@@ -234,8 +244,8 @@ fn language_status(picked: Option<&str>, asked: &[String]) -> String {
 }
 
 /// The three theme cards, in a row that wraps in a narrow window, their
-/// radio buttons one group.
-fn theme_cards() -> gtk::FlowBox {
+/// radio buttons one group and one Tab stop ([`RadioCards`]).
+fn theme_cards() -> RadioCards {
     let cards = gtk::FlowBox::builder()
         .selection_mode(gtk::SelectionMode::None)
         .max_children_per_line(3)
@@ -245,6 +255,7 @@ fn theme_cards() -> gtk::FlowBox {
         .css_classes(["theme-cards"])
         .build();
     let mut first_radio: Option<gtk::CheckButton> = None;
+    let mut radios = Vec::new();
     for card in THEME_CARDS {
         let radio = theme_radio(&card, first_radio.as_ref());
         let child = gtk::FlowBoxChild::builder()
@@ -252,9 +263,10 @@ fn theme_cards() -> gtk::FlowBox {
             .focusable(false)
             .build();
         cards.append(&child);
-        first_radio.get_or_insert(radio);
+        first_radio.get_or_insert_with(|| radio.clone());
+        radios.push(radio);
     }
-    cards
+    RadioCards::new(&cards, radios)
 }
 
 /// The radio button under a card, "System", "Light" or "Dark", in the
@@ -387,6 +399,21 @@ fn shift_f10_row(page: &SettingsPage) -> SettingRow {
     row
 }
 
+/// "F6 moves like Windows": the switch saves the choice, which F6 reads
+/// each time it moves the keyboard (`src/window/focus_regions.rs`).
+fn f6_like_windows_row(page: &SettingsPage) -> SettingRow {
+    let row = SettingRow::new(F6_LIKE_WINDOWS);
+    let switch = page.preference_switch(PreferenceBinding {
+        read: |preferences| preferences.f6_like_windows,
+        write: |on| PreferencesUpdate {
+            f6_like_windows: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    });
+    row.add_control(&switch, ControlName::RowTitle);
+    row
+}
+
 /// "Use the desktop font": the switch saves the choice and the skin draws
 /// it in every window at once.
 fn desktop_font_row(page: &SettingsPage) -> SettingRow {
@@ -502,6 +529,7 @@ fn layout_group(page: &SettingsPage) -> SettingsGroup {
     group.add_row(&right_click_menu_row(page));
     group.add_row(&menu_buttons_row(page));
     group.add_row(&shift_f10_row(page));
+    group.add_row(&f6_like_windows_row(page));
     let row = SettingRow::new(PANE_WIDTHS);
     let reset = parts::button_with_glyph(&ox_core::i18n::gettext("Reset"), Icon::ArrowClockwise);
     WindowAction::ResetLayout.assign_to(&reset);

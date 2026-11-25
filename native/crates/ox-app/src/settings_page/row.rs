@@ -194,16 +194,28 @@ impl SettingRow {
         let imp = self.imp();
         let title: &gtk::Accessible = imp.title_label.upcast_ref();
         let description: &gtk::Accessible = imp.description_label.upcast_ref();
-        let relation = match name {
-            ControlName::RowTitle => gtk::accessible::Relation::LabelledBy(&[title]),
-            ControlName::OwnLabel => gtk::accessible::Relation::DescribedBy(&[title, description]),
+        let labels = [title];
+        let descriptions = [title, description];
+        let relation = || match name {
+            ControlName::RowTitle => gtk::accessible::Relation::LabelledBy(&labels),
+            ControlName::OwnLabel => gtk::accessible::Relation::DescribedBy(&descriptions),
         };
         let control = control.upcast_ref::<gtk::Widget>();
-        control.update_relation(&[relation]);
-        // The details the ⓘ shows are read with the control, so a screen
-        // reader user needs no bubble.
-        if let (ControlName::RowTitle, Some(info)) = (name, imp.info.get()) {
-            control.update_property(&[gtk::accessible::Property::Description(&info.details())]);
+        // A menu button's keyboard stop is the toggle inside it, which a
+        // screen reader reads instead, so it is named the same way.
+        let toggle = control
+            .downcast_ref::<gtk::MenuButton>()
+            .and_then(crate::accessible_names::menu_button_toggle);
+        let named: Vec<gtk::Widget> = std::iter::once(control.clone())
+            .chain(toggle.map(Cast::upcast))
+            .collect();
+        for widget in &named {
+            widget.update_relation(&[relation()]);
+            // The details the ⓘ shows are read with the control, so a
+            // screen reader user needs no bubble.
+            if let (ControlName::RowTitle, Some(info)) = (name, imp.info.get()) {
+                widget.update_property(&[gtk::accessible::Property::Description(&info.details())]);
+            }
         }
         imp.control_slot.append(control);
     }

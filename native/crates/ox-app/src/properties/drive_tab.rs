@@ -178,7 +178,7 @@ impl SpaceRows {
                 .selectable(true)
                 .css_classes(["property-value"])
                 .build();
-            value.update_relation(&[gtk::accessible::Relation::LabelledBy(&[label.upcast_ref()])]);
+            crate::accessible_names::name_value_label(&value, &label);
             self.grid.attach(&value, column, line, 1, 1);
         }
         self.line.set(line + 1);

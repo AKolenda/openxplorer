@@ -1061,6 +1061,7 @@ pub(crate) fn connect_mapped_file_cells(
             // it shows the name.
             let name = bind_owners.shown_name(&item);
             list_item.set_accessible_label(&name);
+            list_item.set_accessible_description(&row_tooltip::spoken_infotip(&item));
             cell.bind(&item);
             cell.show_name(&name, &bind_owners.marked_words());
             cell.show_item_check(bind_owners.shows_item_checks());

@@ -96,9 +96,7 @@ fn order_after_sort_key(column: SortColumn, current: SortOrder) -> SortOrder {
 /// and described once, where a screen reader would otherwise read it as
 /// every title's name and hint joined.
 pub(crate) fn make_titles_keyboard_operable(view: &DetailsView) {
-    let hint = ox_core::i18n::gettext(
-        "Enter sorts by this column; Left and Right resize it; Home fits it to the listed items",
-    );
+    let hint = title_hint();
     if let Some(header) = view.header() {
         header.update_property(&[
             gtk::accessible::Property::Label(&ox_core::i18n::gettext("Column headers")),
@@ -107,6 +105,14 @@ pub(crate) fn make_titles_keyboard_operable(view: &DetailsView) {
     }
     let titles = title_buttons(view.column_view());
     for (column, title) in view.column_order().into_iter().zip(titles) {
+        // GTK gives a title the column-header role, which GTK's AT-SPI
+        // bridge sends as a "filler" Orca does not read as a control
+        // (through GTK 4.20). It is a button that sorts, as Narrator reads
+        // Windows 11's "Date modified, split button". GTK takes a new role
+        // only until the title is realized.
+        if !title.is_realized() {
+            title.set_accessible_role(gtk::AccessibleRole::Button);
+        }
         title.set_focusable(true);
         // A click sorts and leaves focus in the list, as before.
         title.set_focus_on_click(false);
@@ -131,6 +137,13 @@ pub(crate) fn make_titles_keyboard_operable(view: &DetailsView) {
         title.add_controller(keys);
         add_column_resizer(view, column, &title);
     }
+}
+
+/// What every title says of its keys, after the way it sorts.
+pub(crate) fn title_hint() -> String {
+    ox_core::i18n::gettext(
+        "Enter sorts by this column; Left and Right resize it; Home fits it to the listed items",
+    )
 }
 
 /// Adds "Resize <column> column" (`.column-resizer`) to the title of

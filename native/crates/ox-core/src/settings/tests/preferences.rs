@@ -704,6 +704,27 @@ fn the_shift_f10_classic_menu_choice_is_off_and_saved_only_when_on() {
     );
 }
 
+/// "F6 moves like Windows" is off as it comes, so F6 keeps the app's own
+/// cycle through the address bar, search box and command bar too;
+/// turned on, it is saved and read back, and stored only while on.
+/// parity: ACC-015
+#[test]
+fn the_f6_like_windows_choice_is_off_and_saved_only_when_on() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    assert!(!store.snapshot().preferences.f6_like_windows, "off as it comes");
+
+    save_preferences(&mut store, &json!({"f6LikeWindows": true}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).unwrap();
+    assert!(file.contains("\"f6LikeWindows\": true"), "{file}");
+    assert!(Settings::open(root.path()).snapshot().preferences.f6_like_windows);
+
+    save_preferences(&mut store, &json!({"f6LikeWindows": false}));
+    let file = std::fs::read_to_string(root.path().join("settings.json")).unwrap();
+    assert!(!file.contains("f6LikeWindows"), "{file}");
+    assert!(!Settings::open(root.path()).snapshot().preferences.f6_like_windows);
+}
+
 /// A favorite is matched by its canonical form, so the address GIO gives a
 /// file (with `(`, `!` or a remote user name) adds it once and removes it
 /// again, and is known as a favorite (HOME-014).

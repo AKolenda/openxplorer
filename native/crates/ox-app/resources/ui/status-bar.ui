@@ -120,6 +120,8 @@
     </child>
     <child>
       <object class="GtkButton" id="details_view_button">
+        <!-- Heard as a toggle button, pressed for the view shown. -->
+        <property name="accessible-role">toggle-button</property>
         <property name="tooltip-text" translatable="yes">Details view</property>
         <property name="valign">center</property>
         <accessibility>
@@ -129,6 +131,8 @@
     </child>
     <child>
       <object class="GtkButton" id="icons_view_button">
+        <!-- Heard as a toggle button, pressed for the view shown. -->
+        <property name="accessible-role">toggle-button</property>
         <property name="tooltip-text" translatable="yes">Large icons</property>
         <property name="valign">center</property>
         <accessibility>

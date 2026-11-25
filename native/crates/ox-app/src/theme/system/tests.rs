@@ -64,6 +64,22 @@ fn any_dark_theme_name_asks_for_dark() {
     assert_eq!(decide(&[None, None], &[None]), Appearance::Light);
 }
 
+/// GTK's `HighContrastInverse` is light text on black, so it asks for the
+/// dark palette as a "dark" name does; `HighContrast` asks for the light one.
+///
+/// parity: LOOK-004, ACC-011
+#[test]
+fn the_inverse_high_contrast_theme_is_dark() {
+    assert_eq!(
+        appearance_from_gnome_keys(Some("default"), Some("HighContrastInverse")),
+        Some(Appearance::Dark)
+    );
+    assert_eq!(
+        appearance_from_gnome_keys(Some("default"), Some("HighContrast")),
+        Some(Appearance::Light)
+    );
+}
+
 /// parity: LOOK-004
 #[test]
 fn portal_values_one_and_two_prefer_dark_and_light() {

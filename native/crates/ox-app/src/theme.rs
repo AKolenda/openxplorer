@@ -80,6 +80,9 @@ mod imp {
         pub(super) theme: Cell<Theme>,
         /// The desktop's colour scheme, which [`Theme::System`] follows.
         pub(super) desktop_appearance: Cell<Appearance>,
+        /// What the user's GTK theme asked for before the skin put GTK's
+        /// default theme under itself.
+        pub(super) theme_contrast: Cell<Contrast>,
     }
 
     #[glib::object_subclass]
@@ -118,7 +121,17 @@ impl Skin {
     pub(crate) fn install(display: &gdk::Display) -> Self {
         icons::register(display);
         cursor_theme::follow(display);
-        Self::with_providers(Providers::install(display))
+        // Read before the providers force GTK's default theme.
+        let theme_contrast = contrast::theme_contrast(display);
+        let skin = Self::with_providers(Providers::install(display));
+        skin.imp().theme_contrast.set(theme_contrast);
+        skin
+    }
+
+    /// What the user's GTK theme asked for when the skin was installed: a
+    /// `HighContrast` theme asks for more contrast.
+    pub(crate) fn theme_contrast(&self) -> Contrast {
+        self.imp().theme_contrast.get()
     }
 
     /// A skin on no display, for tests that watch what windows connect to

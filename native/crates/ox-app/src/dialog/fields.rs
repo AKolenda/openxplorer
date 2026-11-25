@@ -113,7 +113,7 @@ impl PropertyGrid {
             .selectable(true)
             .css_classes(["property-value"])
             .build();
-        value_label.update_relation(&[gtk::accessible::Relation::LabelledBy(&[name_label.upcast_ref()])]);
+        crate::accessible_names::name_value_label(&value_label, &name_label);
         self.grid.attach(&name_label, 0, row, 1, 1);
         self.grid.attach(&value_label, 1, row, 1, 1);
         self.rows.set(row + 1);

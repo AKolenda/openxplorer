@@ -82,9 +82,22 @@ impl ColumnTitles {
     /// its column, so the chevron after it keeps its room, as in File
     /// extension's 90-pixel default; the others overflow as before.
     pub(crate) fn show_sort(&self, sorted_by: Option<SortOrder>) {
+        let hint = crate::folder_view::column_keys::title_hint();
         for (column, title) in &self.0 {
             let order = sorted_by.filter(|order| order.column == *column);
             point_caret(title, order.map(|order| order.direction));
+            // GTK's sort property never reaches AT-SPI, so the sorted
+            // title says how it sorts before its keys.
+            let description = match order.map(|order| order.direction) {
+                Some(SortDirection::Ascending) => {
+                    format!("{} {hint}", ox_core::i18n::gettext("Sorted ascending."))
+                }
+                Some(SortDirection::Descending) => {
+                    format!("{} {hint}", ox_core::i18n::gettext("Sorted descending."))
+                }
+                None => hint.clone(),
+            };
+            title.update_property(&[gtk::accessible::Property::Description(&description)]);
             if let Some(label) = self.title_box(*column).and_then(|title_box| label_in(&title_box)) {
                 label.set_ellipsize(if order.is_some() {
                     gtk::pango::EllipsizeMode::End

@@ -5,8 +5,18 @@
 //! Windows Explorer cycles its panes with F6; here the regions are, in
 //! order, the tab strip, the address bar, the search box, the command
 //! bar, the sidebar, the file list (each pane of a split tab, the left
-//! one first, as Tab visits them, `tab_order.rs`) and the Details pane,
-//! wrapping round.
+//! one first, as Tab visits them, `tab_order.rs`), the Details pane and
+//! the status bar, wrapping round. Microsoft gives Windows 11's F6 order
+//! as "Tabs", "Navigation pane", "Content pane", "Details pane (if
+//! shown)" and "Status bar" ("Use a screen reader to explore and navigate
+//! File Explorer in Windows"); the address bar, search box and command
+//! bar, which Windows reaches with Tab from the tabs, are F6 stops here
+//! too.
+//! With Settings' "F6 moves like Windows" on, F6 visits only the regions
+//! Microsoft lists (the tabs, the sidebar, the file list and each pane
+//! of a split tab, the Details pane and the status bar), and the address
+//! bar, search box and command bar are left to Tab; from one of those
+//! three, F6 goes on to the next region in the order above.
 //! A hidden or disabled region is skipped. Focus lands on the region's
 //! current item: the front tab, the highlighted sidebar row, the item that
 //! last had focus in the file list; elsewhere on the region's first
@@ -42,11 +52,13 @@ pub(super) enum Region {
     /// The right pane of a split tab, shown only then.
     EndPane,
     Details,
+    /// The status bar's view buttons.
+    StatusBar,
 }
 
 impl Region {
     /// Every region, in F6's order.
-    const ALL: [Region; 8] = [
+    const ALL: [Region; 9] = [
         Region::Tabs,
         Region::Address,
         Region::Search,
@@ -55,24 +67,51 @@ impl Region {
         Region::Files,
         Region::EndPane,
         Region::Details,
+        Region::StatusBar,
     ];
+
+    /// Whether F6 visits this region when it moves like Windows 11's:
+    /// not the address bar, search box or command bar, which Windows
+    /// reaches with Tab from the tabs.
+    fn in_windows_cycle(self) -> bool {
+        !matches!(self, Region::Address | Region::Search | Region::Commands)
+    }
+
+    /// Where this region comes in F6's full order.
+    fn order(self) -> usize {
+        Region::ALL
+            .iter()
+            .position(|region| *region == self)
+            .unwrap_or_default()
+    }
 }
 
-/// The region after `current` among `reachable` (before it `backward`),
-/// wrapping round; the first reachable one when focus is in none.
+/// The region after `current` among `reachable`, in F6's order (before
+/// it `backward`), wrapping round; the first reachable one (the last
+/// `backward`) when focus is in none. `current` need not be reachable
+/// itself: from a region F6 passes over, it goes on from where that
+/// region sits.
 fn next_region(current: Option<Region>, reachable: &[Region], backward: bool) -> Option<Region> {
-    let count = reachable.len();
-    if count == 0 {
-        return None;
-    }
-    let index = current.and_then(|region| reachable.iter().position(|candidate| *candidate == region));
-    let next = match (index, backward) {
-        (None, false) => 0,
-        (None, true) => count - 1,
-        (Some(index), false) => (index + 1) % count,
-        (Some(index), true) => (index + count - 1) % count,
+    let (first, last) = (reachable.first().copied()?, reachable.last().copied()?);
+    let Some(current) = current else {
+        return Some(if backward { last } else { first });
     };
-    Some(reachable[next])
+    let at = current.order();
+    let next = if backward {
+        reachable
+            .iter()
+            .rev()
+            .find(|region| region.order() < at)
+            .copied()
+            .unwrap_or(last)
+    } else {
+        reachable
+            .iter()
+            .find(|region| region.order() > at)
+            .copied()
+            .unwrap_or(first)
+    };
+    Some(next)
 }
 
 /// F6 moves to the next region, Shift+F6 to the previous one.
@@ -213,8 +252,10 @@ impl BrowserWindow {
     /// Moves keyboard focus to the next region that can take it, or the
     /// previous one `backward`; returns the region focused.
     pub(super) fn focus_next_region(&self, backward: bool) -> Option<Region> {
+        let like_windows = self.context().settings_data().preferences.f6_like_windows;
         let reachable: Vec<Region> = Region::ALL
             .into_iter()
+            .filter(|region| !like_windows || region.in_windows_cycle())
             .filter(|region| self.region_is_reachable(*region))
             .collect();
         let mut candidate = next_region(self.focused_region(), &reachable, backward);
@@ -249,6 +290,7 @@ impl BrowserWindow {
             Region::Files => self.pane_on(PaneSide::Start).clone().upcast(),
             Region::EndPane => self.pane_on(PaneSide::End).clone().upcast(),
             Region::Details => self.details_pane().clone().upcast(),
+            Region::StatusBar => self.status_bar().clone().upcast(),
         }
     }
 
@@ -319,5 +361,33 @@ mod tests {
             Some(Region::Address)
         );
         assert_eq!(next_region(None, &[], false), None);
+    }
+
+    /// From a region F6 passes over, such as the address bar while F6
+    /// moves like Windows, F6 goes on from where that region sits.
+    ///
+    /// parity: ACC-015
+    #[test]
+    fn f6_goes_on_from_a_region_it_passes_over() {
+        let cycle: Vec<Region> = Region::ALL
+            .into_iter()
+            .filter(|region| region.in_windows_cycle())
+            .collect();
+        assert_eq!(
+            cycle,
+            [
+                Region::Tabs,
+                Region::Sidebar,
+                Region::Files,
+                Region::EndPane,
+                Region::Details,
+                Region::StatusBar
+            ]
+        );
+        for skipped in [Region::Address, Region::Search, Region::Commands] {
+            assert_eq!(next_region(Some(skipped), &cycle, false), Some(Region::Sidebar));
+            assert_eq!(next_region(Some(skipped), &cycle, true), Some(Region::Tabs));
+        }
+        assert_eq!(next_region(None, &cycle, true), Some(Region::StatusBar));
     }
 }

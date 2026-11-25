@@ -89,12 +89,12 @@ fn the_file_list_its_items_and_every_icon_button_are_named() {
         gtk::AccessibleRole::Status,
         "a live region"
     );
+    // Buttons that sort: GTK's column-header role reaches no screen
+    // reader as one (tests/screen_reader.rs).
     let titles = crate::folder_view::column_titles::title_buttons(&details);
     let roles: Vec<gtk::AccessibleRole> = titles.iter().map(AccessibleExt::accessible_role).collect();
     assert!(
-        roles
-            .iter()
-            .all(|role| *role == gtk::AccessibleRole::ColumnHeader),
+        roles.iter().all(|role| *role == gtk::AccessibleRole::Button),
         "{roles:?}"
     );
     let resizers = descendants::<ResizerControl>(&details);
@@ -159,7 +159,7 @@ fn f6_moves_focus_round_the_regions_and_back_to_the_same_item() {
     let selected = test.window.folder_pane().model().selected_items().len();
 
     let mut visited = Vec::new();
-    for _ in 0..7 {
+    for _ in 0..8 {
         visited.push(
             test.window
                 .focus_next_region(false)
@@ -171,6 +171,7 @@ fn f6_moves_focus_round_the_regions_and_back_to_the_same_item() {
         visited,
         [
             Region::Details,
+            Region::StatusBar,
             Region::Tabs,
             Region::Address,
             Region::Search,
@@ -186,6 +187,180 @@ fn f6_moves_focus_round_the_regions_and_back_to_the_same_item() {
     );
     assert_eq!(test.window.focus_next_region(true), Some(Region::Sidebar));
     assert_eq!(test.window.folder_pane().model().selected_items().len(), selected);
+}
+
+/// Saves "F6 moves like Windows" `on` and waits for the window to read it.
+fn choose_f6_like_windows(test: &TestWindow, on: bool) {
+    let update = ox_core::settings::PreferencesUpdate {
+        f6_like_windows: Some(on),
+        ..ox_core::settings::PreferencesUpdate::default()
+    };
+    ox_core::settings::Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the window to read the choice", || {
+        test.context.settings_data().preferences.f6_like_windows == on
+    });
+}
+
+/// A window with the Details pane shown and the keyboard on its file
+/// list, with the real pointer resting on its edge (the keyboard follows
+/// the pointer on the private display), split in two when `split`.
+fn window_for_real_f6(fixture: &Fixture, split: bool) -> (TestWindow, crate::test_support::pointer::Pointer) {
+    use crate::test_support::pointer::{screen_point, Pointer};
+    // Before the window opens, which a new pointer would put away.
+    let mut pointer = Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    test.open_details_pane();
+    if split {
+        test.activate("split-view", None);
+    }
+    test.window.present();
+    wait_for_frames(&test.window, 3);
+    let (x, y) = screen_point(&mut pointer, &test.window, (4.0, 4.0), (8, 8));
+    pointer.move_to(x, y);
+    wait_until("the window to have the keyboard", || test.window.is_active());
+    test.window
+        .pane_on(crate::window::session::PaneSide::Start)
+        .focus_view();
+    wait_until("the keyboard on the file list", || {
+        test.window.focused_region() == Some(Region::Files)
+    });
+    (test, pointer)
+}
+
+/// The regions `presses` real F6 presses visit, one after the other
+/// (Shift+F6 when `backward`).
+fn regions_after_real_f6(
+    test: &TestWindow,
+    pointer: &mut crate::test_support::pointer::Pointer,
+    presses: usize,
+    backward: bool,
+) -> Vec<Region> {
+    let mut visited = Vec::new();
+    for _ in 0..presses {
+        let before = test.window.focused_region();
+        if backward {
+            pointer.hold_key(gdk::Key::Shift_L);
+        }
+        pointer.tap_key(gdk::Key::F6);
+        if backward {
+            pointer.let_go_key(gdk::Key::Shift_L);
+        }
+        wait_until("F6 to move the keyboard", || {
+            test.window.focused_region().is_some() && test.window.focused_region() != before
+        });
+        visited.push(test.window.focused_region().expect("a region has the keyboard"));
+    }
+    visited
+}
+
+/// As it comes ("F6 moves like Windows" off), real F6 presses keep the
+/// app's own cycle (ACC-015): the address bar, search box and command bar
+/// are F6 stops between the tabs and the navigation pane.
+///
+/// parity: ACC-015
+#[gtk::test]
+fn real_f6_visits_the_address_bar_search_and_command_bar_as_it_comes() {
+    let fixture = Fixture::standard();
+    let (test, mut pointer) = window_for_real_f6(&fixture, false);
+    assert!(!test.context.settings_data().preferences.f6_like_windows);
+    assert_eq!(
+        regions_after_real_f6(&test, &mut pointer, 8, false),
+        [
+            Region::Details,
+            Region::StatusBar,
+            Region::Tabs,
+            Region::Address,
+            Region::Search,
+            Region::Commands,
+            Region::Sidebar,
+            Region::Files
+        ]
+    );
+}
+
+/// With "F6 moves like Windows" on, real F6 presses visit only the
+/// regions Microsoft lists for Windows 11's F6 ("Tabs", "Navigation
+/// pane", "Content pane", "Details pane (if shown)", "Status bar"; "Use a
+/// screen reader to explore and navigate File Explorer in Windows"), each
+/// pane of a split tab, and Shift+F6 goes back the same way. Tab from the
+/// tabs still reaches the address bar, search box and command bar, and
+/// F6 from the address bar goes on to the navigation pane.
+///
+/// parity: ACC-015
+#[gtk::test]
+fn real_f6_like_windows_leaves_the_address_bar_search_and_command_bar_to_tab() {
+    let fixture = Fixture::standard();
+    let (test, mut pointer) = window_for_real_f6(&fixture, true);
+    choose_f6_like_windows(&test, true);
+    assert_eq!(
+        regions_after_real_f6(&test, &mut pointer, 6, false),
+        [
+            Region::EndPane,
+            Region::Details,
+            Region::StatusBar,
+            Region::Tabs,
+            Region::Sidebar,
+            Region::Files
+        ]
+    );
+    assert_eq!(
+        regions_after_real_f6(&test, &mut pointer, 5, true),
+        [
+            Region::Sidebar,
+            Region::Tabs,
+            Region::StatusBar,
+            Region::Details,
+            Region::EndPane
+        ]
+    );
+
+    // Tab from the tab in front goes on, past the tab's buttons, to the
+    // address bar, the search box and the command bar.
+    regions_after_real_f6(&test, &mut pointer, 3, false);
+    assert_eq!(test.window.focused_region(), Some(Region::Tabs));
+    let mut reached = Vec::new();
+    for _ in 0..30 {
+        pointer.tap_key(gdk::Key::Tab);
+        wait_for(std::time::Duration::from_millis(50));
+        let region = test.window.focused_region();
+        if let Some(region) = region.filter(|region| reached.last() != Some(region)) {
+            reached.push(region);
+        }
+        if region == Some(Region::Commands) {
+            break;
+        }
+    }
+    assert_eq!(
+        reached
+            .iter()
+            .filter(|region| matches!(region, Region::Address | Region::Search | Region::Commands))
+            .copied()
+            .collect::<Vec<_>>(),
+        [Region::Address, Region::Search, Region::Commands],
+        "Tab reaches them in order: {reached:?}"
+    );
+
+    // From the address bar, F6 goes on to the navigation pane.
+    pointer.hold_key(gdk::Key::Alt_L);
+    pointer.tap_key(gdk::Key::d);
+    pointer.let_go_key(gdk::Key::Alt_L);
+    wait_until("Alt+D to edit the address", || {
+        test.window.focused_region() == Some(Region::Address)
+    });
+    assert_eq!(
+        regions_after_real_f6(&test, &mut pointer, 1, false),
+        [Region::Sidebar]
+    );
+
+    // Turned off again, F6 takes the address bar back into its cycle.
+    choose_f6_like_windows(&test, false);
+    assert_eq!(
+        regions_after_real_f6(&test, &mut pointer, 1, true),
+        [Region::Commands]
+    );
 }
 
 /// F6 into the tab row puts the keyboard on the tab in front, not on the
@@ -207,7 +382,7 @@ fn f6_into_the_tab_row_focuses_the_tab_in_front() {
     test.window.folder_pane().focus_view();
 
     let mut region = None;
-    for _ in 0..7 {
+    for _ in 0..8 {
         region = test.window.focus_next_region(false);
         if region == Some(Region::Tabs) {
             break;

@@ -298,8 +298,10 @@ impl FolderPane {
         }
         note.set_visible(show);
         self.show_keyboard_on_empty_list();
+        let details = self.details().column_view().clone().upcast::<gtk::Widget>();
+        let rows = rows_of(&details);
         let lists: [gtk::Widget; 3] = [
-            self.details().column_view().clone().upcast(),
+            details,
             self.icon_view().grid().clone().upcast(),
             self.gallery().canvas().clone().upcast(),
         ];
@@ -309,6 +311,14 @@ impl FolderPane {
             } else {
                 list.reset_relation(gtk::AccessibleRelation::DescribedBy);
             }
+        }
+        // The keyboard rests on the details view's list of rows, inside
+        // it, which a screen reader reads on its own; it says it outright,
+        // as GTK 4.14 sends no description made from the relation.
+        if show {
+            rows.update_property(&[gtk::accessible::Property::Description(&note.label())]);
+        } else {
+            rows.reset_property(gtk::AccessibleProperty::Description);
         }
     }
 
@@ -741,6 +751,52 @@ impl FolderPane {
         }
     }
 
+    /// Moves the keyboard from the list itself onto an item once rows are
+    /// drawn: the selected item when it shows, else the first item shown,
+    /// without selecting or scrolling. GTK keeps the keyboard on the list
+    /// when it took it before the listing arrived (a new tab, a typed
+    /// address: the keyboard goes to the list while it is still empty),
+    /// where a screen reader heard only "list". The window calls it when
+    /// a listing ends; it looks again for a moment and stops once an item has
+    /// the keyboard or the keyboard left the list.
+    pub(super) fn move_keyboard_onto_an_item_once_drawn(&self) {
+        /// How often it looks for drawn rows, and how many times.
+        const INTERVAL: std::time::Duration = std::time::Duration::from_millis(20);
+        const TRIES: u32 = 30;
+        let left = std::cell::Cell::new(TRIES);
+        glib::timeout_add_local(
+            INTERVAL,
+            glib::clone!(
+                #[weak(rename_to = pane)]
+                self,
+                #[upgrade_or]
+                glib::ControlFlow::Break,
+                move || {
+                    left.set(left.get().saturating_sub(1));
+                    if !pane.view_has_focus()
+                        || pane.focused_position().is_some()
+                        || pane.shows_gallery_page()
+                    {
+                        return glib::ControlFlow::Break;
+                    }
+                    let shown = pane.positions_shown();
+                    let selected = pane
+                        .model()
+                        .first_selected()
+                        .filter(|selected| shown.contains(selected));
+                    match selected.or_else(|| shown.iter().min().copied()) {
+                        Some(position) => {
+                            pane.focus_item(position);
+                            glib::ControlFlow::Break
+                        }
+                        None if left.get() == 0 => glib::ControlFlow::Break,
+                        None => glib::ControlFlow::Continue,
+                    }
+                }
+            ),
+        );
+    }
+
     /// Makes sure the item with the list's keyboard focus shows, for the
     /// keyboard entering the list (Esc in the address bar, Tab): when the
     /// keyboard rests on the list itself, it goes to the first selected
@@ -813,11 +869,7 @@ impl FolderPane {
     /// view would hand it to its first column title, whose Space and Enter
     /// sort the folder instead of acting on it.
     fn focus_empty_list(&self) {
-        let view = self.view_widget();
-        let rows = std::iter::successors(view.first_child(), WidgetExt::next_sibling)
-            .find(ObjectExt::is::<gtk::ListView>)
-            .unwrap_or(view);
-        rows.grab_focus();
+        rows_of(&self.view_widget()).grab_focus();
     }
 
     /// The grouped model the visible view lists, while it heads the
@@ -978,4 +1030,12 @@ impl FolderPane {
         self.icon_view().set_text_size(size);
         self.details().set_text_scale(size.scale());
     }
+}
+
+/// The list of rows inside `view`, the details view, which takes the
+/// keyboard while the view has no item; `view` itself otherwise.
+fn rows_of(view: &gtk::Widget) -> gtk::Widget {
+    std::iter::successors(view.first_child(), WidgetExt::next_sibling)
+        .find(ObjectExt::is::<gtk::ListView>)
+        .unwrap_or_else(|| view.clone())
 }

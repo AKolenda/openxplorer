@@ -69,9 +69,11 @@ fn decide(schemes: &[Option<Appearance>], hints: &[Option<Appearance>]) -> Appea
 }
 
 /// Dark for a GTK theme whose name contains "dark" (`ZorinBlue-Dark`), as
-/// `system_dark` in winspace.py decides; light otherwise.
+/// `system_dark` in winspace.py decides, or that is GTK's
+/// `HighContrastInverse`, light text on black; light otherwise.
 fn appearance_of_theme_name(name: &str) -> Appearance {
-    if name.to_lowercase().contains("dark") {
+    let name = name.to_lowercase();
+    if name.contains("dark") || name.starts_with("highcontrastinverse") {
         Appearance::Dark
     } else {
         Appearance::Light
@@ -111,13 +113,20 @@ impl PortalSetting {
 }
 
 /// GTK's own dark preference on `display` (`gtk-application-prefer-dark-theme`
-/// in the user's GTK settings). Read it before
+/// in the user's GTK settings, or GTK's `HighContrastInverse` theme, light
+/// text on black). Read it before
 /// [`Skin::install`](super::Skin::install) forces the flag off: afterwards
 /// the flag only says which palette the skin drew last. winspace.py reads
 /// `gtk_system_dark` before theming, too.
 pub(crate) fn gtk_preference(display: &gdk::Display) -> Appearance {
     let settings = gtk::Settings::for_display(display);
-    if settings.is_gtk_application_prefer_dark_theme() {
+    // GTK_THEME wins over the settings' theme name, as in GTK.
+    let theme = std::env::var("GTK_THEME")
+        .ok()
+        .or_else(|| settings.gtk_theme_name().map(|name| name.to_string()))
+        .unwrap_or_default();
+    let inverse = theme.to_lowercase().starts_with("highcontrastinverse");
+    if settings.is_gtk_application_prefer_dark_theme() || inverse {
         Appearance::Dark
     } else {
         Appearance::Light

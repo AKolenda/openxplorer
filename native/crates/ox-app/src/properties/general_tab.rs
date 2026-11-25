@@ -123,7 +123,9 @@ pub(super) fn general_tab(
         let is_shortcut = entry.is_symlink || entry.content_type.as_deref() == Some("application/x-desktop");
         if entry.trash_orig_path.is_none() && !is_shortcut {
             let (row, value) = opens_with_row(properties, rights.can_change_app, uri);
-            kind.add_control(&ox_core::i18n::gettext("Opens with"), &row);
+            let caption = kind.add_control(&ox_core::i18n::gettext("Opens with"), &row);
+            // The app's name is heard as "Opens with: Text Editor".
+            crate::accessible_names::name_value_label(&value, &caption);
             opens_with = Some(value);
         }
     }

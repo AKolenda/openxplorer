@@ -134,5 +134,6 @@ pub(crate) fn menu_button_with_glyph(label: &str, glyph: Icon) -> gtk::MenuButto
         .css_classes(["setting-button", ButtonStyle::Bordered.css_class()])
         .build();
     button.update_property(&[gtk::accessible::Property::Label(label)]);
+    crate::accessible_names::describe_menu_button(&button, Some(label));
     button
 }

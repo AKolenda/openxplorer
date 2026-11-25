@@ -257,6 +257,8 @@ fn every_setting_of_the_earlier_layout_is_on_one_of_the_new_pages() {
         "Delete files on removable drives permanently (like Windows)",
         // Opening installed apps' launchers (OPEN-029).
         "Run installed apps' launchers on double-click",
+        // The choice of Windows 11's F6 order (ACC-015).
+        "F6 moves like Windows",
     ];
     for title in added_since {
         settings.row(title);

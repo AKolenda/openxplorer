@@ -1143,3 +1143,40 @@ fn the_keyboard_entering_a_scrolled_list_lands_on_an_item_in_view() {
     );
     assert!(pane.positions_shown().contains(&0), "and is scrolled into view");
 }
+
+/// A window closed or hidden while the pointer rests on a control whose
+/// tooltip is about to show logs no critical message: GTK 4.14's tooltip
+/// timer asks for the pointer's position on the window it started for,
+/// which has no surface once the window is gone. Checked with the real
+/// pointer, as a user closing Properties or a dialog with the keyboard
+/// leaves it. (A pointer moved by the tests while they put windows away
+/// did trigger it: `Gdk-CRITICAL gdk_surface_get_device_position`.)
+#[gtk::test]
+fn closing_a_window_with_a_tooltip_pending_logs_no_critical() {
+    let recorder = crate::test_support::gtk_log::LogRecorder::start();
+    let fixture = Fixture::standard();
+    let mut pointer = Pointer::connect();
+    for hide in [false, true] {
+        let test = TestWindow::open(&fixture.uri());
+        test.window.present();
+        wait_for_frames(&test.window, 3);
+        let refresh = refresh_button(&test);
+        let (x, y) = screen_point(&mut pointer, &refresh, (8.0, 8.0), (8, 8));
+        pointer.move_to(x - 30, y);
+        pointer.move_to(x, y);
+        wait_for(std::time::Duration::from_millis(100));
+        if hide {
+            test.window.set_visible(false);
+        } else {
+            test.window.close();
+        }
+        // Longer than GTK's tooltip delay.
+        wait_for(std::time::Duration::from_millis(1200));
+    }
+    let criticals: Vec<String> = recorder
+        .warnings()
+        .into_iter()
+        .filter(|warning| warning.contains("gdk_surface_get_device_position"))
+        .collect();
+    assert!(criticals.is_empty(), "{criticals:?}");
+}

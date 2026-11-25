@@ -43,11 +43,11 @@ pub(super) type Pixel = [u8; 4];
 
 /// Restores normal contrast when a test that raised it ends, even when an
 /// assertion fails, so later tests see the skin as designed.
-struct ContrastGuard;
+pub(super) struct ContrastGuard;
 
 impl ContrastGuard {
     /// Raises the skin's contrast until the guard is dropped.
-    fn raise() -> Self {
+    pub(super) fn raise() -> Self {
         skin().set_contrast(Contrast::High);
         Self
     }

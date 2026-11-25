@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-//! What the crate's tests share: listed entries built through ox-core's own
+//! What the crate's tests share: [`atspi`], which reads widgets back
+//! through the accessibility bus as a screen reader does, listed entries built through ox-core's own
 //! conversion, so they carry every field a real listing does, rows of the
 //! Network list and of the volume monitor, [`desktop_setting`], which
 //! changes a GNOME setting only in memory, [`gtk_log`], which records
@@ -11,6 +12,7 @@
 //! which starts the search cache beside a window, and [`test_opener`],
 //! an application for the file types the window tests open.
 
+pub(crate) mod atspi;
 pub(crate) mod desktop_setting;
 pub(crate) mod gtk_log;
 pub(crate) mod harness;

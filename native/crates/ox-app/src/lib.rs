@@ -16,6 +16,7 @@
 // more than 2,048 tests that array passes Clippy's 16 KiB stack limit.
 #![cfg_attr(test, allow(clippy::large_stack_arrays))]
 
+mod accessible_names;
 mod announcement;
 mod app_context;
 pub mod application;
