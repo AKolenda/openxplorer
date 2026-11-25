@@ -458,18 +458,24 @@ fn selection_bar_rules(scale: f64) -> [String; 2] {
 /// 28 pixels with a 2px margin above and below, as measured on Windows
 /// 11's context menu (31 to 32 pixels from row to row). The address bar's suggestion rows
 /// are Windows 11's 40-pixel list rows at 100% text, as its address bar
-/// drop-down spaces them.
+/// drop-down spaces them. The classic right-click menu (`legacy`) has
+/// Windows 11's Win32 menu rows, 24 pixels at 100% text (measured on its
+/// "Show more options" menu), and no least width: it is as wide as its
+/// longest row.
 fn menu_rules(scale: f64) -> String {
     let row = 22.0 * scale + 10.0;
     let suggestion_row = 22.0 * scale + 18.0;
     let width = (235.0 * scale).max(264.0) - 8.0;
     let compact_row = 22.0 * scale + 6.0;
     let compact_width = (235.0 * scale).max(276.0) - 2.0;
+    let legacy_row = 22.0 * scale + 2.0;
     format!(
         "popover.ox-menu list > row, popover.menu.ox-menu modelbutton {{ min-height: {row:.0}px; }}\n\
          popover.ox-menu > contents, popover.menu.ox-menu > contents {{ min-width: {width:.0}px; }}\n\
          popover.ox-menu.compact list > row {{ min-height: {compact_row:.0}px; }}\n\
          popover.ox-menu.compact > contents {{ min-width: {compact_width:.0}px; }}\n\
+         popover.ox-menu.legacy list > row {{ min-height: {legacy_row:.0}px; }}\n\
+         popover.ox-menu.legacy > contents {{ min-width: 0; }}\n\
          popover.ox-menu list.address-suggestions > row {{ min-height: {suggestion_row:.0}px; }}"
     )
 }

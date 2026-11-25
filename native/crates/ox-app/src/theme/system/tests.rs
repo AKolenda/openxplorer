@@ -70,14 +70,12 @@ fn any_dark_theme_name_asks_for_dark() {
 /// parity: LOOK-004, ACC-011
 #[test]
 fn the_inverse_high_contrast_theme_is_dark() {
+    let theme = |name| Some(appearance_of_theme_name(name));
     assert_eq!(
-        appearance_from_gnome_keys(Some("default"), Some("HighContrastInverse")),
-        Some(Appearance::Dark)
+        decide(&[None, None], &[theme("HighContrastInverse")]),
+        Appearance::Dark
     );
-    assert_eq!(
-        appearance_from_gnome_keys(Some("default"), Some("HighContrast")),
-        Some(Appearance::Light)
-    );
+    assert_eq!(decide(&[None, None], &[theme("HighContrast")]), Appearance::Light);
 }
 
 /// parity: LOOK-004

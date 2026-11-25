@@ -1428,14 +1428,39 @@ mod tests {
         webp
     }
 
+    /// A 16 × 16 icon holding one 32-bit bitmap, as Windows programs
+    /// write them. It is built here: gdk-pixbuf's icon writer writes a
+    /// PNG into the icon where it saves through glycin (Fedora, Arch,
+    /// openSUSE), and only Ubuntu's and Debian's write a bitmap.
+    fn bitmap_icon() -> Vec<u8> {
+        // The pixels, bottom row first, in blue, green, red, alpha; then
+        // the transparency mask, a bit a pixel, rows padded to 4 bytes.
+        let pixels = [0x99_u8, 0x66, 0x33, 0xFF].repeat(16 * 16);
+        let mask = vec![0_u8; 16 * 4];
+        let image_length = 40 + pixels.len() + mask.len();
+        let mut icon = vec![0, 0, 1, 0, 1, 0];
+        // The directory's one entry: 16 × 16, no palette, 1 plane, 32
+        // bits a pixel, the image's length and its offset, 22.
+        icon.extend_from_slice(&[16, 16, 0, 0, 1, 0, 32, 0]);
+        icon.extend_from_slice(&u32::try_from(image_length).expect("a short image").to_le_bytes());
+        icon.extend_from_slice(&22_u32.to_le_bytes());
+        // The bitmap's header: its height counts the image and its mask.
+        icon.extend_from_slice(&40_u32.to_le_bytes());
+        icon.extend_from_slice(&16_u32.to_le_bytes());
+        icon.extend_from_slice(&32_u32.to_le_bytes());
+        icon.extend_from_slice(&[1, 0, 32, 0]);
+        icon.extend_from_slice(&[0; 24]);
+        icon.extend_from_slice(&pixels);
+        icon.extend_from_slice(&mask);
+        icon
+    }
+
     /// An icon whose directory puts an image gigabytes in is refused
     /// before a loader reserves room up to it; an icon as programs write
     /// them is still read (found by fuzzing).
     #[test]
     fn an_icon_with_an_image_gigabytes_in_is_refused_before_it_is_read() {
-        let pixbuf = Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, true, 8, 16, 16).expect("a small picture");
-        pixbuf.fill(0x3366_99ff);
-        let icon = pixbuf.save_to_bufferv("ico", &[]).expect("an icon");
+        let icon = bitmap_icon();
         assert_eq!(declared_size(&icon), Declared::Unknown);
         let mut reader = std::io::Cursor::new(icon.clone());
         let decoded =
@@ -1461,10 +1486,6 @@ mod tests {
         assert_eq!(declared_size(&inside), Declared::Damaged);
         let image = usize::try_from(u32::from_le_bytes(icon[18..22].try_into().expect("an offset")))
             .expect("an offset");
-        assert!(
-            !icon[image..].starts_with(PNG_SIGNATURE),
-            "gdk-pixbuf writes bitmaps into icons"
-        );
         for (width, height) in [(289_865_731_i32, 32_i32), (16, -1_000_000)] {
             let mut wide = icon.clone();
             wide[image + 4..image + 8].copy_from_slice(&width.to_le_bytes());

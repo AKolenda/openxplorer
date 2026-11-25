@@ -56,7 +56,8 @@ fn title_of(test: &TestWindow, column: SortColumn) -> gtk::Widget {
 }
 
 /// The pixels `title` draws, row by row, as the header draws it in
-/// place.
+/// place, but for its last column: the faint divider after every title,
+/// drawn the titles' full height in either style, as Windows 11 draws it.
 fn drawn(title: &gtk::Widget) -> Vec<Vec<Pixel>> {
     let renderer = title
         .native()
@@ -67,7 +68,11 @@ fn drawn(title: &gtk::Widget) -> Vec<Vec<Pixel>> {
     let snapshot = gtk::Snapshot::new();
     header.snapshot_child(title, &snapshot);
     let node = snapshot.to_node().expect("the title draws something");
-    pixel_rows(&renderer.render_texture(&node, Some(&place)))
+    let mut rows = pixel_rows(&renderer.render_texture(&node, Some(&place)));
+    for row in &mut rows {
+        row.pop();
+    }
+    rows
 }
 
 /// Whether two pixels differ visibly.
@@ -256,8 +261,9 @@ fn the_apps_own_style_comes_back_with_its_accent() {
 }
 
 /// With Windows' style the chevron stands at the title's top edge, well
-/// clear of the text under it, in a column as wide as a new window's and
-/// in one narrower than its title, where the text runs under the middle.
+/// clear of the text under it (3 pixels above its capitals, as in Windows
+/// 11), in a column as wide as a new window's and in one narrower than its
+/// title, where the text runs under the middle.
 ///
 /// parity: VIEW-014
 #[gtk::test]
@@ -287,13 +293,22 @@ fn windows_style_keeps_the_chevron_clear_of_the_text_in_any_column_width() {
                 .find(|(row, next)| **next > **row + 1)
                 .map(|(row, _)| *row)
                 .expect("text under the chevron");
-            let text_top = inked_rows
-                .iter()
-                .find(|row| **row > chevron_end)
+            // The capitals' top, where the title's first letter, the "D"
+            // of "Date modified", starts at the text's left edge: a font's
+            // taller letters, such as "d" and "f", may stand a pixel above
+            // its capitals.
+            let text = (chevron_end + 1..rows.len() - 1).flat_map(|row| ink(&rows[row..=row], 1));
+            let left = text.map(|(x, _)| x).min().expect("text under the chevron");
+            let capitals_top = (chevron_end + 1..rows.len() - 1)
+                .find(|row| {
+                    ink(&rows[*row..=*row], 1)
+                        .iter()
+                        .any(|(x, _)| (left..left + 3).contains(x))
+                })
                 .expect("text under the chevron");
             assert!(
-                text_top - chevron_end > 3,
-                "{width:?} {direction}: the chevron ends at row {chevron_end}, the text starts at {text_top}"
+                capitals_top - chevron_end > 3,
+                "{width:?} {direction}: the chevron ends at row {chevron_end}, the capitals start at {capitals_top}"
             );
         }
     }

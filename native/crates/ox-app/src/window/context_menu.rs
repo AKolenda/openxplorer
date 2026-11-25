@@ -149,7 +149,7 @@ impl BrowserWindow {
                 // On a group heading's row, the menu of the group's items,
                 // headed by the group's commands, as in Windows 11.
                 let heading = heading_at(&view, x, y);
-                window.open_context_menu(&view, &point, style, heading.as_ref());
+                window.open_context_menu(&view, &point, style, heading.as_ref(), false);
             }
         ));
         view.add_controller(right_click);
@@ -184,13 +184,16 @@ impl BrowserWindow {
 
     /// Opens the menu of the selection, or of the folder without one, in
     /// `style`, pointing at `point` in `view`; opened on a group
-    /// `heading`, the group's commands head it (VIEW-022).
-    fn open_context_menu(
+    /// `heading`, the group's commands head it (VIEW-022). The classic
+    /// style is Windows 11's Win32 menu, which underlines its access keys
+    /// when `by_keyboard` opened it (Shift+F10, the Menu key).
+    pub(super) fn open_context_menu(
         &self,
         view: &gtk::Widget,
         point: &gdk::Rectangle,
         style: MenuStyle,
         heading: Option<&GroupSlot>,
+        by_keyboard: bool,
     ) {
         let Some(popover) = context_menu_of(view) else {
             return;
@@ -231,6 +234,7 @@ impl BrowserWindow {
         if style == MenuStyle::Classic {
             menu.entries = classic_look(menu.entries);
         }
+        popover.set_legacy_look(style == MenuStyle::Classic, by_keyboard);
         popover.set_entries(menu.entries);
         popover.set_style_and_strip(style, menu.strip);
         popover.set_pointing_to(Some(point));
@@ -272,7 +276,7 @@ impl BrowserWindow {
             (None, true) if compact => {
                 compact_recycle_bin_background_menu(&self.undo_redo(), self.background_submenus())
             }
-            (None, true) => recycle_bin_background_menu(),
+            (None, true) => recycle_bin_background_menu(&self.undo_redo(), self.background_submenus()),
             (None, false) if style == MenuStyle::Compact => {
                 let menu = compact_background_menu(&self.undo_redo(), self.background_submenus());
                 strip = menu.strip;
@@ -453,7 +457,31 @@ impl BrowserWindow {
     /// at the selected item the keyboard is on ([`keyboard_menu_item`]),
     /// or near the top of the view without a selection.
     pub(super) fn open_context_menu_from_keyboard(&self) {
-        self.open_keyboard_menu(self.shift_f10_menu_style());
+        self.open_keyboard_menu(self.shift_f10_menu_style(), true);
+    }
+
+    /// Opens the menu of the item called `name`, or of the folder with
+    /// `None`, as a right-click on it does, for the snapshot hook's
+    /// `right-click=` step: the right-click menu's style, pointing into the
+    /// item's row, with no underlined access keys. False without such an
+    /// item.
+    pub(crate) fn open_context_menu_as_pointer(&self, name: Option<&str>) -> bool {
+        match name {
+            Some(name) => {
+                if !self.select_named(name) {
+                    return false;
+                }
+            }
+            None => self.folder_pane().model().select_none(),
+        }
+        self.open_keyboard_menu(self.preferred_menu_style(), false);
+        true
+    }
+
+    /// Opens the navigation pane's menu of the row labelled `label` as a
+    /// right-click does, for the snapshot hook's `place-menu=` step.
+    pub(crate) fn open_place_menu_as_pointer(&self, label: &str) -> bool {
+        self.imp().sidebar.open_row_menu_as_pointer(label)
     }
 
     /// The style Shift+F10 opens: the right-click menu's, as the Menu key
@@ -471,31 +499,37 @@ impl BrowserWindow {
     /// Opens the menu the Menu key opens, the right-click menu's style,
     /// as Windows 11 Explorer's Menu key opens its compact menu.
     pub(super) fn open_context_menu_from_menu_key(&self) {
-        self.open_keyboard_menu(self.preferred_menu_style());
+        self.open_keyboard_menu(self.preferred_menu_style(), true);
     }
 
     /// Opens a menu in `style` from the keyboard, pointing at the
     /// selected item the keyboard is on ([`keyboard_menu_item`]), or near
     /// the top of the view without a selection. An item out of sight
     /// comes into view first, and the menu opens once it is drawn there.
-    fn open_keyboard_menu(&self, style: MenuStyle) {
+    fn open_keyboard_menu(&self, style: MenuStyle, by_keyboard: bool) {
         let view = self.folder_pane().input_widget();
         if let Some(heading) = self.focused_heading() {
             let row = GtkWindowExt::focus(self).and_then(|focus| focus.compute_bounds(&view));
-            self.open_context_menu(&view, &keyboard_menu_anchor(row), style, Some(&heading));
+            self.open_context_menu(
+                &view,
+                &keyboard_menu_anchor(row),
+                style,
+                Some(&heading),
+                by_keyboard,
+            );
             return;
         }
         let pane = self.folder_pane();
         let Some(position) = keyboard_menu_item(&pane.model().selected_positions(), pane.focused_position())
         else {
-            self.open_context_menu(&view, &keyboard_menu_anchor(None), style, None);
+            self.open_context_menu(&view, &keyboard_menu_anchor(None), style, None, by_keyboard);
             return;
         };
         let was_shown = self.item_is_shown(&view, position);
         pane.reveal(position);
         let clock = view.frame_clock().filter(|_| !was_shown);
         let Some(clock) = clock else {
-            self.open_keyboard_menu_at(&view, position, style);
+            self.open_keyboard_menu_at(&view, position, style, by_keyboard);
             return;
         };
         // GTK lays the item out in its new place in the next frame; until
@@ -512,7 +546,7 @@ impl BrowserWindow {
                 if let Some(id) = handler.take() {
                     clock.disconnect(id);
                 }
-                window.open_keyboard_menu_at(&view, position, style);
+                window.open_keyboard_menu_at(&view, position, style, by_keyboard);
             }
         ));
         handler.set(Some(id));
@@ -521,10 +555,10 @@ impl BrowserWindow {
 
     /// Opens a menu in `style` pointing at the item at `position` of
     /// `view`, the keyboard's menu.
-    fn open_keyboard_menu_at(&self, view: &gtk::Widget, position: u32, style: MenuStyle) {
+    fn open_keyboard_menu_at(&self, view: &gtk::Widget, position: u32, style: MenuStyle, by_keyboard: bool) {
         let row = self.folder_pane().owners().widget_at(position);
         let bounds = row.and_then(|row| row.compute_bounds(view));
-        self.open_context_menu(view, &keyboard_menu_anchor(bounds), style, None);
+        self.open_context_menu(view, &keyboard_menu_anchor(bounds), style, None, by_keyboard);
     }
 
     /// Whether the item at `position` shows in `view`: a press in the
@@ -545,13 +579,17 @@ impl BrowserWindow {
     /// "Show more options": the classic menu where the compact one was.
     pub(super) fn show_more_options(&self) {
         let view = self.menu_widget();
-        let Some(point) = context_menu_of(&view).and_then(|popover| popover.pointing_to().1.into()) else {
+        let Some(popover) = context_menu_of(&view) else {
             return;
         };
+        let point = popover.pointing_to().1;
+        // Underlined access keys when the keyboard chose "Show more
+        // options" (or opened the menu it was in), as in Windows.
+        let by_keyboard = popover.keyboard_used_last();
         // Opened on a group heading, the classic menu keeps its commands.
         let heading = self.imp().menu_heading.borrow().clone();
         let heading = heading.filter(|heading| heading.model().is_some());
-        self.open_context_menu(&view, &point, MenuStyle::Classic, heading.as_ref());
+        self.open_context_menu(&view, &point, MenuStyle::Classic, heading.as_ref(), by_keyboard);
     }
 
     /// The folder menu's "New…", "Sort by" and "View": `entries`, the
@@ -561,6 +599,7 @@ impl BrowserWindow {
         let Some(popover) = context_menu_of(&view) else {
             return;
         };
+        popover.set_legacy_look(false, false);
         popover.set_entries(entries);
         popover.set_style_and_strip(MenuStyle::Classic, Vec::new());
         popover.popup();
@@ -669,7 +708,7 @@ impl BrowserWindow {
         };
         self.select_for_context_menu(&view, x, y);
         let point = gdk::Rectangle::new(KEYBOARD_MENU_INSET, KEYBOARD_MENU_INSET, 1, 1);
-        self.open_context_menu(&view, &point, self.preferred_menu_style(), None);
+        self.open_context_menu(&view, &point, self.preferred_menu_style(), None, false);
     }
 
     /// The view's right-button gesture and a point on the item at

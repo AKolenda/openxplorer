@@ -78,7 +78,7 @@ fn the_recycle_bin_lists_trashed_items_and_restore_puts_them_back() {
     test.window.context_menu().popdown();
     test.activate("restore", None);
 
-    assert_eq!(labels, ["Restore", "Delete permanently", "-", "Properties"]);
+    assert_eq!(labels, ["Restore", "-", "Cut", "-", "Delete", "-", "Properties"]);
     wait_until("the file to be back", || original.is_file());
     super::file_ops_support::assert_ended_without_a_message(&test);
 }
@@ -352,7 +352,19 @@ fn empty_recycle_bin_asks_then_deletes_everything_in_it() {
     test.activate("empty-recycle-bin", None);
     let dialog = open_dialog(&test);
 
-    assert_eq!(labels, ["Empty Recycle Bin", "Refresh"]);
+    assert_eq!(
+        labels,
+        [
+            "View",
+            "Sort by",
+            "Group by",
+            "Refresh",
+            "-",
+            "Empty Recycle Bin",
+            "-",
+            "Properties"
+        ]
+    );
     super::file_ops_support::assert_windows_message_box(dialog.upcast_ref(), "Yes");
     assert_eq!(dialog.title_text(), "Delete Multiple Items");
     assert_eq!(

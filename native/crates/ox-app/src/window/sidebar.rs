@@ -345,7 +345,7 @@ impl Sidebar {
             move |gesture, _, x, y| {
                 let style = menu_style_for(sidebar.preferred_menu_style(), gesture.current_event_state());
                 sidebar.imp().menu_opener.set(None);
-                if sidebar.show_menu(x, y, style) {
+                if sidebar.show_menu(x, y, style, false) {
                     gesture.set_state(gtk::EventSequenceState::Claimed);
                 }
             }
@@ -467,20 +467,49 @@ impl Sidebar {
         let x = f64::from(bounds.x()) + 24.0;
         let y = f64::from(bounds.y() + bounds.height() / 2.0);
         self.imp().menu_opener.set(Some(row.upcast_ref()));
-        self.show_menu(x, y, style)
+        self.show_menu(x, y, style, true)
+    }
+
+    /// Opens the menu of the row labelled `label` as a right-click on its
+    /// label does, for the snapshot hook's `place-menu=` step; false
+    /// without such a row or menu.
+    pub(crate) fn open_row_menu_as_pointer(&self, label: &str) -> bool {
+        let index = self
+            .imp()
+            .entries
+            .borrow()
+            .iter()
+            .position(|entry| entry.label == label);
+        let list = self.list();
+        let Some(row) = index
+            .and_then(|index| i32::try_from(index).ok())
+            .and_then(|index| list.row_at_index(index))
+        else {
+            return false;
+        };
+        let Some(bounds) = row.compute_bounds(list) else {
+            return false;
+        };
+        let x = f64::from(bounds.x()) + 60.0;
+        let y = f64::from(bounds.y() + bounds.height() / 2.0);
+        self.imp().menu_opener.set(None);
+        self.show_menu(x, y, self.preferred_menu_style(), false)
     }
 
     /// "Show more options": the classic menu of the row whose compact
     /// menu was open, where it was.
     pub(super) fn show_more_options(&self) {
         if let Some((x, y)) = self.imp().menu_point.get() {
-            self.show_menu(x, y, MenuStyle::Classic);
+            let menu = self.imp().menu.get().expect("constructed builds the menu");
+            let by_keyboard = menu.keyboard_used_last();
+            self.show_menu(x, y, MenuStyle::Classic, by_keyboard);
         }
     }
 
     /// Opens the menu of the row at (`x`, `y`) of the list in `style`;
-    /// false where the row has none.
-    fn show_menu(&self, x: f64, y: f64, style: MenuStyle) -> bool {
+    /// false where the row has none. The classic style underlines its
+    /// access keys when `by_keyboard` opened it.
+    fn show_menu(&self, x: f64, y: f64, style: MenuStyle, by_keyboard: bool) -> bool {
         let Some((entries, strip)) = self.menu_at(y, style) else {
             return false;
         };
@@ -491,6 +520,7 @@ impl Sidebar {
             return false;
         };
         let menu = self.imp().menu.get().expect("constructed builds the menu");
+        menu.set_legacy_look(style == MenuStyle::Classic, by_keyboard);
         menu.set_entries(entries);
         menu.set_style_and_strip(style, strip);
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]

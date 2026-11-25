@@ -122,7 +122,6 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
         rows,
         [
             "Open",
-            "Open containing folder in Terminal",
             "Add to Favorites",
             "Open with…",
             "-",
@@ -139,6 +138,8 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
             "Delete",
             "Rename",
             "-",
+            "Duplicate",
+            "Open containing folder in Terminal",
             "Compress to…",
             "-",
             "Configure service actions…",
@@ -157,8 +158,8 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
 
 /// The classic menu is drawn as Windows 11 draws "Show more options":
 /// no row shows shortcut text, Open is in bold, and a row Windows draws
-/// as text alone, such as Open or Cut, keeps the glyph's column empty, so
-/// its text lines up with the rows that keep a glyph, such as Properties.
+/// as text alone, such as Open, Cut or Properties, keeps the glyph's
+/// column empty, so its text lines up with the rows that keep one.
 ///
 /// parity: LOOK-019, CMD-008
 #[gtk::test]
@@ -187,7 +188,9 @@ fn the_classic_menu_shows_no_shortcut_text_bolds_open_and_lines_up_text_only_row
     let images = |label: &str| crate::window::widget_tree::descendants::<gtk::Image>(&menu.row(label)).len();
     assert_eq!(images("Open"), 0, "Open is text alone");
     assert_eq!(images("Cut"), 0, "Cut is text alone");
-    assert_eq!(images("Properties"), 1, "Properties keeps its glyph");
+    // Windows' classic menu draws Properties, Send to and Open with as text
+    // alone too; only an application's own icon and Share show one.
+    assert_eq!(images("Properties"), 0, "Properties is text alone");
     let left = |label: &str| {
         let row = menu.row(label);
         let text = label_of(&row);

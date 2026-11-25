@@ -6207,10 +6207,6 @@ msgstr ""
 msgid "Create shortcut"
 msgstr ""
 
-#: crates/ox-app/src/window/context_menu/entries.rs crates/ox-app/src/window/file_ops/delete_label.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs
-msgid "Delete permanently"
-msgstr ""
-
 #: crates/ox-app/src/window/context_menu/entries.rs
 msgid "Desktop (create shortcut)"
 msgstr ""
@@ -6865,6 +6861,10 @@ msgstr ""
 
 #: crates/ox-app/src/window/file_ops/clipboard.rs
 msgid "The desktop clipboard could not be claimed."
+msgstr ""
+
+#: crates/ox-app/src/window/file_ops/delete_label.rs crates/ox-app/src/window/folder_tree/menu.rs crates/ox-app/src/window/shortcuts_window.rs
+msgid "Delete permanently"
 msgstr ""
 
 #: crates/ox-app/src/window/file_ops/extension_confirm.rs

@@ -463,10 +463,11 @@ fn the_status_bar_view_buttons_are_flat_side_by_side_with_the_view_on_a_gray_squ
     same(colour(details, 0, 0), css("#636363"), "the gray square's edge");
     same(colour(details, 2, 2), css("#4d4d4d"), "the gray square");
     // GTK crops a drawn widget to what it paints: the flat button paints
-    // only its 16-pixel glyph.
+    // only its glyph, in the 18-pixel square Windows 11's measured glyphs
+    // ink 14 to 16 pixels of.
     let flat = super::icons::painted(icons);
     assert!(
-        flat.width() <= 16 && flat.height() <= 16,
+        flat.width() <= 18 && flat.height() <= 18,
         "the other button is flat"
     );
     let glyph = descendants::<gtk::Image>(details)

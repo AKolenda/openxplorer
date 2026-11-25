@@ -334,8 +334,9 @@ fn the_command_bar_keeps_its_right_group_and_shows_details_as_selected() {
     );
 }
 
-/// Classic menus are 264 pixels with Windows 11's 32-pixel rows at 100%
-/// text; the compact menu is 276 pixels with the 50-pixel labeled strip.
+/// The classic menu is Windows 11's Win32 menu: 24-pixel rows at 100%
+/// text, and as wide as its longest row, with no least width; the compact
+/// menu is at least 276 pixels, with the 50-pixel labeled strip.
 ///
 /// parity: LOOK-019
 #[gtk::test]
@@ -348,11 +349,19 @@ fn classic_and_compact_menus_have_the_current_apps_widths_and_rows() {
     test.window.right_click(Some(position_of(&test, "Notes 2.txt")));
     let menu = test.window.context_menu();
     wait_for_frames(&test.window, 2);
+    assert!(
+        menu.has_css_class("legacy"),
+        "the classic menu has the Win32 look"
+    );
     let contents = menu.child().expect("the menu has contents");
-    // The contents box, inside 3 pixels of padding and a 1-pixel border.
-    assert_eq!(contents.width() + 2 * (3 + 1), 264, "the classic width");
+    let (_, natural, _, _) = contents.measure(gtk::Orientation::Horizontal, -1);
+    assert_eq!(
+        contents.width(),
+        natural,
+        "the classic width is its longest row's"
+    );
     let row = menu.rows().into_iter().next().expect("a row");
-    assert_eq!(row.height(), 32, "the classic row");
+    assert_eq!(row.height(), 24, "the classic row");
     menu.popdown();
 
     choose_menu_style(&test, ContextMenu::Win11);
@@ -361,7 +370,16 @@ fn classic_and_compact_menus_have_the_current_apps_widths_and_rows() {
     wait_for_frames(&test.window, 2);
     assert!(menu.has_css_class("compact"));
     let contents = menu.child().expect("the menu has contents");
-    assert_eq!(contents.width() + 2, 276, "the compact width, inside its border");
+    // 276 is the least width: the strip's five buttons are as wide as its
+    // widest label, Rename, and with the wider DejaVu Sans of the
+    // distribution jobs at GTK 4.24 they need 299 pixels, which the menu
+    // widens to rather than cut a label.
+    let (_, natural, _, _) = contents.measure(gtk::Orientation::Horizontal, -1);
+    assert_eq!(
+        contents.width() + 2,
+        natural.max(274) + 2,
+        "the compact width, inside its border"
+    );
     let buttons = descendants::<gtk::Button>(&menu);
     let cut = buttons
         .iter()
@@ -387,7 +405,8 @@ fn menus_and_the_sign_in_dialog_paint_each_appearance() {
     // menu is the default.
     choose_menu_style(&test, ContextMenu::Win10);
     let cases = [
-        ("light", "#f9f9f9", "#f9f9f9", "#ffffff"),
+        // The classic menu's light colors are Windows 10's light menu.
+        ("light", "#eeeeee", "#f9f9f9", "#ffffff"),
         ("dark", "#2c2c2c", "#282828", "#202020"),
     ];
     for (theme, flyout, caption, body) in cases {
@@ -400,7 +419,7 @@ fn menus_and_the_sign_in_dialog_paint_each_appearance() {
         wait_for_frames(&test.window, 2);
         let contents = menu.child().expect("the menu has contents");
         let place = bounds_in(&contents, &menu);
-        // Inside the menu's 3 pixels of padding, left of its rows.
+        // Inside the menu's 4 pixels of padding, left of its rows.
         let menu_colour = painted_colour(&menu, place.x - 2, place.y + place.height / 2);
         assert_same_colour(menu_colour, css_colour(flyout), &format!("{theme} menu"));
         menu.popdown();
