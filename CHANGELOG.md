@@ -38,6 +38,7 @@ Items can now open with a single click, "Open in Terminal" opens the desktop's o
 * feat(menus): Draw the classic right-click menu as Windows 11's Win32 menu by @addition-official in https://github.com/AKolenda/openxplorer/pull/427
 * feat(folder-options): Let a single click open items, as Windows' "Click items as follows" does by @AKolenda in https://github.com/AKolenda/openxplorer/pull/429
 * fix(terminal): Open the terminal the desktop is set to use, Ghostty and xdg-terminal-exec included by @AKolenda in https://github.com/AKolenda/openxplorer/pull/430
+* test(memory): Give the idle decoders two seconds before they are let go by @AKolenda in https://github.com/AKolenda/openxplorer/pull/432
 
 ## Packages
 Download them from the assets below.
