@@ -21,7 +21,7 @@
 %global debug_package %{nil}
 
 Name:           %{package_name}
-Version:        2.0.25
+Version:        2.0.26
 Release:        1%{?dist}
 Summary:        %{summary_text}
 # The program is AGPL-3.0-only; the Rust crates compiled into it are MIT,
@@ -145,6 +145,13 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %endif
 
 %changelog
+* Wed Nov 25 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.26-1
+- OpenXplorer 2.0.26: a single click can open items, "Open in Terminal" opens
+  the desktop's own terminal (Ghostty and xdg-terminal-exec included), the
+  System theme follows dark KDE, Cinnamon, Xfce and MATE desktops, and many
+  fixes make copying, menus, views, the address bar, errors, accessibility
+  and drives work as in Windows 11 File Explorer.
+
 * Tue Nov 24 2026 OpenXplorer contributors <openxplorer@users.noreply.github.com> - 2.0.25-1
 - OpenXplorer 2.0.25: Google Drive and OneDrive accounts from GNOME Online
   Accounts show as drives and can be browsed and copied from, read-only for
