@@ -23,12 +23,13 @@
 //! place among the four that may run at once, and never the browsing
 //! window. After a move, the moved items leave a cut clipboard.
 
+use gtk::gio::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::clipboard::{ClipboardFiles, ClipboardMode, TOO_LARGE_TO_PASTE};
 use ox_core::location::{parent_location, same_location};
 use ox_core::ops::{
     run_answered_items, run_free_items, run_resolved_transfer, scan_name_conflicts, starting_label,
-    ConflictScan, OperationContext, OpsError, TransferOutcome, UndoRecord,
+    ConflictScan, Operation, OperationContext, OpsError, TransferOutcome, UndoRecord,
 };
 use ox_core::transfer::{Cancellation, TransferMode};
 
@@ -172,7 +173,7 @@ impl BrowserWindow {
     /// outcome of a run that finished; `None` when another operation runs,
     /// the check failed or the user cancelled.
     pub(crate) async fn transfer_with_conflicts(&self, incoming: IncomingItems) -> Option<TransferOutcome> {
-        self.transfer_checked(incoming, None, None).await
+        self.transfer_checked(incoming, None, None, None).await
     }
 
     /// [`Self::transfer_with_conflicts`] for Send to (CMD-038): the copies
@@ -183,7 +184,7 @@ impl BrowserWindow {
         incoming: IncomingItems,
         selected: Vec<String>,
     ) -> Option<TransferOutcome> {
-        self.transfer_checked(incoming, Some(selected), None).await
+        self.transfer_checked(incoming, Some(selected), None, None).await
     }
 
     /// [`Self::transfer_with_conflicts`] for a move that is one step of a
@@ -198,13 +199,61 @@ impl BrowserWindow {
         incoming: IncomingItems,
         archive: &str,
     ) -> Option<TransferOutcome> {
-        self.transfer_checked(incoming, None, Some(archive)).await
+        self.transfer_checked(incoming, None, Some(archive), None).await
+    }
+
+    /// Merges the folder at `source` into the folder at `target`, as Yes
+    /// to Windows' "Confirm Folder Replace" does when a folder is renamed
+    /// to the name of another folder (OPS-008): its items move into
+    /// `target` as a move does, asking Replace or Skip about a file whose
+    /// name is taken there and merging folders of the same name, and
+    /// `source` goes once it is empty. An item skipped or not moved keeps
+    /// `source` where it is, so nothing is lost. One Undo, "Undo Rename",
+    /// makes `source` again and moves its items back. `target` is selected
+    /// afterwards.
+    pub(crate) async fn merge_folder_into(&self, source: &str, target: &str) {
+        let items = match folder_items(source).await {
+            Ok(items) => items,
+            Err(error) => {
+                self.show_message(&error);
+                return;
+            }
+        };
+        if items.is_empty() {
+            let origin = self.current_uri();
+            let removed = remove_if_empty(source).await;
+            let finished = removed.map(|()| FinishedOperation {
+                undo: Some(
+                    UndoRecord::Replace {
+                        operation: Operation::Rename,
+                        steps: Vec::new(),
+                        replaced: Vec::new(),
+                        replaced_since: 0,
+                        overwritten: Vec::new(),
+                    }
+                    .with_emptied_folder(source.to_owned()),
+                ),
+                select_after: vec![target.to_owned()],
+            });
+            self.conclude_operation_in(finished, origin.as_deref()).await;
+            return;
+        }
+        let incoming = IncomingItems {
+            mode: TransferMode::Move,
+            uris: items,
+            destination_folder: target.to_owned(),
+        };
+        self.transfer_checked(incoming, Some(vec![target.to_owned()]), None, Some(source))
+            .await;
     }
 
     /// Checks, asks, runs and reports `incoming`, and the journal records
     /// it: as the copy it is to the user when its items come `extracted_from`
     /// an archive, out of the extraction's private folder. Afterwards the
-    /// copies are selected, or the rows `kept` lists.
+    /// copies are selected, or the rows `kept` lists. With `merged_from`,
+    /// the folder whose items `incoming` moves in, that folder is removed
+    /// once the move emptied it, and Undo makes it again first
+    /// ([`Self::merge_folder_into`]).
     ///
     /// The job claims its action in the progress window first, as Windows
     /// shows "Copying 1 item from Downloads to Desktop" before it asks, so
@@ -215,6 +264,7 @@ impl BrowserWindow {
         incoming: IncomingItems,
         kept: Option<Vec<String>>,
         extracted_from: Option<&str>,
+        merged_from: Option<&str>,
     ) -> Option<TransferOutcome> {
         let incoming = incoming.without_items_already_there()?;
         let origin = self.current_uri();
@@ -253,10 +303,20 @@ impl BrowserWindow {
             .chain([destination.as_str()]);
         let changed = changed_folders(written, incoming.uris.iter().map(String::as_str));
         self.context().search_cache().folders_written(changed);
+        // The merged folder goes only when nothing is left in it.
+        let emptied = match (merged_from, &outcome) {
+            (Some(folder), Ok(done)) if !done.result.cancelled => {
+                remove_if_empty(folder).await.ok().map(|()| folder.to_owned())
+            }
+            _ => None,
+        };
         let finished = outcome.clone().map(|outcome| {
             let mut finished = FinishedOperation::of_transfer(outcome);
             if let Some(kept) = kept {
                 finished.select_after = kept;
+            }
+            if let Some(folder) = emptied {
+                finished.undo = finished.undo.map(|undo| undo.with_emptied_folder(folder));
             }
             if extracted_from.is_some() {
                 finished.undo = finished.undo.and_then(UndoRecord::as_extraction);
@@ -317,6 +377,45 @@ impl BrowserWindow {
         let progress = self.progress_reporter(&context.cancel);
         run_answered_items(scan, &answers, first, context, progress).await
     }
+}
+
+/// The URIs of everything in the folder at `uri`, hidden items included,
+/// links as themselves; the message to show when it cannot be listed.
+async fn folder_items(uri: &str) -> Result<Vec<String>, String> {
+    let folder = gtk::gio::File::for_uri(uri);
+    let listing = folder
+        .enumerate_children_future(
+            "standard::name",
+            gtk::gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+            gtk::glib::Priority::DEFAULT,
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut items = Vec::new();
+    loop {
+        let batch = listing
+            .next_files_future(256, gtk::glib::Priority::DEFAULT)
+            .await
+            .map_err(|error| error.to_string())?;
+        if batch.is_empty() {
+            return Ok(items);
+        }
+        items.extend(
+            batch
+                .iter()
+                .map(|info| folder.child(info.name()).uri().to_string()),
+        );
+    }
+}
+
+/// Removes the folder at `uri` when it is empty; a folder that holds
+/// anything is never removed (the file system refuses to), so nothing in
+/// it is lost.
+async fn remove_if_empty(uri: &str) -> Result<(), OpsError> {
+    gtk::gio::File::for_uri(uri)
+        .delete_future(gtk::glib::Priority::DEFAULT)
+        .await
+        .map_err(OpsError::from)
 }
 
 #[cfg(test)]

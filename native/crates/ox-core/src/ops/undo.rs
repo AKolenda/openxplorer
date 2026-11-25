@@ -236,6 +236,42 @@ impl Operation {
 }
 
 impl UndoRecord {
+    /// This move's record once `folder`, whose items it moved into a
+    /// folder of another name, was emptied and removed: a folder renamed
+    /// onto another folder's name is merged into it, as Windows offers.
+    /// One Undo, named Rename, makes `folder` again first, so the items
+    /// have it to go back into, then undoes the move and brings back what
+    /// it replaced; Redo moves them in again and removes the folder while
+    /// it is empty.
+    #[must_use]
+    pub fn with_emptied_folder(self, folder: String) -> UndoRecord {
+        let emptied = UndoRecord::EmptiedFolders {
+            folders: vec![folder],
+        };
+        match self {
+            UndoRecord::Replace {
+                steps,
+                replaced,
+                replaced_since,
+                overwritten,
+                ..
+            } => UndoRecord::Replace {
+                operation: Operation::Rename,
+                steps: std::iter::once(emptied).chain(steps).collect(),
+                replaced,
+                replaced_since,
+                overwritten,
+            },
+            other => UndoRecord::Replace {
+                operation: Operation::Rename,
+                steps: vec![emptied, other],
+                replaced: Vec::new(),
+                replaced_since: 0,
+                overwritten: Vec::new(),
+            },
+        }
+    }
+
     /// The operation the record reverses.
     pub fn operation(&self) -> Operation {
         match self {
@@ -733,5 +769,67 @@ mod tests {
                 case.record
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod merged_rename_tests {
+    use super::*;
+
+    fn moved(from: &str, to: &str) -> MovedItem {
+        MovedItem {
+            original_uri: from.to_owned(),
+            moved_uri: to.to_owned(),
+        }
+    }
+
+    /// A folder renamed onto another folder's name is merged into it: its
+    /// items move in, and the emptied folder goes. One Undo, "Undo
+    /// Rename", makes the folder again first, so the items have it to go
+    /// back into, then undoes the move; what the move replaced comes back
+    /// as after any Replace.
+    ///
+    /// parity: OPS-008
+    #[test]
+    fn a_merge_by_rename_is_undone_by_making_the_folder_then_moving_back() {
+        let alpha = "file:///srv/example/Alpha";
+        let movement = UndoRecord::Move {
+            items: vec![moved(&format!("{alpha}/a.txt"), "file:///srv/example/Beta/a.txt")],
+        };
+
+        let merged = movement.clone().with_emptied_folder(alpha.to_owned());
+        let replaced = UndoRecord::Replace {
+            operation: Operation::Move,
+            steps: vec![movement.clone()],
+            replaced: vec![PathBuf::from("/srv/example/Beta/b.txt")],
+            replaced_since: 42,
+            overwritten: vec!["file:///srv/example/Beta/c.txt".to_owned()],
+        }
+        .with_emptied_folder(alpha.to_owned());
+
+        let emptied = UndoRecord::EmptiedFolders {
+            folders: vec![alpha.to_owned()],
+        };
+        assert_eq!(
+            merged,
+            UndoRecord::Replace {
+                operation: Operation::Rename,
+                steps: vec![emptied.clone(), movement.clone()],
+                replaced: Vec::new(),
+                replaced_since: 0,
+                overwritten: Vec::new(),
+            }
+        );
+        assert_eq!(merged.title(), Operation::Rename.title());
+        assert_eq!(
+            replaced,
+            UndoRecord::Replace {
+                operation: Operation::Rename,
+                steps: vec![emptied, movement],
+                replaced: vec![PathBuf::from("/srv/example/Beta/b.txt")],
+                replaced_since: 42,
+                overwritten: vec!["file:///srv/example/Beta/c.txt".to_owned()],
+            }
+        );
     }
 }

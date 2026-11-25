@@ -88,6 +88,8 @@ mod recent_rows;
 mod recycle_bin;
 mod rename_question;
 mod renaming;
+mod renaming_by_pointer;
+mod renaming_folder_merge;
 mod renaming_several;
 mod resize_edges;
 mod restore_conflicts;

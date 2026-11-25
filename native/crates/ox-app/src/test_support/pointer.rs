@@ -119,6 +119,18 @@ impl Pointer {
         self.fake(BUTTON_RELEASE, button as u8, 0, 0);
     }
 
+    /// Presses and releases `button` where the pointer is in one go, as a
+    /// touchpad's tap or a quick click does: the X server has the release
+    /// before the window handles the press, so nothing the window does
+    /// after the press, such as an idle callback, comes before the release.
+    pub(crate) fn tap(&mut self, button: Button) {
+        let mut requests = self.fake_request(BUTTON_PRESS, button as u8, 0, 0);
+        requests.extend(self.fake_request(BUTTON_RELEASE, button as u8, 0, 0));
+        self.send(&requests);
+        self.sync();
+        wait_for(STEP_SETTLE);
+    }
+
     /// Presses and releases `key` on the private display's keyboard.
     pub(crate) fn tap_key(&mut self, key: gdk::Key) {
         let keycode = keycode_of(key);

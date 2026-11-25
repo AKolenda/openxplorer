@@ -231,6 +231,11 @@ mod imp {
         pub(super) icon_size: Cell<i32>,
         /// The text field in the name's place while the item is renamed.
         pub(super) name_editor: RefCell<Option<gtk::Entry>>,
+        /// The item the cell shows, so binding it again keeps a rename in
+        /// place going.
+        pub(super) bound: glib::WeakRef<crate::folder_view::item::FileItem>,
+        /// The row or tile marked `.renaming` while the name is edited.
+        pub(super) renaming_item: glib::WeakRef<gtk::Widget>,
         /// The item's custom icon (PROP-016) or preview (VIEW-057), shown
         /// in place of the art.
         pub(super) custom_icon: gtk::Picture,
@@ -382,6 +387,7 @@ impl FileCell {
         };
         if !self.has_css_class(GROUP_SLOT_CLASS) {
             self.hide_name_editor();
+            imp.bound.set(None);
             let row = self.slot_row();
             let hidden: Vec<(gtk::Widget, bool)> =
                 std::iter::successors(self.first_child(), WidgetExt::next_sibling)
@@ -750,11 +756,18 @@ impl FileCell {
     }
 
     /// Shows `item`: its art and its name, and in Tiles and Content its
-    /// type, size and date modified. A rename in place ends: the cell now
-    /// shows another item, or the same one listed again.
+    /// type, size and date modified. A rename in place ends when the cell
+    /// now shows another item, or the same one listed again; it goes on
+    /// when GTK binds the same item again because only whether it is
+    /// selected changed, as a click away from the name field does before
+    /// the field hears that it lost the keyboard (OPS-010).
     pub(crate) fn bind(&self, item: &FileItem) {
-        self.hide_name_editor();
         let imp = self.imp();
+        let is_same_item = imp.bound.upgrade().is_some_and(|bound| bound == *item);
+        imp.bound.set(Some(item));
+        if !is_same_item {
+            self.hide_name_editor();
+        }
         self.show_art(item);
         imp.label.set_text(&item.entry().name);
         if imp.shows_item_lines.get() {
@@ -845,6 +858,7 @@ impl FileCell {
     /// the name's own line in Tiles and Content.
     pub(crate) fn show_name_editor(&self, editor: &gtk::Entry) {
         self.hide_name_editor();
+        self.mark_item_being_renamed(true);
         let imp = self.imp();
         self.name_box().insert_child_after(editor, Some(&imp.label));
         imp.label.set_visible(false);
@@ -852,16 +866,23 @@ impl FileCell {
     }
 
     /// Whether `point`, in the cell's coordinates, is on the name's text
-    /// rather than beside it.
+    /// rather than beside it. A tile's name is centered in its label, so
+    /// the text is where Pango lays its lines out, not at the label's
+    /// left edge (OPS-011).
     pub(crate) fn name_text_contains(&self, point: gtk::graphene::Point) -> bool {
         let label = &self.imp().label;
         let Some(point) = self.compute_point(label, &point).filter(|_| label.is_visible()) else {
             return false;
         };
         let (left, top) = label.layout_offsets();
-        let (width, height) = label.layout().pixel_size();
+        let (_, lines) = label.layout().pixel_extents();
         #[expect(clippy::cast_precision_loss, reason = "label sizes are small")]
-        let text = gtk::graphene::Rect::new(left as f32, top as f32, width as f32, height as f32);
+        let text = gtk::graphene::Rect::new(
+            (left + lines.x()) as f32,
+            (top + lines.y()) as f32,
+            lines.width() as f32,
+            lines.height() as f32,
+        );
         text.contains_point(&point)
     }
 
@@ -891,6 +912,28 @@ impl FileCell {
         };
         self.name_box().remove(&editor);
         imp.label.set_visible(true);
+        self.mark_item_being_renamed(false);
+    }
+
+    /// Marks the row or tile that holds the cell while its name is edited
+    /// in place (`.renaming`), which then draws no focus outline, as
+    /// Windows 11 draws none around an item being renamed (OPS-010).
+    fn mark_item_being_renamed(&self, renaming: bool) {
+        let marked = &self.imp().renaming_item;
+        // The one marked, even when the cell has left it since.
+        if let Some(item) = marked.upgrade() {
+            item.remove_css_class(RENAMING_CLASS);
+        }
+        marked.set(None);
+        if !renaming {
+            return;
+        }
+        let item = std::iter::successors(self.parent(), WidgetExt::parent)
+            .find(|widget| matches!(widget.css_name().as_str(), "row" | "child"));
+        if let Some(item) = item {
+            item.add_css_class(RENAMING_CLASS);
+            marked.set(Some(&item));
+        }
     }
 
     /// Whether the name is cut short with an ellipsis where it is shown.
@@ -992,6 +1035,9 @@ pub(crate) fn connect_mapped_file_cells(
         }
     });
 }
+
+/// The CSS class of the row or tile whose name is edited in place.
+const RENAMING_CLASS: &str = "renaming";
 
 /// Whether `widget` is part of a grid slot that shows no item and is no
 /// heading's row (a blank), or the grid's child holding one: blank space
