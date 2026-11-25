@@ -13,7 +13,7 @@ use gtk::subclass::prelude::*;
 use ox_core::location::{same_location, TRASH_URI};
 
 use super::DropZone;
-use crate::window::file_drag::{is_being_dragged, is_draggable_location};
+use crate::window::file_drag::{drags_files, is_being_dragged, is_draggable_location};
 use crate::window::file_drop::DropDestination;
 use crate::window::session::TabId;
 use crate::window::sidebar::SidebarDropSpot;
@@ -165,7 +165,9 @@ impl BrowserWindow {
     /// Where a drop on the sidebar at `y` goes: a writable place's folder,
     /// or Quick access.
     pub(super) fn sidebar_spot(&self, y: f64) -> Option<DropSpot> {
-        let spot = self.sidebar().drop_spot_at(y)?;
+        // A file cannot be pinned: over a pinned folder, a drag of this
+        // app's that carries one goes into the folder (DND-014).
+        let spot = self.sidebar().drop_spot_where(y, !drags_files())?;
         if let SidebarDropSpot::Folder { uri, .. } = &spot {
             if !self.takes_drops(uri) {
                 return None;

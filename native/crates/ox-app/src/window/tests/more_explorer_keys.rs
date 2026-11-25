@@ -70,6 +70,8 @@ fn window_with_tree(fixture: &Fixture) -> (TestWindow, String) {
     // starts there and never lists the real disk.
     test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
     test.activate("folder-tree", None);
+    // The tree follows the folder shown (Windows' "Expand to current folder").
+    test.activate("folder-tree-option", Some("expand-to-current"));
     let reports = file_uri(&reports);
     let tree = test.window.folder_tree();
     wait_until("the tree selects the folder shown", || {

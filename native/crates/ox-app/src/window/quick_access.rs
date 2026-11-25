@@ -145,14 +145,16 @@ impl BrowserWindow {
         if !self.start_pinning() {
             return;
         }
+        // Saved with the order the pane shows, so the pin goes after the
+        // last one, as in Windows 11; without it, the standard folders the
+        // order did not name yet went after the new pin.
+        let shown_order: Vec<String> = quick_access.into_iter().map(|place| place.uri).collect();
         let change: Change = Box::new(move |settings| {
             let request = BookmarkRequest::new(uri, label);
-            // Not dropped on a row, so the pin goes at the end, and no
-            // sidebar order to save with it.
+            // Not dropped on a row, so the pin goes at the end.
             let drop_target: Option<&str> = None;
-            let shown_order: Option<&[String]> = None;
             settings
-                .pin_many(&[request], drop_target, shown_order)
+                .pin_many(&[request], drop_target, Some(&shown_order))
                 .map(|_pins| ())
         });
         self.context().change_settings(

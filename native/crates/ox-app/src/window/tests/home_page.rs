@@ -657,7 +657,12 @@ fn home_is_spaced_as_windows_11_home() {
         30,
         4,
     );
-    let folder = home_page::tile_folder(body(&test), "Documents");
+    // The first tile, which starts the row at the pane's edge.
+    let first = home_page::tile_names(body(&test))
+        .into_iter()
+        .next()
+        .expect("a tile");
+    let folder = home_page::tile_folder(body(&test), &first);
     near(
         "a tile's folder from the pane's edge",
         bounds(&test, &folder).x - page.x,

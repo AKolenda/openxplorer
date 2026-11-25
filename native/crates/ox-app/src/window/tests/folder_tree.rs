@@ -22,6 +22,8 @@ fn the_folder_tree_opens_down_to_the_folder_shown_and_opens_the_folder_clicked()
     test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
 
     test.activate("folder-tree", None);
+    // The tree follows the folder shown (Windows' "Expand to current folder").
+    test.activate("folder-tree-option", Some("expand-to-current"));
     let tree = test.window.folder_tree();
     let reports = file_uri(&reports);
     wait_until("the tree selects the folder shown", || {
@@ -100,6 +102,8 @@ fn a_real_drag_onto_a_folder_of_the_folder_tree_goes_into_it() {
     let test = TestWindow::open(&file_uri(&reports));
     test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
     test.activate("folder-tree", None);
+    // The tree follows the folder shown (Windows' "Expand to current folder").
+    test.activate("folder-tree-option", Some("expand-to-current"));
     let tree = test.window.folder_tree();
     let shown = file_uri(&reports);
     wait_until("the tree selects the folder shown", || {
@@ -128,5 +132,63 @@ fn a_real_drag_onto_a_folder_of_the_folder_tree_goes_into_it() {
     assert!(
         !reports.join("Draft.txt").exists(),
         "a plain drag within a drive moves"
+    );
+}
+
+/// A real double-click on a folder of the folder tree opens its
+/// subfolders, and another closes them, as a double-click on a folder of
+/// Windows Explorer's navigation pane does; it used to only open the
+/// folder again.
+///
+/// parity: SIDE-028
+#[gtk::test]
+fn a_real_double_click_on_a_folder_of_the_tree_opens_and_closes_it() {
+    use super::right_drag::PROBE;
+    use crate::test_support::harness::wait_for_frames;
+    use crate::test_support::pointer::{screen_point, Button, Pointer};
+
+    let fixture = Fixture::standard();
+    let mut pointer = Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
+    test.activate("folder-tree", None);
+    // The tree follows the folder shown (Windows' "Expand to current folder").
+    test.activate("folder-tree-option", Some("expand-to-current"));
+    let tree = test.window.folder_tree();
+    let shown = fixture.uri();
+    wait_until("the tree selects the folder shown", || {
+        tree.selected_uri().is_some_and(|uri| same_location(&uri, &shown))
+    });
+    wait_for_frames(&test.window, 3);
+    let list = tree_list(&test);
+    let closed = tree.outline();
+    let on = screen_point(
+        &mut pointer,
+        &list,
+        tree_row_middle(&list, "Example projects"),
+        PROBE,
+    );
+    let double_click = |pointer: &mut Pointer| {
+        // Apart from the last clicks by more than the double-click time.
+        crate::test_support::harness::wait_for(std::time::Duration::from_millis(700));
+        pointer.move_to(on.0, on.1);
+        for _ in 0..2 {
+            pointer.press(Button::Primary);
+            pointer.release(Button::Primary);
+        }
+    };
+
+    double_click(&mut pointer);
+    wait_until("the folder to open", || tree.outline().len() > closed.len());
+    let opened = tree.outline();
+    double_click(&mut pointer);
+    wait_until("the folder to close", || tree.outline() == closed);
+
+    assert_eq!(closed, ["Home", "  Example projects"]);
+    assert_eq!(opened, ["Home", "  Example projects", "    Documents"]);
+    assert_eq!(
+        test.window.current_uri(),
+        Some(fixture.uri()),
+        "it stays on the folder"
     );
 }

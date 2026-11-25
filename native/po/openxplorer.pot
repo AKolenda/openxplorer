@@ -549,6 +549,10 @@ msgstr ""
 msgid "The '{label}' device can now be safely removed from the computer."
 msgstr ""
 
+#: crates/ox-app/src/devices.rs
+msgid "This device is currently in use. Close any programs or windows that might be using the device, and then try again."
+msgstr ""
+
 #: crates/ox-app/src/dialog/fields.rs crates/ox-core/src/format.rs
 msgid "Not provided"
 msgstr ""
@@ -6647,6 +6651,10 @@ msgid "Select a folder or share to calculate its size."
 msgstr ""
 
 #: crates/ox-app/src/window/folder_tree/menu.rs
+msgid "Expand to current folder"
+msgstr ""
+
+#: crates/ox-app/src/window/folder_tree/menu.rs
 msgid "Limit to home folder"
 msgstr ""
 
@@ -7622,7 +7630,19 @@ msgid "Map network drive…"
 msgstr ""
 
 #: crates/ox-app/src/window/sidebar/menu.rs
+msgid "Show Network"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/menu.rs
+msgid "Show This PC"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/menu.rs
 msgid "Show all entries"
+msgstr ""
+
+#: crates/ox-app/src/window/sidebar/menu.rs
+msgid "Show all folders"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.

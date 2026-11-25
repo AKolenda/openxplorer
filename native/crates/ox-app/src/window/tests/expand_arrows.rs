@@ -50,6 +50,8 @@ fn window_with_every_arrow(fixture: &Fixture) -> TestWindow {
     save_expandable_folders(&test, true);
     test.window.imp().locations.borrow_mut().home = fixture.root().parent().map(Into::into);
     test.activate("folder-tree", None);
+    // The tree follows the folder shown (Windows' "Expand to current folder").
+    test.activate("folder-tree-option", Some("expand-to-current"));
     let reports = file_uri(&reports);
     wait_until("the tree selects the folder shown", || {
         test.window

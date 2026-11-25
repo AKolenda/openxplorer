@@ -14,10 +14,12 @@ use super::geometry::{bounds, laid_out, Bounds};
 use super::icons::{assert_same_colour, painted_colour};
 use crate::test_support::harness::{descendants, wait_for_frames, wait_until, Fixture, TestWindow};
 
-/// The sidebar row named `label`.
+/// The last sidebar row named `label`.
 fn row_named(test: &TestWindow, label: &str) -> gtk::ListBoxRow {
     let labels = test.window.sidebar().labels();
-    let index = labels.iter().position(|shown| shown == label);
+    // The last one: a folder pinned after a standard folder of the same
+    // name goes at the end of the pins.
+    let index = labels.iter().rposition(|shown| shown == label);
     let index = index.unwrap_or_else(|| panic!("{label} is in the sidebar: {labels:?}"));
     let index = i32::try_from(index).expect("a short sidebar");
     test.window

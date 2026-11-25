@@ -365,32 +365,41 @@ impl BrowserWindow {
     }
 
     /// Saves the sidebar width when the user finishes dragging it, never
-    /// for the window's own layout changes.
+    /// for the window's own layout changes. It watches the button itself:
+    /// `GtkPaned` claims the press on its handle, which cancels any
+    /// gesture of ours before the edge has moved, so a gesture's end never
+    /// saw a drag.
     fn save_sidebar_width_after_drags(&self) {
         let workspace = self.workspace();
-        let drag = gtk::GestureDrag::new();
-        drag.set_propagation_phase(gtk::PropagationPhase::Capture);
-        // Where the drag started, shared by its begin and end handlers.
-        let start = Rc::new(Cell::new(0));
-        drag.connect_drag_begin(glib::clone!(
-            #[strong]
-            start,
-            #[weak(rename_to = paned)]
-            workspace,
-            move |_, _, _| start.set(paned.position())
-        ));
-        drag.connect_drag_end(glib::clone!(
+        let buttons = gtk::EventControllerLegacy::new();
+        buttons.set_propagation_phase(gtk::PropagationPhase::Capture);
+        // Where the handle was when the primary button went down.
+        let start: Rc<Cell<Option<i32>>> = Rc::default();
+        buttons.connect_event(glib::clone!(
             #[weak(rename_to = window)]
             self,
             #[weak(rename_to = paned)]
             workspace,
-            move |_, _, _| {
-                if paned.position() != start.get() {
-                    window.save_preference(Preference::SidebarWidth(paned.position()));
+            #[upgrade_or]
+            glib::Propagation::Proceed,
+            move |_, event| {
+                let is_primary = event
+                    .downcast_ref::<gtk::gdk::ButtonEvent>()
+                    .is_some_and(|button| button.button() == gtk::gdk::BUTTON_PRIMARY);
+                match event.event_type() {
+                    gtk::gdk::EventType::ButtonPress if is_primary => start.set(Some(paned.position())),
+                    gtk::gdk::EventType::ButtonRelease if is_primary => {
+                        let moved = start.take().is_some_and(|from| from != paned.position());
+                        if moved {
+                            window.save_preference(Preference::SidebarWidth(paned.position()));
+                        }
+                    }
+                    _ => {}
                 }
+                glib::Propagation::Proceed
             }
         ));
-        workspace.add_controller(drag);
+        workspace.add_controller(buttons);
     }
 
     /// Saves one preference. A failure leaves the change in this window and

@@ -81,7 +81,16 @@ impl SidebarDropSpot {
 impl Sidebar {
     /// Where a drop at `y` of the list goes; `None` between sections and
     /// on a drive that is not mounted.
+    #[cfg(test)]
     pub(in crate::window) fn drop_spot_at(&self, y: f64) -> Option<SidebarDropSpot> {
+        self.drop_spot_where(y, true)
+    }
+
+    /// Where a drop at `y` of the list goes, as [`Self::drop_spot_at`];
+    /// a drag that cannot `pin`, because it carries a file, goes into a
+    /// pinned folder from anywhere on its row, and the "Pin to Quick
+    /// access" row of an empty Quick access takes none (DND-014).
+    pub(in crate::window) fn drop_spot_where(&self, y: f64, pin: bool) -> Option<SidebarDropSpot> {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let row = self.list().row_at_y(y as i32)?;
         let index = row.index();
@@ -89,7 +98,7 @@ impl Sidebar {
         let entry = entries.get(usize::try_from(index).ok()?)?;
         let uri = match &entry.target {
             RowTarget::Location(uri) => uri,
-            RowTarget::PinDropTail => return Some(SidebarDropSpot::Pin { index, before: None }),
+            RowTarget::PinDropTail if pin => return Some(SidebarDropSpot::Pin { index, before: None }),
             // A drive still to be mounted takes the drop and is mounted
             // first, as Dolphin's places panel does (DEV-010).
             RowTarget::MountVolume(id) if entry.section != Section::QuickAccess => {
@@ -98,13 +107,13 @@ impl Sidebar {
                     id: id.clone(),
                 });
             }
-            RowTarget::MountVolume(_) | RowTarget::SavedSearch(_) => return None,
+            RowTarget::PinDropTail | RowTarget::MountVolume(_) | RowTarget::SavedSearch(_) => return None,
         };
         // Recent files lists what the desktop recorded; nothing goes in.
         if uri == RECENT_URI {
             return None;
         }
-        if entry.section != Section::QuickAccess {
+        if entry.section != Section::QuickAccess || !pin {
             return Some(SidebarDropSpot::Folder {
                 index,
                 uri: uri.clone(),
@@ -184,14 +193,15 @@ impl Sidebar {
             .find(|class| row.has_css_class(class))
     }
 
-    /// The vertical middle of the row labelled `label`, in the list's
-    /// coordinates, for tests.
+    /// The vertical middle of the last row labelled `label`, in the list's
+    /// coordinates, for tests: a folder just pinned is the last of the
+    /// pins, below a standard folder of the same name.
     #[cfg(test)]
     pub(in crate::window) fn middle_of(&self, label: &str) -> f64 {
         let index = self
             .labels()
             .iter()
-            .position(|shown| shown == label)
+            .rposition(|shown| shown == label)
             .unwrap_or_else(|| panic!("the sidebar shows {label}"));
         let row = i32::try_from(index)
             .ok()
@@ -201,14 +211,14 @@ impl Sidebar {
         f64::from(bounds.y() + bounds.height() / 2.0)
     }
 
-    /// A point just inside the top edge of the row labelled `label`, in
-    /// the list's coordinates, where a drop pins before it, for tests.
+    /// A point just inside the top edge of the last row labelled `label`,
+    /// in the list's coordinates, where a drop pins before it, for tests.
     #[cfg(test)]
     pub(in crate::window) fn top_edge_of(&self, label: &str) -> f64 {
         let index = self
             .labels()
             .iter()
-            .position(|shown| shown == label)
+            .rposition(|shown| shown == label)
             .unwrap_or_else(|| panic!("the sidebar shows {label}"));
         let row = i32::try_from(index)
             .ok()

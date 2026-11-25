@@ -31,7 +31,7 @@ const KEY_STEP: i32 = 10;
 const SHIFT_KEY_STEP: i32 = 40;
 
 /// The handle `GtkPaned` draws between its children.
-fn paned_handle(paned: &gtk::Paned) -> Option<gtk::Widget> {
+pub(super) fn paned_handle(paned: &gtk::Paned) -> Option<gtk::Widget> {
     let start = paned.start_child();
     let end = paned.end_child();
     std::iter::successors(paned.first_child(), WidgetExt::next_sibling)

@@ -21,11 +21,13 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use ox_core::location::{is_smb_location, is_smb_share_root, is_virtual_location, same_location};
 use ox_core::search::Caching;
+use ox_core::settings::FolderTreeOptions;
 
 use crate::icons::{Art, Icon};
+use crate::locations::Page;
 use crate::window::cache_folder::cache_item;
 use crate::window::command_bar::{disconnect_network_drive, NetworkDrive};
-use crate::window::menu_popover::{MenuEntry, MenuItem, MenuStyle};
+use crate::window::menu_popover::{ItemCheck, MenuEntry, MenuItem, MenuStyle};
 use crate::window::place_menus::{caching_in, facts_in, finish_menu, PlaceMenu};
 use crate::window::saved_search::saved_search_menu;
 use crate::window::window_action::WindowAction;
@@ -157,6 +159,27 @@ pub(super) struct HeadMenuState {
     pub system_information: bool,
 }
 
+/// "Open in new tab" and "Open in new window" for `uri`.
+fn open_elsewhere_items(uri: &str) -> Vec<MenuEntry> {
+    vec![
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Open in new tab"),
+            Icon::Add,
+            WindowAction::OpenTab,
+            uri,
+        )
+        .into(),
+        MenuItem::with_text_target(
+            &ox_core::i18n::gettext("Open in new window"),
+            Icon::WindowNew,
+            WindowAction::OpenWindow,
+            uri,
+        )
+        .into(),
+    ]
+}
+
+/// "Open in new tab" and "Open in new window" for `uri`.
 /// The menu of This PC's or Network's row, which opens `uri`, laid out as
 /// Windows 11's navigation pane lays it out. Windows' Pin to Quick access
 /// and Pin to Start are left out: the app cannot pin a page and has no
@@ -175,22 +198,7 @@ pub(super) fn head_menu(section: Section, uri: &str, state: &HeadMenuState) -> V
         entries
             .push(MenuItem::with_text_target(&label, glyph, WindowAction::ToggleSidebarSection, key).into());
     }
-    entries.extend([
-        MenuItem::with_text_target(
-            &ox_core::i18n::gettext("Open in new tab"),
-            Icon::Add,
-            WindowAction::OpenTab,
-            uri,
-        )
-        .into(),
-        MenuItem::with_text_target(
-            &ox_core::i18n::gettext("Open in new window"),
-            Icon::WindowNew,
-            WindowAction::OpenWindow,
-            uri,
-        )
-        .into(),
-    ]);
+    entries.extend(open_elsewhere_items(uri));
     if section == Section::ThisPc {
         entries.push(
             MenuItem::new(
@@ -247,7 +255,32 @@ impl Sidebar {
     ) -> Option<(Vec<MenuEntry>, Vec<MenuItem>)> {
         #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
         let Some(row) = self.list().row_at_y(y as i32) else {
-            return Some((empty_space_menu(self.imp().anything_hidden.get()), Vec::new()));
+            let hidden_sections = self
+                .root()
+                .and_downcast::<BrowserWindow>()
+                .map(|window| {
+                    window
+                        .context()
+                        .settings_data()
+                        .preferences
+                        .hidden_sidebar_sections
+                })
+                .unwrap_or_default();
+            let shown = |section: Section| {
+                section
+                    .hiding()
+                    .is_none_or(|(key, _)| !hidden_sections.iter().any(|hidden| hidden == key))
+            };
+            let sections = ShownSections {
+                this_pc: shown(Section::ThisPc),
+                network: shown(Section::Network),
+            };
+            let menu = empty_space_menu(
+                self.imp().anything_hidden.get(),
+                self.folder_tree().options(),
+                sections,
+            );
+            return Some((menu, Vec::new()));
         };
         let index = usize::try_from(row.index()).ok()?;
         let entries = self.imp().entries.borrow();
@@ -436,6 +469,13 @@ impl Sidebar {
                 ));
             }
         }
+        // Home and Gallery open in a new tab or window, as every node of
+        // Windows 11's navigation pane does.
+        if entry.section == Section::Home && entry.menu.is_none() {
+            if let RowTarget::Location(uri) = &entry.target {
+                return Some(open_elsewhere_items(uri));
+            }
+        }
         let place = entry.menu.as_ref()?;
         let place_menu = place.entries(caching_in(place, self));
         // A drive the system keeps mounted may have nothing to offer.
@@ -511,10 +551,42 @@ fn is_own_pin(window: &BrowserWindow, uri: &str) -> bool {
         .any(|place| place.known_folder.is_none() && same_location(&place.uri, uri))
 }
 
-/// The menu of the sidebar's empty space: "Add entry…" (SIDE-031), "Show
-/// all entries" while `anything_hidden` (SIDE-010) and the icon sizes
+/// Whether This PC and Network are shown, for the empty space's menu.
+#[derive(Debug, Clone, Copy)]
+struct ShownSections {
+    this_pc: bool,
+    network: bool,
+}
+
+/// "Show This PC" or "Show Network": checked while the section is
+/// `shown`, which it then hides, else shows (SIDE-010).
+fn show_section_item(label: &str, glyph: Icon, section: Section, shown: bool) -> MenuEntry {
+    let key = section.hiding().map_or("", |(key, _)| key);
+    let action = if shown {
+        WindowAction::HideSection
+    } else {
+        WindowAction::ShowSection
+    };
+    let item = MenuItem::with_text_target(label, glyph, action, key);
+    MenuEntry::Item(MenuItem {
+        check: ItemCheck::Fixed(shown),
+        ..item
+    })
+}
+
+/// The menu of the sidebar's empty space, which starts as Windows 11's
+/// does: "Show This PC" and "Show Network", checked while `sections`
+/// shows them, "Show all folders", which shows the folder tree, and
+/// "Expand to current folder", checked as the tree's `options` say
+/// (SIDE-028); Windows' "Show libraries" is left out, as there are no
+/// libraries. Then this app's own: "Add entry…" (SIDE-031), "Show all
+/// entries" while `anything_hidden` (SIDE-010) and the icon sizes
 /// (SIDE-012).
-fn empty_space_menu(anything_hidden: bool) -> Vec<MenuEntry> {
+fn empty_space_menu(
+    anything_hidden: bool,
+    options: FolderTreeOptions,
+    sections: ShownSections,
+) -> Vec<MenuEntry> {
     let size = |label: &str, pixels: &str| {
         MenuItem::choice(label, Icon::Grid, WindowAction::SidebarIconSize, pixels).into()
     };
@@ -524,6 +596,26 @@ fn empty_space_menu(anything_hidden: bool) -> Vec<MenuEntry> {
         WindowAction::SidebarShowAll,
     );
     vec![
+        show_section_item(
+            &ox_core::i18n::gettext("Show This PC"),
+            Page::ThisPc.icon(),
+            Section::ThisPc,
+            sections.this_pc,
+        ),
+        show_section_item(
+            &ox_core::i18n::gettext("Show Network"),
+            Page::Network.icon(),
+            Section::Network,
+            sections.network,
+        ),
+        MenuItem::toggle(
+            &ox_core::i18n::gettext("Show all folders"),
+            Icon::Folder,
+            WindowAction::FolderTree,
+        )
+        .into(),
+        crate::window::folder_tree::expand_to_current_item(options),
+        MenuEntry::Divider,
         MenuItem::new(
             &ox_core::i18n::gettext("Add entry…"),
             Icon::Add,
@@ -591,7 +683,6 @@ mod tests {
     use gtk::prelude::ToVariant;
 
     use super::*;
-    use crate::window::menu_popover::ItemCheck;
 
     fn labels(entries: &[MenuEntry]) -> Vec<String> {
         entries

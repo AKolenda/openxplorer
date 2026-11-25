@@ -104,6 +104,9 @@ pub(crate) struct OutgoingDrag {
     payload: DragPayload,
     /// The art of the first item, for the drag icon.
     art: Art,
+    /// Whether anything dragged is not a folder, which cannot be pinned
+    /// (DND-014).
+    has_files: bool,
 }
 
 /// The mouse button a drag of files is made with.
@@ -152,6 +155,9 @@ thread_local! {
     /// take no drop while they are dragged, as in Windows Explorer: a drop
     /// on one of them goes to the folder shown.
     static DRAGGED: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
+    /// Whether the items this process drags now include a file, which a
+    /// drop between Quick access pins cannot pin (DND-014).
+    static DRAGGED_FILES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// Remembers `drag`, which just began from a folder view, the navigation
@@ -181,6 +187,12 @@ fn cancel_file_drag() -> bool {
 /// True while the item at `uri` is being dragged by this process.
 pub(crate) fn is_being_dragged(uri: &str) -> bool {
     DRAGGED.with(|dragged| dragged.borrow().contains(uri))
+}
+
+/// True while this process drags anything that is not a folder: such a
+/// drag cannot pin, so over a pinned folder it only goes into it.
+pub(crate) fn drags_files() -> bool {
+    DRAGGED_FILES.with(std::cell::Cell::get)
 }
 
 /// The items this process drags now, from any of its windows.
@@ -418,6 +430,7 @@ impl BrowserWindow {
         self.offer_drag(
             DragPayload::new(vec![uri], local_path),
             Art::Glyph(crate::icons::Icon::HardDrive),
+            false,
         )
     }
 
@@ -474,6 +487,7 @@ impl BrowserWindow {
         let items = model.selected_items();
         let entries: Vec<&Entry> = items.iter().map(FileItem::entry).collect();
         let art = items.first().map_or(Art::Folder, FileItem::art);
+        let has_files = entries.iter().any(|entry| !entry.is_dir);
         let uris: Vec<String> = entries.iter().map(|entry| entry.uri.clone()).collect();
         // Inside a ZIP opened like a folder, the drop gets copies, made
         // when it asks for them (ARC-026).
@@ -487,13 +501,15 @@ impl BrowserWindow {
                 text: String::new(),
                 remote_only: 0,
             };
-            self.imp()
-                .outgoing_drag
-                .replace(Some(OutgoingDrag { payload, art }));
+            self.imp().outgoing_drag.replace(Some(OutgoingDrag {
+                payload,
+                art,
+                has_files,
+            }));
             return Some(content);
         }
         let prepared = dragged_uris(&entries).and_then(|uris| DragPayload::new(uris, local_path));
-        self.offer_drag(prepared, art)
+        self.offer_drag(prepared, art, has_files)
     }
 
     /// What dragging the sidebar's folder at `uri` offers; `None` for a
@@ -510,7 +526,7 @@ impl BrowserWindow {
         } else {
             Art::Folder
         };
-        self.offer_drag(DragPayload::new(vec![uri], local_path), art)
+        self.offer_drag(DragPayload::new(vec![uri], local_path), art, false)
     }
 
     /// True while nothing holds drags back: no file operation runs or is
@@ -522,19 +538,23 @@ impl BrowserWindow {
             && !has_open_popover(self.upcast_ref())
     }
 
-    /// Remembers the drag `prepared` describes and returns its content, or
-    /// shows why it cannot start.
+    /// Remembers the drag `prepared` describes, which `has_files` when an
+    /// item is not a folder, and returns its content, or shows why it
+    /// cannot start.
     fn offer_drag(
         &self,
         prepared: Result<DragPayload, DragRefusal>,
         art: Art,
+        has_files: bool,
     ) -> Option<gdk::ContentProvider> {
         match prepared {
             Ok(payload) => {
                 let content = payload.content();
-                self.imp()
-                    .outgoing_drag
-                    .replace(Some(OutgoingDrag { payload, art }));
+                self.imp().outgoing_drag.replace(Some(OutgoingDrag {
+                    payload,
+                    art,
+                    has_files,
+                }));
                 Some(content)
             }
             Err(refusal) => {
@@ -564,6 +584,7 @@ impl BrowserWindow {
         self.pause_item_clicks(CLICKS_PAUSE_AFTER_START);
         let dragged: HashSet<String> = outgoing.payload.uris.iter().cloned().collect();
         DRAGGED.with(|now| now.replace(dragged.clone()));
+        DRAGGED_FILES.with(|files| files.set(outgoing.has_files));
         self.quiet_tooltips_for_drag(true);
         self.folder_pane().owners().show_dragged_items(dragged);
         if outgoing.payload.remote_only > 0 {
@@ -587,6 +608,7 @@ impl BrowserWindow {
             );
         }
         DRAGGED.with(|now| now.borrow_mut().clear());
+        DRAGGED_FILES.with(|files| files.set(false));
         self.quiet_tooltips_for_drag(false);
         for pane in self.folder_panes() {
             pane.owners().show_dragged_items(HashSet::new());
@@ -750,6 +772,7 @@ mod tests {
         test.window.imp().outgoing_drag.replace(Some(OutgoingDrag {
             payload,
             art: Art::Folder,
+            has_files: true,
         }));
 
         test.window.show_file_drag_feedback();
