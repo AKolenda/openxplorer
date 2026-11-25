@@ -21,8 +21,8 @@ use crate::thumbnails::kept_preview_count;
 /// parity: VIEW-057
 #[gtk::test]
 fn previews_and_picture_decoders_are_let_go_once_unused() {
-    // Long enough that the decoders are still waiting when the previews
-    // are counted on a slow runner, well inside the harness's wait.
+    // Long enough that the decoders are still waiting when the test looks
+    // for them on a slow runner, well inside the harness's wait.
     let _shortened = UnusedForTests::shorten_to(Duration::from_secs(2));
     let fixture = Fixture::standard();
     for number in 0..24_u32 {
@@ -47,11 +47,13 @@ fn previews_and_picture_decoders_are_let_go_once_unused() {
         kept_preview_count() > 0,
         "the previews are kept while they are used"
     );
+    // The first previews show while the rest of the folder is still being
+    // decoded, each picture by a decoder taken from the pool, so none may
+    // wait yet; they wait once the photos are done.
+    wait_until("decoder processes to wait for the next pictures", || {
+        !idle_decoder_ids().is_empty()
+    });
     let decoders = idle_decoder_ids();
-    assert!(
-        !decoders.is_empty(),
-        "decoder processes wait for the next pictures"
-    );
 
     let empty = tempfile::tempdir().expect("a temporary folder");
     let empty_uri = gtk::gio::File::for_path(empty.path()).uri();
