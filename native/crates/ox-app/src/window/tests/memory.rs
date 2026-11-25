@@ -21,7 +21,9 @@ use crate::thumbnails::kept_preview_count;
 /// parity: VIEW-057
 #[gtk::test]
 fn previews_and_picture_decoders_are_let_go_once_unused() {
-    let _shortened = UnusedForTests::shorten_to(Duration::from_millis(300));
+    // Long enough that the decoders are still waiting when the previews
+    // are counted on a slow runner, well inside the harness's wait.
+    let _shortened = UnusedForTests::shorten_to(Duration::from_secs(2));
     let fixture = Fixture::standard();
     for number in 0..24_u32 {
         let color = 0x2040_60ff_u32.wrapping_add(number.wrapping_mul(0x0a0b_0c00));
