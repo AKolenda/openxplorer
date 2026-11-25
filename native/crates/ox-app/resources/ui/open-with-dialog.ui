@@ -151,6 +151,18 @@
                           </object>
                         </child>
                         <child>
+                          <!-- Searches GNOME Software for an app for the file's
+                               type (OPEN-010), as Windows links to the Microsoft
+                               Store; shown while Software is installed. -->
+                          <object class="GtkButton" id="find_software_button">
+                            <property name="label" translatable="yes">Find an app in Software</property>
+                            <property name="visible">false</property>
+                            <style>
+                              <class name="link-button"/>
+                            </style>
+                          </object>
+                        </child>
+                        <child>
                           <!-- A command line instead of an application (OPEN-014). -->
                           <object class="GtkButton" id="custom_command_button">
                             <property name="label" translatable="yes">Use a custom command…</property>

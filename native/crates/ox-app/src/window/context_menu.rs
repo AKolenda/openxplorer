@@ -53,8 +53,9 @@ pub(super) use entries::{classic_look, more_options_item, SendToDrive, SendToTar
 /// opened from the keyboard points.
 const KEYBOARD_MENU_INSET: i32 = 40;
 
-/// The most applications the item menu offers beside Open with… (OPEN-013).
-const MENU_APPLICATIONS: usize = 3;
+/// The most applications the item menu's Open with offers (OPEN-013): the
+/// default and three others.
+const MENU_APPLICATIONS: usize = 4;
 
 /// True for an archive the app extracts itself, by its name or its type
 /// (`isZipEntry`): a ZIP, or a TAR plain or compressed (ARC-024).

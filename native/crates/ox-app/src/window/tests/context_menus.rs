@@ -103,12 +103,20 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
     assert!(menu.is_visible());
     assert_eq!(menu.style(), MenuStyle::Classic);
     assert!(menu.strip_labels().is_empty());
-    // "Open with <app>" rows, and "Edit in <text editor>", name whatever
-    // the machine has installed.
+    // Open with is a submenu of the apps the machine has for text, or
+    // "Open with…" alone without one; "Edit in <text editor>" names
+    // whatever the machine has installed.
     let rows: Vec<String> = menu
         .row_labels()
         .into_iter()
-        .filter(|label| !label.starts_with("Open with ") && !label.starts_with("Edit in "))
+        .filter(|label| !label.starts_with("Edit in "))
+        .map(|label| {
+            if label == "Open with" {
+                "Open with…".to_owned()
+            } else {
+                label
+            }
+        })
         .collect();
     assert_eq!(
         rows,
@@ -138,10 +146,12 @@ fn right_clicking_a_file_selects_it_and_opens_the_classic_menu() {
         ]
     );
     assert!(menu.row("Rename").is_sensitive());
-    assert!(
-        menu.row("Open with…").is_sensitive(),
-        "Open with works for one item"
-    );
+    let open_with = if menu.row_labels().iter().any(|label| label == "Open with") {
+        "Open with"
+    } else {
+        "Open with…"
+    };
+    assert!(menu.row(open_with).is_sensitive(), "Open with works for one item");
 }
 
 /// The classic menu is drawn as Windows 11 draws "Show more options":

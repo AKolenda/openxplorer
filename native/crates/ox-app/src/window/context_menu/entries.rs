@@ -400,9 +400,14 @@ fn open_with_chooser(facts: &ItemFacts) -> MenuItem {
     for_one_item(item(label, Icon::Apps, WindowAction::OpenWith), facts, true)
 }
 
-/// The classic menu's applications: one "Open with <app>" each, then
-/// Open with…, as Windows 10 lists them (OPEN-013).
+/// The classic menu's applications. For a file, the "Open with" submenu
+/// of Windows' "Show more options", as the compact menu has it; for a
+/// folder, which Windows offers no apps for, one "Open with <app>" each,
+/// then Open folder with… (OPEN-013).
 fn classic_application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
+    if facts.shape != ItemShape::Folder {
+        return vec![open_with_submenu(facts)];
+    }
     let mut entries: Vec<MenuEntry> = facts
         .applications
         .iter()
@@ -412,21 +417,24 @@ fn classic_application_items(facts: &ItemFacts) -> Vec<MenuEntry> {
     entries
 }
 
-/// The compact menu's "Open with" submenu, as Windows 11 Explorer's: the
-/// item's applications and "Choose another app" (Open with…), or "Open
-/// with…" alone when there are none. Windows 11's compact menu has no
-/// Open with on a folder; the classic menu keeps it.
+/// The compact menu's "Open with" submenu, as Windows 11 Explorer's. Windows
+/// 11's compact menu has no Open with on a folder; the classic menu keeps
+/// it.
 fn compact_open_with(facts: &ItemFacts) -> Option<MenuEntry> {
-    if facts.shape == ItemShape::Folder {
-        return None;
-    }
+    (facts.shape != ItemShape::Folder).then(|| open_with_submenu(facts))
+}
+
+/// A file's "Open with" submenu, as Windows 11 lists it: each of its apps
+/// by name, its default first, then "Choose another app" (Open with…);
+/// "Open with…" alone when it has none.
+fn open_with_submenu(facts: &ItemFacts) -> MenuEntry {
     let mut choices: Vec<MenuEntry> = facts
         .applications
         .iter()
-        .map(|application| for_one_item(open_with_application(application), facts, true).into())
+        .map(|application| for_one_item(application_choice(application), facts, true).into())
         .collect();
     if choices.is_empty() {
-        return Some(open_with_chooser(facts).into());
+        return open_with_chooser(facts).into();
     }
     let another = item(
         ox_core::i18n::gettext_static("Choose another app"),
@@ -440,7 +448,7 @@ fn compact_open_with(facts: &ItemFacts) -> Option<MenuEntry> {
         WindowAction::OpenWith,
         choices,
     );
-    Some(for_one_item(open_with, facts, true).into())
+    for_one_item(open_with, facts, true).into()
 }
 
 /// Share, the desktop's email share (CMD-037): offered where the desktop
@@ -1336,6 +1344,18 @@ pub(crate) fn background_menu(
         .into(),
     ]);
     entries
+}
+
+/// An app of the "Open with" submenu, named as Windows names it, which
+/// opens the item in `application` (OPEN-013).
+fn application_choice(application: &ApplicationChoice) -> MenuItem {
+    MenuItem::with_text_target(
+        &application.name,
+        Icon::Apps,
+        WindowAction::OpenWithApp,
+        &application.id,
+    )
+    .with_application_icon(application.icon.as_deref())
 }
 
 /// "Open with <app>", opening the item, or the folder when nothing is
@@ -2283,10 +2303,9 @@ mod tests {
         let MenuEntry::Item(open_with) = &entries[1] else {
             panic!("Open with is an item");
         };
-        assert_eq!(
-            labels(&open_with.submenu),
-            ["Open with Papers", "-", "Choose another app"]
-        );
+        // Windows 11 lists each app by its name, the file's default among
+        // them.
+        assert_eq!(labels(&open_with.submenu), ["Papers", "-", "Choose another app"]);
         let without_applications = labels(&item_menu(&file(), MenuStyle::Compact).entries);
         assert_eq!(without_applications[1], "Open with…");
     }
@@ -2397,16 +2416,18 @@ mod tests {
         }
     }
 
-    /// The item's other applications come before Open with…, each
-    /// opening the item in that application.
+    /// The classic menu, as Windows 10's and Windows 11's "Show more
+    /// options", has an "Open with" submenu after Open in Terminal: each
+    /// app by its name, opening the item in that app, then "Choose another
+    /// app"; a file with no apps has "Open with…" alone.
     ///
     /// parity: OPEN-013
     #[test]
-    fn the_items_other_applications_are_offered_before_open_with() {
+    fn the_classic_menu_lists_the_items_applications_under_open_with() {
         let viewer = ApplicationChoice {
             id: "org.gnome.Papers.desktop".to_owned(),
             name: "Papers".to_owned(),
-            is_default: false,
+            is_default: true,
             is_recommended: true,
             is_available: true,
             icon: None,
@@ -2418,12 +2439,31 @@ mod tests {
 
         let entries = item_menu(&facts, MenuStyle::Classic).entries;
 
-        assert_eq!(labels(&entries)[2..4], ["Open with Papers", "Open with…"]);
-        let MenuEntry::Item(open) = &entries[2] else {
+        let names = labels(&entries);
+        let open_with = names
+            .iter()
+            .position(|name| name == "Open with")
+            .expect("Open with");
+        assert_eq!(
+            names[open_with - 1],
+            "Open containing folder in Terminal",
+            "{names:?}"
+        );
+        let MenuEntry::Item(submenu) = &entries[open_with] else {
+            panic!("Open with is an item");
+        };
+        assert_eq!(labels(&submenu.submenu), ["Papers", "-", "Choose another app"]);
+        let MenuEntry::Item(open) = &submenu.submenu[0] else {
             panic!("an application is an item");
         };
         assert_eq!(open.action, WindowAction::OpenWithApp.into());
         assert_eq!(open.target, Some("org.gnome.Papers.desktop".to_variant()));
+        let without_applications = labels(&item_menu(&file(), MenuStyle::Classic).entries);
+        assert!(
+            without_applications.contains(&"Open with…".to_owned()),
+            "{without_applications:?}"
+        );
+        assert!(!without_applications.contains(&"Open with".to_owned()));
     }
 
     /// parity: OPEN-023

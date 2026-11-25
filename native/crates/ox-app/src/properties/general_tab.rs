@@ -307,12 +307,19 @@ fn opens_with_row(
     // window, which may be behind other windows.
     // The file's location now: a rename on this tab changes it.
     let uri = Rc::clone(uri);
+    let shown = value.downgrade();
     change.connect_clicked(move |button| {
         let Some(window) = PropertiesWindow::of(button) else {
             return;
         };
         if let Some(opener) = window.opener() {
-            opener.change_app_over(window.upcast_ref(), &uri.borrow());
+            // Opens with shows the new default at once.
+            let shown = shown.clone();
+            opener.change_app_over(window.upcast_ref(), &uri.borrow(), move |name| {
+                if let Some(label) = shown.upgrade() {
+                    label.set_text(name);
+                }
+            });
         }
     });
     row.append(&change);

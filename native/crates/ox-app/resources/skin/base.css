@@ -133,6 +133,14 @@ window.ox button.accent:active {
   border-color: transparent;
   color: @ox_on_accent_pressed;
 }
+/* A disabled accent button, such as Just once before an app is chosen,
+   is drawn as a disabled bordered one, as Windows grays a disabled
+   primary button, so it does not look clickable. */
+window.ox button.accent:disabled {
+  border-color: @ox_control_stroke;
+  background-color: @ox_control_fill;
+  color: @ox_text_disabled;
+}
 
 /* ---- Scroll bars (§4.12) ---- */
 /* Overlay bars are a 3px line 2px from the edge that widens to 8px under

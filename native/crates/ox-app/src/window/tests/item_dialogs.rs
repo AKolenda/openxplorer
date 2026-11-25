@@ -1917,6 +1917,93 @@ fn change_opens_open_with_over_the_properties_window() {
     cover.destroy();
 }
 
+/// Change... in Properties changes which app opens the file's type, as
+/// in Windows, and opens nothing: the chooser asks "Select a default app
+/// for .txt files", lists the current app under "Default app" and the
+/// others under "More options", and offers "Set default" instead of
+/// "Just once" and "Always"; Set default makes the chosen app the default, closes the
+/// chooser and shows the new app in Opens with.
+///
+/// parity: PROP-003, OPEN-012
+#[gtk::test]
+fn change_sets_the_default_app_without_opening_the_file() {
+    const ENTRIES: [(&str, &str); 2] = [
+        ("io.winspace.PropertiesViewer.desktop", "Properties Viewer"),
+        ("io.winspace.PropertiesEditor.desktop", "Properties Editor"),
+    ];
+    let applications = glib::user_data_dir().join("applications");
+    assert!(
+        applications.starts_with(std::env::temp_dir())
+            && glib::user_config_dir().starts_with(std::env::temp_dir()),
+        "tests run with private XDG folders"
+    );
+    fs::create_dir_all(&applications).expect("the private data folder");
+    for (id, name) in ENTRIES {
+        let entry =
+            format!("[Desktop Entry]\nType=Application\nName={name}\nExec=true %F\nMimeType=text/plain;\n");
+        fs::write(applications.join(id), entry).expect("the fixture entry");
+    }
+    wait_until("GIO to read the entries", || {
+        ENTRIES
+            .iter()
+            .all(|(id, _)| crate::integration::installed_application(id).is_some())
+    });
+    for (id, _) in ENTRIES {
+        crate::integration::installed_application(id)
+            .expect("installed")
+            .add_supports_type("text/plain")
+            .expect("the private config folder is writable");
+    }
+    crate::integration::installed_application(ENTRIES[0].0)
+        .expect("installed")
+        .set_as_default_for_type("text/plain")
+        .expect("the private config folder is writable");
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.context.record_launches();
+    test.select_named("Notes 2.txt");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Notes 2 Properties");
+    let general = general(&window);
+    assert_eq!(
+        value_after(&general, "Opens with:").as_deref(),
+        Some("Properties Viewer")
+    );
+
+    press(&general, "Change...");
+    let open_with = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|toplevel| toplevel.downcast::<OpenWithDialog>().ok())
+            .find(WidgetExt::is_visible)
+    };
+    wait_until("Open with", || {
+        open_with().is_some_and(|dialog| dialog.is_listed())
+    });
+    let dialog = open_with().expect("Open with is open");
+    assert_eq!(dialog.heading_text(), "Select a default app for .txt files");
+    assert_eq!(dialog.section_headings(), ["Default app", "More options"]);
+    assert_eq!(dialog.footer_buttons(), ["Set default", "Cancel"]);
+    dialog.select_named("Properties Editor");
+    settle();
+    capture_dialog(&dialog, "native-open-with-set-default.png");
+    press(&dialog, "Set default");
+
+    wait_until("Open with to close", || open_with().is_none());
+    let default = gtk::gio::AppInfo::default_for_type("text/plain", false).and_then(|app| app.id());
+    assert_eq!(default.as_deref(), Some(ENTRIES[1].0), "the default changed");
+    assert!(test.context.recorded_launches().is_empty(), "nothing opened");
+    wait_until("Opens with to follow", || {
+        value_after(&general, "Opens with:").as_deref() == Some("Properties Editor")
+    });
+    assert!(!window.is_closed(), "Properties stays open");
+
+    gtk::gio::AppInfo::reset_type_associations("text/plain");
+    for (id, _) in ENTRIES {
+        fs::remove_file(applications.join(id)).expect("the fixture entry");
+    }
+}
+
 /// Escape closes Properties as Cancel does.
 ///
 /// parity: PROP-001, ACC-004

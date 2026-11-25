@@ -246,8 +246,9 @@ fn choice_recording_launcher(launches: &LaunchChoices) -> super::Launcher {
 }
 
 /// Open with lists the installed applications for a file, chooses the
-/// default or the first available one, filters by name, and launches the
-/// chosen one after checking it again. "Always" is offered for files.
+/// default (any other app waits to be picked), filters by name, and
+/// launches the chosen one after checking it again. "Always" is offered
+/// for files.
 ///
 /// parity: OPEN-011, OPEN-012
 #[gtk::test]
@@ -276,16 +277,21 @@ fn open_with_lists_filters_and_launches_the_chosen_application() {
     assert!(offers_default, "Always is offered for a file");
     capture_dialog(&dialog, "native-open-with.png");
     let names = dialog.shown_names();
+    // Only the current default is chosen for the user, as in Windows; any
+    // other app waits to be picked.
+    if dialog.chosen().is_none() {
+        if let Some(first) = names.first() {
+            assert!(!dialog.controls_state().1, "Just once waits for a pick");
+            dialog.select_named(first);
+        }
+    }
     if let Some(chosen) = dialog.chosen() {
         dialog.click_just_once();
         wait_until("the launch", || !launches.borrow().is_empty());
         assert_eq!(*launches.borrow(), [chosen]);
         assert_eq!(*reports.borrow(), ["Opened with the selected application."]);
     } else {
-        assert!(
-            names.is_empty(),
-            "an application is chosen when one can open the file"
-        );
+        assert!(names.is_empty(), "every listed app can be picked");
         dialog.type_filter("no such application");
         assert!(dialog.shown_names().is_empty());
         dialog.close();
@@ -496,6 +502,7 @@ fn applications_start_with_the_windows_display() {
         target: LaunchTarget::Path(fixture.path("Notes 2.txt")),
         content_type: "text/plain".to_owned(),
         is_folder: false,
+        default_target: None,
     };
 
     let launcher = test.window.launcher_with(record_start);
