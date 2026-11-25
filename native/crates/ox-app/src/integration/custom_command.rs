@@ -14,7 +14,7 @@ use std::ffi::OsString;
 use std::path::Path;
 
 use gtk::glib;
-use ox_core::integration::{command_in_terminal, session_terminal, spawn_program, Sandbox};
+use ox_core::integration::{command_in_terminal, session_command_terminal, spawn_program, Sandbox};
 
 use super::applications::{LaunchTarget, PreparedLaunch};
 
@@ -95,7 +95,7 @@ pub(crate) fn run_custom_command(command: &CustomCommand, prepared: &PreparedLau
         LaunchTarget::Uri(_) => glib::home_dir(),
     };
     if command.in_terminal {
-        let terminal = session_terminal(sandbox).map_err(|error| error.to_string())?;
+        let terminal = session_command_terminal(sandbox).map_err(|error| error.to_string())?;
         let hold = command.keep_open.then_some(HOLD_SCRIPT_NAME);
         arguments = command_in_terminal(&terminal, &folder, hold, arguments);
     }

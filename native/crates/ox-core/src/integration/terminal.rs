@@ -11,7 +11,7 @@
 //!
 //! | Module | Responsibility |
 //! |---|---|
-//! | `emulator` | Which terminal: [`find_terminal`], [`Terminal`] |
+//! | `emulator` | Which terminal: [`find_terminal`], [`find_command_terminal`], [`Terminal`] |
 //! | `preference` | The desktop's configured terminals: [`desktop_terminals`] |
 //! | `directory` | Which folder: [`prepare_directory`], [`checked_directory`] |
 //! | `launch` | Starting it: [`launch_terminal`] |
@@ -29,7 +29,9 @@ use std::future::Future;
 
 pub use command::{command_in_terminal, HOLD_SCRIPT};
 pub use directory::{checked_directory, prepare_directory, DirectoryChecks, PreparedDirectory};
-pub use emulator::{find_terminal, ExecutableSearch, Terminal, TerminalKind, SYSTEM_PATH};
+pub use emulator::{
+    find_command_terminal, find_terminal, ExecutableSearch, Terminal, TerminalKind, SYSTEM_PATH,
+};
 pub use error::TerminalError;
 pub(crate) use launch::INHERITED_TERMINAL_VARIABLES;
 pub use launch::{launch_terminal, terminal_arguments, LaunchedTerminal};
@@ -48,8 +50,25 @@ use crate::transfer::Cancellation;
 ///
 /// As [`find_terminal`].
 pub fn session_terminal(sandbox: Sandbox) -> Result<Terminal, TerminalError> {
+    find_terminal(&session_search(sandbox))
+}
+
+/// The terminal of this session to run a program in (OPEN-019, OPEN-020):
+/// [`find_command_terminal`], which never picks `xdg-terminal-exec`, with
+/// the same preferences as [`session_terminal`].
+///
+/// # Errors
+///
+/// As [`find_command_terminal`].
+pub fn session_command_terminal(sandbox: Sandbox) -> Result<Terminal, TerminalError> {
+    find_command_terminal(&session_search(sandbox))
+}
+
+/// The host's programs as seen from `sandbox`, preferring the terminals
+/// the desktop is configured to use.
+fn session_search(sandbox: Sandbox) -> ExecutableSearch {
     let preferred = desktop_terminals(&DesktopTerminalConfig::of_session(sandbox));
-    find_terminal(&ExecutableSearch::for_sandbox(sandbox).preferring(preferred))
+    ExecutableSearch::for_sandbox(sandbox).preferring(preferred)
 }
 
 /// Prepares the folder of `uri`, finds the terminal and starts it, on a

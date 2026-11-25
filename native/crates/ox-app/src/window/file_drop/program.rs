@@ -37,7 +37,7 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::entry::Entry;
-use ox_core::integration::{command_in_terminal, session_terminal, spawn_program, Sandbox, Terminal};
+use ox_core::integration::{command_in_terminal, session_command_terminal, spawn_program, Sandbox, Terminal};
 use ox_core::network::local_path;
 
 use super::launcher;
@@ -399,7 +399,7 @@ impl BrowserWindow {
             ProgramKind::Binary | ProgramKind::Script => {
                 let terminal = match program.kind {
                     ProgramKind::Script => {
-                        Some(session_terminal(sandbox).map_err(|error| error.to_string())?)
+                        Some(session_command_terminal(sandbox).map_err(|error| error.to_string())?)
                     }
                     _ => None,
                 };

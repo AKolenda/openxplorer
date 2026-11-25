@@ -10,8 +10,8 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use ox_core::integration::{
-    find_terminal, launch_terminal, terminal_arguments, ExecutableSearch, PreferredTerminal,
-    PreparedDirectory, Sandbox, Terminal, TerminalError, TerminalKind, SYSTEM_PATH,
+    find_command_terminal, find_terminal, launch_terminal, terminal_arguments, ExecutableSearch,
+    PreferredTerminal, PreparedDirectory, Sandbox, Terminal, TerminalError, TerminalKind, SYSTEM_PATH,
 };
 use ox_core::location::file_uri;
 use serde_json::Value;
@@ -204,6 +204,47 @@ fn xdg_terminal_exec_is_the_last_resort() {
     let terminal = find_terminal(&ExecutableSearch::under(root.path())).expect("a terminal");
 
     assert_eq!(terminal.kind(), TerminalKind::XdgTerminalExec);
+}
+
+/// A program run in the terminal, such as a dropped-on script or a
+/// custom command, never goes through `xdg-terminal-exec`, which hands it
+/// to the terminal's own `-e` (Ghostty before 1.2 runs that as shell
+/// code): a configured terminal the app cannot start itself is passed
+/// over for one it can, and with no such terminal nothing runs.
+///
+/// parity: OPEN-019, OPEN-020, SAFE-015
+#[test]
+fn a_program_runs_only_in_a_terminal_the_app_starts_itself() {
+    let root = temporary_folder();
+    let usr_bin = root.path().join("usr/bin");
+    install_program(&usr_bin.join("xdg-terminal-exec"), "#!/bin/sh\n");
+    let search = ExecutableSearch::under(root.path()).preferring(vec![
+        PreferredTerminal::Listed(None),
+        PreferredTerminal::Listed(Some(TerminalKind::Alacritty)),
+    ]);
+
+    let alone = find_command_terminal(&search);
+    install_program(&usr_bin.join("xterm"), "#!/bin/sh\n");
+    let command = find_command_terminal(&search).expect("a terminal");
+    install_program(&usr_bin.join("ghostty"), "#!/bin/sh\n");
+    let listed = find_command_terminal(&search.clone().preferring(vec![
+        PreferredTerminal::Listed(None),
+        PreferredTerminal::Listed(Some(TerminalKind::Ghostty)),
+    ]))
+    .expect("a terminal");
+
+    assert!(matches!(alone, Err(TerminalError::NoTerminal)), "{alone:?}");
+    assert_eq!(command.kind(), TerminalKind::XTerm);
+    assert_eq!(
+        find_terminal(&search).expect("a terminal").kind(),
+        TerminalKind::XdgTerminalExec,
+        "Open in Terminal still goes through it"
+    );
+    assert_eq!(
+        listed.kind(),
+        TerminalKind::Ghostty,
+        "the next configured terminal the app knows"
+    );
 }
 
 /// A Debian alternative pointing to one of the added terminals is

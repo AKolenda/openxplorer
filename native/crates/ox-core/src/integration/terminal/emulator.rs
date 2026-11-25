@@ -207,6 +207,8 @@ impl TerminalKind {
     }
 
     /// How the terminal is told the program to run in it.
+    /// `xdg-terminal-exec` is never given one: [`find_command_terminal`]
+    /// passes it over.
     pub(super) fn command_style(self) -> CommandStyle {
         match self {
             Self::GnomeTerminal | Self::Console | Self::Ptyxis | Self::WezTerm | Self::XdgTerminalExec => {
@@ -360,10 +362,39 @@ impl ExecutableSearch {
 /// included, is looked for in [`SYSTEM_PATH`] only; `$PATH` and
 /// `$TERMINAL` are never read.
 ///
+/// For running a program in the terminal, use [`find_command_terminal`].
+///
 /// # Errors
 ///
 /// [`TerminalError::NoTerminal`] when no known terminal is installed.
 pub fn find_terminal(search: &ExecutableSearch) -> Result<Terminal, TerminalError> {
+    find_terminal_through(search, true)
+}
+
+/// The terminal to run a program in (OPEN-019, OPEN-020): as
+/// [`find_terminal`], but only a terminal the app starts itself, never
+/// `xdg-terminal-exec`.
+///
+/// Safety rule "names are never code": `xdg-terminal-exec` hands the
+/// program to the terminal with that terminal's own `-e`, and some, such
+/// as Ghostty before 1.2, join what follows `-e` into a `/bin/sh -c`
+/// command, so a dropped file's name or a custom command's argument could
+/// run as shell code. The app's own adapters pass each argument so that
+/// it stays one.
+///
+/// # Errors
+///
+/// [`TerminalError::NoTerminal`] when no known terminal is installed.
+pub fn find_command_terminal(search: &ExecutableSearch) -> Result<Terminal, TerminalError> {
+    find_terminal_through(search, false)
+}
+
+/// [`find_terminal`], with `xdg-terminal-exec` taking over only when
+/// `through_xdg_terminal_exec`.
+fn find_terminal_through(
+    search: &ExecutableSearch,
+    through_xdg_terminal_exec: bool,
+) -> Result<Terminal, TerminalError> {
     let installed = |kind: TerminalKind| {
         let executable = search.find(kind.program_name())?;
         Some(Terminal { executable, kind })
@@ -376,7 +407,7 @@ pub fn find_terminal(search: &ExecutableSearch) -> Result<Terminal, TerminalErro
         if let Some(terminal) = kind.and_then(installed) {
             return Ok(terminal);
         }
-        if listed {
+        if listed && through_xdg_terminal_exec {
             if let Some(terminal) = installed(TerminalKind::XdgTerminalExec) {
                 return Ok(terminal);
             }
@@ -385,9 +416,10 @@ pub fn find_terminal(search: &ExecutableSearch) -> Result<Terminal, TerminalErro
     if let Some(terminal) = debian_alternative(search) {
         return Ok(terminal);
     }
+    let last_resort = through_xdg_terminal_exec.then_some(TerminalKind::XdgTerminalExec);
     TerminalKind::ALL
         .into_iter()
-        .chain([TerminalKind::XdgTerminalExec])
+        .chain(last_resort)
         .find_map(installed)
         .ok_or(TerminalError::NoTerminal)
 }

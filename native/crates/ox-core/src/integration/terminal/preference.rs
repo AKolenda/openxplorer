@@ -8,7 +8,8 @@
 //! configuration folder before the system's, and the distribution's lists
 //! in the data folders last), and GNOME's
 //! `org.gnome.desktop.default-applications.terminal` `exec` key when the
-//! user set it. [`super::find_terminal`] starts a listed terminal the app
+//! user set it, which comes before the distribution's lists, since those
+//! are defaults the user did not choose. [`super::find_terminal`] starts a listed terminal the app
 //! knows itself, and hands one it does not know to `xdg-terminal-exec`;
 //! either is looked for in the system folders only.
 
@@ -105,35 +106,44 @@ pub enum PreferredTerminal {
 }
 
 /// The terminals the desktop is configured to use, most preferred first:
-/// the entries of the `xdg-terminals.list` files, in the order
-/// `xdg-terminal-exec` tries them, then GNOME's choice.
+/// the entries of the `xdg-terminals.list` files in the configuration
+/// folders, in the order `xdg-terminal-exec` tries them, then GNOME's
+/// choice when the user set it, then the entries of the distribution's
+/// lists in the data folders.
 pub fn desktop_terminals(config: &DesktopTerminalConfig) -> Vec<PreferredTerminal> {
-    let mut terminals: Vec<PreferredTerminal> = listed_entries(config)
-        .iter()
-        .map(|entry| PreferredTerminal::Listed(kind_of_desktop_entry(entry)))
-        .collect();
-    terminals.extend(gnome_terminal().map(PreferredTerminal::Gnome));
-    terminals
+    ordered_terminals(config, gnome_terminal())
 }
 
-/// The desktop entry IDs of every `xdg-terminals.list`, in the order
-/// `xdg-terminal-exec` tries them: folder by folder, the user's
-/// configuration first and the data folders' `xdg-terminal-exec`
-/// subfolders last, and in each folder the desktops' own lists before the
-/// shared one.
-fn listed_entries(config: &DesktopTerminalConfig) -> Vec<String> {
+/// [`desktop_terminals`], with `gnome` as GNOME's choice.
+fn ordered_terminals(config: &DesktopTerminalConfig, gnome: Option<TerminalKind>) -> Vec<PreferredTerminal> {
+    let data_folders: Vec<PathBuf> = config
+        .data_dirs
+        .iter()
+        .map(|folder| folder.join(DATA_SUBFOLDER))
+        .collect();
+    let listed = |folders: &[PathBuf]| {
+        listed_entries(config, folders)
+            .into_iter()
+            .map(|entry| PreferredTerminal::Listed(kind_of_desktop_entry(&entry)))
+    };
+    listed(&config.config_dirs)
+        .chain(gnome.map(PreferredTerminal::Gnome))
+        .chain(listed(&data_folders))
+        .collect()
+}
+
+/// The desktop entry IDs of the `xdg-terminals.list` files in `folders`,
+/// in the order `xdg-terminal-exec` tries them: folder by folder, and in
+/// each folder the desktops' own lists before the shared one.
+fn listed_entries(config: &DesktopTerminalConfig, folders: &[PathBuf]) -> Vec<String> {
     let names = config
         .desktops
         .iter()
         .map(|desktop| format!("{desktop}-{TERMINALS_LIST}"))
         .chain(std::iter::once(TERMINALS_LIST.to_owned()));
     let names: Vec<String> = names.collect();
-    let data_folders = config.data_dirs.iter().map(|folder| folder.join(DATA_SUBFOLDER));
-    config
-        .config_dirs
+    folders
         .iter()
-        .cloned()
-        .chain(data_folders)
         .flat_map(|folder| names.iter().map(move |name| folder.join(name)))
         .filter_map(|path| read_list(&path))
         .flatten()
@@ -213,9 +223,12 @@ mod tests {
     }
 
     fn listed(config: &DesktopTerminalConfig) -> Vec<Option<TerminalKind>> {
-        listed_entries(config)
-            .iter()
-            .map(|entry| kind_of_desktop_entry(entry))
+        ordered_terminals(config, None)
+            .into_iter()
+            .map(|terminal| match terminal {
+                PreferredTerminal::Listed(kind) => kind,
+                PreferredTerminal::Gnome(kind) => panic!("no GNOME choice was given: {kind:?}"),
+            })
             .collect()
     }
 
@@ -291,6 +304,43 @@ mod tests {
                 Some(TerminalKind::XTerm),
             ],
             "a list straight in a data folder is not read"
+        );
+    }
+
+    /// The terminal the user set in GNOME comes after the lists in the
+    /// configuration folders and before the distribution's lists in the
+    /// data folders, which are defaults the user did not choose.
+    ///
+    /// parity: OPEN-019
+    #[test]
+    fn the_users_gnome_choice_comes_before_the_distributions_lists() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        write(
+            &folder.path().join("data/xdg-terminal-exec/xdg-terminals.list"),
+            "org.gnome.Ptyxis.desktop\n",
+        );
+        let config = config(folder.path(), &["gnome"]);
+
+        assert_eq!(
+            ordered_terminals(&config, Some(TerminalKind::Alacritty)),
+            [
+                PreferredTerminal::Gnome(TerminalKind::Alacritty),
+                PreferredTerminal::Listed(Some(TerminalKind::Ptyxis)),
+            ]
+        );
+
+        write(
+            &folder.path().join("system/xdg-terminals.list"),
+            "kitty.desktop\n",
+        );
+        assert_eq!(
+            ordered_terminals(&config, Some(TerminalKind::Alacritty)),
+            [
+                PreferredTerminal::Listed(Some(TerminalKind::Kitty)),
+                PreferredTerminal::Gnome(TerminalKind::Alacritty),
+                PreferredTerminal::Listed(Some(TerminalKind::Ptyxis)),
+            ],
+            "a configuration folder's list still comes first"
         );
     }
 
