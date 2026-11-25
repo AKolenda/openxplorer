@@ -22,6 +22,7 @@ use ox_core::sizes::{scan_folder_size_in_background, FolderSize, ScanStatus, Siz
 use ox_core::transfer::Cancellation;
 
 use crate::folder_view::item::FileItem;
+use crate::folder_view::sorting::SortColumn;
 use crate::properties::{
     progress_text, size_key, FolderSizeState, FolderSizes, RunEnd, RunPosition, SizeScanStrip,
 };
@@ -374,7 +375,14 @@ impl BrowserWindow {
         for store in stores {
             update_rows_of(&store, uri, state);
         }
+        // GTK keeps a row's cells bound when its item is reported changed
+        // but is the same object: the Size cells on screen are bound again,
+        // so a folder measured while its row shows says its size at once.
+        for pane in self.folder_panes() {
+            pane.details().redraw_column(SortColumn::Size);
+        }
         self.update_details_pane();
+        self.update_status();
     }
 
     /// Forgets the folder at `uri` again, as if it had never been

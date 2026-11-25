@@ -274,8 +274,9 @@ impl StatusBar {
         check_updates.tooltip_text().unwrap_or_default().to_string()
     }
 
-    /// Shows the item count and, between two dividers, the selection, as
-    /// Windows writes "15 items | 1 item selected 4 bytes |".
+    /// Shows the item count, a divider, and the selection followed by
+    /// another, as Windows writes "15 items | 1 item selected 4 bytes |";
+    /// with nothing selected, "15 items |".
     pub(super) fn set_counts(&self, subject: StatusSubject, selected: SelectionSummary) {
         let imp = self.imp();
         imp.count.set_text(&count_text(subject));
@@ -283,7 +284,11 @@ impl StatusBar {
             StatusSubject::Page => String::new(),
             StatusSubject::Folder { .. } | StatusSubject::Search(_) => selection_text(selected),
         };
-        imp.selection_divider.set_visible(!selection.is_empty());
+        // Windows 11 ends the count with a divider whether or not
+        // something is selected ("3 items |"), and the selection with
+        // another ("3 items | 1 item selected |"; checked on Windows 11,
+        // 2026-11-22).
+        imp.selection_divider.set_visible(subject != StatusSubject::Page);
         imp.selection_end_divider.set_visible(!selection.is_empty());
         imp.selection.set_visible(!selection.is_empty());
         imp.selection.set_text(&selection);

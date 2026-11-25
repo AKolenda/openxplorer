@@ -1263,7 +1263,7 @@ fn searching_from_home_searches_the_home_folder_and_its_subfolders() {
     assert!(!shows_home_page(&test), "the results show, not Home");
     let count = test.status_count();
     assert!(
-        count.starts_with("1 result"),
+        count.starts_with("1 item"),
         "the status bar counts the results: {count}"
     );
 

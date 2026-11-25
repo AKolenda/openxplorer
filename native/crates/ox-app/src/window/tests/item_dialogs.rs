@@ -2066,6 +2066,44 @@ fn calculate_folder_size_shows_the_size_in_the_view_and_the_bar() {
     assert!(!strip.is_visible(), "Dismiss hides the finished bar");
 }
 
+/// A folder measured while its row is on screen shows its size in the
+/// Size column as soon as the scan ends, not only once the list is drawn
+/// again for another reason (the bar closing, a scroll).
+///
+/// parity: PROP-026
+#[gtk::test]
+fn a_measured_folder_shows_its_size_in_its_row_at_once() {
+    let fixture = Fixture::standard();
+    fs::write(fixture.path("Documents").join("a.txt"), b"0123456789").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    let view = test.window.folder_pane().details().clone();
+    let shows = |text: &str| {
+        descendants::<gtk::Label>(view.column_view())
+            .iter()
+            .any(|label| label.is_drawable() && label.text() == text)
+    };
+    wait_until("the rows drawn", || shows("Notes 2.txt") || shows("Notes 2"));
+    assert!(!shows("10 bytes"));
+    let pane = test.window.folder_pane();
+    let notes = test.position_of("Notes 2.txt");
+    pane.reveal(notes);
+    wait_until("the keyboard on Notes 2", || {
+        pane.focused_position() == Some(notes)
+    });
+
+    test.activate("calculate-folder-size-of", Some(&fixture.uri_of("Documents")));
+
+    let strip = test.window.size_strip();
+    wait_until("the scan to end", || strip.button_label() == "Dismiss");
+    wait_until("the size in the Documents row", || shows("10 bytes"));
+    wait_for_frames(&test.window, 2);
+    assert_eq!(
+        pane.focused_position(),
+        Some(notes),
+        "the keyboard stays where it was"
+    );
+}
+
 /// parity: PROP-026, PROP-029
 #[gtk::test]
 fn calculate_folder_sizes_measures_every_folder_shown_and_one_scan_runs_at_a_time() {

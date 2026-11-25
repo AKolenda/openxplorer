@@ -617,6 +617,7 @@ mod tests {
             folder_item_count: 1,
             locations: &locations,
             network: &[],
+            known_folders: &[],
             condensed_dates: false,
             preview_rules: PreviewRules {
                 remote: false,
@@ -650,6 +651,7 @@ mod tests {
             folder_item_count: 1,
             locations: &locations,
             network: &[],
+            known_folders: &[],
             condensed_dates: false,
             preview_rules: PreviewRules {
                 remote: false,

@@ -88,6 +88,7 @@ pub(super) fn build_entry(
         serialized_icon: serialized_icon(info),
         meta: Box::new(EntryMeta {
             recent_target: recent_target(uri, info),
+            trash_file: trash_file(uri, info),
             web_target: web_target(uri, info, kind),
             ..EntryMeta::from_info(info)
         }),
@@ -147,6 +148,17 @@ fn recent_target(uri: &str, info: &gio::FileInfo) -> Option<String> {
     }
     let target = normalise(&target).ok()?;
     (!is_virtual_location(&target)).then_some(target)
+}
+
+/// For an item in the Recycle Bin, the local file that holds it in the
+/// trash folder, which `GVfs` names in `standard::target-uri`; only a
+/// `file:` address with a local path is kept.
+fn trash_file(uri: &str, info: &gio::FileInfo) -> Option<String> {
+    if scheme(uri).as_deref() != Some("trash") {
+        return None;
+    }
+    let target = string_attribute(info, "standard::target-uri")?;
+    (scheme(&target).as_deref() == Some("file") && is_local_file_uri(&target)).then_some(target)
 }
 
 /// The web page a Google Drive document opens at: the `https:`
@@ -627,6 +639,22 @@ mod tests {
             .expect("valid ISO 8601 date")
             .to_unix();
         assert_eq!(item.trash_deletion_date, u64::try_from(expected).ok());
+    }
+
+    /// A recycled item keeps the file that holds it in the trash, which
+    /// `GVfs` names in `standard::target-uri`; no other item does.
+    #[test]
+    fn a_recycled_item_keeps_its_file_in_the_trash() {
+        let bin_file = "file:///home/demo/.local/share/Trash/files/notes.txt";
+        let info = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
+        let item = entry_for_uri("trash:///notes.txt", &with_target(info, bin_file));
+        assert_eq!(item.meta.trash_file.as_deref(), Some(bin_file));
+        let info = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
+        let remote = entry_for_uri("trash:///notes.txt", &with_target(info, "smb://nas/notes.txt"));
+        assert_eq!(remote.meta.trash_file, None, "only a local file");
+        let info = file_info(gio::FileType::Regular, "notes.txt", Some("text/plain"));
+        let plain = entry_for_uri("file:///srv/notes.txt", &with_target(info, bin_file));
+        assert_eq!(plain.meta.trash_file, None, "only a recycled item");
     }
 
     #[test]

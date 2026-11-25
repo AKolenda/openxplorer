@@ -22,6 +22,12 @@
 .details .detail-title + button.detail-button { margin-bottom: 18px; }
 .details .detail-section { font-weight: 600; margin-bottom: 10px; }
 .details grid + button.detail-button { margin-top: 20px; }
+/* Under Windows' hint (several items selected), Share and Properties
+   stand as clear of it as of a file's rows; GTK matches the sibling
+   combinator against the shown widgets only, so the hidden heading and
+   rows between them do not count. */
+.details .detail-hint + button.detail-button { margin-top: 20px; }
+.details .detail-hint + button.detail-button + button.detail-button { margin-top: 10px; }
 .details .detail-key { color: @ox_muted; }
 /* Windows' hint with nothing selected: an (i) and its text in a rounded
    box on the chrome color. */

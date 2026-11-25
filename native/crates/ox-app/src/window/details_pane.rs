@@ -20,6 +20,7 @@
 
 mod content;
 mod contents;
+mod drive;
 mod media;
 mod metadata;
 mod options_menu;
@@ -169,6 +170,13 @@ mod imp {
         pub(super) has_selection: Cell<bool>,
         /// The file rows of the content shown.
         pub(super) base_rows: RefCell<Vec<super::content::Property>>,
+        /// The drive selected on This PC whose space is read, if any.
+        pub(super) drive: RefCell<Option<String>>,
+        /// Its space rows, once read.
+        pub(super) drive_rows: RefCell<Vec<super::content::Property>>,
+        /// Counts the drives measured, so an answer for an earlier one is
+        /// dropped.
+        pub(super) drive_generation: Cell<u64>,
         /// The selected file's own details, read by the reader.
         pub(super) metadata: super::metadata::MetadataState,
         /// Counts the content shown, so a preview read for an earlier
@@ -177,6 +185,14 @@ mod imp {
         /// The content preview shown, which a redraw for the same item
         /// keeps (PROP-011).
         pub(super) shown_media: RefCell<Option<super::content::MediaPreview>>,
+        /// The wait for the selection to rest before its content preview
+        /// is read.
+        pub(super) media_timer: RefCell<Option<glib::SourceId>>,
+        /// Cancels the read of the content preview shown.
+        pub(super) media_cancellation: RefCell<Option<gtk::gio::Cancellable>>,
+        /// How many content previews were read, for tests.
+        #[cfg(test)]
+        pub(super) media_reads: Cell<u32>,
         /// The player of the recording shown, in its own process.
         pub(super) player: RefCell<Option<crate::media_player::PlayerStream>>,
         /// The app stopped the last player before changing its file: the
@@ -261,6 +277,7 @@ mod imp {
 
         fn dispose(&self) {
             self.obj().stop_reading();
+            self.obj().stop_media_reading();
             self.dispose_template();
         }
     }
@@ -435,10 +452,12 @@ impl DetailsPane {
         imp.has_selection
             .set(content.subject == content::Subject::Selection);
         imp.has_properties.set(content.has_properties);
+        self.aim_properties_button(content.properties_of.as_deref());
         imp.small_icon.set(content.small_icon);
-        imp.shows_hint.set(content.subject == content::Subject::Folder);
+        imp.shows_hint.set(content.hint);
         self.show_mode();
         imp.base_rows.replace(content.properties.clone());
+        self.follow_drive(content.measures_drive.as_deref());
         self.follow_metadata(content.metadata.as_ref());
         self.redraw_properties();
         let preview_only = imp.mode.get() == PaneMode::Preview;
@@ -464,6 +483,26 @@ impl DetailsPane {
         }
     }
 
+    /// Makes Properties open the Properties of `location`, a drive
+    /// selected on This PC, or else of the selection. The button lets go
+    /// of its action while its target changes: GTK checks an action's
+    /// parameter against the target at each change and warns while they
+    /// differ.
+    fn aim_properties_button(&self, location: Option<&str>) {
+        let button = &*self.imp().properties_button;
+        let (action, target) = match location {
+            Some(uri) => (WindowAction::PropertiesOf, Some(uri.to_variant())),
+            None => (WindowAction::Properties, None),
+        };
+        let name = action.detailed_name();
+        if button.action_name().as_deref() == Some(name.as_str()) && button.action_target_value() == target {
+            return;
+        }
+        button.set_action_name(None);
+        button.set_action_target_value(target.as_ref());
+        button.set_action_name(Some(&name));
+    }
+
     /// Shows Share while the window can share the selection (CMD-037):
     /// the desktop can share, and the selection is files it can attach.
     /// Unlike the command bar, which keeps a disabled Share, the pane
@@ -480,8 +519,8 @@ impl DetailsPane {
             .set_visible(details && imp.share_offered.get() && imp.has_selection.get());
     }
 
-    /// Draws the Details rows again: the file rows, then the rows the
-    /// reader found, then those the preview found (an image's Dimensions,
+    /// Draws the Details rows again: the file rows (a drive's Type and
+    /// space), then the rows the reader found, then those the preview found (an image's Dimensions,
     /// a recording's Length) that the reader did not give.
     pub(super) fn redraw_properties(&self) {
         let imp = self.imp();
@@ -490,7 +529,7 @@ impl DetailsPane {
             grid.remove(&child);
         }
         let mut shown: Vec<&str> = Vec::new();
-        for property in imp.base_rows.borrow().iter() {
+        for property in imp.base_rows.borrow().iter().chain(&self.shown_drive_rows()) {
             self.add_property(property.key, &property.name, &property.value);
             shown.push(property.key);
         }

@@ -212,6 +212,10 @@ struct Opening {
     target: String,
 }
 
+/// The class of a tile whose Properties Alt+Enter opens: the location
+/// its widget is named by.
+const PROPERTIES_TILE_CLASS: &str = "tile-properties";
+
 /// One tile of This PC and what it does.
 struct Tile {
     child: gtk::FlowBoxChild,
@@ -913,6 +917,11 @@ fn tile_group(page: &gtk::Box, group: Group, tiles: Vec<Tile>) {
     page.append(&flow);
     for tile in &tiles {
         flow.append(&tile.child);
+        // The Details pane's Properties opens what Alt+Enter does: the
+        // location a tile is named by ([`tile_facts`]).
+        if tile.properties.as_deref() == Some(tile.child.widget_name().as_str()) {
+            tile.child.add_css_class(PROPERTIES_TILE_CLASS);
+        }
     }
     let tiles = Rc::new(tiles);
     // The tiles are held by the box's own handlers; their gestures hold
@@ -987,6 +996,8 @@ pub(super) struct TileFacts {
     /// What the tile says under its name: "27.6 GB free of 252 GB", or
     /// that it connects when opened.
     pub(super) note: Option<String>,
+    /// The location Alt+Enter shows the Properties of, if it can.
+    pub(super) properties: Option<String>,
 }
 
 /// The tiles of This PC in `page`, or `None` when `page` shows another
@@ -1029,6 +1040,9 @@ fn tile_facts(child: &gtk::FlowBoxChild) -> TileFacts {
         name: text_with("tile-name").unwrap_or_default(),
         art,
         note: text_with("card-sub"),
+        properties: child
+            .has_css_class(PROPERTIES_TILE_CLASS)
+            .then(|| child.widget_name().to_string()),
     }
 }
 

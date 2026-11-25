@@ -281,7 +281,7 @@ fn is_customizable_mount(mount: &MountEntry) -> bool {
 
 /// What is mounted at the folder `file`, if it is a mount point of the
 /// kernel's mount table. Reading the table never mounts anything.
-fn mount_at(file: &gio::File) -> Option<MountFacts> {
+pub(crate) fn mount_at(file: &gio::File) -> Option<MountFacts> {
     let path = file.path()?;
     let path = path.to_str()?;
     let mounts = read_mount_table().ok()?;

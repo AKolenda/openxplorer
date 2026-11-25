@@ -77,7 +77,7 @@ fn typing_filters_a_folder_nobody_indexed_and_says_so() {
     assert_eq!(strip.caption(), "Current folder + subfolders");
     assert!(strip.offers_to_cache_folder());
     assert_eq!(strip.shown_note(), None);
-    assert_eq!(test.status_count(), "2 results");
+    assert_eq!(test.status_count(), "2 items");
     assert!(test.shows_column(SortColumn::FolderPath));
     assert!(!test.shows_column(SortColumn::Modified));
     capture(&test.window, "search-folder-filter.png");
@@ -97,7 +97,7 @@ fn a_folder_nobody_indexed_is_searched_with_its_subfolders() {
     test.search_for("notes");
 
     assert_eq!(test.names(), ["Notes 2.txt", "Notes 10.txt", "notes archive.TXT"]);
-    assert_eq!(test.status_count(), "3 results");
+    assert_eq!(test.status_count(), "3 items");
     let deep = test.window.folder_model().item(2).expect("a third result");
     let expected = fixture.path("Documents/Deep");
     assert_eq!(deep.folder_path().text, expected.to_string_lossy());
@@ -176,7 +176,7 @@ fn a_live_search_caps_the_initial_listing_and_reports_truncation() {
     test.search_for("match");
 
     assert_eq!(test.names().len(), crate::search::RESULT_LIMIT);
-    assert_eq!(test.status_count(), "500 results (first 500)");
+    assert_eq!(test.status_count(), "500 items (first 500)");
     assert_eq!(
         test.window.search_strip().shown_note().as_deref(),
         Some("First 500 results · narrow your search")
@@ -249,7 +249,7 @@ fn the_pin_keeps_the_search_when_changing_folders() {
     test.activate("go-to", Some(&fixture.uri_of("Documents")));
 
     wait_until("the search to run in the folder opened", || {
-        test.names() == ["notes inside.txt"] && test.status_count() == "1 result"
+        test.names() == ["notes inside.txt"] && test.status_count() == "1 item"
     });
     assert_eq!(test.window.search_box().entry().text().as_str(), "notes");
     strip.set_keeps_search(false);
@@ -293,7 +293,7 @@ fn an_indexed_folder_is_searched_in_the_cache_with_its_subfolders() {
         strip.shown_note().as_deref(),
         Some("Cached metadata · see update coverage in Settings")
     );
-    assert_eq!(test.status_count(), "3 results · Cached");
+    assert_eq!(test.status_count(), "3 items · Cached");
     let deep = test.window.folder_model().item(2).expect("a third result");
     let expected = fixture.path("Documents/Deep");
     assert_eq!(deep.folder_path().text, expected.to_string_lossy());
@@ -425,7 +425,7 @@ fn a_cache_change_keeps_the_selected_result_of_a_cached_search() {
     );
     assert_eq!(test.selected_names(), ["Notes 2.txt"]);
     assert_eq!(test.window.folder_model().selected_items(), selected);
-    assert_eq!(test.status_count(), "3 results · Cached");
+    assert_eq!(test.status_count(), "3 items · Cached");
 }
 
 /// Indexing another folder changes the cache every few seconds; a walk of

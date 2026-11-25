@@ -19,12 +19,11 @@ use crate::window::window_action::WindowAction;
 
 /// The fields the menu can turn off, in the order the pane shows them:
 /// each one's key (as the settings keep it), its name and its glyph.
-pub(super) const FIELDS: [(&str, &str, Icon); 7] = [
+pub(super) const FIELDS: [(&str, &str, Icon); 6] = [
     (keys::TYPE, message_id("Type"), Icon::Document),
     (keys::SIZE, message_id("Size"), Icon::HardDrive),
     (keys::LOCATION, message_id("File location"), Icon::Folder),
     (keys::MODIFIED, message_id("Date modified"), Icon::Clock),
-    (keys::CREATED, message_id("Date created"), Icon::Clock),
     (keys::DIMENSIONS, message_id("Dimensions"), Icon::Image),
     (keys::LENGTH, message_id("Length"), Icon::Video),
 ];

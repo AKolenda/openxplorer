@@ -113,3 +113,44 @@ fn write_thumbnail(uri: &str, path: &std::path::Path) {
         )
         .expect("the thumbnail");
 }
+
+/// Writes a `width` by `height` PNG called `name` into `fixture`.
+fn write_png(fixture: &Fixture, name: &str, width: i32, height: i32) {
+    let picture =
+        gdk_pixbuf::Pixbuf::new(gdk_pixbuf::Colorspace::Rgb, false, 8, width, height).expect("a picture");
+    picture.fill(0x3366_99ff);
+    picture.savev(fixture.path(name), "png", &[]).expect("png");
+}
+
+/// Arrowing through a folder of photos reads only the photo the
+/// selection stops on: a photo passed on the way is never decoded, as
+/// the Preview pane's pages wait for the selection to rest, so a folder
+/// of large photos stays as quick with the pane open as without it.
+///
+/// parity: PROP-011
+#[gtk::test]
+fn arrowing_through_photos_reads_only_the_one_the_selection_stops_on() {
+    let fixture = Fixture::standard();
+    let names: Vec<String> = (1..=6).map(|number| format!("Photo {number}.png")).collect();
+    for name in &names {
+        write_png(&fixture, name, 64, 48);
+    }
+    let test = window_with_pane(&fixture);
+    let pane = test.window.details_pane();
+    let before = pane.media_reads();
+
+    for name in &names {
+        test.select_named(name);
+    }
+
+    wait_until("the last photo's picture", || {
+        !descendants::<gtk::Picture>(pane).is_empty()
+    });
+    assert_eq!(
+        pane.media_reads() - before,
+        1,
+        "only the photo the selection stopped on is read"
+    );
+    let last = fixture.uri_of(names.last().expect("photos"));
+    assert!(pane.shows_media_of(&last), "the last photo is shown");
+}

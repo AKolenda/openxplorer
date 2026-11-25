@@ -146,7 +146,9 @@ pub(crate) enum CountProgress {
 }
 
 impl SearchCount {
-    /// "Searching…", or "12 results (first 500) · Cached".
+    /// "Searching…", or the results counted as Windows 11's status bar
+    /// counts them, as items: "12 items", then "(first 500)" when the
+    /// list stopped there and "· Cached" for the search cache's results.
     pub(crate) fn text(self) -> String {
         let CountProgress::Shown {
             is_truncated,
@@ -155,16 +157,16 @@ impl SearchCount {
         else {
             return ox_core::i18n::gettext("Searching…");
         };
-        let mut text = if self.shown == 1 {
-            "1 result".to_owned()
-        } else {
-            ox_core::i18n::format_message("{shown} results", &[("shown", &self.shown.to_string())])
-        };
+        let shown = u64::from(self.shown);
+        let mut text = ox_core::i18n::ngettext("{count} item", "{count} items", shown)
+            .replace("{count}", &ox_core::format::group_digits(shown));
         if is_truncated {
-            text.push_str(" (first 500)");
+            text.push(' ');
+            text.push_str(&ox_core::i18n::gettext("(first 500)"));
         }
         if is_cached {
-            text.push_str(" · Cached");
+            text.push_str(" · ");
+            text.push_str(&ox_core::i18n::gettext("Cached"));
         }
         text
     }
@@ -229,7 +231,9 @@ mod tests {
     }
 
     /// Ported from the search branch of `updateStatus` in
-    /// `v2.0.0:desktop/ui/app.js`.
+    /// `v2.0.0:desktop/ui/app.js`, counted as Windows 11's status bar
+    /// counts search results: as items, "1 item" or "1,204 items", the
+    /// way it counts a folder's.
     ///
     /// parity: VIEW-050
     #[test]
@@ -239,9 +243,10 @@ mod tests {
         let many_cached = report(SearchSource::Cache, shown(true));
 
         assert_eq!(running.count(3).text(), "Searching…");
-        assert_eq!(one_filtered.count(1).text(), "1 result");
-        assert_eq!(one_filtered.count(0).text(), "0 results");
-        assert_eq!(many_cached.count(500).text(), "500 results (first 500) · Cached");
+        assert_eq!(one_filtered.count(1).text(), "1 item");
+        assert_eq!(one_filtered.count(0).text(), "0 items");
+        assert_eq!(one_filtered.count(1204).text(), "1,204 items");
+        assert_eq!(many_cached.count(500).text(), "500 items (first 500) · Cached");
     }
 
     /// Ported from the empty state of `renderRows` in `v2.0.0:desktop/ui/app.js`.

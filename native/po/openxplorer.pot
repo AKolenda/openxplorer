@@ -573,7 +573,7 @@ msgstr ""
 msgid "Capacity"
 msgstr ""
 
-#: crates/ox-app/src/dialogs/format_drive.rs crates/ox-app/src/properties/drive_tab.rs
+#: crates/ox-app/src/dialogs/format_drive.rs crates/ox-app/src/properties/drive_tab.rs crates/ox-app/src/window/details_pane/content.rs
 msgid "File system"
 msgstr ""
 
@@ -963,7 +963,7 @@ msgstr ""
 msgid "Date accessed"
 msgstr ""
 
-#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-app/src/window/details_pane/content.rs crates/ox-app/src/window/details_pane/options_menu.rs crates/ox-core/src/grouping.rs
+#: crates/ox-app/src/folder_view/sort_roles.rs crates/ox-app/src/folder_view/sorting.rs crates/ox-app/src/properties/details_rows.rs crates/ox-core/src/grouping.rs
 msgid "Date created"
 msgstr ""
 
@@ -2876,6 +2876,14 @@ msgid "The search cache holds names only"
 msgstr ""
 
 #: crates/ox-app/src/search/report.rs
+msgid "(first 500)"
+msgstr ""
+
+#: crates/ox-app/src/search/report.rs
+msgid "Cached"
+msgstr ""
+
+#: crates/ox-app/src/search/report.rs
 msgid "Cached metadata · see update coverage in Settings"
 msgstr ""
 
@@ -2908,9 +2916,11 @@ msgid "Searching…"
 msgstr ""
 
 #. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/search/report.rs
-msgid "{shown} results"
-msgstr ""
+#: crates/ox-app/src/search/report.rs crates/ox-app/src/window/status_bar.rs
+msgid "{count} item"
+msgid_plural "{count} items"
+msgstr[0] ""
+msgstr[1] ""
 
 #: crates/ox-app/src/search/source.rs
 msgid "All cached folders"
@@ -5736,6 +5746,18 @@ msgstr ""
 msgid "Space"
 msgstr ""
 
+#: crates/ox-app/src/window/details_pane/content.rs
+msgid "Space free"
+msgstr ""
+
+#: crates/ox-app/src/window/details_pane/content.rs
+msgid "Space used"
+msgstr ""
+
+#: crates/ox-app/src/window/details_pane/content.rs
+msgid "Total size"
+msgstr ""
+
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/details_pane/content.rs
 msgid "{folder} ({count} item)"
@@ -7821,13 +7843,6 @@ msgstr ""
 #: crates/ox-app/resources/ui/status-bar.ui crates/ox-app/src/window/status_bar.rs
 msgid "Ready"
 msgstr ""
-
-#. Keep each {name} as it is: the app puts a value there.
-#: crates/ox-app/src/window/status_bar.rs
-msgid "{count} item"
-msgid_plural "{count} items"
-msgstr[0] ""
-msgstr[1] ""
 
 #. Keep each {name} as it is: the app puts a value there.
 #: crates/ox-app/src/window/status_bar.rs
