@@ -200,6 +200,7 @@ fn network_picture(place: NetworkPlace, size: i32) -> Picture {
         NetworkPlace::Share => Picture::plain(Icon::FileFolder, size),
         NetworkPlace::MappedDrive => Picture::coloured(Icon::HardDrive, size, &[MAPPED_DRIVE_CLASS]),
         NetworkPlace::Server => Picture::coloured(Icon::Server, size, &[SERVER_CLASS]),
+        NetworkPlace::Computer => Picture::coloured(Icon::Desktop, size, &[SERVER_CLASS]),
         NetworkPlace::KnownFolder(folder) => known_folder_picture(folder, size),
     }
 }

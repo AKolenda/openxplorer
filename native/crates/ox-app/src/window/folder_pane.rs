@@ -147,6 +147,13 @@ impl FolderPane {
         }));
     }
 
+    /// Whether the pane last showed Network's own style.
+    pub(crate) fn is_styled_for_network(&self) -> bool {
+        self.imp().styled.borrow().as_ref().is_some_and(|styled| {
+            ox_core::location::same_location(&styled.uri, ox_core::location::NETWORK_URI)
+        })
+    }
+
     /// Notes that the pane shows the folder style `from` shows, for the
     /// same tab, as it does once that pane's style is copied to it.
     pub(crate) fn copy_styled_for(&self, from: &Self) {

@@ -21,12 +21,12 @@ use ox_core::archive::{ArchiveBrowser, ArchiveEntryKind, ArchiveError, ArchiveLi
 use ox_core::entry::{self, Entry, EntryError};
 use ox_core::location::ArchiveLocation;
 use ox_core::location::RECENT_LOCATIONS_URI;
-use ox_core::network::DiscoveredServer;
+use ox_core::network::{service_row_name, DiscoveredComputer};
 use ox_core::transfer::Cancellation;
 
 use super::recent_locations::list_recent_locations;
 use crate::archive_view::{archive_browser, listing_notice};
-use crate::network::{discover_computers, Discoverer};
+use crate::network::{discover_computers, Discoverer, DiscoveryProblem};
 
 /// A running listing. Dropping it cancels the listing.
 #[derive(Debug)]
@@ -87,31 +87,86 @@ pub(crate) fn list_folder(
 }
 
 /// Lists Network (`network:///`) as Windows Explorer does, like a folder:
-/// the computers `discoverer` finds, each pass's new ones in a batch to
-/// `on_batch` (HOME-007, HOME-008). `on_done` gets why discovery could
-/// not run, or `None` when it ran; either way the listing succeeded, with
-/// what it found. Neither is called after the [`Listing`] is dropped,
-/// which drops the passes still to come.
+/// the computers `discoverer` finds, one row per device, each pass's new
+/// ones in a batch to `on_batch` (HOME-007, HOME-008), and every computer
+/// found so far to `on_pass` after each pass. `on_done` gets why
+/// discovery could not run, or `None` when it ran; either way the listing
+/// succeeded, with what it found. None is called after the [`Listing`] is
+/// dropped, which drops the passes still to come.
 pub(crate) fn list_network(
     discoverer: Discoverer,
     on_batch: impl Fn(Vec<Entry>) + 'static,
-    on_done: impl FnOnce(Option<String>) + 'static,
+    on_pass: impl Fn(&[DiscoveredComputer]) + 'static,
+    on_done: impl FnOnce(Option<DiscoveryProblem>) + 'static,
 ) -> Listing {
     Listing::spawn(async move {
         #[cfg(test)]
         crate::test_support::held::wait_while_held(ox_core::location::NETWORK_URI).await;
-        let discovered = discover_computers(&discoverer, |servers| {
-            on_batch(servers.into_iter().map(computer_entry).collect());
-        })
+        let discovered = discover_computers(
+            &discoverer,
+            |computers| on_batch(computers.into_iter().map(computer_entry).collect()),
+            on_pass,
+        )
         .await;
         on_done(discovered.err());
     })
 }
 
-/// The row of a computer Network found: it opens the server's shared
-/// folders.
-fn computer_entry(server: DiscoveredServer) -> Entry {
-    Entry::network_computer(server.uri, server.label)
+/// The row of a computer Network found: it opens the computer, `\\host`,
+/// which lists its shares and its other services.
+fn computer_entry(computer: DiscoveredComputer) -> Entry {
+    Entry::network_computer(computer.uri, computer.name)
+}
+
+/// The rows of `computer`'s services besides SMB, such as "Harbor Files
+/// (SFTP)", each a shortcut to the service.
+pub(crate) fn service_entries(computer: &DiscoveredComputer) -> Vec<Entry> {
+    computer
+        .services
+        .iter()
+        .map(|service| Entry::network_service(service.uri.clone(), service_row_name(service)))
+        .collect()
+}
+
+/// Lists the computer `computer` opens as (`\\host`): its SMB shares, as
+/// `GVfs`'s SMB browser lists them, after its other services, so nothing
+/// it advertised is lost (NET-036). A computer without an SMB server lists
+/// only its services; one whose SMB server cannot be listed still lists
+/// them, unless the server only needs mounting first, which `on_done`'s
+/// error asks the window to do.
+pub(crate) fn list_computer(
+    computer: DiscoveredComputer,
+    on_batch: impl Fn(Vec<Entry>) + 'static,
+    on_done: impl FnOnce(Result<(), EntryError>) + 'static,
+) -> Listing {
+    Listing::spawn(async move {
+        #[cfg(test)]
+        crate::test_support::held::wait_while_held(&crate::test_support::held::listing_key(&computer.uri))
+            .await;
+        let services = service_entries(&computer);
+        let has_services = !services.is_empty();
+        if has_services {
+            on_batch(services);
+        }
+        if !computer.has_smb {
+            on_done(Ok(()));
+            return;
+        }
+        let result = entry::enumerate_folder(&computer.uri, on_batch).await;
+        let result = match result {
+            Err(error @ (EntryError::NotMounted(_) | EntryError::Cancelled)) => Err(error),
+            Err(error) if has_services => {
+                glib::g_debug!(
+                    ox_core::LOG_DOMAIN,
+                    "The shares of {} could not be listed: {error}",
+                    computer.name
+                );
+                Ok(())
+            }
+            other => other,
+        };
+        on_done(result);
+    })
 }
 
 /// Cancels the archive reader's work when the listing that owns it is
@@ -284,9 +339,10 @@ mod tests {
         let batches = Rc::clone(&delivered);
         let done = Rc::clone(&delivered);
         let found = ox_core::network::Discovery {
-            servers: vec![DiscoveredServer {
+            servers: vec![ox_core::network::DiscoveredServer {
                 uri: "smb://nas/".into(),
                 label: "NAS".into(),
+                name: "NAS".into(),
                 host: "nas".into(),
             }],
             warnings: Vec::new(),
@@ -296,6 +352,7 @@ mod tests {
         drop(list_network(
             slow,
             move |_| batches.batches.set(batches.batches.get() + 1),
+            |_| {},
             move |_| done.done.set(true),
         ));
         crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));

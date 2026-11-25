@@ -16,6 +16,8 @@ use super::entries::{RowLevel, Section, SidebarEntry};
 /// expands (DND-027).
 const DRAG_EXPAND_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
 use super::{row, Sidebar};
+use crate::window::window_action::WindowAction;
+use crate::window::BrowserWindow;
 
 impl Sidebar {
     /// Whether `section` is collapsed.
@@ -65,11 +67,18 @@ impl Sidebar {
                 match entry.level {
                     RowLevel::Place => {}
                     RowLevel::Group => row::show_expanded(&row, section, !collapsed),
-                    RowLevel::Child => row.set_visible(!collapsed),
+                    RowLevel::Child | RowLevel::Grandchild => row.set_visible(!collapsed),
                 }
             }
         }
         self.highlight_location();
+        // Expanding Network looks for the computers on the network, as
+        // Windows' navigation pane does, when nothing found them yet.
+        if section == Section::Network && !collapsed {
+            if let Some(window) = self.root().and_downcast::<BrowserWindow>() {
+                window.discover_for_network_pane();
+            }
+        }
     }
 
     /// A double-click on the row of This PC or Network collapses its
@@ -260,6 +269,9 @@ impl Sidebar {
     /// Expands, or collapses, the section whose head row has keyboard
     /// focus; false when another row has it or the section already is.
     fn expand_focused_section(&self, expand: bool) -> bool {
+        if self.expand_focused_row(expand) {
+            return true;
+        }
         let focused = self.list().focus_child().and_downcast::<gtk::ListBoxRow>();
         let Some(section) = focused.and_then(|row| self.head_section(&row)) else {
             return false;
@@ -269,6 +281,39 @@ impl Sidebar {
         }
         self.collapse_section(section, !expand);
         true
+    }
+
+    /// Expands, or collapses, the row with keyboard focus that expands on
+    /// its own (a computer under Network), keeping the focus on it; false
+    /// when another row has it or the row already is.
+    fn expand_focused_row(&self, expand: bool) -> bool {
+        let Some(focused) = self.list().focus_child().and_downcast::<gtk::ListBoxRow>() else {
+            return false;
+        };
+        let Ok(index) = usize::try_from(focused.index()) else {
+            return false;
+        };
+        let expander = self
+            .imp()
+            .entries
+            .borrow()
+            .get(index)
+            .and_then(|entry| entry.expander.clone());
+        let Some(expander) = expander.filter(|expander| expander.expanded != expand) else {
+            return false;
+        };
+        let target = expander.uri.to_variant();
+        let toggled = self
+            .activate_action(&WindowAction::ToggleComputer.detailed_name(), Some(&target))
+            .is_ok();
+        // The rows were drawn again: the keyboard stays on the computer.
+        if let Some(row) = i32::try_from(index)
+            .ok()
+            .and_then(|index| self.list().row_at_index(index))
+        {
+            row.grab_focus();
+        }
+        toggled
     }
 
     /// Moves keyboard focus as Windows' tree does once a section is as
@@ -295,6 +340,10 @@ impl Sidebar {
                 (false, RowLevel::Child) => entries[..index]
                     .iter()
                     .rposition(|head| head.level == RowLevel::Group && head.section == entry.section),
+                // Left on a share moves to its computer.
+                (false, RowLevel::Grandchild) => entries[..index]
+                    .iter()
+                    .rposition(|parent| parent.level == RowLevel::Child && parent.expander.is_some()),
                 _ => None,
             }
         };
@@ -337,7 +386,7 @@ fn shown_row(entries: &[SidebarEntry], collapsed: &[Section], index: usize) -> u
     let Some(entry) = entries.get(index) else {
         return index;
     };
-    if entry.level != RowLevel::Child || !collapsed.contains(&entry.section) {
+    if !entry.level.is_inside() || !collapsed.contains(&entry.section) {
         return index;
     }
     entries
@@ -363,6 +412,7 @@ mod tests {
             pinned: false,
             menu: None,
             eject: None,
+            expander: None,
         }
     }
 

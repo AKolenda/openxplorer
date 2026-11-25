@@ -103,6 +103,7 @@ impl BrowserWindow {
         // Snapshot folders are read-only and mark the tabs inside them.
         context.snapshot_roots = self.context().previous_versions().snapshot_roots();
         context.network_mounts = self.network_mount_points();
+        context.computer_names = self.computer_names();
         self.imp().volumes.replace(rows);
         self.imp().locations.replace(context);
     }
@@ -112,6 +113,18 @@ impl BrowserWindow {
     /// that shows a place is redrawn.
     fn places_changed(&self) {
         self.imp().locations.borrow_mut().network_mounts = self.network_mount_points();
+        let names = self.computer_names();
+        let renamed = {
+            let mut locations = self.imp().locations.borrow_mut();
+            let renamed = locations.computer_names != names;
+            locations.computer_names = names;
+            renamed
+        };
+        if renamed {
+            // The tabs, crumbs and search box of a computer use its name.
+            self.render_tabs();
+            self.render_location();
+        }
         // The places show the icons chosen in File icons (LOOK-029) too.
         crate::icons::file_icons::follow(&self.context().settings_data().preferences.file_icons);
         self.render_places();
@@ -122,6 +135,17 @@ impl BrowserWindow {
         if self.current_uri().as_deref() == Some(ox_core::location::RECENT_LOCATIONS_URI) {
             self.refresh();
         }
+    }
+
+    /// The (host key, name) of each computer Network found, which names
+    /// its SMB locations.
+    fn computer_names(&self) -> Vec<(String, String)> {
+        self.context()
+            .network()
+            .known_computers()
+            .into_iter()
+            .map(|computer| (computer.key, computer.name))
+            .collect()
     }
 
     /// The mount points of the kernel's CIFS and SMB3 mounts, as last read:
@@ -181,8 +205,10 @@ impl BrowserWindow {
     pub(super) fn render_places(&self) {
         let places = self.places();
         let searches = self.context().saved_searches();
+        let computers = self.network_computers(&places);
         let mut entries = sidebar::sidebar_entries(
             &places,
+            &computers,
             &searches,
             &self.imp().locations.borrow(),
             self.context().settings_data().preferences.home_quick_access,

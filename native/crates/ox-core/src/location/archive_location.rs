@@ -227,6 +227,7 @@ mod tests {
             devices: Vec::new(),
             snapshot_roots: Vec::new(),
             network_mounts: Vec::new(),
+            computer_names: Vec::new(),
         };
         let root = ArchiveLocation::root(ZIP);
         let maps = root.member("tidewater/maps/");

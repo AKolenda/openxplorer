@@ -286,7 +286,7 @@ impl BrowserWindow {
             Stop::Places => self.sidebar().list().clone().upcast(),
             Stop::FolderTree => self.sidebar().folder_tree().clone().upcast(),
             Stop::SidebarResizer => self.sidebar_resizer().clone().upcast(),
-            Stop::NetworkInfoBar => self.network_info_bar().clone().upcast(),
+            Stop::NetworkInfoBar => self.network_info_bar().bar.clone().upcast(),
             Stop::SearchStrip => self.search_strip().clone().upcast(),
             Stop::Pane(side) => self.pane_on(side).clone().upcast(),
             Stop::Details => self.details_pane().clone().upcast(),

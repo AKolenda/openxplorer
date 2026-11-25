@@ -278,6 +278,14 @@ impl BrowserWindow {
             plain_action(WindowAction::About, BrowserWindow::show_about),
             plain_action(WindowAction::Help, BrowserWindow::show_help),
             plain_action(
+                WindowAction::NetworkDiscoveryHelp,
+                BrowserWindow::show_network_discovery_help,
+            ),
+            plain_action(
+                WindowAction::DismissNetworkInfoBar,
+                BrowserWindow::dismiss_network_info_bar,
+            ),
+            plain_action(
                 WindowAction::KeyboardShortcuts,
                 BrowserWindow::show_keyboard_shortcuts,
             ),

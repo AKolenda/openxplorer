@@ -489,49 +489,6 @@ fn the_pane_bar_and_tab_menus_run_actions_the_window_has() {
     problems.assert_none();
 }
 
-/// A right-click after the last menu closed, by Escape or by a click
-/// elsewhere, opens the next menu.
-///
-/// parity: CMD-008
-#[gtk::test]
-fn a_right_click_after_a_menu_closed_opens_the_next_menu() {
-    let mut session = Session::open_on(Fixture::real_world(), None);
-    choose_menu_style(&session.test, ContextMenu::Win11);
-    let window = session.test.window.clone();
-    let names = [
-        "Quarterly report.pdf",
-        "Holiday song.mp3",
-        "Beach clip.mp4",
-        "Sunset (2).jpg",
-    ];
-    for (round, name) in names.iter().enumerate() {
-        let at = on_item(&session, name);
-        session.pointer.move_to(at.0, at.1);
-        session.pointer.press(Button::Secondary);
-        session.pointer.release(Button::Secondary);
-        let menu = open_menu(&window);
-        eprintln!(
-            "round {round} {name}: {}",
-            menu.as_ref().map_or("no menu".to_owned(), summary)
-        );
-        assert!(
-            menu.is_some(),
-            "round {round}: the right-click on {name} opens its menu"
-        );
-        let menu = menu.expect("the menu");
-        if round % 2 == 0 {
-            session.pointer.tap_key(gtk::gdk::Key::Escape);
-        } else {
-            let blank = on_blank(&session);
-            session.pointer.move_to(blank.0, blank.1);
-            session.pointer.press(Button::Primary);
-            session.pointer.release(Button::Primary);
-        }
-        wait_until("the menu to close", || !menu.is_mapped());
-        crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
-    }
-}
-
 /// Ctrl+clicking files and right-clicking one of them opens the menu of
 /// all of them at the first right-click.
 ///

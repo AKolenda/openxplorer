@@ -96,6 +96,7 @@ impl Environment {
             devices,
             snapshot_roots: self.snapshot_roots.clone(),
             network_mounts,
+            computer_names: Vec::new(),
         }
     }
 }
@@ -238,9 +239,18 @@ fn display_paths_match_app_js() {
 /// parity: TAB-010
 #[test]
 fn tab_titles_match_app_js() {
+    // One deliberate difference: a computer's list of shares (an SMB
+    // server) is titled `\\\\PC`, as Windows 11 titles it, where app.js
+    // wrote the bare server name.
     assert_every_uri(
         "titleFor",
-        |case| case.title_for.clone(),
+        |case| {
+            if location::is_smb_server(&case.uri) {
+                format!("\\\\{}", case.title_for)
+            } else {
+                case.title_for.clone()
+            }
+        },
         LocationContext::title_for,
     );
 }
@@ -276,9 +286,21 @@ fn snapshot_locations_match_app_js() {
 /// parity: NAV-017
 #[test]
 fn breadcrumbs_match_app_js() {
+    // One deliberate difference: an SMB location starts with a Network
+    // crumb, as Windows 11's "Network > PC > share" does; an address that
+    // cannot be read stays one crumb of itself.
     assert_every_uri(
         "breadcrumbSegments",
-        UriCase::breadcrumbs,
+        |case| {
+            let mut crumbs = case.breadcrumbs();
+            if location::location_kind(&case.uri) == location::LocationKind::Smb
+                && location::ArchiveLocation::from_uri(&case.uri).is_none()
+                && crumbs.first().is_some_and(|crumb| crumb.label != case.uri)
+            {
+                crumbs.insert(0, Crumb::new("Network", location::NETWORK_URI));
+            }
+            crumbs
+        },
         LocationContext::breadcrumbs,
     );
 }

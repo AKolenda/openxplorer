@@ -213,6 +213,11 @@ impl BrowserWindow {
     /// Opens Properties of the selection or the folder on `tab`.
     pub(super) fn open_properties(&self, tab: PropertiesTab) {
         let selected = self.folder_pane().model().selected_items();
+        // A computer Network lists has no Properties, as in Windows: it is
+        // not a folder, and its menu lists none (B4).
+        if !selected.is_empty() && selected.iter().all(|item| item.entry().is_network_computer()) {
+            return;
+        }
         if selected.len() > 1 && tab != PropertiesTab::PreviousVersions {
             // Rows of Recent files are described as the files they stand
             // for, whose shares are mounted first, as one item's are.

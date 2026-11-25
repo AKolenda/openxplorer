@@ -2,49 +2,99 @@
 //! Windows' info bar on Network while discovery cannot run.
 //!
 //! Windows 11 lists Network like a folder, and when network discovery is
-//! off it shows a yellow bar above the items: "Network discovery is
-//! turned off. Network computers and devices are not visible. Click to
-//! change...". The app cannot turn discovery on by itself: it reads
-//! `GVfs`'s network browser, which needs the desktop's `GVfs` network
-//! services. So the bar says Windows' first two sentences when the browser
-//! cannot be read, gives GIO's own reason as its tooltip, and opens Help
-//! at "Network locations", which says what discovery needs, when it is
-//! clicked or activated with the keyboard. It spans the folder panes, as
-//! Windows' bar spans the item view, and hides once discovery runs again
-//! or another location is in front.
+//! off it shows a yellow bar under the command bar: "Network discovery
+//! and file sharing are turned off. Network computers and devices are not
+//! visible. Click to change...", with an × at the right. Clicking it
+//! opens a menu: "Turn on network discovery and file sharing" and "Open
+//! Network and Sharing Center".
+//!
+//! The app reads `GVfs`'s network browser, which needs the desktop's own
+//! discovery services (Avahi for DNS-SD, wsdd for WS-Discovery), and it
+//! never starts or changes a system service by itself (AGENTS.md: native
+//! actions stay opt-in). So the bar shows when the browser is missing or
+//! cannot be read, or when neither service is there and nothing was
+//! found; its tooltip says which, and its menu offers "How to turn on
+//! network discovery", the manual's steps, and Help. The × hides it until
+//! discovery runs again. It spans the folder panes, as Windows' bar spans
+//! the item view, and hides once discovery runs again or another location
+//! is in front.
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 
+use crate::icons::Icon;
 use crate::locations::Page;
 
+use super::menu_popover::{MenuEntry, MenuItem, MenuPopover};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
 
-/// What the bar says (Windows 11's words, then where clicking leads).
+/// What the bar says, in Windows 11's words.
 const DISCOVERY_OFF: &str = crate::i18n::message_id(
-    "Network discovery is turned off. Network computers and devices are not visible. Click to learn more...",
+    "Network discovery is turned off. Network computers and devices are not visible. Click to change...",
 );
 
-/// The bar: a flat, full-width button with its text at the start.
-fn info_bar() -> gtk::Button {
-    let text = gtk::Label::builder()
+/// The bar's menu, as Windows' bar opens one.
+fn bar_menu() -> Vec<MenuEntry> {
+    vec![
+        MenuItem::new(
+            &ox_core::i18n::gettext("How to turn on network discovery"),
+            Icon::ShieldLock,
+            WindowAction::NetworkDiscoveryHelp,
+        )
+        .into(),
+        MenuItem::new(
+            &ox_core::i18n::gettext("Open Help"),
+            Icon::Info,
+            WindowAction::Help,
+        )
+        .into(),
+    ]
+}
+
+/// The parts of the bar.
+#[derive(Debug)]
+pub(super) struct NetworkInfoBar {
+    /// The whole bar.
+    pub(super) bar: gtk::Box,
+    /// The text, a flat button that opens the menu.
+    pub(super) text: gtk::Button,
+}
+
+/// The bar: its text, a full-width flat button that opens the menu, then
+/// the × that hides it.
+fn info_bar() -> NetworkInfoBar {
+    let label = gtk::Label::builder()
         .label(ox_core::i18n::gettext_static(DISCOVERY_OFF))
         .xalign(0.0)
         .wrap(true)
         .build();
-    gtk::Button::builder()
-        .child(&text)
-        .action_name(WindowAction::Help.detailed_name())
+    let text = gtk::Button::builder()
+        .child(&label)
         .hexpand(true)
+        .css_classes(["info-bar-text"])
+        .build();
+    let close = gtk::Button::builder()
+        .child(&crate::icons::image(Icon::Dismiss, 16))
+        .tooltip_text(ox_core::i18n::gettext("Close"))
+        .action_name(WindowAction::DismissNetworkInfoBar.detailed_name())
+        .valign(gtk::Align::Center)
+        .css_classes(["info-bar-close"])
+        .build();
+    close.update_property(&[gtk::accessible::Property::Label(&ox_core::i18n::gettext("Close"))]);
+    let bar = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
         .visible(false)
         .css_classes(["info-bar"])
-        .build()
+        .build();
+    bar.append(&text);
+    bar.append(&close);
+    NetworkInfoBar { bar, text }
 }
 
 impl BrowserWindow {
     /// Network's info bar.
-    pub(super) fn network_info_bar(&self) -> &gtk::Button {
+    pub(super) fn network_info_bar(&self) -> &NetworkInfoBar {
         self.imp()
             .network_info_bar
             .get()
@@ -53,22 +103,45 @@ impl BrowserWindow {
 
     /// Puts the info bar above the folder panes, and the search strip.
     pub(super) fn install_network_info_bar(&self) {
-        let bar = info_bar();
+        let parts = info_bar();
         if let Some(column) = self.search_strip().parent().and_downcast::<gtk::Box>() {
-            column.prepend(&bar);
+            column.prepend(&parts.bar);
         }
-        self.imp().network_info_bar.set(bar).expect("installed once");
+        parts.text.connect_clicked(Self::popup_network_info_menu);
+        self.imp().network_info_bar.set(parts).expect("installed once");
+    }
+
+    /// Opens the bar's menu under its text.
+    fn popup_network_info_menu(text: &gtk::Button) {
+        let popover = MenuPopover::new(bar_menu());
+        popover.set_parent(text);
+        popover.set_position(gtk::PositionType::Bottom);
+        popover.set_halign(gtk::Align::Start);
+        popover.connect_closed(|popover| {
+            let closed = popover.clone();
+            glib::idle_add_local_once(move || closed.unparent());
+        });
+        popover.popup();
+    }
+
+    /// Hides the bar until discovery runs again (its ×).
+    pub(super) fn dismiss_network_info_bar(&self) {
+        self.network().dismiss_discovery_problem();
+        self.show_network_info_bar();
     }
 
     /// Shows the info bar while Network is in front and its last listing
-    /// could not discover computers; hides it otherwise.
+    /// could not discover computers, unless its × hid it; hides it
+    /// otherwise.
     pub(super) fn show_network_info_bar(&self) {
         let on_network = self
             .current_uri()
             .is_some_and(|uri| Page::from_uri(&uri) == Some(Page::Network));
-        let problem = on_network.then(|| self.network().discovery_problem()).flatten();
-        let bar = self.network_info_bar();
-        bar.set_tooltip_text(problem.as_deref());
-        bar.set_visible(problem.is_some());
+        let problem = on_network
+            .then(|| self.network().shown_discovery_problem())
+            .flatten();
+        let parts = self.network_info_bar();
+        parts.text.set_tooltip_text(problem.as_deref());
+        parts.bar.set_visible(problem.is_some());
     }
 }

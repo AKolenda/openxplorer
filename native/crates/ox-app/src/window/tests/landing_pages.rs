@@ -670,19 +670,20 @@ fn a_saved_share_tile_shows_the_art_of_its_sidebar_row() {
 #[gtk::test]
 fn a_server_row_shows_the_server_in_the_share_blue_on_the_network_bar() {
     let test = laid_out(Page::ThisPc.uri());
-    // Browsing a server lists it under Network for the session; recording
-    // it directly mounts nothing.
+    // Browsing a server lists it as a computer under Network for the
+    // session (SIDE-035); recording it directly mounts nothing.
     test.window.context().remember_network("smb://nas/");
-    let server = Art::for_network_location(NetworkKind::Server, "nas", Connection::Disconnected);
     let sidebar = test.window.sidebar();
+    sidebar.toggle_section("network");
+    let server = Art::COMPUTER;
     wait_until("the server's row", || arts_in(sidebar).contains(&server));
     wait_for_frames(&test.window, 2);
     let row_art = art_image_showing(sidebar, server).expect("the row is drawn");
     let glyph = descendants::<gtk::Image>(&row_art)
         .into_iter()
         .find(|image| image.has_css_class("server"))
-        .expect("the row shows the server glyph");
-    assert_eq!(glyph.icon_name().as_deref(), Some(Icon::Server.name()));
+        .expect("the row shows the computer glyph");
+    assert_eq!(glyph.icon_name().as_deref(), Some(Icon::Desktop.name()));
     assert_eq!(glyph.color().to_str(), "rgb(75,150,192)");
 }
 

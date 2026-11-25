@@ -387,7 +387,9 @@ impl BrowserWindow {
             return Ok(Resolved::Opened);
         }
         match activation_for(&fresh) {
-            Activation::Folder(uri) => Ok(Resolved::Folder(uri)),
+            // An SFTP server opens at the account's home, as it was just
+            // mounted (B6).
+            Activation::Folder(uri) => Ok(Resolved::Folder(super::loading::at_remote_home(uri).await)),
             Activation::Archive => Ok(Resolved::Archive(Box::new(fresh))),
             Activation::Refused(message) => Err(message.to_owned()),
             Activation::File => {

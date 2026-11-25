@@ -464,6 +464,15 @@ impl Dialog {
         }
     }
 
+    /// Shows the dialog with its primary (accent) button focused, so Enter
+    /// presses it, for a question whose answer is that button.
+    pub(crate) fn open_on_primary_button(&self) {
+        match self.default_widget() {
+            Some(primary) => self.open_focusing(&primary),
+            None => self.open(),
+        }
+    }
+
     /// Shows the dialog with `widget` focused, for a dialog whose first
     /// button must not be the one a reflexive Enter presses.
     pub(crate) fn open_focusing(&self, widget: &impl IsA<gtk::Widget>) {

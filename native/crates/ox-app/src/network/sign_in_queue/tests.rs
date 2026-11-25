@@ -282,6 +282,53 @@ fn a_question_offers_its_answers_and_cancel() {
     fixture.prompts.finish(&operation, MountOutcome::Failed);
 }
 
+/// An SSH host key's long question keeps every answer on screen: the
+/// message scrolls, and the buttons stay inside the dialog (B2).
+///
+/// parity: NET-013
+#[gtk::test]
+fn a_long_question_keeps_its_answers_visible() {
+    let fixture = PromptsFixture::new();
+    let (operation, _replies) = fixture.mount();
+    let choices = glib::StrV::from(vec!["Log In Anyway", "Cancel Login"]);
+    let message = "The identity of the remote computer (harbornas.local) is unknown.\n\
+        This happens when you log in to a computer the first time.\n\n"
+        .to_owned()
+        + &"The identity sent by the remote computer is SHA256:AAAABBBBCCCCDDDDEEEEFFFF.\n".repeat(30);
+
+    operation.emit_by_name::<()>("ask-question", &[&message, &choices]);
+    let dialog = fixture.shown();
+    dialog.present();
+    settle();
+
+    let height = f64::from(dialog.height());
+    // The answers row; the footer's own Cancel is hidden for a question.
+    let buttons: Vec<gtk::Button> = descendants::<gtk::Button>(&dialog)
+        .into_iter()
+        .filter(|button| {
+            button
+                .parent()
+                .is_some_and(|row| row.has_css_class("sign-in-choices"))
+        })
+        .collect();
+    let labels: Vec<String> = buttons
+        .iter()
+        .filter_map(|button| button.label().map(Into::into))
+        .collect();
+    assert_eq!(labels, ["Log In Anyway", "Cancel Login", "Cancel"]);
+    for button in buttons {
+        let bounds = button.compute_bounds(&dialog).expect("the button is drawn");
+        assert!(
+            bounds.y() >= 0.0 && f64::from(bounds.y() + bounds.height()) <= height,
+            "{:?} at {:?} is outside the {height}-pixel dialog",
+            button.label(),
+            bounds
+        );
+    }
+    dialog.press_choice(2);
+    fixture.prompts.finish(&operation, MountOutcome::Failed);
+}
+
 /// Challenges wait their turn and a duplicate is ignored; a waiting one
 /// that `GVfs` gives up on leaves the queue, and closing the one on
 /// screen shows the next.

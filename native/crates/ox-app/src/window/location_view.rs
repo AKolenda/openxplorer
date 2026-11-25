@@ -323,7 +323,8 @@ impl BrowserWindow {
         self.set_action_enabled(WindowAction::PinFolder, !on_page && !in_zip);
         self.render_address(uri);
         let search = self.search_box();
-        search.set_folder_title(&title);
+        // "Search PC" for a computer, whose tab says "\\\\PC".
+        search.set_folder_title(title.trim_start_matches('\\'));
         // Windows 11's Home searches the home folder (HOME-035); the other
         // pages search nothing.
         let searches_home = Page::from_uri(uri) == Some(Page::Home);

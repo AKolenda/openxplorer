@@ -32,6 +32,7 @@
 //! | `volumes` | Connect drives and phones, Disconnect, Eject and Safely remove | `winspace.py`, `volume_locations.py` |
 //! | `sign_out` | Sign out of a server | `winspace.py` |
 //! | `discovery` | Servers advertising on the local network | `winspace.py`, `gio_backend.py` |
+//! | `computers` | The services of one device merged into one computer | Windows' Network folder |
 //! | `visited` | Servers and shares browsed this session | `winspace.py` |
 //! | `usershare` | Sharing a local folder with Samba user shares | Dolphin's Share tab |
 //! | `recent_servers` | The recent-servers list GTK's Other Locations shares | GTK's places view |
@@ -55,6 +56,7 @@
 //! - Credentials are saved only after a successful mount (NET-015), and a
 //!   save racing a Sign out is discarded (SAFE-012).
 
+mod computers;
 mod credential;
 mod credential_store;
 mod discovery;
@@ -78,9 +80,14 @@ mod usershare;
 mod visited;
 mod volumes;
 
+pub use computers::{
+    computer_key_of, computers_among, service_row_name, DiscoveredComputer, ServiceProtocol,
+};
 pub use credential::{Credential, CredentialScope, Password};
 pub use credential_store::{CredentialGeneration, CredentialStore, ForgetScope, SMB_CREDENTIAL_SCHEMA};
-pub use discovery::{discover_servers, DiscoveredServer, Discovery, DISCOVERY_NOTE};
+pub use discovery::{
+    discover_servers, discovery_sources, DiscoveredServer, Discovery, DiscoverySources, DISCOVERY_NOTE,
+};
 pub use error::NetworkError;
 pub use keyring::{Keyring, KeyringCollection, KeyringError, NewSecret, SecretAttributes};
 pub use local_path::{fuse_export_location, fuse_export_path, local_path, outside_location};
@@ -107,7 +114,7 @@ pub use sign_out::{
     begin_sign_out, finish_sign_out, SignOutRegistry, SignOutReport, SignOutRequest, SigningOut,
 };
 pub use usershare::{validate_share_name, Usershare, UsershareError, Usershares};
-pub use visited::{session_network_root, VisitedNetwork};
+pub use visited::{is_at_or_inside, session_network_root, VisitedNetwork};
 pub use volumes::{
     eject_location, mount_volume, safely_remove_location, unmount_location, volume_id, volume_id_from,
 };

@@ -65,6 +65,11 @@
 .sidebar .side-entry { padding: 0 11px 0 19px; }
 /* Rows inside This PC and Network (.side-entry.indent). */
 .sidebar list.places > row.indent .side-entry { padding-left: 35px; }
+/* A computer under Network draws its own chevron in the 14px before its
+   icon, which stays in the column of the other rows inside Network; its
+   shares sit one 16px level further in (SIDE-035). */
+.sidebar list.places > row.indent.expandable .side-entry { padding-left: 21px; }
+.sidebar list.places > row.indent2 .side-entry { padding-left: 51px; }
 /* The dashed tail of an empty Quick access sits 7px further in (6px
    margin, 1px border), so its glyph takes the same column. */
 .sidebar list.places > row.quick-drop-tail .side-entry { padding-left: 12px; }

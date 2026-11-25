@@ -385,8 +385,10 @@ pub(crate) struct BrowserWindow {
     /// The in-window dialogs, Properties by tab, and the tabs that
     /// browse snapshots.
     pub(super) item_dialogs: super::item_dialogs::ItemDialogs,
+    /// The computers under Network in the navigation pane.
+    pub(super) network_pane: super::network_pane::NetworkPane,
     /// Network's info bar, shown while discovery cannot run.
-    pub(super) network_info_bar: OnceCell<gtk::Button>,
+    pub(super) network_info_bar: OnceCell<super::network_info_bar::NetworkInfoBar>,
     /// The rename a slow second click on a name scheduled (OPS-011).
     pub(super) slow_click_rename: super::slow_click_rename::SlowClickRename,
     /// Measured folder sizes and the running folder-size scan.

@@ -208,6 +208,11 @@ impl BrowserWindow {
     /// Remove saved location: deletes the saved entry only; the share stays
     /// mounted and its credentials stay saved (NET-017).
     fn remove_saved_location(&self, uri: &str) {
+        self.forget_saved_location(uri);
+    }
+
+    /// Deletes the saved entry of `uri` from the settings.
+    pub(super) fn forget_saved_location(&self, uri: &str) {
         let change = share_change(BookmarkAction::Remove, uri.to_owned(), String::new());
         self.change_network_settings(change);
     }

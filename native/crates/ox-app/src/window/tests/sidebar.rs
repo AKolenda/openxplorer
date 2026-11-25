@@ -381,6 +381,7 @@ fn a_volume_to_mount_is_not_dragged_and_a_drop_mounts_it() {
         pinned: false,
         menu: None,
         eject: None,
+        expander: None,
     };
     sidebar.set_entries(vec![volume]);
     wait_for_frames(&test.window, 3);
@@ -708,10 +709,11 @@ fn this_pc_and_network_menus_list_windows_items_in_its_order() {
             "Show more options",
         ]
     );
+    // Network starts collapsed, as in Windows 11 (SIDE-035).
     assert_eq!(
         menu_labels("Network"),
         [
-            "Collapse",
+            "Expand",
             "Open in new tab",
             "Open in new window",
             "Map network drive…",

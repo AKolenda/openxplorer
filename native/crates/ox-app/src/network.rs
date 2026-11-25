@@ -22,6 +22,6 @@ mod services;
 mod sign_in_queue;
 mod window_network;
 
-pub(crate) use discovery::{discover_computers, Discoverer};
+pub(crate) use discovery::{discover_computers, Discoverer, DiscoveryProblem};
 pub(crate) use services::{read_stable_mounts, user_recent_servers, NetworkServices};
 pub(crate) use window_network::WindowNetwork;

@@ -88,14 +88,18 @@ fn an_smb_path_has_server_share_and_folder_crumbs_with_the_uri_encoded() {
         .iter()
         .filter_map(|crumb| crumb.label().map(Into::into))
         .collect();
-    assert_eq!(labels[1..], ["Team files", "Q3 #1"]);
-    assert!(crumb_target(&crumbs[0]).starts_with("smb://nas:1445/"));
-    assert_eq!(crumb_target(&crumbs[2]), "smb://nas:1445/Team%20files/Q3%20%231");
+    // Network > server > share > folder, as Windows starts the address of
+    // a computer's share at Network.
+    assert_eq!(labels[0], "Network");
+    assert_eq!(labels[2..], ["Team files", "Q3 #1"]);
+    assert_eq!(crumb_target(&crumbs[0]), "network:///");
+    assert!(crumb_target(&crumbs[1]).starts_with("smb://nas:1445/"));
+    assert_eq!(crumb_target(&crumbs[3]), "smb://nas:1445/Team%20files/Q3%20%231");
     let dividers: Vec<gtk::Label> = descendants::<gtk::Label>(&crumb_box(&test))
         .into_iter()
         .filter(|label| label.has_css_class("crumb-divider"))
         .collect();
-    assert_eq!(dividers.len(), 2, "server › share › folder");
+    assert_eq!(dividers.len(), 3, "Network › server › share › folder");
     assert!(
         dividers.iter().all(|label| label.text().is_empty()),
         "dividers are drawn as Explorer's chevrons, not as the path's '\\'"

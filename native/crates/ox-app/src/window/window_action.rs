@@ -143,6 +143,11 @@ pub(crate) enum WindowAction {
     /// Opens the offline user manual at the topic of what the window
     /// shows (F1, CMD-033).
     Help,
+    /// Opens the manual at "Turning on network discovery", from Network's
+    /// info bar.
+    NetworkDiscoveryHelp,
+    /// Hides Network's info bar until discovery runs again.
+    DismissNetworkInfoBar,
     /// Opens the keyboard shortcuts window (Ctrl+?, CMD-032).
     KeyboardShortcuts,
     About,
@@ -200,6 +205,9 @@ pub(crate) enum WindowAction {
     /// Collapses or expands the sidebar section whose key is the string
     /// target: the chevron of This PC or Network (SIDE-033).
     ToggleSidebarSection,
+    /// Expands or collapses the computer under Network whose location is
+    /// the string target, to its shares (SIDE-035).
+    ToggleComputer,
     /// Shows the hidden sidebar section whose key is the string target.
     ShowSection,
     /// Hides the sidebar place at the string target (SIDE-010).
@@ -617,6 +625,8 @@ impl WindowAction {
             WindowAction::Share => "share",
             WindowAction::About => "about",
             WindowAction::Help => "help",
+            WindowAction::NetworkDiscoveryHelp => "network-discovery-help",
+            WindowAction::DismissNetworkInfoBar => "dismiss-network-info-bar",
             WindowAction::KeyboardShortcuts => "keyboard-shortcuts",
             WindowAction::ContextMenu => "context-menu",
             WindowAction::View => "view",
@@ -639,6 +649,7 @@ impl WindowAction {
             WindowAction::SidebarShowAll => "sidebar-show-all",
             WindowAction::HideSection => "hide-section",
             WindowAction::ToggleSidebarSection => "toggle-sidebar-section",
+            WindowAction::ToggleComputer => "toggle-computer",
             WindowAction::ShowSection => "show-section",
             WindowAction::HidePlace => "hide-place",
             WindowAction::ShowPlace => "show-place",

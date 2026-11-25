@@ -63,8 +63,11 @@ pub(crate) enum NetworkPlace {
     Share,
     /// A share mapped as a drive: the drive glyph.
     MappedDrive,
-    /// An SMB server listing its shares: the server glyph.
+    /// An SMB server listing its shares, or a service inside a computer:
+    /// the server glyph.
     Server,
+    /// A computer Network lists: the monitor, as Windows draws one.
+    Computer,
     /// A standard folder relocated onto a network mount: its own glyph, in
     /// its colour (`networkIcon(19, glyph)` in app.js).
     KnownFolder(KnownFolder),
@@ -113,6 +116,12 @@ impl Art {
         connection: Connection::Connected,
     });
 
+    /// A computer Network lists: the monitor on the bar.
+    pub(crate) const COMPUTER: Art = Art::Network(NetworkArt {
+        place: NetworkPlace::Computer,
+        connection: Connection::Connected,
+    });
+
     /// The art of a listed item: a computer (a shortcut to a server, as
     /// Network lists one) or a share in a server listing on the bar, a
     /// folder, a ZIP archive as a folder with the zip badge, else the
@@ -126,6 +135,9 @@ impl Art {
     /// The art of a listed item as [`Art::for_entry`] draws it when no
     /// icon is chosen in File icons.
     pub(crate) fn usual_for_entry(entry: &Entry) -> Self {
+        if entry.is_network_computer() {
+            return Art::COMPUTER;
+        }
         if entry.is_dir && entry.is_virtual {
             return if entry.kind == EntryKind::Shortcut {
                 Art::SERVER
@@ -285,7 +297,17 @@ mod tests {
         share.is_virtual = true;
         assert_eq!(Art::for_entry(&share), Art::SHARE);
         let computer = Entry::network_computer("smb://studio-nas/".into(), "studio-nas".into());
-        assert_eq!(Art::for_entry(&computer), Art::SERVER, "a computer Network lists");
+        assert_eq!(
+            Art::for_entry(&computer),
+            Art::COMPUTER,
+            "a computer Network lists"
+        );
+        let service = Entry::network_service("sftp://studio-nas:2222/".into(), "Studio (SFTP)".into());
+        assert_eq!(
+            Art::for_entry(&service),
+            Art::SERVER,
+            "a service inside a computer"
+        );
     }
 
     /// A network location and the picture it shows on the bar.

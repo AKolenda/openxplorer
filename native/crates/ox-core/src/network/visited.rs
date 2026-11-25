@@ -59,6 +59,15 @@ impl VisitedNetwork {
             .retain(|share| host_name(&share.uri).as_deref() != Some(host));
     }
 
+    /// Forgets the shares mapped this session at or inside `root`, as
+    /// Disconnect of a mapped drive ends its mapping in Windows. Returns
+    /// whether one was mapped.
+    pub fn forget_mapped_inside(&mut self, root: &str) -> bool {
+        let before = self.mapped.len();
+        self.mapped.retain(|share| !is_at_or_inside(&share.uri, root));
+        self.mapped.len() != before
+    }
+
     /// The remembered roots, oldest first.
     pub fn iter(&self) -> impl Iterator<Item = &str> {
         self.roots.iter().map(String::as_str)
@@ -75,6 +84,23 @@ impl VisitedNetwork {
         let roots = self.iter().map(bookmark);
         self.mapped.iter().cloned().chain(roots).collect()
     }
+}
+
+/// Whether `uri` is `root` or inside it, ignoring a trailing `/`, and on
+/// SMB, whose names ignore case, the case: `GVfs` spells a mounted share
+/// as it was first typed, which may differ from the mapping's spelling.
+pub fn is_at_or_inside(uri: &str, root: &str) -> bool {
+    let canonical = |text: &str| {
+        let uri = crate::location::normalise(text).unwrap_or_else(|_| text.to_owned());
+        let uri = uri.trim_end_matches('/').to_owned();
+        if is_smb_location(&uri) {
+            uri.to_lowercase()
+        } else {
+            uri
+        }
+    };
+    let (uri, root) = (canonical(uri), canonical(root));
+    uri == root || uri.strip_prefix(&root).is_some_and(|rest| rest.starts_with('/'))
 }
 
 /// The root the Network list shows for SMB location `uri`:
@@ -117,6 +143,33 @@ fn same_root(known: &str, root: &str) -> bool {
             .map(|parts| (parts.scheme, parts.authority))
     };
     server(known).is_some_and(|known| Some(known) == server(root))
+}
+
+#[cfg(test)]
+mod forget_tests {
+    use super::*;
+
+    /// Disconnect of a mapped drive ends its mapping, whatever the case of
+    /// the mount's spelling; other mappings stay.
+    ///
+    /// parity: NET-040
+    #[test]
+    fn disconnecting_a_mapped_share_forgets_its_mapping() {
+        let mut visited = VisitedNetwork::default();
+        visited.remember_mapped("smb://harbornas.local/Projects", "Projects (Z:)");
+        visited.remember_mapped("smb://harbornas.local/Public", "Public (Y:)");
+
+        assert!(visited.forget_mapped_inside("smb://HARBORNAS.local/projects/"));
+        let labels: Vec<String> = visited
+            .to_bookmarks()
+            .into_iter()
+            .map(|bookmark| bookmark.label)
+            .collect();
+        assert_eq!(labels, ["Public (Y:)"]);
+        assert!(!visited.forget_mapped_inside("smb://harbornas.local/Projects"));
+        assert!(is_at_or_inside("smb://nas/Share/Plans", "smb://NAS/share/"));
+        assert!(!is_at_or_inside("smb://nas/Shared", "smb://nas/share"));
+    }
 }
 
 #[cfg(test)]
