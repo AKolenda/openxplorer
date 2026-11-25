@@ -249,6 +249,7 @@ impl AppContext {
             .set(SettingsStore::new(settings))
             .expect("a new AppContext has no settings yet");
         context.watch_known_folders(folder_locations);
+        context.follow_search_preferences();
         context.read_saved_searches();
         context.follow_recent_privacy();
         context.follow_icon_files();
@@ -585,8 +586,25 @@ impl AppContext {
 
     /// Tells every window to redraw its sidebar and landing page.
     fn notify_places_changed(&self) {
+        self.follow_search_preferences();
         self.export_pins();
         self.emit_by_name::<()>(PLACES_CHANGED, &[]);
+    }
+
+    /// Makes the searches started from now on match words in extensions as
+    /// Settings > Search says (`extension_word_starts`), and the name
+    /// fields refuse characters as Settings says
+    /// (`allow_linux_name_characters`).
+    fn follow_search_preferences(&self) {
+        let mode = if self.settings_data().preferences.extension_word_starts {
+            ox_core::search::ExtensionWords::FromStart
+        } else {
+            ox_core::search::ExtensionWords::WholeOnly
+        };
+        ox_core::search::set_extension_words(mode);
+        crate::window::allow_linux_name_characters(
+            self.settings_data().preferences.allow_linux_name_characters,
+        );
     }
 
     /// Calls `callback` whenever the places may have changed.

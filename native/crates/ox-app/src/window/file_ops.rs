@@ -97,7 +97,7 @@ use ox_core::transfer::Cancellation;
 pub(super) use availability::FileCommand;
 pub(super) use clipboard::{ClipboardContent, ClipboardKind};
 pub(super) use jobs::MAX_JOBS;
-pub(crate) use name_balloon::refuse_forbidden_characters;
+pub(crate) use name_balloon::{allow_linux_name_characters, refuse_forbidden_characters};
 pub(crate) use names::trim_typed_name;
 pub(super) use shortcuts::file_key_bindings;
 pub(super) use transfer::IncomingItems;

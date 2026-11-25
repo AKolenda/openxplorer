@@ -26,8 +26,14 @@ pub const MAX_QUERY_CHARS: usize = 512;
 /// Results returned when the caller does not choose a limit.
 pub const DEFAULT_RESULT_LIMIT: usize = 500;
 
-/// Most results one search can return.
+/// Most results one search can return, unless it asks for every one.
 pub const MAX_RESULT_LIMIT: usize = 2000;
+
+/// The limit of a search that returns every match, as Windows' search has
+/// no cap (Settings' "Show all search matches (like Windows)"). The query
+/// still runs off the main thread; the caller shows the hits a batch at a
+/// time.
+pub const UNLIMITED_RESULTS: usize = usize::MAX;
 
 /// Most distinct words of a query that are matched: the terms of its
 /// clauses, counted as typed.
@@ -50,7 +56,8 @@ pub struct SearchQuery {
     /// Only this folder and its subfolders; `None` for every cached folder
     /// ("All cached folders").
     pub scope: Option<String>,
-    /// Most results to return, 1 to [`MAX_RESULT_LIMIT`].
+    /// Most results to return, 1 to [`MAX_RESULT_LIMIT`], or
+    /// [`UNLIMITED_RESULTS`] for every one.
     pub limit: usize,
     /// Whether hidden items are returned (the "Hidden items" setting).
     pub hidden_items: HiddenItems,
@@ -141,7 +148,11 @@ impl SearchIndex {
             return Err(SearchError::QueryTooLong);
         }
         let scope = query.scope.as_deref().map(normalise).transpose()?;
-        let limit = query.limit.clamp(1, MAX_RESULT_LIMIT);
+        let limit = if query.limit == UNLIMITED_RESULTS {
+            UNLIMITED_RESULTS
+        } else {
+            query.limit.clamp(1, MAX_RESULT_LIMIT)
+        };
         let started = Instant::now();
         let pattern = query_pattern(&query.text);
         if pattern.is_empty() {
@@ -223,7 +234,8 @@ impl QueryPlan {
             conditions.push("e.hidden=0".to_owned());
         }
         // One row more than the limit tells whether results were cut off.
-        plan.values.push(Value::Integer(sql_integer(limit + 1)));
+        plan.values
+            .push(Value::Integer(sql_integer(limit.saturating_add(1))));
         plan.sql = format!(
             "SELECT e.uri, e.parent, e.name, e.is_dir, e.size, e.modified, e.type, e.kind, e.hidden, e.seen,
                     r.updated, r.status
@@ -609,6 +621,27 @@ mod tests {
         assert_eq!(smallest.limit, 1);
         assert_eq!(largest.limit, MAX_RESULT_LIMIT);
         assert_eq!(SearchQuery::new("report").limit, DEFAULT_RESULT_LIMIT);
+    }
+
+    /// A search for every match ("Show all search matches (like
+    /// Windows)") returns them all, past the usual most, and says none
+    /// were left out.
+    #[test]
+    fn an_unlimited_search_returns_every_match() {
+        let share = ScannedShare::new();
+        let items: Vec<ListedItem> = (0..MAX_RESULT_LIMIT + 5)
+            .map(|number| listed_file(SHARE, &format!("{number}-report.txt")))
+            .collect();
+        share.store(&items);
+
+        let all = share
+            .index
+            .search(&limited("report", UNLIMITED_RESULTS), None)
+            .unwrap();
+
+        assert_eq!(all.hits.len(), MAX_RESULT_LIMIT + 5);
+        assert!(!all.is_truncated);
+        assert_eq!(all.limit, UNLIMITED_RESULTS);
     }
 
     /// A hit carries what the search results show: size, time, type and

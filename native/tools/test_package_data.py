@@ -381,6 +381,25 @@ class VerifierTests(StagingTestCase):
         self.assertFalse(tree.path_of(PurePosixPath('/app/share/xdg-desktop-portal')).exists())
 
     # parity: INT-032
+    def test_host_packages_install_the_file_dialogs_generator(self) -> None:
+        """Each host package installs its own generator, executable, where
+        the systemd user manager runs it at login; removing the package
+        removes it. The Flatpak installs none."""
+        for channel, layout in ((Channel.STABLE, Layout.DEBIAN), (Channel.PREVIEW, Layout.DEBIAN),
+                                (Channel.STABLE, Layout.FHS)):
+            with self.subTest(channel=channel.name, layout=layout.name):
+                tree = self.install(channel, layout)
+                installed = package_data.file_dialogs_generator_path(tree.paths, channel)
+                self.assertEqual(installed.parent,
+                                 PurePosixPath('/usr/lib/systemd/user-environment-generators'))
+                self.assertIn(channel.package, installed.name)
+                generator = tree.path_of(installed)
+                self.assertTrue(generator.stat().st_mode & 0o111)
+                self.assertIn('GTK_USE_PORTAL=1', generator.read_text(encoding='utf-8'))
+        flatpak = self.install(Channel.STABLE, Layout.FLATPAK)
+        self.assertIsNone(package_data.file_dialogs_generator_path(flatpak.paths, Channel.STABLE))
+
+    # parity: INT-032
     def test_a_portal_file_that_volunteers_is_refused(self) -> None:
         tree = self.install(Channel.STABLE, Layout.FHS)
         portal = tree.path_of(package_data.portal_file_path(tree.paths, Channel.STABLE.app_id))

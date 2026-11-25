@@ -256,6 +256,18 @@ fn every_setting_of_the_earlier_layout_is_on_one_of_the_new_pages() {
         "Music icon",
         "Code icon",
         "File name endings",
+        // Previous Versions' Restore as Windows', off by default.
+        "Restore over the original (Windows)",
+        // Search words from an extension's start, as Windows', off by default.
+        "Match words at the start of file extensions (like Windows)",
+        // Owner choices with a Windows value, and the Linux name
+        // characters (#116, #227, #273, #191, #382, #212).
+        "Show all search matches (like Windows)",
+        "Neutral selection colors (like Windows)",
+        "Show Recent files in the navigation pane",
+        "Connect to shares opened by other apps right away (like Windows)",
+        "Keep Open/Save dialogs modal on GNOME (like Windows)",
+        "Allow Linux file name characters when renaming",
         // The Details view's sort arrow (VIEW-014).
         "Column header style",
         // The line under the column titles, which Windows 11 has not.

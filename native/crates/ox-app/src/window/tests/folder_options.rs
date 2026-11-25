@@ -268,6 +268,34 @@ fn the_search_tab_searches_names_and_contents() {
     wait_until("searches to read names again", || search_in() == SearchIn::Names);
 }
 
+/// Search: "Include system directories" starts checked and "Include
+/// compressed files" unchecked, as in Windows; Apply saves them, and
+/// Restore Defaults puts them back (#231).
+#[gtk::test]
+fn the_search_tab_includes_system_directories_and_compressed_files() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    let system = "Include system directories";
+    let compressed = "Include compressed files (ZIP, 7Z, TAR...)";
+    let options = open_folder_options(&test);
+    assert!(option_check(&options, "Search", system).is_active());
+    assert!(!option_check(&options, "Search", compressed).is_active());
+    option_check(&options, "Search", system).set_active(false);
+    option_check(&options, "Search", compressed).set_active(true);
+    options.press("Apply");
+    let saved = || test.window.context().settings_data().preferences;
+    wait_until("the search options to be saved", || {
+        !saved().search_system_directories && saved().search_compressed_files
+    });
+    tab_button(&options, "Search", "Restore Defaults").emit_clicked();
+    assert!(option_check(&options, "Search", system).is_active());
+    assert!(!option_check(&options, "Search", compressed).is_active());
+    close_folder_options(&test, &options, "OK");
+    wait_until("the defaults to be saved", || {
+        saved().search_system_directories && !saved().search_compressed_files
+    });
+}
+
 /// The close button in the title bar of the titled dialog `options`.
 fn title_bar_close(options: &crate::properties::PropertiesWindow) -> gtk::Button {
     let bar = options.titlebar().expect("Folder Options has a title bar");

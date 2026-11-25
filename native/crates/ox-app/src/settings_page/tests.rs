@@ -545,6 +545,7 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Theme",
             "Text size",
             "Use the desktop font",
+            "Neutral selection colors (like Windows)",
             "Language",
             "Folder icon",
             "ZIP archive icon",
@@ -566,6 +567,7 @@ fn escape_leaves_the_search_and_shows_every_row_again() {
             "Name column starts at Windows' width (256 px)",
             "Hide expand arrows in the sidebar",
             "Show more items in the navigation pane",
+            "Show Recent files in the navigation pane",
             "Show more items in the tab menu",
             "Right-click menu",
             "Buttons in the right-click menu",
@@ -967,6 +969,65 @@ fn the_replaced_files_switch_is_on_by_default_and_saves_only_its_turning_off() {
         !stored.contains("recycleReplacedFiles"),
         "stored only when off: {stored}"
     );
+}
+
+/// "Restore over the original (Windows)" is in Files & folders, off by
+/// default (the owner's choice), and saves only its turning on, which
+/// Previous Versions' Restore follows.
+///
+/// parity: PROP-025
+#[gtk::test]
+fn the_restore_over_the_original_switch_is_off_by_default_and_saves_only_its_turning_on() {
+    let settings = SettingsTest::open();
+    let switch = switch_of(&settings.row("Restore over the original (Windows)"));
+    assert!(!switch.is_active(), "off by default");
+    assert!(!settings.test.window.restores_over_original());
+
+    switch.set_active(true);
+    wait_until("the choice to be saved", || {
+        settings.saved_preferences().restore_over_original
+    });
+    let stored = std::fs::read_to_string(settings.test.settings_directory().join("settings.json")).unwrap();
+    assert!(stored.contains("restoreOverOriginal"), "stored when on: {stored}");
+    wait_until("the window to follow", || {
+        settings.test.window.restores_over_original()
+    });
+
+    switch.set_active(false);
+    wait_until("the choice to be saved", || {
+        !settings.saved_preferences().restore_over_original
+    });
+    let stored = std::fs::read_to_string(settings.test.settings_directory().join("settings.json")).unwrap();
+    assert!(
+        !stored.contains("restoreOverOriginal"),
+        "stored only when on: {stored}"
+    );
+}
+
+/// Settings > Search > "Match words at the start of file extensions (like
+/// Windows)" is off by default, the owner's rule, and the searches started
+/// after it is turned on match words from an extension's start.
+///
+/// parity: SRCH-004
+#[gtk::test]
+fn the_extension_word_switch_is_off_by_default_and_reaches_the_searches() {
+    let settings = SettingsTest::open();
+    let title = "Match words at the start of file extensions (like Windows)";
+    let switch = switch_of(&settings.row_in(Category::Search, title));
+    assert!(!switch.is_active(), "off by default");
+    let finds_docx = || ox_core::search::NamePattern::new("doc").matches("report.docx");
+    assert!(!finds_docx());
+
+    switch.set_active(true);
+    wait_until("the choice to be saved", || {
+        settings.saved_preferences().extension_word_starts
+    });
+    wait_until("the searches to follow", finds_docx);
+    let stored = std::fs::read_to_string(settings.test.settings_directory().join("settings.json")).unwrap();
+    assert!(stored.contains("extensionWordStarts"), "stored when on: {stored}");
+
+    switch.set_active(false);
+    wait_until("the searches to follow", || !finds_docx());
 }
 
 /// "Show thumbnails in network folders" is off by default, as Windows 11
@@ -1733,4 +1794,77 @@ fn the_run_installed_launchers_switch_is_off_and_saves_the_choice() {
     wait_until("the choice to be saved", || {
         settings.saved_preferences().run_installed_launchers
     });
+}
+
+/// One new switch on its page, its key in `settings.json`, and its
+/// default.
+struct NewSwitch {
+    category: Category,
+    title: &'static str,
+    key: &'static str,
+    default: bool,
+}
+
+/// The switches for owner choices that differ from Windows, and the
+/// Linux name characters: each starts at the owner's default, saves its
+/// own key once changed, and keeps the settings file a new installation's
+/// once changed back (#106, #116, #191, #212, #227, #273, #382).
+#[gtk::test]
+fn the_new_switches_start_at_the_owners_defaults_and_save_their_keys() {
+    let switches = [
+        NewSwitch {
+            category: Category::Search,
+            title: "Show all search matches (like Windows)",
+            key: "showAllSearchMatches",
+            default: false,
+        },
+        NewSwitch {
+            category: Category::Appearance,
+            title: "Neutral selection colors (like Windows)",
+            key: "neutralSelectionColors",
+            default: false,
+        },
+        NewSwitch {
+            category: Category::Appearance,
+            title: "Show Recent files in the navigation pane",
+            key: "recentFilesInNavigationPane",
+            default: true,
+        },
+        NewSwitch {
+            category: Category::DefaultApps,
+            title: "Connect to shares opened by other apps right away (like Windows)",
+            key: "connectExternalShares",
+            default: false,
+        },
+        NewSwitch {
+            category: Category::DefaultApps,
+            title: "Keep Open/Save dialogs modal on GNOME (like Windows)",
+            key: "modalDialogsOnGnome",
+            default: false,
+        },
+        NewSwitch {
+            category: Category::FilesAndFolders,
+            title: "Allow Linux file name characters when renaming",
+            key: "allowLinuxNameCharacters",
+            default: false,
+        },
+        NewSwitch {
+            category: Category::FilesAndFolders,
+            title: "Show check boxes only while Ctrl is held",
+            key: "itemChecksOnCtrl",
+            default: true,
+        },
+    ];
+    let settings = SettingsTest::open();
+    let stored = || {
+        std::fs::read_to_string(settings.test.settings_directory().join("settings.json")).unwrap_or_default()
+    };
+    for new in &switches {
+        let switch = switch_of(&settings.row_in(new.category, new.title));
+        assert_eq!(switch.is_active(), new.default, "{}", new.title);
+        switch.set_active(!new.default);
+        wait_until("the choice to be saved", || stored().contains(new.key));
+        switch.set_active(new.default);
+        wait_until("the default to be saved", || !stored().contains(new.key));
+    }
 }

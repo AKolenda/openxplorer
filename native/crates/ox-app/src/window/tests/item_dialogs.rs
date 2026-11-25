@@ -119,6 +119,28 @@ pub(super) fn check(widget: &impl IsA<gtk::Widget>, label: &str) -> gtk::CheckBu
         .unwrap_or_else(|| panic!("a {label} check box"))
 }
 
+/// Waits for Confirm Attribute Changes over `window`, chooses `answer`
+/// unless it is empty and presses `button`; returns the dialog's texts.
+pub(super) fn answer_attribute_changes(window: &PropertiesWindow, answer: &str, button: &str) -> Vec<String> {
+    let over_window = || {
+        gtk::Window::list_toplevels()
+            .into_iter()
+            .filter_map(|shown| shown.downcast::<Dialog>().ok())
+            .find(|dialog| {
+                dialog.is_visible() && dialog.transient_for().as_ref() == Some(window.upcast_ref())
+            })
+    };
+    wait_until("Confirm Attribute Changes", || over_window().is_some());
+    let dialog = over_window().expect("wait_until returned once the dialog showed");
+    assert_eq!(dialog.title(), Some("Confirm Attribute Changes".into()));
+    let texts = dialog.texts();
+    if !answer.is_empty() {
+        check(&dialog, answer).set_active(true);
+    }
+    dialog.press(button);
+    texts
+}
+
 /// A button's text: its label, or the label inside it.
 fn button_label(button: &gtk::Button) -> Option<String> {
     if let Some(label) = button.label() {
@@ -871,6 +893,12 @@ fn a_folders_read_only_reaches_the_files_inside_only() {
     assert!(!read_only.is_inconsistent() && read_only.is_active(), "ticked");
     assert!(window.apply_button().is_sensitive());
     press(&window, "Apply");
+    let texts = answer_attribute_changes(
+        &window,
+        "Apply changes to this folder, subfolders and files",
+        "OK",
+    );
+    assert!(texts.iter().any(|text| text == "set read-only"), "{texts:?}");
 
     wait_until("the files inside", || {
         mode_of(&fixture.path("Album/photo.png")) == 0o444
@@ -882,6 +910,106 @@ fn a_folders_read_only_reaches_the_files_inside_only() {
     );
     wait_until("Apply to grey", || !window.apply_button().is_sensitive());
     assert!(!window.is_closed(), "Apply keeps the window open");
+}
+
+/// A folder's Read-only asks first, as Windows does: "this folder only"
+/// leaves every file and subfolder inside as it was, and Cancel changes
+/// nothing and keeps the change to apply.
+///
+/// parity: PROP-003
+#[gtk::test]
+fn a_folders_read_only_asks_before_it_reaches_inside() {
+    let fixture = Fixture::standard();
+    fs::create_dir_all(fixture.path("Album/2026")).expect("folders");
+    for name in ["Album/photo.png", "Album/2026/beach.png"] {
+        fs::write(fixture.path(name), b"p").expect("a file");
+        fs::set_permissions(fixture.path(name), fs::Permissions::from_mode(0o644)).expect("mode");
+    }
+    let test = TestWindow::open(&fixture.uri());
+    test.select_named("Album");
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Album Properties");
+    let read_only = check(&general(&window), "Read-only (Only applies to files in folder)");
+    let folder_mode = mode_of(&fixture.path("Album"));
+
+    read_only.set_active(true);
+    press(&window, "Apply");
+    let texts = answer_attribute_changes(&window, "", "Cancel");
+    assert!(
+        texts
+            .iter()
+            .any(|text| text == "Apply changes to this folder only"),
+        "{texts:?}"
+    );
+    wait_until("the buttons back", || window.ok_button().is_sensitive());
+    assert!(window.apply_button().is_sensitive(), "the change stays to apply");
+    assert!(!window.is_closed());
+    assert_eq!(
+        mode_of(&fixture.path("Album/photo.png")),
+        0o644,
+        "Cancel changes nothing"
+    );
+
+    press(&window, "Apply");
+    answer_attribute_changes(&window, "Apply changes to this folder only", "OK");
+    wait_until("Apply to grey", || !window.apply_button().is_sensitive());
+    assert_eq!(
+        mode_of(&fixture.path("Album/photo.png")),
+        0o644,
+        "its files stay writable"
+    );
+    assert_eq!(
+        mode_of(&fixture.path("Album/2026/beach.png")),
+        0o644,
+        "so do its subfolders' files"
+    );
+    assert_eq!(mode_of(&fixture.path("Album/2026")) & 0o200, 0o200);
+    assert_eq!(
+        mode_of(&fixture.path("Album")),
+        folder_mode,
+        "the folder keeps its bits"
+    );
+}
+
+/// With a folder among several items, Read-only asks in the selection's
+/// words; "the selected items only" changes the selected files and
+/// nothing inside the folder.
+///
+/// parity: PROP-002, PROP-003
+#[gtk::test]
+fn several_items_read_only_asks_and_can_stop_at_the_selection() {
+    let fixture = Fixture::standard();
+    fixture.write("Documents/inside.txt");
+    for name in ["Documents/inside.txt", "Notes 2.txt"] {
+        fs::set_permissions(fixture.path(name), fs::Permissions::from_mode(0o644)).expect("mode");
+    }
+    let test = TestWindow::open(&fixture.uri());
+    super::file_ops_support::select_names(&test, &["Documents", "Notes 2.txt"]);
+    test.activate("properties", None);
+    let window = test.wait_for_properties("Documents, Notes 2.txt Properties");
+    let read_only = check(&window, "Read-only (Only applies to files in folder)");
+    wait_until("the items read", || read_only.is_sensitive());
+
+    while !read_only.is_active() || read_only.is_inconsistent() {
+        read_only.set_active(!read_only.is_active());
+    }
+    press(&window, "Apply");
+    let texts = answer_attribute_changes(&window, "Apply changes to the selected items only", "OK");
+    assert!(
+        texts
+            .iter()
+            .any(|text| text == "Apply changes to the selected items, subfolders and files"),
+        "{texts:?}"
+    );
+    wait_until("the selected file", || {
+        mode_of(&fixture.path("Notes 2.txt")) == 0o444
+    });
+    wait_until("Apply to grey", || !window.apply_button().is_sensitive());
+    assert_eq!(
+        mode_of(&fixture.path("Documents/inside.txt")),
+        0o644,
+        "the folder's file is left alone"
+    );
 }
 
 /// A folder's Read-only changed while Apply makes the change before it
@@ -902,6 +1030,7 @@ fn a_folders_read_only_changed_during_apply_stays_to_apply() {
 
     read_only.set_active(true);
     press(&window, "Apply");
+    answer_attribute_changes(&window, "", "OK");
     // Apply greys the buttons as it starts the change, which then runs off
     // the main thread until the main loop takes its result.
     while window.ok_button().is_sensitive() {
@@ -2362,6 +2491,69 @@ fn restore_a_copy_copies_the_version_into_a_live_folder_only() {
     assert_eq!(
         fs::read(fixture.path("Documents/plan.txt")).expect("the live file"),
         b"live plan"
+    );
+}
+
+/// With "Restore over the original (Windows)" on, Restore copies the
+/// version back into the item's folder and asks "Replace or Skip Files"
+/// as a paste does: Skip keeps the live file, Replace puts the version
+/// there. The setting is off by default, so Restore asks for a folder.
+///
+/// parity: PROP-025
+#[gtk::test]
+fn restore_over_the_original_asks_before_replacing_the_live_item() {
+    let fixture = fixture_with_snapshot();
+    let test = TestWindow::open(&fixture.uri());
+    assert!(
+        !test.context.settings_data().preferences.restore_over_original,
+        "off by default, the owner's choice"
+    );
+    let update = ox_core::settings::PreferencesUpdate {
+        restore_over_original: Some(true),
+        ..ox_core::settings::PreferencesUpdate::default()
+    };
+    ox_core::settings::Settings::open(test.settings_directory())
+        .update_preferences(&update)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    wait_until("the window to read the choice", || {
+        test.context.settings_data().preferences.restore_over_original
+    });
+    let version = fixture
+        .path("Documents")
+        .join(".snapshot")
+        .join(SNAPSHOT_NAME)
+        .join("plan.txt");
+    let request = RestoreRequest {
+        version_uri: ox_core::location::file_uri(&version),
+        label: SNAPSHOT_NAME.to_owned(),
+        name: "plan.txt".to_owned(),
+    };
+    let live = fixture.path("Documents/plan.txt");
+    let original = ox_core::location::file_uri(&live);
+
+    test.window.restore_over_original(&request, &original);
+    super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Skip);
+    super::file_ops_support::assert_ended_without_a_message(&test);
+    assert_eq!(
+        fs::read(&live).expect("the live file"),
+        b"live plan",
+        "Skip keeps it"
+    );
+
+    test.window.restore_over_original(&request, &original);
+    super::file_ops_support::answer_conflicts(&test, super::file_ops_support::ConflictAnswer::Replace);
+    wait_until("the version back in place", || {
+        fs::read(&live).is_ok_and(|bytes| bytes == b"earlier plan")
+    });
+    assert_eq!(
+        fs::read(&version).expect("the snapshot file"),
+        b"earlier plan",
+        "the snapshot is never changed"
+    );
+    assert!(
+        !fixture.path("Documents/plan - Copy.txt").exists(),
+        "no copy name"
     );
 }
 

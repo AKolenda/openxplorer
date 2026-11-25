@@ -30,6 +30,38 @@ pub(crate) fn wait_for<T: Send + 'static>(
     job: impl FnOnce() -> T + Send + 'static,
 ) -> Option<T> {
     let (sender, receiver) = mpsc::sync_channel(1);
+    look_on_a_thread(key, job, move |answer| {
+        let _ = sender.send(answer);
+    })?;
+    receiver.recv_timeout(wait).ok()
+}
+
+/// [`wait_for`] without holding the main loop: the window keeps drawing
+/// and answering input while `job` looks at the file `key` names, for at
+/// most `wait`. `None` when it did not answer in time.
+pub(crate) async fn look_for<T: Send + 'static>(
+    key: &str,
+    wait: Duration,
+    job: impl FnOnce() -> T + Send + 'static,
+) -> Option<T> {
+    let (sender, receiver) = async_channel::bounded(1);
+    look_on_a_thread(key, job, move |answer| {
+        let _ = sender.send_blocking(answer);
+    })?;
+    gtk::glib::future_with_timeout(wait, receiver.recv())
+        .await
+        .ok()?
+        .ok()
+}
+
+/// Runs `job`, which looks at the file `key` names, on a thread of its
+/// own and hands its answer to `answer`; `None` when the thread could not
+/// start.
+fn look_on_a_thread<T: Send + 'static>(
+    key: &str,
+    job: impl FnOnce() -> T + Send + 'static,
+    answer: impl FnOnce(T) + Send + 'static,
+) -> Option<()> {
     #[cfg(test)]
     let stalled = stall::is_stalled(key);
     #[cfg(not(test))]
@@ -42,10 +74,10 @@ pub(crate) fn wait_for<T: Send + 'static>(
                 // A share that stopped answering, as a test sets it up.
                 std::thread::sleep(stall::STALL);
             }
-            let _ = sender.send(job());
+            answer(job());
         })
-        .ok()?;
-    receiver.recv_timeout(wait).ok()
+        .ok()
+        .map(drop)
 }
 
 /// Tests' stand-in for a mount whose server stopped answering: a test

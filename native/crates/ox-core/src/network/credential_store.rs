@@ -188,20 +188,6 @@ impl CredentialStore {
         };
         keyring.clear(&credential_attributes(key, scope))
     }
-
-    /// Deletes the selected scopes on every port of `host`. The caller
-    /// holds the host's lock, also used by endpoint-specific saves.
-    pub(super) fn clear_host(&self, host: &str, scope: ForgetScope) -> Result<bool, KeyringError> {
-        let Some(keyring) = self.keyring.as_deref() else {
-            return Ok(false);
-        };
-        let attributes = host_attributes(host);
-        let attributes = match scope {
-            ForgetScope::AllScopes => attributes,
-            ForgetScope::SessionOnly => attributes.with("scope", CredentialScope::Session.as_str()),
-        };
-        keyring.clear(&attributes)
-    }
 }
 
 impl fmt::Debug for CredentialStore {

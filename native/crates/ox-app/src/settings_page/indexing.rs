@@ -89,6 +89,21 @@ const SEARCH_FILTER_BAR: RowText = RowText {
     keywords: "search filter bar strip options scope kind date size cache save search windows layout",
 };
 
+const EXTENSION_WORD_STARTS: RowText = RowText {
+    title: "Match words at the start of file extensions (like Windows)",
+    description: "A word also finds names whose extension starts with it, as in Windows: \
+                  “doc” finds “report.docx”. Off: a word finds an extension only when it is \
+                  the whole extension.",
+    keywords: "search word extension suffix type docx pdf partial match windows file name",
+};
+
+const SHOW_ALL_SEARCH_MATCHES: RowText = RowText {
+    title: "Show all search matches (like Windows)",
+    description: "A search shows every match, as in Windows, adding them while you keep working. \
+                  Off, it shows the first 500 and asks you to narrow your search.",
+    keywords: "search results matches all limit 500 first more cap live folder windows",
+};
+
 const WATCH_FOLDERS: RowText = RowText {
     title: "Watch folders for changes",
     description: "Watch enabled local folders for changes while OpenXplorer is open.",
@@ -157,6 +172,29 @@ fn search_results_group(page: &SettingsPage) -> SettingsGroup {
         },
     };
     row.add_control(&page.preference_switch(filter_bar), ControlName::RowTitle);
+    group.add_row(&row);
+    // Off by default, the owner's rule; on, words match as Windows'.
+    let row = SettingRow::new(EXTENSION_WORD_STARTS);
+    let extension_starts = PreferenceBinding {
+        read: |preferences| preferences.extension_word_starts,
+        write: |on| PreferencesUpdate {
+            extension_word_starts: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    row.add_control(&page.preference_switch(extension_starts), ControlName::RowTitle);
+    group.add_row(&row);
+    // Off by default, the owner's limit of 500; on, every match, from the
+    // cache too (#116).
+    let row = SettingRow::new(SHOW_ALL_SEARCH_MATCHES);
+    let show_all = PreferenceBinding {
+        read: |preferences| preferences.show_all_search_matches,
+        write: |on| PreferencesUpdate {
+            show_all_search_matches: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    row.add_control(&page.preference_switch(show_all), ControlName::RowTitle);
     group.add_row(&row);
     group
 }

@@ -56,15 +56,28 @@
 //!
 //! GTK 4 applications ask the portal whenever it runs, but GTK 3 ones
 //! show GTK's own dialog unless `GTK_USE_PORTAL=1` is set. Enabling therefore also
-//! writes `$XDG_CONFIG_HOME/environment.d/60-openxplorer-file-dialogs.conf`,
-//! which the systemd user manager reads at login and passes to the
-//! session; disabling removes it if it still holds what the app wrote. It
-//! applies from the next login. Only a session the user manager starts
-//! (GNOME, KDE Plasma by default) passes that environment to its apps; on
-//! others (Xfce, MATE) the file would change nothing, so it is written
-//! only while [`GRAPHICAL_SESSION_TARGET`] is active, which such a session
-//! starts. Applications that draw a dialog of their
-//! own (GTK's dialog widget used directly, or another toolkit's) keep it.
+//! writes the opt-in mark `file-dialogs/gtk-apps` in the settings folder
+//! (`~/.config/winspace`). The packages install a systemd user
+//! environment generator (`native/packaging/data/file-dialogs-generator`)
+//! that the user manager runs at login: it sets the variable for the
+//! session only while the mark is there. Disabling removes the mark if it
+//! still holds what the app wrote. It applies from the next login, and
+//! uninstalling the package removes the generator, and with it the
+//! variable, without any script touching a home folder. Only a session the
+//! user manager starts (GNOME, KDE Plasma by default) passes that
+//! environment to its apps; on others (Xfce, MATE) the mark would change
+//! nothing, so it is written only while [`GRAPHICAL_SESSION_TARGET`] is
+//! active, which such a session starts. Applications that draw a dialog
+//! of their own (GTK's dialog widget used directly, or another toolkit's)
+//! keep it.
+//!
+//! Versions before the generator wrote
+//! `$XDG_CONFIG_HOME/environment.d/60-openxplorer-file-dialogs.conf`
+//! instead, which outlived the package.
+//! [`FileDialogRegistration::replace_old_gtk_env_file`], which the app
+//! runs once soon after it starts, puts the mark in its place, only while
+//! that file holds exactly what the app wrote; Restore removes such a file
+//! too.
 
 use std::fs;
 use std::future::Future;
@@ -112,6 +125,11 @@ const PORTAL_SUBDIR: &str = "xdg-desktop-portal";
 /// The record of what the file held before, in the settings folder.
 const RECORD_FILE_NAME: &str = "file-dialogs.json";
 
+/// The mark, in the settings folder, that Make `OpenXplorer` default turned
+/// the dialogs on: Restore previous turns them off only then, never when
+/// the user enabled them on their own.
+const BY_MAKE_DEFAULT_FILE_NAME: &str = "file-dialogs-by-make-default";
+
 /// The section that holds the preferences.
 const PREFERRED_SECTION: &str = "[preferred]";
 
@@ -138,12 +156,24 @@ pub const GRAPHICAL_SESSION_TARGET: &str = "graphical-session.target";
 /// and GIO does not read it.
 pub const GTK_PORTAL_VARIABLE: &str = "GTK_USE_PORTAL";
 
-/// The file below `$XDG_CONFIG_HOME/environment.d` that sets
-/// [`GTK_PORTAL_VARIABLE`] at login.
+/// The opt-in mark below the settings folder: while it is there, the
+/// packages' environment generator sets [`GTK_PORTAL_VARIABLE`] at login.
+/// The generator reads `${XDG_CONFIG_HOME:-$HOME/.config}/winspace/` +
+/// this path. It has a folder of its own, apart from the record.
+pub const GTK_MARK_NAME: &str = "file-dialogs/gtk-apps";
+
+/// What the mark holds.
+const GTK_MARK: &str = "# Open and Save dialogs of GTK 3 apps go to the desktop portal, which sends them\n\
+                        # to OpenXplorer: while this file is here, OpenXplorer's environment generator\n\
+                        # sets GTK_USE_PORTAL=1 at login. Set by OpenXplorer (Settings > Default apps);\n\
+                        # Restore removes it.\n";
+
+/// The file below `$XDG_CONFIG_HOME/environment.d` that versions before
+/// the generator wrote to set [`GTK_PORTAL_VARIABLE`] at login.
 const GTK_ENV_SUBDIR: &str = "environment.d";
 const GTK_ENV_FILE_NAME: &str = "60-openxplorer-file-dialogs.conf";
 
-/// What the app's environment file holds.
+/// What that older file held.
 const GTK_ENV_FILE: &str = "# Open and Save dialogs of GTK 3 apps go to the desktop portal, which sends them\n\
                             # to OpenXplorer. Set by OpenXplorer (Settings > Default apps); Restore removes it.\n\
                             GTK_USE_PORTAL=1\n";
@@ -154,18 +184,22 @@ const GTK_ENV_FILE: &str = "# Open and Save dialogs of GTK 3 apps go to the desk
 enum LoginFile {
     /// KDE's login script, which Plasma runs.
     Kde,
-    /// The environment file the systemd user manager reads, for GTK 3
-    /// apps.
+    /// The opt-in mark the packages' environment generator reads, for
+    /// GTK 3 apps.
     Gtk,
+    /// The environment file earlier versions wrote for GTK 3 apps, which
+    /// is only ever replaced or removed.
+    OldGtk,
 }
 
 impl LoginFile {
-    /// The folder below `$XDG_CONFIG_HOME`, the file's name there, and
-    /// what the app writes.
+    /// The folder below `$XDG_CONFIG_HOME` (empty for the settings
+    /// folder), the file's name there, and what the app writes.
     fn parts(self) -> (&'static str, &'static str, &'static str) {
         match self {
             Self::Kde => (KDE_ENV_SUBDIR, KDE_ENV_FILE_NAME, KDE_ENV_SCRIPT),
-            Self::Gtk => (GTK_ENV_SUBDIR, GTK_ENV_FILE_NAME, GTK_ENV_FILE),
+            Self::Gtk => ("", GTK_MARK_NAME, GTK_MARK),
+            Self::OldGtk => (GTK_ENV_SUBDIR, GTK_ENV_FILE_NAME, GTK_ENV_FILE),
         }
     }
 }
@@ -446,6 +480,30 @@ impl FileDialogRegistration {
         self.record_path().is_file()
     }
 
+    /// Remembers that Make `OpenXplorer` default turned the dialogs on, so
+    /// Restore previous turns them off again; [`Self::disable`] forgets
+    /// it.
+    ///
+    /// # Errors
+    ///
+    /// [`FileDialogError::Io`] when the mark cannot be written.
+    pub fn remember_enabled_by_make_default(&self) -> Result<(), FileDialogError> {
+        write_text(
+            &self.by_make_default_path(),
+            "Open and Save dialogs were enabled by Make OpenXplorer default.\n",
+        )
+    }
+
+    /// Whether Make `OpenXplorer` default turned the dialogs on and nothing
+    /// turned them off since. Reading only reads.
+    pub fn was_enabled_by_make_default(&self) -> bool {
+        self.by_make_default_path().is_file()
+    }
+
+    fn by_make_default_path(&self) -> PathBuf {
+        self.paths.settings.join(BY_MAKE_DEFAULT_FILE_NAME)
+    }
+
     /// [`Self::is_enabled`] for the portal's folder `only`.
     fn is_enabled_in(&self, only: Option<&Path>) -> bool {
         let Ok(contents) = fs::read_to_string(self.config_file_in(only)) else {
@@ -638,9 +696,38 @@ impl FileDialogRegistration {
         self.is_kde_session() && matches!(self.login_file(LoginFile::Kde), Ok(LoginFileState::Other))
     }
 
-    /// The environment file that sets [`GTK_PORTAL_VARIABLE`] at login.
+    /// The opt-in mark for which the packages' environment generator sets
+    /// [`GTK_PORTAL_VARIABLE`] at login.
     pub fn gtk_env_file(&self) -> PathBuf {
         self.login_file_path(LoginFile::Gtk)
+    }
+
+    /// The environment file versions before the generator wrote.
+    pub fn old_gtk_env_file(&self) -> PathBuf {
+        self.login_file_path(LoginFile::OldGtk)
+    }
+
+    /// Puts the opt-in mark in place of the environment file an earlier
+    /// version wrote, once: only while that file holds exactly what the
+    /// app wrote and is no link. The mark is written unless one is there
+    /// already; a file of the user's in the mark's place keeps the old
+    /// file too. Returns whether the old file was replaced.
+    ///
+    /// # Errors
+    ///
+    /// [`FileDialogError::Io`] when the mark cannot be written or the old
+    /// file removed; nothing else is changed then.
+    pub fn replace_old_gtk_env_file(&self) -> Result<bool, FileDialogError> {
+        if self.login_file(LoginFile::OldGtk)? != LoginFileState::Ours {
+            return Ok(false);
+        }
+        match self.login_file(LoginFile::Gtk)? {
+            LoginFileState::Other => return Ok(false),
+            LoginFileState::Missing => write_text(&self.login_file_path(LoginFile::Gtk), GTK_MARK)?,
+            LoginFileState::Ours => {}
+        }
+        remove_file(&self.login_file_path(LoginFile::OldGtk))?;
+        Ok(true)
     }
 
     /// Whether GTK 3 applications are set to ask the portal from the next
@@ -694,6 +781,9 @@ impl FileDialogRegistration {
 
     fn login_file_path(&self, file: LoginFile) -> PathBuf {
         let (subdir, name, _) = file.parts();
+        if subdir.is_empty() {
+            return self.paths.settings.join(name);
+        }
         self.paths.config_home.join(subdir).join(name)
     }
 
@@ -741,11 +831,12 @@ impl FileDialogRegistration {
         Ok(written)
     }
 
-    /// Takes the login files away if they still hold what the app wrote.
-    /// A file of the user's, a symlink, or anything that cannot be read
-    /// there is not the app's and is left alone, so Restore goes on.
+    /// Takes the login files away if they still hold what the app wrote,
+    /// an earlier version's environment file included. A file of the
+    /// user's, a symlink, or anything that cannot be read there is not the
+    /// app's and is left alone, so Restore goes on.
     fn disable_login_files(&self) -> Result<(), FileDialogError> {
-        for file in [LoginFile::Kde, LoginFile::Gtk] {
+        for file in [LoginFile::Kde, LoginFile::Gtk, LoginFile::OldGtk] {
             if matches!(self.login_file(file), Ok(LoginFileState::Ours)) {
                 remove_file(&self.login_file_path(file))?;
             }
@@ -770,6 +861,7 @@ impl FileDialogRegistration {
             None => self.restore(&self.config_file()?, None)?,
         };
         remove_file(&self.record_path())?;
+        remove_file(&self.by_make_default_path())?;
         Ok(outcome)
     }
 

@@ -166,6 +166,51 @@ pub fn default_preview_root() -> PathBuf {
     glib::user_runtime_dir().join("winspace-archive-previews")
 }
 
+impl ArchiveBrowser {
+    /// Every file and folder the archive at `uri` records whose own name
+    /// `matches` (given in lower case), at any depth, as the browser would
+    /// list each in its folder; members it hides stay hidden, and so do
+    /// links. At most [`MAX_LISTED_ENTRIES`]. Blocking: a search walking
+    /// folders calls it off the main thread.
+    ///
+    /// # Errors
+    ///
+    /// The errors of reading the archive, or [`ArchiveError::Cancelled`].
+    pub fn matching_members(
+        &self,
+        uri: &str,
+        matches: &dyn Fn(&str) -> bool,
+        cancel: &Cancellation,
+    ) -> Result<Vec<ArchiveEntry>, ArchiveError> {
+        let archive = open_archive(&self.opener, uri, cancel)?;
+        let mut found = Vec::new();
+        for member in archive.members() {
+            cancel.check()?;
+            if !is_listable(member) {
+                continue;
+            }
+            let trimmed = member.name.trim_end_matches('/');
+            let (folder, name) = trimmed
+                .rsplit_once('/')
+                .map_or(("", trimmed), |(folder, name)| (folder, name));
+            if !matches(&name.to_lowercase()) {
+                continue;
+            }
+            let prefix = if folder.is_empty() {
+                String::new()
+            } else {
+                format!("{folder}/")
+            };
+            let relative = &member.name[prefix.len()..];
+            found.push(entry_for(&prefix, relative, member));
+            if found.len() >= MAX_LISTED_ENTRIES {
+                break;
+            }
+        }
+        Ok(found)
+    }
+}
+
 /// The folder to list as a member prefix: empty, or ending with one `/`.
 fn folder_prefix(prefix: &str) -> Result<String, ArchiveError> {
     if prefix.is_empty() {

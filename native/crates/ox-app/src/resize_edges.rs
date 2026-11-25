@@ -11,8 +11,10 @@
 //!
 //! [`install`] adds a handle for each edge and corner, laid over
 //! everything else in the window: a band [`INSIDE_EDGE`] pixels wide just
-//! inside each edge, which leaves a scroll bar's thumb under it to the
-//! scroll bar, and a square [`INSIDE_CORNER`] pixels wide in each
+//! inside each edge, which leaves a scroll bar under it, thumb and trough,
+//! and any control that takes a press, such as a button, a check box or a
+//! text field, to that widget ([`takes_its_own_presses`]), and a square
+//! [`INSIDE_CORNER`] pixels wide in each
 //! corner, which covers the rounded corner. Each shows its resize cursor
 //! (`nw-resize`, `n-resize`, …, the names GTK itself uses) and starts the
 //! compositor's resize from its edge on a primary press; the window does
@@ -101,10 +103,12 @@ mod imp {
     impl ObjectImpl for ResizeHandle {}
 
     impl WidgetImpl for ResizeHandle {
-        /// An edge's band leaves a scroll bar's thumb under it to the
-        /// scroll bar: the file list's thumb lies at the window's right
-        /// edge, 3 pixels wide 2 in from it, and dragging it scrolls.
-        /// The corners resize whatever lies under them.
+        /// An edge's band leaves a scroll bar under it to the scroll bar,
+        /// thumb and trough: the file list's lies at the window's right
+        /// edge, and dragging the thumb or clicking the trough scrolls.
+        /// It leaves any other control that takes presses to it too, so a
+        /// button at the edge is pressed all the way to the edge. The
+        /// corners resize whatever lies under them.
         fn contains(&self, x: f64, y: f64) -> bool {
             if self.looking_under.get() || !self.parent_contains(x, y) {
                 return false;
@@ -115,7 +119,7 @@ mod imp {
             self.looking_under.set(true);
             let under = super::under(&self.obj(), x, y);
             self.looking_under.set(false);
-            !under.is_some_and(|widget| super::is_scroll_thumb(&widget))
+            !under.is_some_and(|widget| super::takes_its_own_presses(&widget))
         }
     }
 }
@@ -326,9 +330,24 @@ fn under(handle: &ResizeHandle, x: f64, y: f64) -> Option<gtk::Widget> {
     )
 }
 
-/// Whether `widget` is a scroll bar's thumb.
-fn is_scroll_thumb(widget: &gtk::Widget) -> bool {
-    widget.css_name() == "slider" && widget.ancestor(gtk::Scrollbar::static_type()).is_some()
+/// Whether `widget`, picked under an edge's band, belongs to a control
+/// that takes a press itself: a scroll bar (its thumb or trough), a
+/// button, check box, switch, scale, text field or drop-down. The rows of
+/// a list are not among them: they fill the panes to the window's edges,
+/// where the band would then never resize.
+fn takes_its_own_presses(widget: &gtk::Widget) -> bool {
+    let controls = [
+        gtk::Range::static_type(),
+        gtk::Button::static_type(),
+        gtk::CheckButton::static_type(),
+        gtk::Switch::static_type(),
+        gtk::Editable::static_type(),
+        gtk::DropDown::static_type(),
+        gtk::MenuButton::static_type(),
+    ];
+    controls
+        .into_iter()
+        .any(|control| widget.ancestor(control).is_some())
 }
 
 /// The handles [`install`] added to `window`.

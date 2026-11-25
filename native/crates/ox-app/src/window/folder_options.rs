@@ -28,8 +28,13 @@
 //! PC, Network, Recent, search results or the Recycle Bin it cannot be
 //! pressed. Then the advanced settings, in Windows' order and tree.
 //!
-//! Search: "Always search file names and contents" starts every search
-//! with the search strip's "Names and contents".
+//! Search: "Include system directories" lets a search that walks folders
+//! enter the system's own, such as `/usr` (on by default, as in Windows);
+//! "Include compressed files (ZIP, 7Z, TAR...)" makes it find what
+//! archives hold by name too (off by default, as in Windows); "Always
+//! search file names and contents" starts every search with the search
+//! strip's "Names and contents". Windows' "How to search" (the index) has
+//! no counterpart here.
 //!
 //! The options take effect with OK or Apply, and each tab's Restore
 //! Defaults sets its choices back. It is a window of its own, modal to
@@ -238,13 +243,27 @@ fn advanced_settings() -> [Setting; 11] {
     ]
 }
 
-/// The Search tab's option, under "When searching non-indexed locations".
-fn search_settings() -> [Setting; 1] {
-    [check(
-        message_id("Always search file names and contents (this might take several minutes)"),
-        |preferences| preferences.search_contents,
-        |update, _, on| update.search_contents = Some(on),
-    )]
+/// The Search tab's options, under "When searching non-indexed
+/// locations", in Windows' order. Windows' compressed files are "ZIP,
+/// CAB..."; here they are the archives the app opens.
+fn search_settings() -> [Setting; 3] {
+    [
+        check(
+            message_id("Include system directories"),
+            |preferences| preferences.search_system_directories,
+            |update, _, on| update.search_system_directories = Some(on),
+        ),
+        check(
+            message_id("Include compressed files (ZIP, 7Z, TAR...)"),
+            |preferences| preferences.search_compressed_files,
+            |update, _, on| update.search_compressed_files = Some(on),
+        ),
+        check(
+            message_id("Always search file names and contents (this might take several minutes)"),
+            |preferences| preferences.search_contents,
+            |update, _, on| update.search_contents = Some(on),
+        ),
+    ]
 }
 
 /// An option as Folder Options shows it.

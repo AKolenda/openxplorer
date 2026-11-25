@@ -40,6 +40,9 @@ APP_ICON = NATIVE / 'crates/ox-app/resources/icons/hicolor/scalable/places/ox-fi
 DBUS_SERVICE_TEMPLATE = PACKAGING_DATA / 'dbus-service.in'
 # The desktop portal's backend file for Open and Save dialogs (INT-032).
 PORTAL_TEMPLATE = PACKAGING_DATA / 'file-chooser.portal.in'
+# The systemd user environment generator that sets GTK_USE_PORTAL=1 at
+# login while the user's opt-in mark is there (file_dialogs.rs).
+FILE_DIALOGS_GENERATOR = PACKAGING_DATA / 'file-dialogs-generator'
 
 # The administrator's persistent SMB mount helper, a second Rust program
 # (crates/ox-core/src/bin/openxplorer-mount-share.rs). The mount assistant
@@ -402,6 +405,9 @@ def install_desktop_data(staging: Staging, channel: Channel, paths: InstalledPat
     portal = portal_file_path(paths, app_id)
     if portal is not None:
         staging.write(build_portal_file(app_id), portal, DATA_MODE)
+    generator = file_dialogs_generator_path(paths, channel)
+    if generator is not None:
+        staging.copy(FILE_DIALOGS_GENERATOR, generator, PROGRAM_MODE)
 
 
 def portal_file_path(paths: InstalledPaths, app_id: str) -> PurePosixPath | None:
@@ -413,6 +419,21 @@ def portal_file_path(paths: InstalledPaths, app_id: str) -> PurePosixPath | None
     if paths.share == PurePosixPath('/app/share'):
         return None
     return paths.share / 'xdg-desktop-portal/portals' / f'{app_id}.portal'
+
+
+def file_dialogs_generator_path(paths: InstalledPaths, channel: Channel) -> PurePosixPath | None:
+    """Return where the generator that sets GTK_USE_PORTAL=1 at login goes.
+
+    The systemd user manager runs every program in this folder; uninstalling
+    the package removes it, and with it the variable, so no maintainer
+    script has to touch a home folder. Each package names its own, so both
+    channels install side by side. A Flatpak serves no dialogs and installs
+    none.
+    """
+    if paths.share == PurePosixPath('/app/share'):
+        return None
+    folder = PurePosixPath('/usr/lib/systemd/user-environment-generators')
+    return folder / f'60-{channel.package}-file-dialogs'
 
 
 def build_portal_file(app_id: str) -> str:

@@ -31,7 +31,7 @@ use super::error::NetworkError;
 use super::keyring::{KeyringError, SecretAttributes};
 use super::mounting::{PromptedOperation, WriteActivity};
 use super::prompts::{CredentialChoice, MountPrompts};
-use super::server::smb_host;
+use super::server::{smb_host, ServerKey, DEFAULT_SMB_PORT};
 use super::session_credentials::SessionCredentials;
 use crate::location::{is_smb_location, normalise};
 
@@ -126,6 +126,9 @@ pub struct SignOutRequest<'a> {
 #[derive(Debug)]
 pub struct SigningOut<'a> {
     entry: RegistryEntry<'a>,
+    /// The location signed out from, whose server's saved credentials
+    /// are forgotten.
+    uri: String,
     prompts: &'a MountPrompts,
     forget: ForgetScope,
 }
@@ -174,6 +177,9 @@ pub fn begin_sign_out<'a>(
     }
     let uri = normalise(request.uri)?;
     let host = smb_host(&uri).ok_or(NetworkError::NotAnSmbLocation)?;
+    if ServerKey::for_location(&uri).is_none() {
+        return Err(NetworkError::NotAnSmbLocation);
+    }
     let entry = registry.begin(&host)?;
     // Safety rule (NET-021, SAFE-012): every window's in-memory copy and
     // every keyring save still in flight for this server are discarded
@@ -181,6 +187,7 @@ pub fn begin_sign_out<'a>(
     prompts.credentials().forget_host_memory(&host);
     Ok(SigningOut {
         entry,
+        uri,
         prompts,
         forget: request.forget,
     })
@@ -260,10 +267,10 @@ async fn forget_saved_credentials(
     deadline: Duration,
 ) -> Result<bool, NetworkError> {
     let credentials = Arc::clone(signing_out.prompts.credentials());
-    let host = signing_out.host().to_owned();
+    let uri = signing_out.uri.clone();
     let forget = signing_out.forget;
     // The keyring may show an unlock prompt: never block the main thread.
-    let worker = gio::spawn_blocking(move || delete_saved_credentials(&credentials, &host, forget));
+    let worker = gio::spawn_blocking(move || delete_saved_credentials(&credentials, &uri, forget));
     let Ok(finished) = glib::future_with_timeout(deadline, worker).await else {
         return Err(NetworkError::CredentialsNotRemoved(KeyringError::TimedOut));
     };
@@ -272,24 +279,36 @@ async fn forget_saved_credentials(
     deleted.map_err(NetworkError::CredentialsNotRemoved)
 }
 
-/// Deletes `OpenXplorer`'s entries for every port of `host` in `forget`'s
-/// scope and, when forgetting everything, the passwords `GVfs` remembered
-/// for `host`.
+/// Deletes `OpenXplorer`'s entries for the server of `uri` (its host and
+/// port) in `forget`'s scope and, when forgetting everything, the
+/// passwords `GVfs` remembered for it. The saved credentials of the host's
+/// other ports stay: they are other servers (NET-014).
+///
+/// `GVfs` keeps no share in its entries, and `OpenXplorer` keys its own by
+/// server, as every share of a server signs in once; a server on SMB's
+/// usual port may be saved by `GVfs` with port 0 or none, so its entries
+/// are matched by host, and those of a custom port by that port.
 fn delete_saved_credentials(
     credentials: &SessionCredentials,
-    host: &str,
+    uri: &str,
     forget: ForgetScope,
 ) -> Result<bool, KeyringError> {
-    let own_removed = credentials.forget_host(host, forget)?;
+    let own_removed = credentials.forget(uri, forget)?;
     if forget == ForgetScope::SessionOnly {
         return Ok(own_removed);
     }
+    let Some(server) = ServerKey::for_location(uri) else {
+        return Ok(own_removed);
+    };
     // Safety rule (NET-021): GVfs keeps its own copy of a remembered
     // password; forgetting the server deletes that copy too.
     let keyring = credentials.keyring().ok_or(KeyringError::Unavailable)?;
-    let gnome_passwords = SecretAttributes::any_schema()
-        .with("server", host)
+    let mut gnome_passwords = SecretAttributes::any_schema()
+        .with("server", server.host())
         .with("protocol", GVFS_SMB_PROTOCOL);
+    if server.port() != DEFAULT_SMB_PORT {
+        gnome_passwords = gnome_passwords.with("port", &server.port().to_string());
+    }
     let gvfs_removed = keyring.clear(&gnome_passwords)?;
     Ok(own_removed || gvfs_removed)
 }

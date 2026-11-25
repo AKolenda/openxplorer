@@ -230,7 +230,7 @@ pub(crate) use desktop_link::fuzz_link;
 #[cfg(feature = "fuzzing")]
 pub(crate) use details_pane::{fuzz_rtf, fuzz_text};
 pub(crate) use disk_tools::is_installed as is_disk_tool_installed;
-pub(crate) use file_ops::{refuse_forbidden_characters, trim_typed_name};
+pub(crate) use file_ops::{allow_linux_name_characters, refuse_forbidden_characters, trim_typed_name};
 pub(crate) use folder_pane::FolderView;
 pub(crate) use menu_popover::OPENING_MOTION as MENU_OPENING_MOTION;
 pub(crate) use menu_popover::SUBMENU_DELAY;

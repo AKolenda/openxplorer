@@ -14,8 +14,13 @@
 //! while they are edited. The Rename dialog and the name box of
 //! Properties refuse them the same way, so every place a name is typed
 //! agrees.
+//!
+//! Settings' "Allow Linux file name characters when renaming", off by
+//! default as in Windows, lets every one of them through in all those
+//! places alike, but the slash, which Linux never allows, and the
+//! backslash, which the name check refuses everywhere (#212).
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -35,10 +40,46 @@ const BALLOON_TIMEOUT: Duration = Duration::from_secs(5);
 /// The CSS class of the balloon.
 const BALLOON_CLASS: &str = "name-balloon";
 
-/// The forbidden characters as the balloon's second line lists them:
+/// The characters refused while Linux's are allowed: the slash Linux
+/// never allows, and the backslash the name check refuses.
+const ALWAYS_REFUSED: [char; 2] = ['\\', '/'];
+
+thread_local! {
+    /// Whether Settings' "Allow Linux file name characters when renaming"
+    /// is on; read at each key, so an open name field follows a change.
+    static ALLOWS_LINUX_CHARACTERS: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Lets the characters Linux allows in names through every name field
+/// (`allowed`), or refuses all that Windows forbids.
+pub(crate) fn allow_linux_name_characters(allowed: bool) {
+    ALLOWS_LINUX_CHARACTERS.with(|allows| allows.set(allowed));
+}
+
+/// The characters a name field refuses now.
+fn refused_characters() -> &'static [char] {
+    if ALLOWS_LINUX_CHARACTERS.with(Cell::get) {
+        &ALWAYS_REFUSED
+    } else {
+        &WINDOWS_FORBIDDEN_CHARACTERS
+    }
+}
+
+/// Whether `inserted` holds a character a name field refuses now.
+fn is_refused(inserted: &str) -> bool {
+    if ALLOWS_LINUX_CHARACTERS.with(Cell::get) {
+        inserted
+            .chars()
+            .any(|character| ALWAYS_REFUSED.contains(&character))
+    } else {
+        has_windows_forbidden_character(inserted)
+    }
+}
+
+/// The refused characters as the balloon's second line lists them:
 /// `\ / : * ? " < > |`.
 fn forbidden_characters_line() -> String {
-    let characters: Vec<String> = WINDOWS_FORBIDDEN_CHARACTERS.iter().map(char::to_string).collect();
+    let characters: Vec<String> = refused_characters().iter().map(char::to_string).collect();
     characters.join(" ")
 }
 
@@ -72,7 +113,7 @@ fn types_forbidden_character(key: gdk::Key, modifiers: gdk::ModifierType) -> boo
         return false;
     }
     key.to_unicode()
-        .is_some_and(|character| WINDOWS_FORBIDDEN_CHARACTERS.contains(&character))
+        .is_some_and(|character| refused_characters().contains(&character))
 }
 
 /// The balloon under one name field.
@@ -82,6 +123,8 @@ struct Balloon {
     editor: glib::WeakRef<gtk::Entry>,
     /// The balloon itself, a child of the field.
     popover: gtk::Popover,
+    /// Its line of refused characters.
+    characters: gtk::Label,
     /// The timer that hides it, while it shows.
     timeout: Rc<RefCell<Option<glib::SourceId>>>,
 }
@@ -99,6 +142,7 @@ impl Balloon {
         let lines = gtk::Box::new(gtk::Orientation::Vertical, 2);
         lines.append(&first);
         lines.append(&characters);
+        let characters = characters.clone();
         // It only tells: the keyboard stays in the field, and typing goes
         // on there while it shows.
         let popover = gtk::Popover::builder()
@@ -117,6 +161,7 @@ impl Balloon {
         let balloon = Self {
             editor: editor.downgrade(),
             popover,
+            characters,
             timeout: Rc::default(),
         };
         editor.connect_unmap(glib::clone!(
@@ -143,6 +188,7 @@ impl Balloon {
             }
         });
         self.timeout.replace(Some(source));
+        self.characters.set_label(&forbidden_characters_line());
         if !self.popover.is_visible() {
             self.popover.popup();
         }
@@ -219,7 +265,7 @@ pub(crate) fn refuse_forbidden_characters(editor: &gtk::Entry) {
         }
     ));
     text.connect_insert_text(move |text, inserted, _| {
-        if restoring.get() || !has_windows_forbidden_character(inserted) {
+        if restoring.get() || !is_refused(inserted) {
             return;
         }
         text.stop_signal_emission_by_name("insert-text");
@@ -289,5 +335,24 @@ mod tests {
         );
         assert!(is_modifier_key(gdk::Key::Shift_L));
         assert!(!is_modifier_key(gdk::Key::BackSpace));
+    }
+
+    /// "Allow Linux file name characters when renaming": every character
+    /// Windows forbids goes through but the slash and the backslash, and
+    /// off again, all are refused (#212).
+    #[test]
+    fn allowing_linux_characters_refuses_only_the_slashes() {
+        allow_linux_name_characters(true);
+        let allowed = (
+            is_refused("10:30 notes?.txt"),
+            is_refused("a/b"),
+            is_refused("a\\b"),
+            forbidden_characters_line(),
+            types_forbidden_character(gdk::Key::colon, gdk::ModifierType::SHIFT_MASK),
+        );
+        allow_linux_name_characters(false);
+        assert_eq!(allowed, (false, true, true, "\\ /".to_owned(), false));
+        assert!(is_refused("10:30 notes.txt"));
+        assert_eq!(forbidden_characters_line(), "\\ / : * ? \" < > |");
     }
 }

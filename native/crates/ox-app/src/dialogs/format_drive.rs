@@ -5,8 +5,10 @@
 //! New in the native app, which formats through UDisks
 //! ([`ox_core::integration::format_drive`]) instead of opening GNOME
 //! Disks. Like Windows' dialog it shows the capacity and offers the file
-//! system, the volume label and Quick format, then asks once more before
-//! anything is erased. It only asks; the window formats.
+//! system, the allocation unit size, "Restore device defaults", the
+//! volume label and Quick format, then asks once more, in Windows' words,
+//! before anything is erased. Windows' MS-DOS startup disk has no
+//! counterpart and is left out. It only asks; the window formats.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -17,10 +19,40 @@ use ox_core::integration::{default_file_system, DriveFacts, FileSystem, FormatRe
 
 use crate::window::{ButtonStyle, Dialog};
 
-/// The question asked before the drive is erased.
+/// The question asked before the drive is erased, in Windows' words.
 const WARNING: &str = crate::i18n::message_id(
-    "Formatting erases all data on this drive. Copy anything you want to keep to another drive first.",
+    "WARNING: Formatting will erase ALL data on this disk.\nTo format the disk, click OK. To quit, click CANCEL.",
 );
+
+/// The first allocation unit size listed, which leaves the size to the
+/// file system's own `mkfs`.
+const DEFAULT_ALLOCATION: &str = crate::i18n::message_id("Default allocation size");
+
+/// An allocation unit size as Windows lists it: bytes up to 8192, then
+/// kilobytes.
+fn allocation_label(unit: u32) -> String {
+    if unit < 16 * 1024 {
+        ox_core::i18n::format_message("{size} bytes", &[("size", &unit.to_string())])
+    } else {
+        ox_core::i18n::format_message("{size} kilobytes", &[("size", &(unit / 1024).to_string())])
+    }
+}
+
+/// The allocation unit sizes `file_system` offers on a drive of `size`
+/// bytes, after the default, as the list shows them.
+fn allocation_choices(file_system: FileSystem, size: u64) -> (Vec<Option<u32>>, gtk::StringList) {
+    let units: Vec<Option<u32>> = std::iter::once(None)
+        .chain(file_system.allocation_units(size).into_iter().map(Some))
+        .collect();
+    let labels = gtk::StringList::new(&[]);
+    for unit in &units {
+        match unit {
+            Some(unit) => labels.append(&allocation_label(*unit)),
+            None => labels.append(&ox_core::i18n::gettext(DEFAULT_ALLOCATION)),
+        }
+    }
+    (units, labels)
+}
 
 /// The Format dialog for the drive `drive_name` that `facts` describes,
 /// over `parent`, offering the file systems in `available` (at least
@@ -51,6 +83,14 @@ pub(crate) fn format_drive_dialog(
         .unwrap_or_default();
     choice.set_selected(u32::try_from(first_index).unwrap_or_default());
     dialog.add_labelled(&ox_core::i18n::gettext("File system"), &choice);
+    let size = facts.size;
+    let (units, labels) = allocation_choices(first, size);
+    let units = Rc::new(RefCell::new(units));
+    let allocation = gtk::DropDown::new(Some(labels), None::<gtk::Expression>);
+    dialog.add_labelled(&ox_core::i18n::gettext("Allocation unit size"), &allocation);
+    let restore = gtk::Button::with_label(&ox_core::i18n::gettext("Restore device defaults"));
+    restore.set_halign(gtk::Align::Start);
+    dialog.add_field(&restore);
     let label = dialog.add_text_field(
         &ox_core::i18n::gettext("Volume label"),
         &first.fitted_label(&facts.label),
@@ -68,24 +108,51 @@ pub(crate) fn format_drive_dialog(
     choice.connect_selected_notify(glib::clone!(
         #[weak]
         label,
+        #[weak]
+        allocation,
         #[strong]
         chosen,
+        #[strong]
+        units,
         move |choice| {
             system.set(chosen(choice));
             fit_label_field(&label, system.get());
+            // Each file system has sizes of its own; the default again.
+            let (offered, labels) = allocation_choices(system.get(), size);
+            units.replace(offered);
+            allocation.set_model(Some(&labels));
+            allocation.set_selected(0);
         }
     ));
     let quick = dialog.add_check_button(&ox_core::i18n::gettext("Quick format"), true);
+    // As Windows' button does: the file system the drive starts with, the
+    // default allocation size and a quick format; the label stays.
+    restore.connect_clicked(glib::clone!(
+        #[weak]
+        choice,
+        #[weak]
+        allocation,
+        #[weak]
+        quick,
+        move |_| {
+            choice.set_selected(u32::try_from(first_index).unwrap_or_default());
+            allocation.set_selected(0);
+            quick.set_active(true);
+        }
+    ));
     dialog.add_cancel_button();
     dialog.add_button(&ox_core::i18n::gettext("Start"), ButtonStyle::Accent);
     dialog.connect_confirmed(move |dialog| {
         let file_system = chosen(&choice);
+        let index = usize::try_from(allocation.selected()).unwrap_or_default();
+        let allocation_unit = units.borrow().get(index).copied().flatten();
         on_start(
             dialog,
             FormatRequest {
                 file_system,
                 label: file_system.fitted_label(&label.text()),
                 quick: quick.is_active(),
+                allocation_unit,
             },
         );
     });
@@ -163,7 +230,7 @@ pub(crate) async fn confirm_erase(dialog: &Dialog) -> bool {
         ox_core::i18n::gettext_static(WARNING),
     );
     question.add_cancel_button();
-    let format = question.add_button(&ox_core::i18n::gettext("Format"), ButtonStyle::Danger);
+    let format = question.add_button(&ox_core::i18n::gettext("OK"), ButtonStyle::Danger);
     // Without a field Cancel has focus, so Enter does not erase the drive.
     question.open();
     let answer = question.next_response().await;
@@ -218,6 +285,9 @@ mod tests {
             "Capacity",
             "14.9 GB",
             "File system",
+            "Allocation unit size",
+            "Default allocation size",
+            "Restore device defaults",
             "Volume label",
             "Quick format",
             "Cancel",
@@ -228,7 +298,8 @@ mod tests {
                 "{expected} in {texts:?}"
             );
         }
-        let [choice] = <[gtk::DropDown; 1]>::try_from(descendants::<gtk::DropDown>(&dialog)).unwrap();
+        let [choice, allocation] =
+            <[gtk::DropDown; 2]>::try_from(descendants::<gtk::DropDown>(&dialog)).unwrap();
         let label = descendants::<gtk::Entry>(&dialog).remove(0);
         assert_eq!(choice.selected(), 1, "FAT32, the drive's own");
         assert_eq!(label.text(), "OLD STICK");
@@ -236,6 +307,7 @@ mod tests {
         dialog.press("Start");
         settle();
         choice.set_selected(3);
+        allocation.set_selected(2);
         label.set_text("Backups for the studio");
         descendants::<gtk::CheckButton>(&dialog)[0].set_active(false);
         dialog.press("Start");
@@ -246,14 +318,66 @@ mod tests {
                 file_system: FileSystem::Fat32,
                 label: "OLD STICK".into(),
                 quick: true,
+                allocation_unit: None,
             },
             FormatRequest {
                 file_system: FileSystem::Ext4,
                 label: "Backups for the".into(),
                 quick: false,
+                allocation_unit: Some(2048),
             },
         ];
         assert_eq!(*requests.borrow(), expected);
+        dialog.close();
+        parent.close();
+    }
+
+    /// Allocation unit size lists the default first, then the file
+    /// system's own sizes in Windows' words; a new file system lists its
+    /// own, and "Restore device defaults" puts back the drive's file
+    /// system, the default size and a quick format (#133).
+    #[gtk::test]
+    fn restore_device_defaults_resets_the_file_system_size_and_quick_format() {
+        let parent = gtk::Window::new();
+        let dialog = format_drive_dialog(&parent, "USB", &usb_stick(), &FileSystem::ALL, |_, _| {});
+        let [choice, allocation] =
+            <[gtk::DropDown; 2]>::try_from(descendants::<gtk::DropDown>(&dialog)).unwrap();
+        let shown = |allocation: &gtk::DropDown| -> Vec<String> {
+            let model = allocation
+                .model()
+                .and_downcast::<gtk::StringList>()
+                .expect("a list of sizes");
+            (0..model.n_items())
+                .filter_map(|index| model.string(index))
+                .map(String::from)
+                .collect()
+        };
+        let fat32 = shown(&allocation);
+        assert_eq!(fat32[0], "Default allocation size");
+        assert!(fat32.contains(&"4096 bytes".to_owned()), "{fat32:?}");
+        assert!(fat32.contains(&"32 kilobytes".to_owned()), "{fat32:?}");
+        choice.set_selected(3);
+        assert_eq!(
+            shown(&allocation),
+            [
+                "Default allocation size",
+                "1024 bytes",
+                "2048 bytes",
+                "4096 bytes"
+            ]
+        );
+        allocation.set_selected(3);
+        let quick = descendants::<gtk::CheckButton>(&dialog).remove(0);
+        quick.set_active(false);
+        descendants::<gtk::Button>(&dialog)
+            .into_iter()
+            .find(|button| button.label().as_deref() == Some("Restore device defaults"))
+            .expect("the Restore device defaults button")
+            .emit_clicked();
+        settle();
+        assert_eq!(choice.selected(), 1, "FAT32, the drive's own");
+        assert_eq!(allocation.selected(), 0);
+        assert!(quick.is_active());
         dialog.close();
         parent.close();
     }
@@ -274,7 +398,7 @@ mod tests {
         let available = [FileSystem::ExFat, FileSystem::Fat32];
         let dialog = format_drive_dialog(&parent, "USB", &facts, &available, |_, _| {});
 
-        let [choice] = <[gtk::DropDown; 1]>::try_from(descendants::<gtk::DropDown>(&dialog)).unwrap();
+        let [choice, _] = <[gtk::DropDown; 2]>::try_from(descendants::<gtk::DropDown>(&dialog)).unwrap();
         let label = descendants::<gtk::Entry>(&dialog).remove(0);
         assert_eq!(choice.model().map(|model| model.n_items()), Some(2));
         assert_eq!(choice.selected(), 0, "exFAT for a drive above 32 GB");
@@ -304,7 +428,7 @@ mod tests {
             move |_, request| heard.borrow_mut().push(request.label),
         );
 
-        let [choice] = <[gtk::DropDown; 1]>::try_from(descendants::<gtk::DropDown>(&dialog)).unwrap();
+        let [choice, _] = <[gtk::DropDown; 2]>::try_from(descendants::<gtk::DropDown>(&dialog)).unwrap();
         let label = descendants::<gtk::Entry>(&dialog).remove(0);
         let typing = descendants::<gtk::Text>(&label).remove(0);
         label.set_text("");

@@ -84,8 +84,13 @@ impl Term {
     /// Whether the term holds for `lowercase_name`, with
     /// `lowercase_context` the item's folder or text, as
     /// [`super::NamePattern::matches_lowercase`] takes them.
-    pub(crate) fn holds(&self, lowercase_name: &str, lowercase_context: &str) -> bool {
-        self.test.passes(lowercase_name, lowercase_context) != self.negated
+    pub(crate) fn holds(
+        &self,
+        lowercase_name: &str,
+        lowercase_context: &str,
+        extensions: super::pattern::ExtensionWords,
+    ) -> bool {
+        self.test.passes(lowercase_name, lowercase_context, extensions) != self.negated
     }
 
     /// The text a positive term marks in a name; `None` for the others.
@@ -122,14 +127,19 @@ impl Term {
 }
 
 impl Test {
-    fn passes(&self, lowercase_name: &str, lowercase_context: &str) -> bool {
+    fn passes(
+        &self,
+        lowercase_name: &str,
+        lowercase_context: &str,
+        extensions: super::pattern::ExtensionWords,
+    ) -> bool {
         use super::pattern::{wildcard_in_name, wildcard_matches, word_in_name};
         match self {
             Test::Word(word) => {
-                word_in_name(word, lowercase_name) || lowercase_context.contains(word.as_str())
+                word_in_name(word, lowercase_name, extensions) || lowercase_context.contains(word.as_str())
             }
-            Test::Wildcard(pattern) => wildcard_in_name(pattern, lowercase_name),
-            Test::Name(NameTest::Contains(word)) => word_in_name(word, lowercase_name),
+            Test::Wildcard(pattern) => wildcard_in_name(pattern, lowercase_name, extensions),
+            Test::Name(NameTest::Contains(word)) => word_in_name(word, lowercase_name, extensions),
             Test::Name(NameTest::Equals(word)) => lowercase_name == word,
             Test::Name(NameTest::BeginsWith(word)) => lowercase_name.starts_with(word.as_str()),
             Test::Name(NameTest::EndsWith(word)) => lowercase_name.ends_with(word.as_str()),
@@ -806,9 +816,13 @@ mod tests {
     fn the_tests_follow_the_folder_filter_rules() {
         let holds = |text: &str, name: &str| {
             parse(text, &lower).iter().all(|clause| {
-                clause
-                    .iter()
-                    .any(|term| term.holds(&name.to_lowercase(), "/home/demo/work"))
+                clause.iter().any(|term| {
+                    term.holds(
+                        &name.to_lowercase(),
+                        "/home/demo/work",
+                        super::super::pattern::ExtensionWords::WholeOnly,
+                    )
+                })
             })
         };
         assert!(holds("\"annual report\"", "Annual report 2026.docx"));

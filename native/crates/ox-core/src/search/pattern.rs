@@ -19,6 +19,8 @@
 //! M5753RA.pdf` but not `WO - M5753.pdf`, whose only `pd` is in `.pdf`,
 //! while `pdf`, `.pdf`, `p?f` and `66873.pdf` still find PDF files.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use super::expression::{self, Clauses};
 
 /// The characters that make a word a wildcard pattern.
@@ -29,11 +31,46 @@ pub fn is_wildcard(word: &str) -> bool {
     word.contains(WILDCARDS)
 }
 
+/// How a search word may reach into a name's extension.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ExtensionWords {
+    /// Only as the whole extension, with or without its dot: `doc` and
+    /// `.doc` do not find `report.docx`. The default.
+    #[default]
+    WholeOnly,
+    /// Also from the extension's start, as Windows 11's search matches:
+    /// `doc` and `.doc` find `report.docx`, `ocx` still does not.
+    FromStart,
+}
+
+/// Whether search words match from the start of an extension
+/// ([`ExtensionWords::FromStart`]), for every search the process makes
+/// from now on: Settings > Search > "Match words at the start of file
+/// extensions (like Windows)".
+static WORDS_FROM_EXTENSION_START: AtomicBool = AtomicBool::new(false);
+
+/// Sets how the searches this process makes from now on match words in
+/// extensions, as the Settings switch says.
+pub fn set_extension_words(mode: ExtensionWords) {
+    WORDS_FROM_EXTENSION_START.store(mode == ExtensionWords::FromStart, Ordering::Relaxed);
+}
+
+/// The mode [`set_extension_words`] set last.
+pub fn extension_words() -> ExtensionWords {
+    if WORDS_FROM_EXTENSION_START.load(Ordering::Relaxed) {
+        ExtensionWords::FromStart
+    } else {
+        ExtensionWords::WholeOnly
+    }
+}
+
 /// What a search's words ask of a name: the clauses of
-/// [`super::expression`], lower-cased.
+/// [`super::expression`], lower-cased, and how a word may reach into a
+/// name's extension.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NamePattern {
     clauses: Clauses,
+    extensions: ExtensionWords,
 }
 
 impl NamePattern {
@@ -48,7 +85,16 @@ impl NamePattern {
     pub(crate) fn normalised(text: &str, normalise: &dyn Fn(&str) -> String) -> Self {
         Self {
             clauses: expression::parse(text, normalise),
+            extensions: extension_words(),
         }
+    }
+
+    /// The pattern matching words in extensions as `mode` says, whatever
+    /// the process-wide setting.
+    #[must_use]
+    pub fn with_extension_words(mut self, mode: ExtensionWords) -> Self {
+        self.extensions = mode;
+        self
     }
 
     /// Whether the search has no words, so it matches everything.
@@ -99,7 +145,7 @@ impl NamePattern {
         self.clauses.iter().all(|clause| {
             clause
                 .iter()
-                .any(|term| term.holds(lowercase_name, lowercase_context))
+                .any(|term| term.holds(lowercase_name, lowercase_context, self.extensions))
         })
     }
 }
@@ -121,13 +167,25 @@ fn extension_start(lowercase_name: &str) -> Option<usize> {
 }
 
 /// Whether the plain `word` is in `lowercase_name`, starting before its
-/// extension, or is the whole extension.
-pub(crate) fn word_in_name(word: &str, lowercase_name: &str) -> bool {
+/// extension's dot, or reaching into the extension as `mode` allows: as
+/// the whole extension, with or without the dot, or also from the start
+/// of the extension or its dot. A word that starts at the dot reaches
+/// into the extension as one without it does, so `.doc` finds
+/// `report.docx` exactly when `doc` does.
+pub(crate) fn word_in_name(word: &str, lowercase_name: &str, mode: ExtensionWords) -> bool {
     let Some(first) = lowercase_name.find(word) else {
         return false;
     };
     match extension_start(lowercase_name) {
-        Some(extension) => first < extension || lowercase_name[extension..] == *word,
+        Some(extension) => {
+            let dot = extension - 1;
+            match mode {
+                ExtensionWords::FromStart => first <= extension,
+                ExtensionWords::WholeOnly => {
+                    first < dot || lowercase_name[extension..] == *word || lowercase_name[dot..] == *word
+                }
+            }
+        }
         None => true,
     }
 }
@@ -140,16 +198,21 @@ pub(crate) fn word_in_name(word: &str, lowercase_name: &str) -> bool {
 /// a search may test every cached name here: one pass over the name, in
 /// time proportional to the name's length times the pattern's, with a
 /// fixed number of allocations.
-pub(crate) fn wildcard_in_name(pattern: &str, lowercase_name: &str) -> bool {
+pub(crate) fn wildcard_in_name(pattern: &str, lowercase_name: &str, mode: ExtensionWords) -> bool {
     let pattern: Vec<char> = pattern.chars().collect();
     let tokens = tokens(&pattern);
     let extension = extension_start(lowercase_name);
     let mut states = States::new(tokens.len());
-    // Every position before the extension may start a match, which may
-    // run on into the extension; reaching the pattern's end at any point
-    // means the pattern matches the text from that start.
+    // Every position before the extension's dot may start a match, which
+    // may run on into the extension, and with `FromStart` the dot and the
+    // extension's first character too; reaching the pattern's end at any
+    // point means the pattern matches the text from that start.
+    let may_start = |at: usize, extension: usize| match mode {
+        ExtensionWords::WholeOnly => at + 1 < extension,
+        ExtensionWords::FromStart => at <= extension,
+    };
     for (at, character) in lowercase_name.char_indices() {
-        if extension.is_none_or(|extension| at < extension) {
+        if extension.is_none_or(|extension| may_start(at, extension)) {
             states.start(&tokens);
         }
         if states.is_complete() {
@@ -164,8 +227,12 @@ pub(crate) fn wildcard_in_name(pattern: &str, lowercase_name: &str) -> bool {
     if states.is_complete() {
         return true;
     }
-    // Inside the extension, only as the whole extension.
-    extension.is_some_and(|extension| matches_tokens(&tokens, &lowercase_name[extension..]))
+    // From the dot or inside the extension, only as the whole extension,
+    // with or without its dot.
+    extension.is_some_and(|extension| {
+        matches_tokens(&tokens, &lowercase_name[extension..])
+            || matches_tokens(&tokens, &lowercase_name[extension - 1..])
+    })
 }
 
 /// Whether the whole of `name` matches the wildcard `pattern`, as
@@ -376,6 +443,47 @@ mod tests {
         for word in ["pdf", ".pdf", "66873.pdf", "873.p"] {
             assert!(NamePattern::new(word).matches("WO - M5753 - 66873.pdf"), "{word}");
         }
+        // A word starting at the dot reaches into the extension as one
+        // without the dot does: only the whole extension matches.
+        for word in ["doc", ".doc", "do?", ".do?", ".d*c"] {
+            assert!(!NamePattern::new(word).matches("report.docx"), "{word}");
+        }
+        for word in ["docx", ".docx", ".doc?", "t.doc", "report.doc"] {
+            assert!(NamePattern::new(word).matches("report.docx"), "{word}");
+        }
+    }
+
+    /// With "Match words at the start of file extensions (like Windows)"
+    /// on, a word also matches from the start of an extension or its dot,
+    /// as Windows 11 answered in a folder of "WO - M5753.pdf",
+    /// "report.docx" and "notes.txt"; a word inside an extension still
+    /// does not, and the default stays the owner's rule.
+    ///
+    /// parity: SRCH-004
+    #[test]
+    fn words_may_match_from_an_extensions_start_as_windows_does() {
+        let names = ["WO - M5753.pdf", "report.docx", "notes.txt"];
+        let found = |word: &str, mode: ExtensionWords| -> Vec<&str> {
+            let pattern = NamePattern::new(word).with_extension_words(mode);
+            names.into_iter().filter(|name| pattern.matches(name)).collect()
+        };
+        let windows = ExtensionWords::FromStart;
+        assert_eq!(found("doc", windows), ["report.docx"]);
+        assert_eq!(found(".doc", windows), ["report.docx"]);
+        assert_eq!(found("docx", windows), ["report.docx"]);
+        assert_eq!(found("pd", windows), ["WO - M5753.pdf"]);
+        assert_eq!(found("txt", windows), ["notes.txt"]);
+        assert!(found("mp", windows).is_empty());
+        assert!(found("ocx", windows).is_empty(), "not from inside the extension");
+        assert_eq!(found(".do?", windows), ["report.docx"], "a wildcard too");
+        let owner = ExtensionWords::WholeOnly;
+        assert!(found("doc", owner).is_empty());
+        assert!(
+            found(".doc", owner).is_empty(),
+            "doc and .doc agree in both modes"
+        );
+        assert_eq!(found("docx", owner), ["report.docx"]);
+        assert_eq!(ExtensionWords::default(), owner, "the owner's rule by default");
         assert!(!NamePattern::new("df").matches("WO - M5753 - 66873.pdf"));
         // Not extensions: the words are found anywhere.
         assert!(NamePattern::new("draft").matches("Notes v2.final draft"));
@@ -575,13 +683,14 @@ mod tests {
                     .map(|(start, _)| start)
                     .chain(std::iter::once(name.len()))
                     .any(|start| match extension {
-                        Some(extension) if start >= extension => {
-                            start == extension && wildcard_matches(pattern, &name[start..])
+                        Some(extension) if start + 1 >= extension => {
+                            (start == extension || start + 1 == extension)
+                                && wildcard_matches(pattern, &name[start..])
                         }
                         _ => wildcard_matches(&open_end, &name[start..]),
                     });
                 assert_eq!(
-                    wildcard_in_name(pattern, name),
+                    wildcard_in_name(pattern, name, ExtensionWords::WholeOnly),
                     expected,
                     "{pattern:?} in {name:?}"
                 );

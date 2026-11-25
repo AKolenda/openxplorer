@@ -450,8 +450,12 @@ impl Dialog {
     /// Shows the dialog, focusing its first text field with the text
     /// selected, or else its first button.
     pub(crate) fn open(&self) {
-        let first_field =
-            crate::window::children(&self.fields()).find_map(|child| child.downcast::<gtk::Entry>().ok());
+        // A field may share its row with a button, as Map network drive's
+        // Folder has Browse... beside it.
+        let first_field = crate::window::children(&self.fields()).find_map(|child| {
+            let in_row = child.downcast_ref::<gtk::Box>().and_then(gtk::Box::first_child);
+            in_row.unwrap_or(child).downcast::<gtk::Entry>().ok()
+        });
         let first_button = self.imp().buttons.borrow().first().cloned();
         // Set before the window shows, so GTK's initial focus lands there.
         let initial_focus: Option<gtk::Widget> = match (&first_field, first_button) {

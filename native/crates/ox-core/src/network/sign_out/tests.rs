@@ -124,15 +124,18 @@ fn signing_out_forgets_every_saved_credential_of_that_server_only() {
     });
 }
 
-/// Host-wide Sign out matches the ports it disconnects, without sharing
-/// credentials between ports or forgetting another host's account.
+/// Sign out makes every window forget the host's credentials in memory on
+/// every port and discards saves in flight for any of them, but deletes
+/// the saved credentials of the one server signed out of: another port of
+/// the same host is another server, whose account stays saved (#126).
 #[test]
-fn signing_out_forgets_every_port_and_window_in_the_chosen_scope() {
+fn signing_out_forgets_the_saved_credentials_of_that_port_only() {
     for scope in [ForgetScope::AllScopes, ForgetScope::SessionOnly] {
         with_prompts(|fixture| {
-            let endpoints = ["smb://nas/a", "smb://nas:1445/a"];
+            let signed_out = "smb://nas/a";
+            let other_port = "smb://nas:1445/b";
             let other_window = SessionCredentials::new(Arc::clone(&fixture.store));
-            for uri in endpoints.into_iter().chain(["smb://other:1445/a"]) {
+            for uri in [signed_out, other_port, "smb://other:1445/a"] {
                 save(fixture, uri, &sam(CredentialScope::Permanent));
                 save(fixture, uri, &sam(CredentialScope::Session));
                 other_window.accept_memory(uri, &sam(CredentialScope::Session));
@@ -140,10 +143,10 @@ fn signing_out_forgets_every_port_and_window_in_the_chosen_scope() {
             let pending_uri = "smb://nas:2445/a";
             let pending_generation = fixture.credentials.generation(pending_uri);
             let registry = SignOutRegistry::default();
-            let signing_out = begin_sign_out(&fixture.prompts, &registry, request(endpoints[0], scope))
+            let signing_out = begin_sign_out(&fixture.prompts, &registry, request(signed_out, scope))
                 .expect("sign-out starts");
 
-            for uri in endpoints {
+            for uri in [signed_out, other_port] {
                 assert_eq!(other_window.peek(uri), None, "{uri}");
                 assert!(registry.is_signing_out(uri), "{uri}");
             }
@@ -156,20 +159,50 @@ fn signing_out_forgets_every_port_and_window_in_the_chosen_scope() {
                 .persist(pending_uri, &sam(CredentialScope::Session), pending_generation)
                 .expect("a pending save on a previously unseen port is discarded");
             let fresh_window = SessionCredentials::new(Arc::clone(&fixture.store));
-            for uri in endpoints {
-                let expected = match scope {
-                    ForgetScope::AllScopes => None,
-                    ForgetScope::SessionOnly => Some(sam(CredentialScope::Permanent)),
-                };
-                assert_eq!(fresh_window.load(uri).unwrap(), expected, "{uri}");
-            }
+            let expected = match scope {
+                ForgetScope::AllScopes => None,
+                ForgetScope::SessionOnly => Some(sam(CredentialScope::Permanent)),
+            };
+            assert_eq!(fresh_window.load(signed_out).unwrap(), expected);
             assert_eq!(fresh_window.load(pending_uri).unwrap(), None);
-            assert_eq!(
-                fresh_window.load("smb://other:1445/a").unwrap(),
-                Some(sam(CredentialScope::Session))
-            );
+            for uri in [other_port, "smb://other:1445/a"] {
+                assert_eq!(
+                    fresh_window.load(uri).unwrap(),
+                    Some(sam(CredentialScope::Session)),
+                    "{uri}"
+                );
+            }
         });
     }
+}
+
+/// The password `GVfs` remembered for a custom port of a host stays when
+/// Sign out forgets another port's, and goes when its own port is signed
+/// out of.
+#[test]
+fn signing_out_of_a_custom_port_forgets_only_its_gvfs_password() {
+    with_prompts(|fixture| {
+        let on_port = |port: &str| gnome_password("nas").with("port", port);
+        for port in ["1445", "2445"] {
+            let attributes = on_port(port);
+            let secret = NewSecret {
+                collection: KeyringCollection::Default,
+                label: "sam@nas",
+                attributes: &attributes,
+                text: "not-a-real-password",
+            };
+            fixture.keyring.store(&secret).expect("the memory keyring saves");
+        }
+        let registry = SignOutRegistry::default();
+        sign_out(
+            fixture,
+            &registry,
+            request("smb://nas:1445/Projects", ForgetScope::AllScopes),
+        )
+        .expect("sign out succeeds");
+        assert!(!fixture.keyring.contains(&on_port("1445")));
+        assert!(fixture.keyring.contains(&on_port("2445")));
+    });
 }
 
 /// parity: NET-021

@@ -9,7 +9,8 @@
 //! drive), showing "Connecting…" meanwhile and any error inside the dialog.
 
 use gtk::prelude::*;
-use ox_core::location::MAX_LABEL_CHARS;
+use gtk::{gio, glib};
+use ox_core::location::{split_location, LocationKind, MAX_LABEL_CHARS};
 use ox_core::network::CredentialChoice;
 
 use super::network_protocol::Protocol;
@@ -126,7 +127,7 @@ pub(crate) fn map_network_dialog(
     let drive = gtk::DropDown::from_strings(&letters);
     drive.set_halign(gtk::Align::Start);
     dialog.add_labelled(ox_core::i18n::gettext_static("Drive:"), &drive);
-    let folder = address_field(&dialog, ox_core::i18n::gettext_static("Folder:"), "");
+    let folder = folder_field(&dialog);
     dialog.add_hint(&ox_core::i18n::format_message(
         "Example: {address}",
         &[("address", "\\\\server\\share")],
@@ -237,6 +238,65 @@ pub(crate) fn network_location_dialog(
         on_connect(dialog, request);
     });
     dialog
+}
+
+/// Map network drive's Folder field, with Windows' Browse... button beside
+/// it, which picks a folder on the network into the field.
+fn folder_field(dialog: &Dialog) -> gtk::Entry {
+    let entry = gtk::Entry::builder()
+        .activates_default(true)
+        .hexpand(true)
+        .input_hints(gtk::InputHints::NO_SPELLCHECK)
+        .build();
+    let browse = gtk::Button::with_label(&ox_core::i18n::gettext("Browse..."));
+    browse.connect_clicked(glib::clone!(
+        #[weak]
+        entry,
+        move |button| browse_for_share(button, &entry)
+    ));
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 8);
+    row.append(&entry);
+    row.append(&browse);
+    let label = ox_core::i18n::gettext_static("Folder:");
+    dialog.add_labelled(label, &row);
+    entry.update_property(&[gtk::accessible::Property::Label(label)]);
+    entry
+}
+
+/// Browse...: asks for a folder, starting at the network, and writes it
+/// into `entry` as Map network drive takes it.
+fn browse_for_share(button: &gtk::Button, entry: &gtk::Entry) {
+    let picker = gtk::FileDialog::builder()
+        .title(ox_core::i18n::gettext("Browse For Folder"))
+        .modal(true)
+        .initial_folder(&gio::File::for_uri("network:///"))
+        .build();
+    let window = button.root().and_downcast::<gtk::Window>();
+    picker.select_folder(
+        window.as_ref(),
+        gio::Cancellable::NONE,
+        glib::clone!(
+            #[weak]
+            entry,
+            move |chosen| {
+                if let Ok(folder) = chosen {
+                    entry.set_text(&folder_text(&folder.uri()));
+                }
+            }
+        ),
+    );
+}
+
+/// How a folder chosen with Browse... reads in the Folder field: a
+/// Windows share as `\\server\share\folder`, as Windows writes it, and
+/// any other location by its address.
+fn folder_text(uri: &str) -> String {
+    let is_share = split_location(uri).is_ok_and(|parts| parts.kind() == LocationKind::Smb);
+    if is_share {
+        ox_core::search::display_path(uri)
+    } else {
+        uri.to_owned()
+    }
 }
 
 /// Adds a text field labelled `label` showing `placeholder` while empty.
@@ -365,6 +425,15 @@ mod tests {
         assert_eq!(checks, [true, false]);
         let entries = descendants::<gtk::Entry>(&dialog);
         assert_eq!(entries.len(), 1, "only the folder is typed");
+        let browse = descendants::<gtk::Button>(&dialog)
+            .into_iter()
+            .find(|button| button.label().as_deref() == Some("Browse..."))
+            .expect("Browse... beside the folder, as in Windows");
+        assert_eq!(
+            browse.prev_sibling().as_ref(),
+            Some(entries[0].upcast_ref::<gtk::Widget>()),
+            "on the folder's row"
+        );
         let focus = GtkWindowExt::focus(&dialog);
         assert!(
             focus.is_some_and(|focus| focus.is_ancestor(&entries[0])),
@@ -392,6 +461,20 @@ mod tests {
         assert!(long.ends_with("é (Z:)"));
         dialog.close();
         parent.close();
+    }
+
+    /// A folder chosen with Browse... reads as Windows writes a share, and
+    /// other locations by their address.
+    ///
+    /// parity: NET-001
+    #[test]
+    fn a_browsed_folder_reads_as_a_windows_share() {
+        assert_eq!(
+            folder_text("smb://nas/Projects/2026%20plans"),
+            "\\\\nas\\Projects\\2026 plans"
+        );
+        assert_eq!(folder_text("smb://nas/Projects"), "\\\\nas\\Projects");
+        assert_eq!(folder_text("sftp://server/home/demo"), "sftp://server/home/demo");
     }
 
     /// The Drive list leaves out the letters other shares were mapped to

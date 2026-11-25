@@ -76,12 +76,16 @@ impl FileDialogsStatus {
             )];
             sentences.extend(match self.gtk_apps {
                 LoginApps::Following => Some(ox_core::i18n::gettext_static("GTK 3 apps do too.")),
-                LoginApps::NextLogin => Some(ox_core::i18n::gettext_static("GTK 3 apps follow after you log out and back in.")),
-                LoginApps::LeftAlone => Some(ox_core::i18n::gettext_static(
-                    "GTK 3 apps keep GTK's dialog: ~/.config/environment.d/60-openxplorer-file-dialogs.conf is \
-                     not OpenXplorer's, so it was left alone.",
+                LoginApps::NextLogin => Some(ox_core::i18n::gettext_static(
+                    "GTK 3 apps follow after you log out and back in.",
                 )),
-                LoginApps::NotCovered => Some(ox_core::i18n::gettext_static("Click Enable for GTK 3 apps too.")),
+                LoginApps::LeftAlone => Some(ox_core::i18n::gettext_static(
+                    "GTK 3 apps keep GTK's dialog: ~/.config/winspace/file-dialogs/gtk-apps is not \
+                     OpenXplorer's, so it was left alone.",
+                )),
+                LoginApps::NotCovered => {
+                    Some(ox_core::i18n::gettext_static("Click Enable for GTK 3 apps too."))
+                }
                 LoginApps::NotNeeded => None,
             });
             sentences.extend(match self.kde_apps {
@@ -291,6 +295,19 @@ impl DesktopIntegration {
                 backend: registration.current_backend(),
             })
             .await
+    }
+
+    /// Soon after the app starts, puts the opt-in mark in place of the
+    /// environment file an earlier version wrote for GTK 3 apps, off the
+    /// main thread; only an unchanged file of the app's is replaced, once
+    /// (#143). Failing changes nothing, and the next start tries again.
+    pub(crate) fn replace_old_gtk_env_file(&self) {
+        let replacing = self
+            .file_dialogs()
+            .run_in_background(FileDialogRegistration::replace_old_gtk_env_file);
+        gtk::glib::spawn_future_local(async move {
+            let _ = replacing.await;
+        });
     }
 
     fn file_dialogs(&self) -> &FileDialogRegistration {

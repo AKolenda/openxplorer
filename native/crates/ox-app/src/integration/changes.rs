@@ -18,7 +18,8 @@ use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::integration::{
     request_autostart, AutostartRequest, BackgroundError, DefaultApps, DefaultAppsError, DisabledReveal,
-    RegistrationFailed, RestoreScope, RevealError, RevealRegistration, ZipAssociation, BUS_NAME, OBJECT_PATH,
+    FileDialogError, RegistrationFailed, RestoreScope, RevealError, RevealRegistration, ZipAssociation,
+    BUS_NAME, OBJECT_PATH,
 };
 use ox_core::location::file_uri;
 
@@ -223,7 +224,14 @@ impl DesktopIntegration {
                 {
                     return Ok(None);
                 }
-                registration.enable().map(|()| Some(AfterLogin::of(registration)))
+                // Dialogs the user enabled before stay theirs: Restore
+                // previous gives back only what Make default turned on.
+                let were_enabled = registration.is_enabled() || registration.has_record();
+                registration.enable()?;
+                if !were_enabled {
+                    registration.remember_enabled_by_make_default()?;
+                }
+                Ok::<_, FileDialogError>(Some(AfterLogin::of(registration)))
             })
             .await;
         match enabled {
@@ -238,7 +246,8 @@ impl DesktopIntegration {
 
     /// Puts every recorded handler back where the app is still the
     /// default, then turns Show in folder off (`desktopRestore`) and gives
-    /// Open and Save dialogs back to the desktop.
+    /// Open and Save dialogs back to the desktop when Make default turned
+    /// them on; dialogs the user enabled on their own stay enabled.
     ///
     /// # Errors
     ///
@@ -255,9 +264,10 @@ impl DesktopIntegration {
             .services()
             .file_dialogs
             .run_in_background(|registration| {
-                // A recorded Enable is undone even when the configuration
-                // cannot be read now, so a failure is told, not skipped.
-                if !registration.is_available() || !(registration.has_record() || registration.is_enabled()) {
+                // Only what Make default turned on is undone, and then even
+                // when the configuration cannot be read now, so a failure is
+                // told, not skipped.
+                if !registration.is_available() || !registration.was_enabled_by_make_default() {
                     return Ok(false);
                 }
                 registration.disable().map(|_| true)

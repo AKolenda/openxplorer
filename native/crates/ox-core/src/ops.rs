@@ -88,6 +88,8 @@ mod links;
 mod new_from_template;
 mod numbered_rename;
 mod opendocument;
+#[cfg(test)]
+pub(crate) use opendocument::stored_zip;
 mod pasted_file;
 mod progress;
 mod recycle_bin;

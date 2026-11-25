@@ -165,11 +165,11 @@ impl IconRole {
             IconRole::Videos => (Imageres, 189, Verified),
             IconRole::Home => (Shell32, 51380, Verified),
             IconRole::Gallery => (Shell32, 51586, Verified),
-            IconRole::ThisPc => (Imageres, 109, Verified),
+            // This PC, and a computer on the network: the plain monitor, as
+            // Network shows computers; checked on the user's extracted
+            // imageres, like the groups below marked so.
+            IconRole::ThisPc | IconRole::NetworkComputer => (Imageres, 109, Verified),
             IconRole::Network => (Imageres, 25, Verified),
-            // The plain monitor, as Network shows computers; checked on the
-            // user's extracted imageres, like the groups below marked so.
-            IconRole::NetworkComputer => (Imageres, 109, Verified),
             // The yellow folder with a green bar, Windows' network folder.
             IconRole::NetworkShare => (Imageres, 143, Verified),
             IconRole::NetworkDrive => (Imageres, 33, Verified),

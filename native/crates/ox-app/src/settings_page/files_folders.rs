@@ -77,8 +77,17 @@ const ITEM_CHECK_BOXES: RowText = RowText {
 const CHECKS_ON_CTRL: RowText = RowText {
     title: "Show check boxes only while Ctrl is held",
     description: "Item check boxes stay out of the way until you hold Ctrl to pick several items. \
-                  Turn this off to show them whenever you point at an item.",
+                  Turn this off to show them whenever you point at an item, as in Windows.",
     keywords: "check box checkbox ctrl control key hold hover show hide select multiple",
+};
+
+const LINUX_NAME_CHARACTERS: RowText = RowText {
+    title: "Allow Linux file name characters when renaming",
+    description: "Names you type may contain : * ? \" < > | as Linux allows, when renaming in place, in \
+                  the Rename dialog and in Properties alike. Such a name cannot be copied to a Windows \
+                  share or a USB drive as it is. Off, these are refused as in Windows.",
+    keywords: "rename name characters colon asterisk question mark quote pipe forbidden invalid \
+               linux windows balloon",
 };
 
 const EXPANDABLE_FOLDERS: RowText = RowText {
@@ -93,6 +102,14 @@ const RECYCLE_REPLACED: RowText = RowText {
                   bring it back. Off: the new file overwrites it, as in Windows, and it is gone.",
     keywords: "replace overwrite file conflict copy move paste drag restore recycle bin trash undo old \
                replaced keep windows",
+};
+
+const RESTORE_OVER_ORIGINAL: RowText = RowText {
+    title: "Restore over the original (Windows)",
+    description: "Previous Versions' Restore copies the version back over the item, asking before \
+                  it replaces anything, as in Windows. Off: Restore asks where to put a copy, and \
+                  the item is never touched.",
+    keywords: "previous versions restore snapshot shadow copy overwrite original replace windows",
 };
 
 const DELETE_REMOVABLE_PERMANENTLY: RowText = RowText {
@@ -337,7 +354,8 @@ fn details_group(page: &SettingsPage) -> SettingsGroup {
 
 /// What Replace does with the file it replaces in a copy, move, paste,
 /// drag or Recycle Bin restore. On by default, the owner's choice; off,
-/// the old file is overwritten, as in Windows 11.
+/// the old file is overwritten, as in Windows 11. Then whether Previous
+/// Versions' Restore copies back over the item, as Windows' does.
 fn replacing_group(page: &SettingsPage) -> SettingsGroup {
     let group = SettingsGroup::new(&ox_core::i18n::gettext("Copying and moving"));
     let row = SettingRow::new(RECYCLE_REPLACED);
@@ -349,6 +367,29 @@ fn replacing_group(page: &SettingsPage) -> SettingsGroup {
         },
     };
     row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    group.add_row(&row);
+    // Off by default, the owner's choice; on, Restore works as Windows'.
+    let row = SettingRow::new(RESTORE_OVER_ORIGINAL);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.restore_over_original,
+        write: |on| PreferencesUpdate {
+            restore_over_original: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    group.add_row(&row);
+    // Off by default, as in Windows; one rule for every name field (#212).
+    let row = SettingRow::new(LINUX_NAME_CHARACTERS);
+    let binding = PreferenceBinding {
+        read: |preferences| preferences.allow_linux_name_characters,
+        write: |on| PreferencesUpdate {
+            allow_linux_name_characters: Some(on),
+            ..PreferencesUpdate::default()
+        },
+    };
+    row.add_control(&page.preference_switch(binding), ControlName::RowTitle);
+    group.add_row(&row);
     group
 }
 

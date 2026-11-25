@@ -175,16 +175,42 @@ async fn read_payload(clipboard: &gdk::Clipboard, mime_type: &str) -> Payload {
 
 /// Reads `format` from `clipboard` and decodes it; a URI list is read
 /// with its KDE cut marker. A payload over the limit is no file list.
-async fn read_file_list(clipboard: &gdk::Clipboard, format: FileListFormat<'_>) -> Option<ClipboardFiles> {
+async fn read_file_list(
+    clipboard: &gdk::Clipboard,
+    format: FileListFormat<'static>,
+) -> Option<ClipboardFiles> {
     let payload = read_payload(clipboard, format.mime_type()).await.bytes()?;
-    if !matches!(format, FileListFormat::UriList { .. }) {
-        return decode(format, &payload);
-    }
-    let marker = read_payload(clipboard, KDE_CUT).await.bytes();
-    let with_marker = FileListFormat::UriList {
-        kde_cut_marker: marker.as_deref(),
+    let marker = if matches!(format, FileListFormat::UriList { .. }) {
+        read_payload(clipboard, KDE_CUT).await.bytes()
+    } else {
+        None
     };
-    decode(with_marker, &payload)
+    decode_in_background(format, payload, marker).await
+}
+
+/// Decodes `payload`, read as `format` (a URI list with its KDE cut
+/// `marker`), on a worker thread: a list of up to [`MAX_BYTES`] takes long
+/// enough to parse that the window would freeze while it ran on the main
+/// thread.
+async fn decode_in_background(
+    format: FileListFormat<'static>,
+    payload: Vec<u8>,
+    marker: Option<Vec<u8>>,
+) -> Option<ClipboardFiles> {
+    gio::spawn_blocking(move || {
+        #[cfg(test)]
+        tests::note_decoding_thread();
+        let format = match format {
+            FileListFormat::UriList { .. } => FileListFormat::UriList {
+                kde_cut_marker: marker.as_deref(),
+            },
+            other => other,
+        };
+        decode(format, &payload)
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 /// The file list on `clipboard`, in the first format that holds one, and
@@ -643,5 +669,54 @@ impl BrowserWindow {
                 window.refresh_file_clipboard().await;
             }
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+    use std::thread::ThreadId;
+
+    use gtk::glib;
+    use ox_core::clipboard::{ClipboardMode, FileListFormat};
+
+    use super::decode_in_background;
+
+    /// The thread the last decode ran on.
+    static DECODED_ON: Mutex<Option<ThreadId>> = Mutex::new(None);
+
+    /// Notes the thread a decode runs on.
+    pub(super) fn note_decoding_thread() {
+        *DECODED_ON.lock().expect("the note is never poisoned") = Some(std::thread::current().id());
+    }
+
+    #[test]
+    fn a_large_file_list_is_decoded_off_the_main_thread() {
+        let uris: Vec<String> = (0..50_000)
+            .map(|n| format!("file:///srv/example/item-{n}.txt"))
+            .collect();
+        let payload = format!("cut\n{}", uris.join("\n")).into_bytes();
+        let context = glib::MainContext::new();
+        let files = context
+            .block_on(decode_in_background(FileListFormat::Gnome, payload, None))
+            .expect("the list decodes");
+        assert_eq!(files.mode(), ClipboardMode::Cut);
+        assert_eq!(files.uris().len(), uris.len());
+        let decoded_on = DECODED_ON.lock().expect("the note is never poisoned").take();
+        assert_ne!(decoded_on, Some(std::thread::current().id()));
+        assert!(decoded_on.is_some(), "the decode ran");
+    }
+
+    #[test]
+    fn a_uri_list_keeps_its_kde_cut_marker_off_the_main_thread() {
+        let context = glib::MainContext::new();
+        let files = context
+            .block_on(decode_in_background(
+                FileListFormat::UriList { kde_cut_marker: None },
+                b"file:///srv/example/a.txt\r\n".to_vec(),
+                Some(b"1".to_vec()),
+            ))
+            .expect("the list decodes");
+        assert_eq!(files.mode(), ClipboardMode::Cut);
     }
 }

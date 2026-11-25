@@ -24,6 +24,7 @@ mod heading_span;
 mod item_check;
 mod marks;
 pub(crate) use item_check::own_clicks;
+mod folder_summary;
 mod row_tooltip;
 
 use std::rc::Rc;

@@ -126,6 +126,9 @@ appstreamcli validate --no-net %{buildroot}%{_datadir}/metainfo/%{app_id}.metain
 %{_datadir}/icons/hicolor/scalable/apps/%{app_id}.svg
 %{_datadir}/dbus-1/services/%{app_id}.service
 %{_datadir}/xdg-desktop-portal/portals/%{app_id}.portal
+# Sets GTK_USE_PORTAL=1 at login while the user's opt-in mark is there;
+# removing the package removes it, and with it the variable.
+/usr/lib/systemd/user-environment-generators/60-%{name}-file-dialogs
 # Each channel's catalogue is named after its package (the gettext
 # domain), so the preview and the stable app own one file each.
 %{_datadir}/locale/zh_CN/LC_MESSAGES/%{name}.mo

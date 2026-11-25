@@ -117,6 +117,9 @@ def promised_files(tree: InstalledTree) -> list[PurePosixPath]:
     portal = package_data.portal_file_path(paths, app_id)
     if portal is not None:
         files.append(portal)
+    generator = package_data.file_dialogs_generator_path(paths, tree.channel)
+    if generator is not None:
+        files.append(generator)
     if paths.mount_helper is not None:
         legacy = (package_data.LEGACY_COMMAND, package_data.MOUNT_HELPER_COMMAND,
                   package_data.LEGACY_MOUNT_HELPER_COMMAND)

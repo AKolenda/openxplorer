@@ -81,9 +81,10 @@ impl BrowserWindow {
 
     /// The Properties of a checked `ShowItemProperties` request's item,
     /// over the window once it is shown; nothing for the other methods.
-    /// Properties mount an unmounted share first, which a request never
-    /// does: an item on such a share gets no Properties, and its tab says
-    /// the share is not mounted.
+    /// Properties mount an unmounted share first, which a request does
+    /// only while Settings connects to such shares right away: otherwise
+    /// an item on such a share gets no Properties, and its tab says the
+    /// share is not mounted.
     pub(crate) fn open_request_properties(&self, request: &FileManagerRequest) {
         if request.method() != FileManagerMethod::ShowItemProperties {
             return;
@@ -100,7 +101,9 @@ impl BrowserWindow {
                         gtk::glib::Priority::DEFAULT,
                     )
                     .await;
-                if !matches!(&probe, Err(error) if error.matches(gtk::gio::IOErrorEnum::NotMounted)) {
+                let not_mounted =
+                    matches!(&probe, Err(error) if error.matches(gtk::gio::IOErrorEnum::NotMounted));
+                if !not_mounted || window.connects_requested_shares() {
                     window.open_properties_of(&uri, PropertiesTab::General);
                 }
             }
@@ -116,9 +119,26 @@ impl BrowserWindow {
         }
         let active = self.imp().session.borrow().active_id();
         if let Some(id) = active {
-            self.wait_to_mount(id);
+            self.wait_to_mount_for_request(id);
         }
         self.focus_first_item_when_listed();
+    }
+
+    /// Whether a share another application opens here is connected to
+    /// at once, as Windows Explorer connects to a UNC path another program
+    /// opens: Settings' "Connect to shares opened by other apps right away
+    /// (like Windows)", off by default (#191).
+    fn connects_requested_shares(&self) -> bool {
+        self.context().settings_data().preferences.connect_external_shares
+    }
+
+    /// Makes tab `id`, opened for another application, wait to mount its
+    /// share until the user asks to connect, unless Settings connects to
+    /// such shares right away.
+    fn wait_to_mount_for_request(&self, id: TabId) {
+        if !self.connects_requested_shares() {
+            self.wait_to_mount(id);
+        }
     }
 
     /// Makes tab `id`'s listings, the one running included, leave its
@@ -149,7 +169,7 @@ impl BrowserWindow {
         };
         self.switch_tab(id);
         self.mark_selection_to_reveal(id, items);
-        self.wait_to_mount(id);
+        self.wait_to_mount_for_request(id);
         self.load_tab(id, LoadMode::Reload);
     }
 
@@ -162,7 +182,7 @@ impl BrowserWindow {
         }
         let active = self.imp().session.borrow().active_id();
         if let Some(id) = active {
-            self.wait_to_mount(id);
+            self.wait_to_mount_for_request(id);
             self.mark_selection_to_reveal(id, items);
         }
     }

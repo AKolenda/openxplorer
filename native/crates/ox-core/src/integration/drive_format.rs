@@ -51,6 +51,10 @@ const FAT32_DEFAULT_LIMIT: u64 = 32 * 1024 * 1024 * 1024;
 /// specification that devices may not read.
 const FAT32_MIN_SIZE: u64 = 64 * 1024 * 1024;
 
+/// The fewest clusters a FAT32 file system has; `mkfs.fat` makes FAT16
+/// or fails with fewer.
+const FAT32_MIN_CLUSTERS: u64 = 65_525;
+
 /// The characters a FAT volume label cannot hold, as Windows refuses
 /// them; `mkfs.fat` and UDisks refuse them too, after the drive was
 /// unmounted.
@@ -117,6 +121,39 @@ impl FileSystem {
     /// needs [`FAT32_MIN_SIZE`].
     pub fn fits(self, size: u64) -> bool {
         self != Self::Fat32 || size >= FAT32_MIN_SIZE
+    }
+
+    /// The allocation unit sizes, in bytes, the Format dialog offers for a
+    /// drive of `size` bytes, smallest first, as Windows lists them: those
+    /// the file system's `mkfs` makes, and for FAT32 only those that still
+    /// give the drive the 65,525 clusters FAT32 needs at least.
+    pub fn allocation_units(self, size: u64) -> Vec<u32> {
+        let (smallest, largest) = match self {
+            Self::Fat32 | Self::Ntfs => (512, 64 * 1024),
+            Self::ExFat => (512, 32 * 1024 * 1024),
+            Self::Ext4 => (1024, 4096),
+        };
+        let mut units = Vec::new();
+        let mut unit: u32 = smallest;
+        while unit <= largest {
+            if self != Self::Fat32 || size / u64::from(unit) >= FAT32_MIN_CLUSTERS {
+                units.push(unit);
+            }
+            unit *= 2;
+        }
+        units
+    }
+
+    /// The arguments that make `mkfs` use clusters (blocks for ext4) of
+    /// `unit` bytes, one of [`Self::allocation_units`].
+    fn allocation_arguments(self, unit: u32) -> [String; 2] {
+        match self {
+            // In sectors of 512 bytes, as `mkfs.fat` counts them.
+            Self::Fat32 => ["-s".to_owned(), (unit / 512).to_string()],
+            // In bytes, as `mkfs.exfat` and `mkntfs` take it.
+            Self::ExFat | Self::Ntfs => ["-c".to_owned(), unit.to_string()],
+            Self::Ext4 => ["-b".to_owned(), unit.to_string()],
+        }
     }
 
     /// The longest volume label the file system keeps, in the units
@@ -264,6 +301,10 @@ pub struct FormatRequest {
     /// Quick format: only a new file system; without it the drive is
     /// overwritten with zeros first.
     pub quick: bool,
+    /// The allocation unit size in bytes, one the file system offers
+    /// ([`FileSystem::allocation_units`]), or `None` for the default
+    /// allocation size, which `mkfs` chooses.
+    pub allocation_unit: Option<u32>,
 }
 
 /// A drive [`format_drive`] formatted.
@@ -645,7 +686,8 @@ async fn mount(
 /// a full format, the partition's type to match the file system, FAT32
 /// itself, as `mkfs.fat` otherwise makes FAT16 on drives up to 512 MB,
 /// and for ext4 the new file system's top folder owned by the user, as
-/// FAT and NTFS mounts are.
+/// FAT and NTFS mounts are. A chosen allocation unit size is passed to
+/// `mkfs` too; one the file system does not offer is left to `mkfs`.
 fn format_options(request: &FormatRequest) -> glib::VariantDict {
     let options = glib::VariantDict::new(None);
     options.insert("label", request.file_system.fitted_label(&request.label).as_str());
@@ -653,10 +695,18 @@ fn format_options(request: &FormatRequest) -> glib::VariantDict {
     if !request.quick {
         options.insert("erase", "zero");
     }
+    let mut arguments: Vec<String> = Vec::new();
     match request.file_system {
-        FileSystem::Fat32 => options.insert_value("mkfs-args", &vec!["-F", "32"].to_variant()),
+        FileSystem::Fat32 => arguments.extend(["-F".to_owned(), "32".to_owned()]),
         FileSystem::Ext4 => options.insert("take-ownership", true),
         FileSystem::ExFat | FileSystem::Ntfs => {}
+    }
+    let offered = |unit: &u32| request.file_system.allocation_units(u64::MAX).contains(unit);
+    if let Some(unit) = request.allocation_unit.filter(offered) {
+        arguments.extend(request.file_system.allocation_arguments(unit));
+    }
+    if !arguments.is_empty() {
+        options.insert_value("mkfs-args", &arguments.to_variant());
     }
     options
 }

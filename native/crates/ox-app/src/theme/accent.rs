@@ -144,12 +144,16 @@ impl Accent {
 /// bar use, and the selection's fill and edge tinted with it. In light,
 /// the file list's and navigation pane's items take the accent's tint
 /// too, in place of Windows' light blue; in dark they keep Windows'
-/// neutral greys whatever the accent. Empty for the Windows blue.
-pub(crate) fn stylesheet(accent: Accent, appearance: Appearance) -> String {
+/// neutral greys whatever the accent. With `neutral_items` (Settings'
+/// "Neutral selection colors (like Windows)"), the items keep Windows'
+/// colors in light too, as Windows 11 draws them whatever the accent.
+/// Empty for the Windows blue.
+pub(crate) fn stylesheet(accent: Accent, appearance: Appearance, neutral_items: bool) -> String {
     let Some(shade) = accent.shade(appearance) else {
         return String::new();
     };
     let (selected_tint, items) = match appearance {
+        Appearance::Light if neutral_items => (".1", ""),
         Appearance::Light => (
             ".1",
             "@define-color ox_item_hover mix(@ox_bg, @ox_accent, .1);\n\
@@ -206,7 +210,7 @@ mod tests {
         assert_eq!(Accent::nearest_to(0.93, 0.36, 0.0), Some(Accent::Orange));
         assert_eq!(Accent::nearest_to(0.21, 0.52, 0.89), Some(Accent::Windows));
         assert_eq!(Accent::nearest_to(-1.0, -1.0, -1.0), None);
-        assert_eq!(stylesheet(Accent::Windows, Appearance::Light), "");
+        assert_eq!(stylesheet(Accent::Windows, Appearance::Light, false), "");
         for accent in Accent::OTHERS {
             let light = accent.shade(Appearance::Light).expect("a light shade");
             let dark = accent.shade(Appearance::Dark).expect("a dark shade");
@@ -217,17 +221,30 @@ mod tests {
                 "{accent:?} on the dark background"
             );
         }
-        let green = stylesheet(Accent::Green, Appearance::Dark);
+        let green = stylesheet(Accent::Green, Appearance::Dark, false);
         assert!(green.starts_with("@define-color ox_accent #8dc196;\n"), "{green}");
         assert!(
             green.contains("ox_selected mix(@ox_bg, @ox_accent, .22)"),
             "{green}"
         );
         assert!(!green.contains("ox_item_"), "dark items stay grey: {green}");
-        let light_green = stylesheet(Accent::Green, Appearance::Light);
+        let light_green = stylesheet(Accent::Green, Appearance::Light, false);
         assert!(
             light_green.contains("ox_item_selected mix(@ox_bg, @ox_accent, .2)"),
             "{light_green}"
         );
+    }
+
+    /// "Neutral selection colors (like Windows)": a custom accent still
+    /// colors buttons and focus rings, but the file list's hover and
+    /// selection keep Windows' own colors, as in Windows 11 (#227).
+    #[test]
+    fn neutral_selection_colors_leave_the_items_untinted() {
+        for appearance in [Appearance::Light, Appearance::Dark] {
+            let neutral = stylesheet(Accent::Green, appearance, true);
+            assert!(neutral.starts_with("@define-color ox_accent "), "{neutral}");
+            assert!(!neutral.contains("ox_item_"), "{neutral}");
+        }
+        assert_eq!(stylesheet(Accent::Windows, Appearance::Light, true), "");
     }
 }

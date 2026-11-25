@@ -247,6 +247,7 @@ fn request(file_system: FileSystem, quick: bool) -> FormatRequest {
         file_system,
         label: "PHOTOS".to_owned(),
         quick,
+        allocation_unit: None,
     }
 }
 
@@ -509,6 +510,42 @@ fn fat32_is_made_as_fat32_on_any_drive() {
     );
     assert_eq!(arguments(FileSystem::ExFat), None);
     assert_eq!(arguments(FileSystem::Ext4), None);
+}
+
+/// A chosen allocation unit size reaches `mkfs` in its own words: sectors
+/// for FAT32, bytes for exFAT and NTFS, the block size for ext4; one the
+/// file system does not offer is left out. FAT32 offers only the sizes
+/// that leave a small drive enough clusters (#133).
+#[test]
+fn the_allocation_unit_size_reaches_mkfs() {
+    let arguments = |file_system, unit| {
+        let chosen = FormatRequest {
+            allocation_unit: Some(unit),
+            ..request(file_system, true)
+        };
+        format_options(&chosen)
+            .lookup::<Vec<String>>("mkfs-args")
+            .ok()
+            .flatten()
+    };
+    let strings = |words: &[&str]| Some(words.iter().map(|word| (*word).to_owned()).collect::<Vec<_>>());
+
+    assert_eq!(
+        arguments(FileSystem::Fat32, 32_768),
+        strings(&["-F", "32", "-s", "64"])
+    );
+    assert_eq!(arguments(FileSystem::ExFat, 131_072), strings(&["-c", "131072"]));
+    assert_eq!(arguments(FileSystem::Ntfs, 4096), strings(&["-c", "4096"]));
+    assert_eq!(arguments(FileSystem::Ext4, 2048), strings(&["-b", "2048"]));
+    assert_eq!(arguments(FileSystem::Ext4, 3000), None, "not a size ext4 offers");
+
+    let small = FileSystem::Fat32.allocation_units(64 * 1024 * 1024);
+    assert_eq!(small, [512, 1024]);
+    let large = FileSystem::ExFat.allocation_units(64_000_000_000);
+    assert_eq!(
+        (large.first(), large.last()),
+        (Some(&512), Some(&(32 * 1024 * 1024)))
+    );
 }
 
 /// A drive in use is not formatted, and a dismissed password prompt is

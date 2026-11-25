@@ -21,6 +21,7 @@
 //! | `item_window` | The Properties window of one item |
 //! | `selection_view` | Properties of several items |
 //! | `selection_attributes` | Read-only and Hidden of several items |
+//! | `attribute_confirm` | Confirm Attribute Changes: whether Read-only reaches into folders |
 //! | `metadata` | Reading an item's properties off the main thread |
 //! | `general_tab` | The General tab: name, type, sizes, dates and attributes |
 //! | `drive_tab` | A drive's General and Hardware tabs |
@@ -47,6 +48,7 @@
 //! | `folder_sizes` | [`FolderSizeState`] and [`FolderSizes`]: measured sizes and their text |
 //! | `size_scan_strip` | [`SizeScanStrip`]: the bar of a running folder-size scan |
 
+mod attribute_confirm;
 mod change_icon;
 mod custom_icon;
 mod details_rows;

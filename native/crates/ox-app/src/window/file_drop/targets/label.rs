@@ -17,16 +17,24 @@
 //! its menu on release instead (DND-027). Drags from other apps show none
 //! either, as their icon is drawn by the other app. "Open with" over a
 //! program and "Pin to Quick access" stay the folder pane's notes.
+//!
+//! What the label needs from the dragged items, which may be 100,000, is
+//! read once per drag ([`DraggedFacts`]), never at each motion.
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
-use ox_core::location::TRASH_URI;
+use ox_core::location::{parent_location, same_location, TRASH_URI};
 use ox_core::ops::is_recycle_bin_item;
 
 use super::spot::DropSpot;
-use crate::window::file_drag::{dragged_now, show_drag_label, DragButton, DragLabel, DragVerb};
-use crate::window::file_drop::action::{drop_run_action, is_in_folder, DragOrigin, OfferedDrop};
+use crate::window::file_drag::{
+    drag_generation, dragged_now, show_drag_label, DragButton, DragLabel, DragVerb,
+};
+use crate::window::file_drop::action::{drop_run_action, DragOrigin, OfferedDrop};
 use crate::window::file_drop::{DropAction, DropDestination, DropRun};
 use crate::window::sidebar::SidebarDropSpot;
 use crate::window::zip_copies::is_zip_copy;
@@ -67,6 +75,65 @@ pub(crate) struct DropLabels {
     drive: Option<DriveAnswer>,
 }
 
+/// What the label reads from the items of a drag, once: they stay the
+/// same while it lasts, and scanning 100,000 of them at every motion would
+/// hold up the window.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(super) struct DraggedFacts {
+    /// Whether any item is in the Recycle Bin.
+    from_recycle_bin: bool,
+    /// Whether any item is a copy taken out of a ZIP.
+    has_zip_copy: bool,
+    /// The folder every item is directly in, when there are items and
+    /// they all are in one.
+    shared_folder: Option<String>,
+}
+
+impl DraggedFacts {
+    /// The facts of `dragged`.
+    pub(super) fn of(dragged: &[String]) -> Self {
+        let mut parents = dragged.iter().map(|uri| parent_location(uri));
+        let first = parents.next().flatten();
+        let shared_folder = first
+            .filter(|first| parents.all(|parent| parent.is_some_and(|parent| same_location(&parent, first))));
+        Self {
+            from_recycle_bin: dragged.iter().any(|uri| is_recycle_bin_item(uri)),
+            has_zip_copy: dragged.iter().any(|uri| is_zip_copy(uri)),
+            shared_folder,
+        }
+    }
+
+    /// Whether every item is directly in `folder`.
+    fn all_in(&self, folder: &str) -> bool {
+        self.shared_folder
+            .as_deref()
+            .is_some_and(|shared| same_location(shared, folder))
+    }
+}
+
+thread_local! {
+    /// The facts of the items dragged now, with the drag generation they
+    /// were read at.
+    static FACTS: RefCell<Option<(u64, Rc<DraggedFacts>)>> = const { RefCell::new(None) };
+}
+
+/// The facts of the items this process drags now, read at the first
+/// motion of a drag and kept until its items change.
+pub(super) fn dragged_facts() -> Rc<DraggedFacts> {
+    let generation = drag_generation();
+    FACTS.with(|facts| {
+        let mut facts = facts.borrow_mut();
+        if let Some((read_at, known)) = facts.as_ref() {
+            if *read_at == generation {
+                return Rc::clone(known);
+            }
+        }
+        let read = Rc::new(DraggedFacts::of(&dragged_now()));
+        *facts = Some((generation, Rc::clone(&read)));
+        read
+    })
+}
+
 /// True when `weak` is `identity`.
 fn is_drop(weak: &glib::WeakRef<glib::Object>, identity: &glib::Object) -> bool {
     weak.upgrade().as_ref() == Some(identity)
@@ -81,20 +148,20 @@ fn is_drop(weak: &glib::WeakRef<glib::Object>, identity: &glib::Object) -> bool 
 pub(super) fn label_verb(
     action: DropAction,
     destination: &DropDestination,
-    dragged: &[String],
+    dragged: &DraggedFacts,
 ) -> Option<DragVerb> {
     if matches!(action, DropAction::Ask(_)) {
         return None;
     }
-    let from_recycle_bin = dragged.iter().any(|uri| is_recycle_bin_item(uri));
+    let from_recycle_bin = dragged.from_recycle_bin;
     match destination {
         DropDestination::RecycleBin => (!from_recycle_bin).then_some(DragVerb::Move),
         DropDestination::Folder(_) | DropDestination::Volume(_) if from_recycle_bin => Some(DragVerb::Move),
         DropDestination::Folder(folder) => {
-            let in_own_folder = !dragged.is_empty() && dragged.iter().all(|uri| is_in_folder(uri, folder));
+            let in_own_folder = dragged.all_in(folder);
             match action {
                 DropAction::Move if in_own_folder => None,
-                DropAction::Link if dragged.iter().any(|uri| is_zip_copy(uri)) => None,
+                DropAction::Link if dragged.has_zip_copy => None,
                 other => verb_of(other),
             }
         }
@@ -164,18 +231,18 @@ impl BrowserWindow {
     /// What the label says for `hover`; `None` while a plain drop's drive
     /// is being read, or where the label names nothing.
     fn hover_label(&self, hover: &LabelHover) -> Option<DragLabel> {
-        let dragged = dragged_now();
+        let dragged = dragged_facts();
         let action = match (&hover.run, &hover.destination) {
             (DropRun::Run(action), _) => *action,
             (DropRun::MoveWithinDrive, DropDestination::Folder(folder)) => {
                 // Recycle Bin items always move out, so need no drive. Items
                 // back in their own folder do: on a share a plain drop
                 // copies them there.
-                if dragged.iter().any(|uri| is_recycle_bin_item(uri)) {
+                if dragged.from_recycle_bin {
                     DropAction::Move
                 } else {
                     let identity = hover.drop.upgrade()?;
-                    self.plain_drop_action(&identity, folder, dragged.clone())?
+                    self.plain_drop_action(&identity, folder)?
                 }
             }
             (DropRun::MoveWithinDrive, _) => DropAction::Copy,
@@ -187,16 +254,11 @@ impl BrowserWindow {
         })
     }
 
-    /// What a plain drop of `dragged`, the items of the drag `identity`,
-    /// into `folder` does; `None` until that is read, off the GTK thread
-    /// as for the drop itself. Once read, the label of a drag still
+    /// What a plain drop of the items of the drag `identity` into `folder`
+    /// does; `None` until that is read, off the GTK thread as for the drop
+    /// itself, once per folder. Once read, the label of a drag still
     /// hovering over that folder shows it.
-    fn plain_drop_action(
-        &self,
-        identity: &glib::Object,
-        folder: &str,
-        dragged: Vec<String>,
-    ) -> Option<DropAction> {
+    fn plain_drop_action(&self, identity: &glib::Object, folder: &str) -> Option<DropAction> {
         let mut labels = self.imp().drop_labels.borrow_mut();
         let known = labels
             .drive
@@ -211,6 +273,7 @@ impl BrowserWindow {
             action: None,
         });
         drop(labels);
+        let dragged = dragged_now();
         let destination = DropDestination::Folder(folder.to_owned());
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
@@ -261,8 +324,51 @@ mod tests {
     const FOLDER: &str = "file:///home/demo/Documents";
     const ITEMS: [&str; 2] = ["file:///home/demo/a.txt", "file:///home/demo/b.txt"];
 
-    fn items() -> Vec<String> {
-        ITEMS.iter().map(|uri| (*uri).to_owned()).collect()
+    fn items() -> DraggedFacts {
+        DraggedFacts::of(&ITEMS.iter().map(|uri| (*uri).to_owned()).collect::<Vec<_>>())
+    }
+
+    /// The dragged items are read once per drag: every motion after the
+    /// first gets the same facts, and a new drag reads its own.
+    ///
+    /// parity: DND-028
+    #[test]
+    fn the_dragged_items_are_read_once_per_drag() {
+        crate::window::file_drag::set_dragged_for_tests(&ITEMS);
+        let first = dragged_facts();
+        assert!(
+            Rc::ptr_eq(&first, &dragged_facts()),
+            "the next motion reads nothing again"
+        );
+        assert!(first.all_in("file:///home/demo"));
+
+        crate::window::file_drag::set_dragged_for_tests(&["file:///home/demo/Documents/c.txt"]);
+        let next = dragged_facts();
+        assert!(!Rc::ptr_eq(&first, &next));
+        assert!(next.all_in(FOLDER));
+        crate::window::file_drag::set_dragged_for_tests(&[]);
+        assert_eq!(*dragged_facts(), DraggedFacts::default());
+    }
+
+    /// The facts of a drag of 100,000 items say whether they all are in
+    /// one folder, as checking each item at each motion did.
+    ///
+    /// parity: DND-028
+    #[test]
+    fn the_facts_of_a_huge_drag_tell_its_own_folder() {
+        let many: Vec<String> = (0..100_000).map(|n| format!("{FOLDER}/file%20{n}.txt")).collect();
+        let facts = DraggedFacts::of(&many);
+        assert!(facts.all_in(FOLDER));
+        assert!(
+            facts.all_in(&format!("{FOLDER}/")),
+            "the same folder written with a slash"
+        );
+        assert!(!facts.all_in("file:///home/demo"));
+        assert!(!facts.from_recycle_bin && !facts.has_zip_copy);
+        let mut mixed = many;
+        mixed.push("file:///home/demo/elsewhere.txt".to_owned());
+        assert!(!DraggedFacts::of(&mixed).all_in(FOLDER));
+        assert!(!DraggedFacts::of(&[]).all_in(FOLDER), "no items are in no folder");
     }
 
     /// The label names what the drop runs, and nothing where a release
