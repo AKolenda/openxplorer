@@ -143,11 +143,29 @@ impl Providers {
     }
 }
 
+/// GTK's own theme, which the skin draws over.
+const BUILTIN_THEME: &str = "Default";
+
 /// Uses GTK's own theme under the skin, in its light variant until the
 /// skin draws dark.
 fn force_builtin_theme(settings: &gtk::Settings) {
-    settings.set_gtk_theme_name(Some("Default"));
+    settings.set_gtk_theme_name(Some(BUILTIN_THEME));
     settings.set_gtk_application_prefer_dark_theme(false);
+}
+
+/// The GTK theme the desktop names for `display` (in XSETTINGS on X11
+/// desktops such as Xfce and MATE, from GNOME's key or the portal on
+/// Wayland) while the skin keeps GTK's built-in theme forced on it.
+///
+/// GTK ignores the desktop's name while the application sets its own, so
+/// the forced name is released, GTK reads the desktop's name again, and
+/// the built-in theme is forced back before anything is drawn.
+pub(super) fn desktop_theme_name(display: &gdk::Display) -> Option<String> {
+    let settings = gtk::Settings::for_display(display);
+    settings.reset_property("gtk-theme-name");
+    let name = settings.gtk_theme_name().map(String::from);
+    settings.set_gtk_theme_name(Some(BUILTIN_THEME));
+    name
 }
 
 /// A provider loaded with `css`.
