@@ -6,7 +6,9 @@
 //! As Windows 11 File Explorer's Preview pane: a text or source file's
 //! beginning as plain, read-only text in a fixed-width font that wraps at
 //! the pane's edge (the Windows TXT Previewer cannot turn wrapping off), a
-//! PDF's pages one under the other, a picture as large as the pane allows
+//! PDF's pages one under the other, an office document's pages as
+//! `LibreOffice` draws them (Windows draws them with Office's preview
+//! handlers), a picture as large as the pane allows
 //! and never stretched, and "No preview available." in the middle of the
 //! pane for a folder, several items, a file of another type, or a file
 //! the app may not read (on a network share with network previews off).
@@ -20,6 +22,7 @@ use ox_core::location::is_smb_location;
 
 use crate::folder_view::item::FileItem;
 use crate::i18n::message_id;
+use crate::icons::Art;
 
 /// What Windows' Preview pane says when it has nothing to show.
 pub(in crate::window) const NO_PREVIEW: &str = message_id("No preview available.");
@@ -80,6 +83,11 @@ pub(in crate::window) enum PreviewPage {
     Picture(PreviewFile),
     /// The pages of the local PDF at `uri`.
     Pdf(PreviewFile),
+    /// The pages of the office document at `uri` (a Word, Excel or
+    /// `PowerPoint` file, or an `OpenDocument`), as `LibreOffice` draws them in
+    /// its sandbox ([`crate::thumbnails::documents`]); without
+    /// `LibreOffice`, [`NO_PREVIEW`] under the item's `Art`, its icon.
+    Document(PreviewFile, Art),
     /// The details pane's own preview: the player of an audio or video
     /// file, as the Preview pane showed it before.
     Media,
@@ -150,6 +158,8 @@ pub(in crate::window) fn preview_page(selection: &[FileItem], rules: PreviewRule
         PreviewPage::Picture(file)
     } else if content_type == "application/pdf" || extension_of(&entry.name) == "pdf" {
         PreviewPage::Pdf(file)
+    } else if crate::thumbnails::documents::is_document(content_type, &entry.name) {
+        PreviewPage::Document(file, Art::for_entry(entry))
     } else if kind == "audio" || kind == "video" {
         PreviewPage::Media
     } else {

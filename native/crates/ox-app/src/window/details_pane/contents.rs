@@ -13,7 +13,12 @@
 //! A text file is read up to [`TEXT_LIMIT`]; a picture is decoded within
 //! the app's limits for pictures ([`picture_guard`]); a PDF's pages are
 //! drawn by `pdftoppm` in the thumbnailers' sandbox and limits a few at a
-//! time, at most [`PDF_PAGE_LIMIT`] and [`PDF_PIXEL_BUDGET`]. With network
+//! time, at most [`PDF_PAGE_LIMIT`] and [`PDF_PIXEL_BUDGET`]. An office
+//! document is converted to PDF by `LibreOffice` in the same sandbox
+//! ([`documents`]), whose PDF is kept, so it is drawn as a PDF; its first
+//! pages stay in memory for the last few documents ([`KEPT_DOCUMENTS`]),
+//! so selecting one again shows it at once. Without `LibreOffice` the pane
+//! says "No preview available." under the document's icon. With network
 //! previews off, a file on a network file system is not read.
 
 use std::fs;
@@ -26,7 +31,9 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gdk, gio, glib};
 
+use crate::icons::{Art, ArtImage};
 use crate::picture_guard::{self, Limits};
+use crate::thumbnails::documents;
 
 use super::preview_page::{decode_text, shown_text, PreviewPage, NO_PREVIEW, TEXT_LIMIT};
 use super::rich_text::{is_rtf, rtf_text};
@@ -45,6 +52,14 @@ const PDF_PIXEL_BUDGET: u64 = 24 * 1024 * 1024;
 /// How many PDF pages each run of `pdftoppm` draws: the first show soon,
 /// and a long document goes on in the background.
 const PDF_BATCH: u32 = 4;
+
+/// How many documents' first pages are kept in memory, so selecting one
+/// of them again shows it at once.
+const KEPT_DOCUMENTS: usize = 8;
+
+/// The size of the icon above "No preview available." for a document
+/// nothing converts, in pixels.
+const MESSAGE_ICON_SIZE: i32 = 96;
 
 /// The room around the contents, in pixels.
 const MARGIN: i32 = 12;
@@ -67,6 +82,10 @@ const PREVIEW: &str = "preview";
 pub(super) struct Contents {
     stack: gtk::Stack,
     message: gtk::Label,
+    /// Holds the document's icon above [`Self::message`] when nothing
+    /// converts it, made for each message so that no hidden icon stays in
+    /// the pane.
+    message_icon_room: gtk::Box,
     text: gtk::TextView,
     text_scroller: gtk::ScrolledWindow,
     /// Holds the picture shown, made for each picture so that no empty
@@ -94,7 +113,16 @@ impl Contents {
             .max_width_chars(28)
             .css_classes(["preview-message"])
             .build();
-        stack.add_named(&message, Some(MESSAGE));
+        let message_icon_room = gtk::Box::builder().halign(gtk::Align::Center).build();
+        let message_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(MARGIN)
+            .halign(gtk::Align::Center)
+            .valign(gtk::Align::Center)
+            .build();
+        message_box.append(&message_icon_room);
+        message_box.append(&message);
+        stack.add_named(&message_box, Some(MESSAGE));
 
         let text = gtk::TextView::builder()
             .editable(false)
@@ -154,6 +182,7 @@ impl Contents {
         Self {
             stack,
             message,
+            message_icon_room,
             text,
             text_scroller,
             picture_room,
@@ -164,14 +193,32 @@ impl Contents {
 
     /// Shows `words`, translated, in the middle of the pane.
     fn show_message(&self, words: &str) {
+        self.remove_message_icon();
         self.message.set_text(&ox_core::i18n::gettext(words));
         self.stack.set_visible_child_name(MESSAGE);
+    }
+
+    /// Shows `words`, translated, under `art`, the item's icon, in the
+    /// middle of the pane.
+    fn show_message_with_icon(&self, words: &str, art: Art) {
+        self.show_message(words);
+        let icon = ArtImage::new(art, MESSAGE_ICON_SIZE);
+        icon.add_css_class("preview-message-icon");
+        self.message_icon_room.append(&icon);
+    }
+
+    /// Removes the icon above the message, if there is one.
+    fn remove_message_icon(&self) {
+        while let Some(icon) = self.message_icon_room.first_child() {
+            self.message_icon_room.remove(&icon);
+        }
     }
 
     /// Empties every page, so nothing of the item before shows while the
     /// next one is read.
     fn clear(&self) {
         self.message.set_text("");
+        self.remove_message_icon();
         self.stack.set_visible_child_name(MESSAGE);
         self.text.buffer().set_text("");
         self.picture_room.set_child(gtk::Widget::NONE);
@@ -268,7 +315,8 @@ impl DetailsPane {
             PreviewPage::Text(file)
             | PreviewPage::RichText(file)
             | PreviewPage::Picture(file)
-            | PreviewPage::Pdf(file) => file,
+            | PreviewPage::Pdf(file)
+            | PreviewPage::Document(file, _) => file,
             PreviewPage::Message(_) | PreviewPage::Media => return,
         };
         let local_only = file.local_only;
@@ -287,7 +335,12 @@ impl DetailsPane {
                 .flatten();
             let Some(path) = path else {
                 if let Some(pane) = pane.upgrade().filter(|pane| pane.is_current(generation)) {
-                    pane.contents().show_message(NO_PREVIEW);
+                    match page {
+                        PreviewPage::Document(_, art) => {
+                            pane.contents().show_message_with_icon(NO_PREVIEW, art);
+                        }
+                        _ => pane.contents().show_message(NO_PREVIEW),
+                    }
                 }
                 return;
             };
@@ -329,7 +382,24 @@ impl DetailsPane {
                     }
                 }
                 PreviewPage::Pdf(_) => {
-                    pdf_pages(pane, generation, path, local_only, width * scale, cancellation).await;
+                    let pages = Pages {
+                        local_only,
+                        width: width * scale,
+                        document: None,
+                    };
+                    pdf_pages(pane, generation, path, pages, cancellation).await;
+                }
+                PreviewPage::Document(_, art) => {
+                    document_pages(
+                        pane,
+                        generation,
+                        path,
+                        local_only,
+                        width * scale,
+                        art,
+                        cancellation,
+                    )
+                    .await;
                 }
                 PreviewPage::Message(_) | PreviewPage::Media => {}
             }
@@ -421,6 +491,37 @@ impl DetailsPane {
         .filter(|text| !text.is_empty())
     }
 
+    /// The number of PDF or document pages shown, for tests.
+    #[cfg(test)]
+    pub(in crate::window) fn preview_page_count(&self) -> usize {
+        let contents = self.contents();
+        let shown = self.imp().pages.visible_child_name().as_deref() == Some(PREVIEW)
+            && contents.stack.visible_child_name().as_deref() == Some(PDF);
+        if !shown {
+            return 0;
+        }
+        let mut count = 0;
+        let mut page = contents.pdf_pages.first_child();
+        while let Some(child) = page {
+            count += 1;
+            page = child.next_sibling();
+        }
+        count
+    }
+
+    /// The icon shown above the message in the middle of the pane, for
+    /// tests.
+    #[cfg(test)]
+    pub(in crate::window) fn preview_message_icon(&self) -> Option<Art> {
+        let contents = self.contents();
+        self.preview_message()?;
+        contents
+            .message_icon_room
+            .first_child()
+            .and_downcast::<ArtImage>()?
+            .art()
+    }
+
     /// The size of the picture shown, for tests.
     #[cfg(test)]
     pub(in crate::window) fn preview_picture_size(&self) -> Option<(i32, i32)> {
@@ -445,8 +546,104 @@ impl DetailsPane {
     }
 }
 
+/// The first pages of a document's PDF drawn at a width, by the PDF and
+/// the width.
+type KeptPages = ((std::path::PathBuf, i32), Vec<gdk::Texture>);
+
+thread_local! {
+    /// The first pages drawn of the last [`KEPT_DOCUMENTS`] documents'
+    /// PDFs, by the PDF and the width they were drawn at. A document's PDF
+    /// is named after its version, so a changed document is never shown
+    /// from here.
+    static DOCUMENT_PAGES: std::cell::RefCell<Vec<KeptPages>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// How [`pdf_pages`] draws a PDF.
+#[derive(Debug, Clone)]
+struct Pages {
+    /// Network previews are off: a PDF on a network file system is not
+    /// read.
+    local_only: bool,
+    /// The pages' width, in pixels.
+    width: i32,
+    /// The PDF is an office document's, made by this converter, which
+    /// draws its pages: its first pages are kept in memory
+    /// ([`DOCUMENT_PAGES`]), and the pane says "No preview available."
+    /// under the document's icon, its `Art`, when none is drawn.
+    document: Option<(Art, std::sync::Arc<documents::Converter>)>,
+}
+
+/// The office document at `path`, converted to PDF by `LibreOffice` in its
+/// sandbox (or found in the cache of PDFs made), drawn by [`pdf_pages`]
+/// for `pane`'s selection `generation`; "No preview available." under the
+/// document's icon `art` when nothing converts documents here, or it
+/// could not be converted. With `local_only`, not on a network file
+/// system.
+async fn document_pages(
+    pane: glib::WeakRef<DetailsPane>,
+    generation: u64,
+    path: std::path::PathBuf,
+    local_only: bool,
+    width: i32,
+    art: Art,
+    cancellation: gio::Cancellable,
+) {
+    let cancel = cancellation.clone();
+    let converted = gio::spawn_blocking(move || {
+        if !allowed(&path, local_only) {
+            return Err(documents::Failure::Refused);
+        }
+        let converter = documents::converter().ok_or(documents::Failure::Unavailable)?;
+        let pdf = converter.pdf(&path, documents::Priority::Preview, &cancel)?;
+        Ok((pdf, converter))
+    })
+    .await
+    .unwrap_or(Err(documents::Failure::Failed));
+    let Some(shown) = pane.upgrade().filter(|pane| pane.is_current(generation)) else {
+        return;
+    };
+    match converted {
+        Ok((pdf, converter)) => {
+            let pages = Pages {
+                local_only: false,
+                width,
+                document: Some((art, converter)),
+            };
+            pdf_pages(pane, generation, pdf, pages, cancellation).await;
+        }
+        Err(_) => shown.contents().show_message_with_icon(NO_PREVIEW, art),
+    }
+}
+
+/// The kept first pages of the document PDF at `path` drawn `width`
+/// pixels wide, if any, marked as just used.
+fn kept_document_pages(path: &Path, width: i32) -> Option<Vec<gdk::Texture>> {
+    DOCUMENT_PAGES.with_borrow_mut(|kept| {
+        let at = kept
+            .iter()
+            .position(|((kept_path, kept_width), _)| kept_path == path && *kept_width == width)?;
+        let entry = kept.remove(at);
+        let pages = entry.1.clone();
+        kept.push(entry);
+        Some(pages)
+    })
+}
+
+/// Keeps `pages`, the first ones of the document PDF at `path` drawn
+/// `width` pixels wide, dropping the ones used longest ago.
+fn keep_document_pages(path: &Path, width: i32, pages: &[gdk::Texture]) {
+    DOCUMENT_PAGES.with_borrow_mut(|kept| {
+        kept.retain(|((kept_path, kept_width), _)| !(kept_path == path && *kept_width == width));
+        if kept.len() >= KEPT_DOCUMENTS {
+            kept.remove(0);
+        }
+        kept.push(((path.to_path_buf(), width), pages.to_vec()));
+    });
+}
+
 /// Draws the PDF at `path` page by page for `pane`'s selection
-/// `generation`, `width` pixels wide, until it ends, [`PDF_PAGE_LIMIT`]
+/// `generation`, as `how` says, until it ends, [`PDF_PAGE_LIMIT`]
 /// pages or [`PDF_PIXEL_BUDGET`] pixels are shown, or the selection
 /// changes; only a plain file, and with `local_only` not on a network
 /// file system.
@@ -454,34 +651,60 @@ async fn pdf_pages(
     pane: glib::WeakRef<DetailsPane>,
     generation: u64,
     path: std::path::PathBuf,
-    local_only: bool,
-    width: i32,
+    how: Pages,
     cancellation: gio::Cancellable,
 ) {
+    let Pages {
+        local_only,
+        width,
+        document,
+    } = how;
     let mut first = 1;
     let mut pixels = 0_u64;
     while first <= PDF_PAGE_LIMIT && pixels < PDF_PIXEL_BUDGET {
         let last = (first + PDF_BATCH - 1).min(PDF_PAGE_LIMIT);
+        let kept = (first == 1 && document.is_some())
+            .then(|| kept_document_pages(&path, width))
+            .flatten();
         let (path, cancel) = (path.clone(), cancellation.clone());
-        let drawn = gio::spawn_blocking(move || {
-            // Only a plain file reaches pdftoppm, which would wait on a
-            // pipe until its time limit ([`open_plain_file`]).
-            let plain = || fs::metadata(&path).is_ok_and(|metadata| metadata.is_file());
-            if first == 1 && !(plain() && allowed(&path, local_only)) {
-                return None;
+        let drawn = if let Some(kept) = kept {
+            Some(kept)
+        } else {
+            let keep = first == 1 && document.is_some();
+            let kept_path = path.clone();
+            let converter = document
+                .as_ref()
+                .map(|(_, converter)| std::sync::Arc::clone(converter));
+            let drawn = gio::spawn_blocking(move || {
+                // Only a plain file reaches pdftoppm, which would wait on a
+                // pipe until its time limit ([`open_plain_file`]).
+                let plain = || fs::metadata(&path).is_ok_and(|metadata| metadata.is_file());
+                if first == 1 && !(plain() && allowed(&path, local_only)) {
+                    return None;
+                }
+                let drawn = match &converter {
+                    Some(converter) => converter.pages(&path, first, last, width, &cancel),
+                    None => crate::thumbnails::pdf_pages(&path, first, last, width, &cancel),
+                };
+                drawn.map(|pages| pages.iter().map(gdk::Texture::for_pixbuf).collect::<Vec<_>>())
+            })
+            .await
+            .ok()
+            .flatten();
+            if let (true, Some(pages)) = (keep, &drawn) {
+                keep_document_pages(&kept_path, width, pages);
             }
-            crate::thumbnails::pdf_pages(&path, first, last, width, &cancel)
-                .map(|pages| pages.iter().map(gdk::Texture::for_pixbuf).collect::<Vec<_>>())
-        })
-        .await
-        .ok()
-        .flatten();
+            drawn
+        };
         let Some(pane) = pane.upgrade().filter(|pane| pane.is_current(generation)) else {
             return;
         };
         let Some(pages) = drawn else {
             if first == 1 {
-                pane.contents().show_message(NO_PREVIEW);
+                match &document {
+                    Some((art, _)) => pane.contents().show_message_with_icon(NO_PREVIEW, *art),
+                    None => pane.contents().show_message(NO_PREVIEW),
+                }
             }
             return;
         };

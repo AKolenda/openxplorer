@@ -344,6 +344,21 @@ impl Pool {
         });
     }
 
+    /// An idle decoder that still runs, if any. One may have ended while
+    /// it waited: bubblewrap's `--die-with-parent` (the sandbox's) ends
+    /// it when the thread that started it exits, as the worker threads of
+    /// `GLib`'s pool do once idle, not when the app does. Handed a picture,
+    /// it would give no answer and the picture would not be shown.
+    fn idle_alive(&self) -> Option<Decoder> {
+        loop {
+            let mut decoder = self.idle.lock().unwrap_or_else(PoisonError::into_inner).pop()?;
+            if matches!(decoder.child.0.try_wait(), Ok(None)) {
+                return Some(decoder);
+            }
+            // Dropping it reaps it.
+        }
+    }
+
     /// Decodes with an idle decoder, or a new one; a decoder that served
     /// well goes back to the pool, any other is stopped.
     fn decode(
@@ -354,7 +369,7 @@ impl Pool {
         limits: Limits,
         cancellable: Option<&gio::Cancellable>,
     ) -> Result<Decoded, Refusal> {
-        let idle = self.idle.lock().unwrap_or_else(PoisonError::into_inner).pop();
+        let idle = self.idle_alive();
         let decoder = match idle {
             Some(decoder) => decoder,
             None => Decoder::start(&self.words)?,
