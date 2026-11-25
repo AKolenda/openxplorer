@@ -126,6 +126,53 @@ fn refresh_button(test: &TestWindow) -> gtk::Button {
         .expect("the navigation row shows Refresh")
 }
 
+/// A tab opened in front, with Ctrl+T or the "+" button or for another
+/// application, puts the keyboard in its list, as any other way of
+/// opening a folder does, even when the keyboard was on a button: the
+/// arrow keys and typed names then work there at once, rather than
+/// moving along the command bar. A tab opened behind leaves the keyboard
+/// where it is.
+///
+/// parity: SEL-020, TAB-001
+#[gtk::test]
+fn a_tab_opened_in_front_puts_the_keyboard_in_its_folder() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the first folder");
+
+    refresh_button(&test).grab_focus();
+    test.activate("new-tab", None);
+    test.wait_for_listing("the new tab");
+    settle();
+    let after_new_tab = test.window.folder_pane().view_has_focus();
+
+    refresh_button(&test).grab_focus();
+    test.window
+        .open_locations_as_tabs(vec![fixture.uri_of("Documents")]);
+    wait_until("the requested folder", || {
+        test.window.current_uri() == Some(fixture.uri_of("Documents"))
+    });
+    test.wait_for_listing("Documents");
+    settle();
+    let after_request = test.window.folder_pane().view_has_focus();
+
+    refresh_button(&test).grab_focus();
+    test.activate("open-tab-background", Some(&fixture.uri()));
+    settle();
+    let after_background_tab = focused(&test);
+
+    assert!(after_new_tab, "Ctrl+T leaves the keyboard in the new tab's list");
+    assert!(
+        after_request,
+        "a folder another application opens takes the keyboard"
+    );
+    assert_eq!(
+        after_background_tab,
+        Some(refresh_button(&test).upcast()),
+        "a tab opened behind leaves the keyboard where it is"
+    );
+}
+
 /// parity: SIDE-002, SEL-020
 #[gtk::test]
 fn clicking_a_place_puts_the_keyboard_in_the_folder() {

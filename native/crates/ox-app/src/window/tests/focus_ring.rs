@@ -98,3 +98,66 @@ fn the_focus_ring_shows_only_after_keyboard_navigation() {
         ]
     );
 }
+
+/// A folder another application opens, and a folder typed into the
+/// address bar and opened with Enter, take the keyboard on their first
+/// item, ringed but not selected, as in Windows 11 File Explorer (checked
+/// on Windows 11 on 2026-11-22): the first Down then selects the second
+/// item. Pressed with real keys.
+///
+/// parity: SEL-020, ACC-016
+#[gtk::test]
+fn a_folder_opened_from_outside_or_typed_rings_its_first_item_and_down_selects_the_second() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    test.window.present();
+    settle(&test);
+    let window = test.window.upcast_ref::<gtk::Window>();
+    let mut pointer = Pointer::connect();
+
+    // Another application asks for the folder (xdg-open, the command line).
+    test.window.open_locations_as_tabs(vec![fixture.uri()]);
+    crate::test_support::harness::wait_until("the requested folder", || {
+        test.window.current_uri() == Some(fixture.uri())
+    });
+    test.wait_for_listing("the requested folder");
+    settle(&test);
+    let names = test.names();
+    let from_outside = (
+        test.window.folder_pane().focused_position(),
+        test.selected_names(),
+        window.gets_focus_visible(),
+    );
+    pointer.tap_key(gdk::Key::Down);
+    settle(&test);
+    let after_down_from_outside = test.selected_names();
+
+    // A folder typed into the address bar, opened with Enter.
+    click(&test, &mut pointer, &home_row(&test));
+    test.activate("location", None);
+    let entry = test.window.address_bar().entry();
+    entry.set_text(&fixture.root().display().to_string());
+    pointer.tap_key(gdk::Key::Return);
+    crate::test_support::harness::wait_until("the typed folder", || {
+        test.window.current_uri() == Some(fixture.uri())
+    });
+    test.wait_for_listing("the typed folder");
+    settle(&test);
+    let typed = (
+        test.window.folder_pane().focused_position(),
+        test.selected_names(),
+    );
+    pointer.tap_key(gdk::Key::Down);
+    settle(&test);
+    let after_down_typed = test.selected_names();
+    pointer.move_to(720, 500);
+
+    assert_eq!(
+        from_outside,
+        (Some(0), Vec::new(), true),
+        "the first item rings, unselected"
+    );
+    assert_eq!(after_down_from_outside, [names[1].clone()]);
+    assert_eq!(typed, (Some(0), Vec::new()));
+    assert_eq!(after_down_typed, [names[1].clone()]);
+}

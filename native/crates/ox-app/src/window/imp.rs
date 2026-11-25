@@ -304,6 +304,10 @@ pub(crate) struct BrowserWindow {
     /// after Settings hides; see
     /// [`super::BrowserWindow::focus_new_file_list`].
     pub(super) file_list_awaits_focus: Cell<bool>,
+    /// The item a folder opened from outside or typed into the address bar
+    /// rang without selecting it, until the next key in the file list:
+    /// Up or Down then moves on from it, as in Windows 11 (SEL-020).
+    pub(super) ringed_item: Cell<Option<u32>>,
     /// Folder Options' "Always search file names and contents" as the
     /// window last followed it; `None` until it first did.
     pub(super) searches_contents: Cell<Option<bool>>,

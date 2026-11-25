@@ -807,6 +807,73 @@ fn the_open_tabs_are_saved_while_the_window_is_open() {
     assert!(test.window.is_visible(), "saved while the window is open");
 }
 
+/// With several windows open, the window in front saves the tabs of every
+/// window, its own first, as Windows 11 reopens every folder window with
+/// its tabs: an app ended by a signal at logout keeps them all, not only
+/// the window in front. A file dialog's window is not one of them.
+///
+/// parity: TAB-053
+#[gtk::test]
+fn the_window_in_front_saves_the_tabs_of_every_window() {
+    use ox_core::session::SavedWindows;
+
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.window
+        .add_tab(&fixture.uri_of("Documents"))
+        .expect("a folder");
+    test.wait_for_listing("the second tab");
+    let other = test.open_beside(&fixture.uri_of("Documents"));
+    for window in [&test.window, &other.window] {
+        window.imp().remembers_session.set(true);
+    }
+    let restore = ox_core::settings::PreferencesUpdate {
+        restore_session: Some(true),
+        ..ox_core::settings::PreferencesUpdate::default()
+    };
+    ox_core::settings::Settings::open(test.settings_directory())
+        .update_preferences(&restore)
+        .expect("the settings file takes the choice");
+    test.context.reload_settings();
+    let saved_windows = || {
+        SavedWindows::load(test.settings_directory()).map(|saved| {
+            saved
+                .windows
+                .iter()
+                .map(|window| {
+                    window
+                        .tabs
+                        .iter()
+                        .map(|tab| tab.panes[tab.active_pane].uri.clone())
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>()
+        })
+    };
+
+    other.window.save_session_in_background();
+    wait_until("both windows to be saved, the saving one first", || {
+        saved_windows()
+            == Some(vec![
+                vec![fixture.uri_of("Documents")],
+                vec![fixture.uri(), fixture.uri_of("Documents")],
+            ])
+    });
+    test.window.save_session_in_background();
+    wait_until("both windows to be saved again, this one first", || {
+        saved_windows()
+            == Some(vec![
+                vec![fixture.uri(), fixture.uri_of("Documents")],
+                vec![fixture.uri_of("Documents")],
+            ])
+    });
+    other.window.close();
+    wait_until("the window to close", || !other.window.is_visible());
+    wait_until("the closed window to be left out", || {
+        saved_windows() == Some(vec![vec![fixture.uri(), fixture.uri_of("Documents")]])
+    });
+}
+
 /// A save of the open tabs that fails for a while (a full disk, a folder
 /// that may not be written) is tried again at the next save, so the tabs
 /// are kept once the storage works again.

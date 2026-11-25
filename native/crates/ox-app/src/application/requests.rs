@@ -147,10 +147,17 @@ impl AppState {
             });
             return false;
         }
+        // Every window is saved for the next start first (TAB-053), so the
+        // last one closing does not save itself alone.
+        let saved = crate::window::save_windows_for_quit(app);
         for window in app.windows() {
             window.close();
         }
         if !app.windows().is_empty() {
+            let open = app.windows();
+            for window in saved.iter().filter(|window| open.contains(window.upcast_ref())) {
+                window.set_saves_on_close(true);
+            }
             return false;
         }
         self.context().desktop_integration().stop_file_manager_service();

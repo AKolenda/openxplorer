@@ -40,8 +40,8 @@ const HOME_QUICK_ACCESS: RowText = RowText {
 
 const RESTORE_SESSION: RowText = RowText {
     title: "Reopen my tabs when OpenXplorer starts",
-    description: "Starting OpenXplorer without a folder reopens the tabs and split panes the last \
-                  window had.",
+    description: "Starting OpenXplorer without a folder reopens every window with the tabs and split \
+                  panes it had.",
     keywords: "restore previous tabs at startup session remember reopen restore tabs last time \
                startup logon restore previous folder windows at logon",
 };

@@ -289,6 +289,10 @@ impl BrowserWindow {
         }
         if self.imp().session.borrow().is_active(id) {
             self.show_tab(id);
+            // As any other way of opening a folder does, a tab opened in
+            // front takes the keyboard into its list, also from the "+"
+            // button or for another application (SEL-020).
+            self.focus_files_after_navigation();
         } else {
             self.render_tabs();
         }

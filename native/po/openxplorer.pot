@@ -4643,7 +4643,7 @@ msgid "Start up"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs
-msgid "Starting OpenXplorer without a folder reopens the tabs and split panes the last window had."
+msgid "Starting OpenXplorer without a folder reopens every window with the tabs and split panes it had."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/startup.rs

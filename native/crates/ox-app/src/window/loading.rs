@@ -527,6 +527,9 @@ impl BrowserWindow {
             self.update_content();
             self.update_details_pane();
             self.focus_new_file_list();
+            if run.mode == LoadMode::Navigate {
+                self.focus_first_item_if_asked(id);
+            }
             self.restore_scroll_after_listing(id);
             self.restore_expanded_after_listing(id);
             self.reveal_located_item(id);
@@ -721,6 +724,43 @@ impl BrowserWindow {
         ));
         handler.set(Some(painted));
         clock.request_phase(gtk::gdk::FrameClockPhase::PAINT);
+    }
+
+    /// Asks the next listing of the active tab's location to put the
+    /// keyboard on its first item, unselected: another application opened
+    /// the folder, or it was typed into the address bar and opened with
+    /// Enter. Windows 11 File Explorer then rings the first item, so the
+    /// first Down selects the second (SEL-020).
+    pub(super) fn focus_first_item_when_listed(&self) {
+        if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
+            tab.focuses_first_item = true;
+        }
+    }
+
+    /// Gives the first item of tab `id`, just listed, the keyboard without
+    /// selecting it, with the focus ring shown, when its location was
+    /// opened as [`Self::focus_first_item_when_listed`] asks and nothing
+    /// is selected there; the next Up or Down moves on from it
+    /// ([`Self::step_from_ringed_item`]). A text field that has the
+    /// keyboard keeps it.
+    fn focus_first_item_if_asked(&self, id: TabId) {
+        let asked = self
+            .imp()
+            .session
+            .borrow_mut()
+            .tab_mut(id)
+            .is_some_and(|tab| std::mem::take(&mut tab.focuses_first_item));
+        let pane = self.folder_pane();
+        if !asked || self.focus_is_in_text_field() || !pane.lists_items() || pane.model().n_items() == 0 {
+            return;
+        }
+        if !pane.model().selected_positions().is_empty() {
+            return;
+        }
+        pane.focus_view();
+        pane.focus_item(0);
+        self.set_focus_visible(true);
+        self.imp().ringed_item.set(Some(0));
     }
 
     /// Puts the view back where a moved tab (TAB-039) or Back and Forward

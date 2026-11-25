@@ -556,6 +556,9 @@ impl BrowserWindow {
 
     /// Opens the address `text`, given as `source` says.
     fn open_address(&self, text: &str, source: AddressSource) {
+        if source == AddressSource::Typed {
+            self.focus_first_item_when_listed();
+        }
         let typed = text.trim();
         // As in Windows' address bar, a path may come between double
         // quotes, as Copy as path copies it, and %NAME% (or $NAME) stands
@@ -862,8 +865,9 @@ impl BrowserWindow {
             IncomingTab::Active => self.navigate(uri),
             IncomingTab::New => self.add_tab(uri),
         };
-        if let Err(error) = opened {
-            self.show_message(&error.to_string());
+        match opened {
+            Ok(()) => self.focus_first_item_when_listed(),
+            Err(error) => self.show_message(&error.to_string()),
         }
     }
 }

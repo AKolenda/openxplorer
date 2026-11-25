@@ -15,7 +15,7 @@ use std::rc::Rc;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 use ox_core::location::{file_uri, location_kind, LocationKind, VirtualPlace};
-use ox_core::session::SavedSession;
+use ox_core::session::SavedWindows;
 use ox_core::settings::Settings;
 
 use super::clock_format::ClockSetting;
@@ -222,33 +222,50 @@ impl AppState {
         }
     }
 
-    /// Opens the first window of a start without locations: the tabs the
-    /// last window had when the settings ask to restore them and they were
-    /// saved, else a window at the startup folder.
+    /// Opens the first windows of a start without locations: the windows
+    /// and tabs saved last when the settings ask to restore them and they
+    /// were saved, else a window at the startup folder.
     fn open_first_window(&self, app: &gtk::Application) {
         let preferences = self.context.settings_data().preferences;
         // Not after a crash loop: a saved tab that takes the app down
         // would otherwise take it down at every start.
         let restore = preferences.restore_session && crate::crash_guard::previous_run().may_restore_tabs();
         let saved = restore
-            .then(|| SavedSession::load(&self.context.settings_directory()))
+            .then(|| SavedWindows::load(&self.context.settings_directory()))
             .flatten();
         let Some(saved) = saved else {
             self.open_window(app, None);
             return;
         };
-        let window = BrowserWindow::new(app, &self.context);
-        window.restore_session(&saved);
-        if window.tab_count() == 0 {
-            // A window never opens empty.
-            window.destroy();
+        // Every saved window reopens, as Windows 11 reopens every folder
+        // window; a window none of whose tabs could be opened is left out,
+        // as a window never opens empty.
+        let windows: Vec<BrowserWindow> = saved
+            .windows
+            .iter()
+            .filter_map(|session| {
+                let window = BrowserWindow::new(app, &self.context);
+                window.restore_session(session);
+                if window.tab_count() == 0 {
+                    window.destroy();
+                    return None;
+                }
+                Some(window)
+            })
+            .collect();
+        let Some((front, others)) = windows.split_first() else {
             self.open_window(app, None);
             return;
-        }
+        };
         if let Some(warning) = self.context.settings_warning() {
-            window.show_message(&warning);
+            front.show_message(&warning);
         }
-        window.present_as_new_window();
+        // The window that was in front is shown last, so it comes out on
+        // top with the keyboard.
+        for window in others.iter().rev() {
+            window.present_as_new_window();
+        }
+        front.present_as_new_window();
     }
 
     /// `--split`: the locations paired into split tabs, in a new window
@@ -659,6 +676,70 @@ mod tests {
         wait_until("the high-contrast rules", || skin().contrast() == Contrast::High);
         high_contrast.set_boolean(false);
         wait_until("the normal rules", || skin().contrast() == Contrast::Normal);
+    }
+
+    /// With "Reopen my tabs" on, a start without locations reopens every
+    /// saved window with its tabs, as Windows 11 reopens every folder
+    /// window.
+    ///
+    /// parity: TAB-053
+    #[gtk::test]
+    fn a_start_reopens_every_saved_window() {
+        use ox_core::session::{SavedSession, SavedTab, SavedWindows, TabSnapshot};
+
+        let fixture = Fixture::standard();
+        let app = TestApp::new();
+        let update = PreferencesUpdate {
+            restore_session: Some(true),
+            ..PreferencesUpdate::default()
+        };
+        app.state
+            .context
+            .update_preferences(update, |result| result.expect("saved"));
+        wait_until("the saved option", || {
+            app.state.context.settings_data().preferences.restore_session
+        });
+        let window = |uris: &[String]| SavedSession {
+            tabs: uris
+                .iter()
+                .map(|uri| SavedTab {
+                    panes: vec![TabSnapshot::from_json(
+                        &serde_json::json!({ "uri": uri, "history": [uri], "index": 0 }),
+                    )
+                    .expect("a valid tab")],
+                    active_pane: 0,
+                })
+                .collect(),
+            active_tab: 0,
+        };
+        let saved = SavedWindows {
+            windows: vec![
+                window(&[fixture.uri(), fixture.uri_of("Documents")]),
+                window(&[fixture.uri_of("Documents")]),
+            ],
+        };
+        saved
+            .save(&app.state.context.settings_directory())
+            .expect("the session is saved");
+
+        app.state.activate(&application());
+
+        let mut opened: Vec<Vec<String>> = browser_windows().iter().map(BrowserWindow::tab_uris).collect();
+        opened.sort();
+        let mut expected = vec![
+            vec![fixture.uri(), fixture.uri_of("Documents")],
+            vec![fixture.uri_of("Documents")],
+        ];
+        expected.sort();
+        assert_eq!(opened, expected);
+        let front = browser_windows()
+            .into_iter()
+            .find(|window| window.tab_count() == 2)
+            .expect("the front window is open");
+        assert!(
+            front.remembers_session(),
+            "a restored window saves its tabs again"
+        );
     }
 
     #[gtk::test]

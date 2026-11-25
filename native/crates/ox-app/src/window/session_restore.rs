@@ -4,17 +4,22 @@
 //!
 //! Ports Dolphin's `RememberOpenedTabs` (`DolphinTabWidget::saveState`
 //! and `restoreState`) as Explorer's "Restore previous folder windows at
-//! logon" offers it: off unless the settings turn it on. The last window
-//! that closes saves its tabs, the panes of split tabs, their histories,
-//! selections and scroll positions; a start without locations opens them
-//! again. The Settings tab is not saved.
+//! logon" offers it: off unless the settings turn it on. Every browsing
+//! window is saved with its tabs, the panes of split tabs, their
+//! histories, selections and scroll positions, the window in front first;
+//! a start without locations opens them all again, as Windows 11 reopens
+//! every folder window with its tabs (Insider build 22635.4580,
+//! KB5050094). The Settings tab is not saved.
 //!
-//! An app ended without closing its windows (SIGTERM at logout or
-//! shutdown, or killed) never closes its last window, so the window in
-//! front also saves its tabs while it is open: every
-//! [`SESSION_SAVE_SECONDS`] seconds when they changed, written off the
-//! main thread, and at once when the session manager asks the app to end
-//! (`GtkApplication`'s `query-end`, [`save_front_session`]).
+//! The window in front saves every window while they are open: every
+//! [`SESSION_SAVE_SECONDS`] seconds when something changed, written off
+//! the main thread, at once when another window closes, and when the
+//! session manager asks the app to end (`GtkApplication`'s `query-end`,
+//! [`save_front_session`]), so an app ended without closing its windows
+//! (SIGTERM at logout or shutdown, or killed) keeps them. Quit saves them
+//! all before the windows close ([`save_windows_for_quit`]). A window the
+//! user closes while others stay open is left out; the last window that
+//! closes saves itself alone.
 
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -24,8 +29,8 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use ox_core::session::{
-    SavedSession, SavedTab, SortDirection, SortField, TabSnapshot, MAX_HISTORY_ENTRIES, MAX_SAVED_TABS,
-    MAX_SCROLL, MAX_SELECTED_ITEMS,
+    SavedSession, SavedTab, SavedWindows, SortDirection, SortField, TabSnapshot, MAX_HISTORY_ENTRIES,
+    MAX_SAVED_TABS, MAX_SAVED_WINDOWS, MAX_SCROLL, MAX_SELECTED_ITEMS,
 };
 use ox_core::settings::View;
 
@@ -50,7 +55,7 @@ static WRITTEN_SNAPSHOT: Mutex<u64> = Mutex::new(0);
 
 /// Writes `saved`, snapshot `number`, to `directory`, after any write
 /// still running, unless a newer snapshot is written already.
-fn write_snapshot(saved: &SavedSession, number: u64, directory: &Path) -> Result<(), String> {
+fn write_snapshot(saved: &SavedWindows, number: u64, directory: &Path) -> Result<(), String> {
     let mut written = WRITTEN_SNAPSHOT.lock().unwrap_or_else(PoisonError::into_inner);
     if *written > number {
         return Ok(());
@@ -60,9 +65,10 @@ fn write_snapshot(saved: &SavedSession, number: u64, directory: &Path) -> Result
     Ok(())
 }
 
-/// Writes the tabs of `window` now, after any write still running.
-fn save_now(window: &BrowserWindow) {
-    let Some(saved) = window.saved_session() else {
+/// Writes the tabs of `window` now, and with `others` those of the other
+/// browsing windows that save theirs, after any write still running.
+fn save_now(window: &BrowserWindow, others: OtherWindows) {
+    let Some(saved) = window.saved_windows(others) else {
         return;
     };
     let number = NEXT_SNAPSHOT.fetch_add(1, Ordering::Relaxed);
@@ -114,7 +120,38 @@ fn saved_tab(tab: &Tab) -> SavedTab {
     }
 }
 
+/// Whether a save of a window's tabs takes the other windows' along.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OtherWindows {
+    /// Every other browsing window that saves its tabs, after this one.
+    Included,
+    /// This window alone: it is the last one closing.
+    Left,
+}
+
 impl BrowserWindow {
+    /// The tabs of this window, then with `others` those of every other
+    /// browsing window of the user's still shown, most recently used
+    /// first, as the windows to reopen; `None` when none has a tab to
+    /// save.
+    fn saved_windows(&self, others: OtherWindows) -> Option<SavedWindows> {
+        let other_windows: Vec<BrowserWindow> = match (others, self.application()) {
+            (OtherWindows::Included, Some(app)) => app
+                .windows()
+                .into_iter()
+                .filter_map(|window| window.downcast::<BrowserWindow>().ok())
+                .filter(|window| window != self && window.saves_session())
+                .collect(),
+            _ => Vec::new(),
+        };
+        let windows: Vec<SavedSession> = std::iter::once(self)
+            .chain(&other_windows)
+            .filter_map(BrowserWindow::saved_session)
+            .take(MAX_SAVED_WINDOWS)
+            .collect();
+        (!windows.is_empty()).then_some(SavedWindows { windows })
+    }
+
     /// The window's tabs as a session to reopen; `None` when it shows only
     /// Settings.
     pub(crate) fn saved_session(&self) -> Option<SavedSession> {
@@ -149,9 +186,15 @@ impl BrowserWindow {
                 .any(|window| window != self.upcast_ref::<gtk::Window>() && window.is::<BrowserWindow>())
         });
         if others_open {
+            // The others save again at once without this window, so a
+            // window the user closed does not come back at the next start
+            // when the app is ended within the next few seconds.
+            if let Some(app) = self.application() {
+                glib::idle_add_local_once(move || save_front_windows_in_background(&app));
+            }
             return;
         }
-        save_now(self);
+        save_now(self, OtherWindows::Left);
     }
 
     /// Saves the window's tabs every [`SESSION_SAVE_SECONDS`] seconds
@@ -190,10 +233,11 @@ impl BrowserWindow {
         front.is_none_or(|front| &front == self.upcast_ref::<gtk::Window>())
     }
 
-    /// Writes the window's tabs on a worker thread when they differ from
-    /// what this window saved last and no other window saved since.
+    /// Writes the tabs of this window, then of the other browsing windows,
+    /// on a worker thread when they differ from what this window saved
+    /// last and no other window saved since.
     pub(super) fn save_session_in_background(&self) {
-        let Some(saved) = self.saved_session() else {
+        let Some(saved) = self.saved_windows(OtherWindows::Included) else {
             return;
         };
         let text = saved.to_json().to_string();
@@ -240,6 +284,12 @@ impl BrowserWindow {
                 other.imp().saved_session_text.replace(None);
             }
         }
+    }
+
+    /// Whether this window's close saves its tabs: false once Quit saved
+    /// every window, so the last one closing does not save itself alone.
+    pub(crate) fn set_saves_on_close(&self, saves: bool) {
+        self.imp().remembers_session.set(saves);
     }
 
     /// Opens the tabs of `saved` in this window, which has none yet, and
@@ -302,7 +352,39 @@ pub(crate) fn save_front_session(app: &gtk::Application) {
         return;
     };
     window.forget_other_saves();
-    save_now(&window);
+    save_now(&window, OtherWindows::Included);
+}
+
+/// Saves every browsing window of `app` now, the one in front first, when
+/// the settings ask for that, before Quit closes them, and keeps the
+/// windows from saving themselves again as they close: the next start
+/// reopens them all. Returns the windows that will not save again, to give
+/// back [`BrowserWindow::set_saves_on_close`] if one of them stays open.
+pub(crate) fn save_windows_for_quit(app: &gtk::Application) -> Vec<BrowserWindow> {
+    save_front_session(app);
+    let windows: Vec<BrowserWindow> = app
+        .windows()
+        .into_iter()
+        .filter_map(|window| window.downcast::<BrowserWindow>().ok())
+        .filter(BrowserWindow::saves_session)
+        .collect();
+    for window in &windows {
+        window.set_saves_on_close(false);
+    }
+    windows
+}
+
+/// Has the browsing window of `app` in front save every window on a
+/// worker thread, after one of them closed.
+fn save_front_windows_in_background(app: &gtk::Application) {
+    let front = app
+        .windows()
+        .into_iter()
+        .filter_map(|window| window.downcast::<BrowserWindow>().ok())
+        .find(BrowserWindow::saves_session);
+    if let Some(window) = front {
+        window.save_session_in_background();
+    }
 }
 
 /// Gives the restored pane `tab` the selection and scroll position of
