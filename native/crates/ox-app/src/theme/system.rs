@@ -2,21 +2,24 @@
 //! The desktop's light or dark preference.
 //!
 //! Ports `system_dark` and `on_system_theme_changed` in
-//! `v2.0.0:desktop/winspace.py`: GNOME's `org.gnome.desktop.interface`
-//! `color-scheme` key decides when the schema is installed (`prefer-dark`
-//! or `prefer-light`; `default` falls back to a GTK theme name containing
-//! "dark"). Without the schema, the XDG desktop portal's
-//! `org.freedesktop.appearance color-scheme` setting is read instead, and
-//! while the portal has no preference, GTK's own dark preference as it was
-//! when the app started (`gtk_system_dark`).
+//! `v2.0.0:desktop/winspace.py`, and asks every desktop, not only GNOME:
+//!
+//! 1. GNOME's `org.gnome.desktop.interface color-scheme` key, when it says
+//!    `prefer-dark` or `prefer-light`.
+//! 2. Else the XDG desktop portal's `org.freedesktop.appearance
+//!    color-scheme`, when it has a preference. KDE Plasma, Cinnamon and
+//!    COSMIC answer here, while GNOME's schema, which most distributions
+//!    install anyway, keeps its `default`.
+//! 3. Else dark when any GTK theme name the desktop gives contains "dark"
+//!    (`ZorinBlue-Dark`, `Mint-Y-Dark`): GNOME's `gtk-theme` key, the one
+//!    GNOME-based portals serve, or GTK's own theme name, which Xfce and
+//!    MATE set over XSETTINGS; or when GTK's own dark preference was on at
+//!    startup (`gtk_system_dark`). Light otherwise.
 //!
 //! Inside Flatpak the runtime ships GNOME's schema too, but the sandbox
 //! cannot read the host's settings, so the schema holds only its defaults
-//! and would always ask for light. There the portal, which answers with the
-//! host's colour scheme, decides as on a desktop without the schema. While
-//! its `color-scheme` has no preference, the GTK theme name that GNOME-based
-//! portals also serve (`org.gnome.desktop.interface gtk-theme`) decides as
-//! GNOME's own key does on the host: "dark" in the name asks for dark.
+//! and would always ask for light. There GNOME's keys never decide, and the
+//! portal, which answers with the host's colour scheme, does.
 
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
@@ -40,14 +43,29 @@ pub(super) const APPEARANCE_NAMESPACE: &str = "org.freedesktop.appearance";
 /// How long the portal may take to answer the first read, in milliseconds.
 const PORTAL_TIMEOUT_MS: i32 = 2000;
 
-/// The appearance GNOME's keys ask for, or `None` when they do not decide.
-fn appearance_from_gnome_keys(color_scheme: Option<&str>, gtk_theme: Option<&str>) -> Option<Appearance> {
+/// The appearance GNOME's `color-scheme` asks for, or `None` for
+/// `default`, which leaves it to the other settings.
+fn appearance_from_gnome_scheme(color_scheme: Option<&str>) -> Option<Appearance> {
     match color_scheme {
-        Some("prefer-dark") => return Some(Appearance::Dark),
-        Some("prefer-light") => return Some(Appearance::Light),
-        _ => {}
+        Some("prefer-dark") => Some(Appearance::Dark),
+        Some("prefer-light") => Some(Appearance::Light),
+        _ => None,
     }
-    gtk_theme.map(appearance_of_theme_name)
+}
+
+/// The appearance the desktop asks for: the first colour scheme with a
+/// preference in `schemes` (GNOME's, then the portal's), else dark when
+/// any of the `hints` from theme names and GTK's preference is dark, else
+/// light.
+fn decide(schemes: &[Option<Appearance>], hints: &[Option<Appearance>]) -> Appearance {
+    if let Some(chosen) = schemes.iter().find_map(|scheme| *scheme) {
+        return chosen;
+    }
+    if hints.contains(&Some(Appearance::Dark)) {
+        Appearance::Dark
+    } else {
+        Appearance::Light
+    }
 }
 
 /// Dark for a GTK theme whose name contains "dark" (`ZorinBlue-Dark`), as
@@ -106,6 +124,44 @@ pub(crate) fn gtk_preference(display: &gdk::Display) -> Appearance {
     }
 }
 
+/// What GTK says of the desktop's style before
+/// [`Skin::install`](super::Skin::install) forces GTK's own theme: its dark
+/// preference and the appearance of its theme name.
+#[derive(Debug, Clone)]
+pub(crate) struct GtkDesktop {
+    /// GTK's dark preference ([`gtk_preference`]).
+    preference: Appearance,
+    /// The appearance of GTK's theme name, which XSETTINGS sets on X11
+    /// desktops such as Xfce and MATE.
+    theme: Option<Appearance>,
+    /// The display whose theme name the scheme follows; `None` in tests
+    /// that set the preference themselves.
+    display: Option<gdk::Display>,
+}
+
+impl GtkDesktop {
+    /// Reads GTK's preference and theme name on `display`, before the skin
+    /// is installed there.
+    pub(crate) fn read(display: &gdk::Display) -> Self {
+        let theme = gtk::Settings::for_display(display).gtk_theme_name();
+        Self {
+            preference: gtk_preference(display),
+            theme: theme.as_deref().map(appearance_of_theme_name),
+            display: Some(display.clone()),
+        }
+    }
+
+    /// GTK on no display, preferring `preference` with no theme name.
+    #[cfg(test)]
+    pub(crate) fn preferring(preference: Appearance) -> Self {
+        Self {
+            preference,
+            theme: None,
+            display: None,
+        }
+    }
+}
+
 /// GNOME's interface settings, when they are the desktop's: on the host
 /// with the schema installed. Inside Flatpak they are the runtime's
 /// defaults, not the desktop's, so the portal decides there.
@@ -132,14 +188,14 @@ fn string_key(settings: &gio::Settings, schema: &gio::SettingsSchema, key: &str)
 pub(crate) struct SystemScheme {
     /// GNOME's interface settings, when the schema is installed.
     gnome_settings: Option<gio::Settings>,
-    /// The portal's last colour scheme, when there is no GNOME schema.
+    /// The portal's last colour scheme.
     portal_appearance: Cell<Option<Appearance>>,
-    /// The appearance of the GTK theme name the portal reports; decides
-    /// while its colour scheme has no preference.
+    /// The appearance of the GTK theme name the portal reports.
     portal_theme: Cell<Option<Appearance>>,
+    /// The appearance of GTK's own theme name, as the desktop last set it.
+    gtk_theme: Cell<Option<Appearance>>,
     /// GTK's dark preference as read at startup, before the skin forced
-    /// it; the desktop's appearance when neither GNOME's keys nor the
-    /// portal decide.
+    /// it.
     gtk_fallback: Appearance,
     /// Hears the desktop's appearance whenever it may have changed.
     on_change: Box<dyn Fn(Appearance)>,
@@ -159,6 +215,7 @@ impl std::fmt::Debug for SystemScheme {
             .field("gnome_settings", &self.gnome_settings.is_some())
             .field("portal_appearance", &self.portal_appearance)
             .field("portal_theme", &self.portal_theme)
+            .field("gtk_theme", &self.gtk_theme)
             .field("gtk_fallback", &self.gtk_fallback)
             .finish_non_exhaustive()
     }
@@ -166,20 +223,27 @@ impl std::fmt::Debug for SystemScheme {
 
 impl SystemScheme {
     /// Starts watching and calls `on_change` with the desktop's appearance
-    /// whenever the scheme changes. With no GNOME schema the portal is
-    /// queried asynchronously, and `on_change` hears its answer.
+    /// whenever the scheme changes: GNOME's keys, when their schema is
+    /// installed, GTK's theme name on the display `gtk` was read from, and
+    /// the portal, which is queried asynchronously; `on_change` hears its
+    /// answer.
     ///
-    /// `gtk_fallback` is GTK's dark preference from [`gtk_preference`],
-    /// read before the skin was installed.
-    pub(crate) fn new(gtk_fallback: Appearance, on_change: impl Fn(Appearance) + 'static) -> Rc<Self> {
+    /// `gtk` is what GTK said of the desktop before the skin was installed.
+    pub(crate) fn new(gtk: &GtkDesktop, on_change: impl Fn(Appearance) + 'static) -> Rc<Self> {
         let gnome_settings = gnome_interface_settings(Sandbox::detect());
-        let scheme = Rc::new(Self::unwatched(gnome_settings, gtk_fallback, Box::new(on_change)));
-        match &scheme.gnome_settings {
-            Some(settings) => scheme.watch_gnome_keys(settings),
-            None => {
-                glib::spawn_future_local(follow_session_portal(Rc::downgrade(&scheme)));
-            }
+        let scheme = Rc::new(Self::unwatched(
+            gnome_settings,
+            gtk.preference,
+            Box::new(on_change),
+        ));
+        scheme.gtk_theme.set(gtk.theme);
+        if let Some(settings) = &scheme.gnome_settings {
+            scheme.watch_gnome_keys(settings);
         }
+        if let Some(display) = &gtk.display {
+            scheme.watch_gtk_theme(display);
+        }
+        glib::spawn_future_local(follow_session_portal(Rc::downgrade(&scheme)));
         scheme
     }
 
@@ -193,6 +257,7 @@ impl SystemScheme {
             gnome_settings,
             portal_appearance: Cell::new(None),
             portal_theme: Cell::new(None),
+            gtk_theme: Cell::new(None),
             gtk_fallback,
             on_change,
             portal_subscription: RefCell::new(None),
@@ -208,29 +273,42 @@ impl SystemScheme {
         Self::unwatched(None, gtk_fallback, Box::new(|_| {}))
     }
 
-    /// The appearance the desktop asks for: GNOME's keys decide, else the
-    /// portal's colour scheme, else the portal's GTK theme name, else the
-    /// GTK preference read at startup, before the skin forced it
-    /// (`gtk_system_dark` in winspace.py).
+    /// The appearance the desktop asks for: GNOME's colour scheme, else
+    /// the portal's, else dark when a GTK theme name (GNOME's, the
+    /// portal's or GTK's own) or GTK's preference at startup, before the
+    /// skin forced it (`gtk_system_dark` in winspace.py), asks for dark.
     pub(crate) fn appearance(&self) -> Appearance {
-        self.gnome_appearance()
-            .or(self.portal_appearance.get())
-            .or(self.portal_theme.get())
-            .unwrap_or(self.gtk_fallback)
+        let (gnome_scheme, gnome_theme) = self.gnome_keys();
+        decide(
+            &[gnome_scheme, self.portal_appearance.get()],
+            &[
+                gnome_theme,
+                self.portal_theme.get(),
+                self.gtk_theme.get(),
+                Some(self.gtk_fallback),
+            ],
+        )
     }
 
     fn notify(&self) {
         (self.on_change)(self.appearance());
     }
 
-    /// The appearance GNOME's keys ask for, reading only the keys the
-    /// installed schema has.
-    fn gnome_appearance(&self) -> Option<Appearance> {
-        let settings = self.gnome_settings.as_ref()?;
-        let schema = settings.settings_schema()?;
+    /// The appearances GNOME's `color-scheme` and `gtk-theme` keys ask
+    /// for, reading only the keys the installed schema has.
+    fn gnome_keys(&self) -> (Option<Appearance>, Option<Appearance>) {
+        let Some(settings) = self.gnome_settings.as_ref() else {
+            return (None, None);
+        };
+        let Some(schema) = settings.settings_schema() else {
+            return (None, None);
+        };
         let color_scheme = string_key(settings, &schema, COLOR_SCHEME_KEY);
         let gtk_theme = string_key(settings, &schema, GTK_THEME_KEY);
-        appearance_from_gnome_keys(color_scheme.as_deref(), gtk_theme.as_deref())
+        (
+            appearance_from_gnome_scheme(color_scheme.as_deref()),
+            gtk_theme.as_deref().map(appearance_of_theme_name),
+        )
     }
 
     /// Follows GNOME's own keys, when their schema is installed.
@@ -249,6 +327,25 @@ impl SystemScheme {
                 ),
             );
         }
+    }
+
+    /// Follows GTK's theme name on `display`, which X11 desktops change
+    /// over XSETTINGS.
+    fn watch_gtk_theme(self: &Rc<Self>, display: &gdk::Display) {
+        display.connect_setting_changed(glib::clone!(
+            #[weak(rename_to = scheme)]
+            self,
+            move |display, name| {
+                if name != "gtk-theme-name" {
+                    return;
+                }
+                let theme = super::providers::desktop_theme_name(display);
+                scheme
+                    .gtk_theme
+                    .set(theme.as_deref().map(appearance_of_theme_name));
+                scheme.notify();
+            }
+        ));
     }
 
     /// Records the portal's colour-scheme value and reports the scheme.
