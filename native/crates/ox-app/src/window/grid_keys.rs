@@ -100,6 +100,9 @@ fn grouped_step(
     heights: RowHeights,
 ) -> Option<GroupTarget> {
     let item = |position: Option<u32>| position.map(GroupTarget::Item).filter(|to| *to != from);
+    if layout.heading_slots() == 1 && layout.columns() > 1 {
+        return list_step(layout, movement, from, column);
+    }
     // A page moves as far as the view shows, measured in pixels: the
     // heading rows it passes count at their own height, which is less
     // than a row of items. It always moves at least one row.
@@ -130,6 +133,32 @@ fn grouped_step(
         (GroupedMove::First, _) => item(layout.end_item(false)),
         (GroupedMove::Last, _) => item(layout.end_item(true)),
     }
+}
+
+/// Where `movement` goes from `from` in grouped List, whose lines of slots
+/// are columns on screen, keeping to `column`, the row on screen: Up and
+/// Down go to the item before or after, across the groups, Left and Right
+/// (and Page Up and Page Down) to the same row of the column before or
+/// after, Home and End to the first and last item. Its headings take no
+/// keyboard, as they have no chevron.
+fn list_step(
+    layout: &SlotLayout,
+    movement: GroupedMove,
+    from: GroupTarget,
+    column: u32,
+) -> Option<GroupTarget> {
+    let GroupTarget::Item(position) = from else {
+        return layout.end_item(false).map(GroupTarget::Item);
+    };
+    let to = match movement {
+        GroupedMove::Up => layout.item_step(position, false),
+        GroupedMove::Down => layout.item_step(position, true),
+        GroupedMove::Back | GroupedMove::PageUp => layout.row_step(position, column, false),
+        GroupedMove::Forward | GroupedMove::PageDown => layout.row_step(position, column, true),
+        GroupedMove::First => layout.end_item(false),
+        GroupedMove::Last => layout.end_item(true),
+    };
+    to.filter(|to| *to != position).map(GroupTarget::Item)
 }
 
 impl BrowserWindow {
@@ -189,9 +218,15 @@ impl BrowserWindow {
                 return Some(glib::Propagation::Stop);
             }
         };
-        let memory = movement
-            .keeps_column()
-            .then_some(GridColumn { column, position: to });
+        // List keeps to the row on screen across its columns, the other
+        // layouts to the column across their rows.
+        let keeps_place = if grouped.is_list() {
+            !movement.keeps_column() || matches!(movement, GroupedMove::PageUp | GroupedMove::PageDown)
+        } else {
+            movement.keeps_column()
+        };
+        let keeps_place = keeps_place && !matches!(movement, GroupedMove::First | GroupedMove::Last);
+        let memory = keeps_place.then_some(GridColumn { column, position: to });
         self.imp().grid_column.set(memory);
         let extends = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
         let keeps = modifiers.contains(gdk::ModifierType::CONTROL_MASK);
@@ -206,6 +241,52 @@ impl BrowserWindow {
             pane.reveal(to);
         } else {
             pane.select_and_reveal(to);
+        }
+        icons.show_heading_above(to);
+        Some(glib::Propagation::Stop)
+    }
+
+    /// Handles Home and End in grouped Details: they go to the first and
+    /// last item shown, as in Windows 11, Shift extending the selection
+    /// from where it started and Ctrl moving the keyboard alone. GTK's own
+    /// keys went to the list's first row, the first group's heading, which
+    /// then selected the whole group. Home scrolls to the top, so the
+    /// first heading shows. `None` for every other key or view.
+    pub(super) fn grouped_details_end_key(
+        &self,
+        key: gdk::Key,
+        modifiers: gdk::ModifierType,
+    ) -> Option<glib::Propagation> {
+        let last = match key {
+            gdk::Key::Home | gdk::Key::KP_Home => false,
+            gdk::Key::End | gdk::Key::KP_End => true,
+            _ => return None,
+        };
+        let others =
+            gdk::ModifierType::ALT_MASK | gdk::ModifierType::SUPER_MASK | gdk::ModifierType::META_MASK;
+        let pane = self.folder_pane();
+        if modifiers.intersects(others) || pane.view() != FolderView::Details {
+            return None;
+        }
+        let grouped = pane.details().grouped()?;
+        let to = grouped.layout()?.end_item(last)?;
+        self.reset_typeahead();
+        self.imp().grid_column.set(None);
+        let from = pane.focused_position();
+        let extends = modifiers.contains(gdk::ModifierType::SHIFT_MASK);
+        let keeps = modifiers.contains(gdk::ModifierType::CONTROL_MASK);
+        if extends {
+            let anchor = grouped.anchor().or(from).unwrap_or(to);
+            grouped.select_shown_between(anchor, to, !keeps);
+            pane.reveal(to);
+        } else if keeps {
+            pane.reveal(to);
+        } else {
+            pane.select_and_reveal(to);
+        }
+        if !last {
+            let adjustment = pane.details().vadjustment();
+            adjustment.set_value(adjustment.lower());
         }
         Some(glib::Propagation::Stop)
     }

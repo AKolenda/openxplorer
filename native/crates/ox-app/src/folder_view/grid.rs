@@ -9,13 +9,15 @@
 //! the window binds Explorer's four named sizes to Ctrl+Shift+1..4. The
 //! compact layout is Dolphin's Compact view and Explorer's List layout
 //! (VIEW-008): the same grid turned on its side, so the items fill columns
-//! top to bottom and the view scrolls sideways. Small icons is laid out
-//! the same way, as Windows 11 lays it out, with narrower columns: its
-//! 16-pixel icons sit left of their names, not above them. Tiles and Content
+//! top to bottom and the view scrolls sideways. Small icons fill rows left
+//! to right and scroll down, as Windows 11 lays them out: one line per
+//! item, its 16-pixel icon left of its name, in columns 310 pixels apart
+//! at 100%, leaving the rest of the width free. Tiles and Content
 //! (VIEW-071) are the same grid with other cells: Tiles in as many columns
 //! of 256-pixel tiles as fit, Content in one column of rows that span the
-//! width, both scrolling down. A grouped folder's Tiles and Content keep
-//! its groups, each under a heading as in Details ([`GroupedSelection`]).
+//! width, both scrolling down. A grouped folder's Tiles, Content and icon
+//! sizes keep its groups, each under a heading as in Details
+//! ([`GroupedSelection`]); Small icons and List keep their order alone.
 //! [`IconView`] is the widget; it keeps its layout and the text size, and
 //! fits its lines to its size.
 
@@ -32,7 +34,7 @@ pub(crate) use grouped::{CollapsedGroups, GroupSlot, GroupedSelection, SlotKind}
 
 use crate::folder_view::cells::{self, CellLayout, CellOwners, PositionMap};
 use crate::folder_view::details::GroupTitle;
-use crate::folder_view::group_slots::RowHeights;
+use crate::folder_view::group_slots::{GroupTarget, RowHeights};
 pub(crate) use crate::folder_view::icon_size::{cell_size, IconSize};
 use crate::folder_view::icon_size::{
     compact_density_heading_row, compact_density_tiles_row, compact_row, content_row, group_heading_row,
@@ -43,6 +45,10 @@ use crate::text_size::TextSize;
 /// The icon edge of the compact layout (Explorer's List uses small icons).
 const COMPACT_ICON_SIZE: i32 = 16;
 
+/// Pixels of Small icons' grid beside its items: its 12-pixel padding at
+/// the left and 8 at the right (`skin/folder-views.css`).
+const SMALL_ICONS_SIDE_PADDING: i32 = 12 + 8;
+
 /// The CSS class of the compact layout.
 const COMPACT_CLASS: &str = "compact";
 
@@ -51,6 +57,12 @@ const TILES_CLASS: &str = "tiles";
 
 /// The CSS class of the Content layout.
 const CONTENT_CLASS: &str = "content";
+
+/// The CSS class of grouped icon sizes: a tile draws its padding, hover,
+/// selection and focus on its own box, as Tiles does, so a heading row's
+/// slots draw none of a tile's and are a line of title tall
+/// (`skin/folder-views.css`, `theme/fonts.rs`).
+pub(crate) const ICON_GROUPS_CLASS: &str = "icon-groups";
 
 /// How the icon view lays its items out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,17 +80,10 @@ pub(crate) enum GridLayout {
 }
 
 impl GridLayout {
-    /// Whether the layout keeps a grouped folder's groups: Tiles and
-    /// Content do, as in Windows 11 (VIEW-071).
-    const fn shows_groups(self) -> bool {
-        matches!(self, GridLayout::Tiles | GridLayout::Content)
-    }
-
     /// Whether the items fill columns top to bottom and the view scrolls
-    /// sideways: List, and Small icons, which Windows 11 lays out as List
-    /// with narrower columns, each 16-pixel icon left of its name.
+    /// sideways: List alone. Small icons fill rows, as in Windows 11.
     pub(crate) const fn flows_sideways(self) -> bool {
-        matches!(self, GridLayout::Compact | GridLayout::Icons(IconSize::SMALL))
+        matches!(self, GridLayout::Compact)
     }
 }
 
@@ -148,7 +153,7 @@ mod imp {
         pub(super) items: RefCell<Option<gtk::MultiSelection>>,
         /// Names each item's group while the folder is grouped.
         pub(super) group_title: RefCell<Option<GroupTitle>>,
-        /// The grid's model while it shows grouped Tiles or Content.
+        /// The grid's model while it shows a grouped layout with headings.
         pub(super) grouping: SharedGrouping,
         /// The groups collapsed under their headings, which the folder
         /// model shares.
@@ -269,7 +274,8 @@ impl IconView {
         self.show_model();
     }
 
-    /// Keeps a grouped folder's groups in Tiles and Content, each under a
+    /// Keeps a grouped folder's groups in Tiles, Content and the icon
+    /// sizes that fill rows, each under a
     /// heading `title` names, or shows no groups with `None` (VIEW-022).
     pub(crate) fn set_group_titles(&self, title: Option<GroupTitle>) {
         let grouped_now = title.is_some();
@@ -282,8 +288,8 @@ impl IconView {
         }
     }
 
-    /// The grouped model the grid shows, while it shows grouped Tiles or
-    /// Content.
+    /// The grouped model the grid shows, while it shows a grouped layout
+    /// with headings.
     pub(crate) fn grouped(&self) -> Option<GroupedSelection> {
         self.imp().grouping.borrow().clone()
     }
@@ -313,12 +319,49 @@ impl IconView {
         }
     }
 
+    /// Scrolls up to the heading of the group of the item at the
+    /// listing's `position` when the item is in its group's first row and
+    /// the heading is above the view, as Windows 11 keeps a group's
+    /// heading in sight over its first row; Home so goes back to the top
+    /// of the list (VIEW-022). Nothing while the view is not grouped.
+    pub(crate) fn show_heading_above(&self, position: u32) {
+        let Some(layout) = self.grouped().and_then(|grouped| grouped.layout()) else {
+            return;
+        };
+        let Some(group) = layout.group_of(position) else {
+            return;
+        };
+        let (Some(heading), Some(row)) = (
+            layout.row_of(GroupTarget::Heading(group)),
+            layout.row_of(GroupTarget::Item(position)),
+        ) else {
+            return;
+        };
+        if row != heading + 1 {
+            return;
+        }
+        let top = self.row_heights().top_of(&layout, heading);
+        let adjustment = self.scroll_adjustment();
+        if top < adjustment.value() {
+            adjustment.set_value(top.max(adjustment.lower()));
+        }
+    }
+
     /// How tall a page of the view and its rows are, for Page Up and Page
-    /// Down in grouped Tiles and Content.
+    /// Down in grouped Tiles, Content and icon sizes.
     /// In Compact view (VIEW-067) the rows are as close as its stylesheet
     /// draws them (`theme/fonts.rs`).
     pub(crate) fn row_heights(&self) -> RowHeights {
         let text_size = self.imp().text_size.get();
+        let page = self.scroll_adjustment().page_size();
+        if let GridLayout::Icons(size) = self.layout() {
+            // Compact view leaves the icon sizes' rows as they are.
+            return RowHeights {
+                page,
+                item: cell_size(size, text_size).height,
+                heading: group_heading_row(text_size),
+            };
+        }
         let content = self.layout() == GridLayout::Content;
         let (item, heading) = match (self.in_compact_density(), content) {
             (false, true) => (content_row(text_size), group_heading_row(text_size)),
@@ -332,11 +375,7 @@ impl IconView {
                 compact_density_heading_row(text_size, false),
             ),
         };
-        RowHeights {
-            page: self.scroll_adjustment().page_size(),
-            item,
-            heading,
-        }
+        RowHeights { page, item, heading }
     }
 
     /// Whether the window showing the view is in Compact view: it carries
@@ -346,21 +385,24 @@ impl IconView {
             .is_some_and(|root| root.has_css_class(crate::window::COMPACT_DENSITY_CLASS))
     }
 
-    /// Gives the grid the folder's items, grouped in Tiles and Content
-    /// while the folder is grouped.
+    /// Gives the grid the folder's items, grouped under headings while the
+    /// folder is grouped and the layout shows groups.
     fn show_model(&self) {
         let imp = self.imp();
         let items = imp.items.borrow().clone();
         let title = imp.group_title.borrow().clone();
         let grouped = match (items.as_ref(), title) {
-            (Some(items), Some(title)) if self.layout().shows_groups() => {
+            // Every layout heads a grouped folder's groups, as Windows 11
+            // does (VIEW-022, VIEW-071), List with each heading at the top
+            // of its group's column.
+            (Some(items), Some(title)) => {
                 let collapsed = imp.collapsed.borrow().clone();
-                Some(GroupedSelection::new(
-                    items,
-                    title,
-                    &collapsed,
-                    imp.grid.max_columns(),
-                ))
+                let lines = imp.grid.max_columns();
+                Some(if self.layout().flows_sideways() {
+                    GroupedSelection::new_list(items, title, &collapsed, lines)
+                } else {
+                    GroupedSelection::new(items, title, &collapsed, lines)
+                })
             }
             _ => None,
         };
@@ -370,11 +412,24 @@ impl IconView {
             crate::folder_view::details::GROUPED_CLASS,
             grouped.is_some(),
         );
+        self.mark_icon_groups();
         match (grouped, items) {
             (Some(grouped), _) => imp.grid.set_model(Some(&grouped)),
             (None, items) => imp.grid.set_model(items.as_ref()),
         }
         self.fit_lines();
+    }
+
+    /// Marks grouped icon sizes with [`ICON_GROUPS_CLASS`], whose tiles
+    /// draw on their own boxes.
+    fn mark_icon_groups(&self) {
+        let imp = self.imp();
+        let icons = matches!(self.layout(), GridLayout::Icons(_));
+        crate::window::widget_tree::toggle_class(
+            &imp.grid,
+            ICON_GROUPS_CLASS,
+            icons && imp.grouping.borrow().is_some(),
+        );
     }
 
     /// The adjustment of the scroll position: the horizontal one in List
@@ -444,11 +499,29 @@ impl IconView {
                 let rows = imp.scroller.height() / compact_row(text_size).max(1);
                 u32::try_from(rows.max(1)).unwrap_or(1)
             }
+            GridLayout::Icons(IconSize::SMALL) => {
+                cell_size(IconSize::SMALL, text_size).columns_in(width - SMALL_ICONS_SIDE_PADDING)
+            }
             GridLayout::Icons(size) => cell_size(size, text_size).columns_in(width),
             GridLayout::Tiles => tiles_cell(text_size).columns_in(width),
             // List flows sideways above; Content is one column.
             GridLayout::Compact | GridLayout::Content => 1,
         };
+        // Small icons keep Windows 11's distance between columns: the
+        // grid takes only the width its columns need, as GTK would spread
+        // them over all of it.
+        let spare = match layout {
+            GridLayout::Icons(IconSize::SMALL) => {
+                let cell = cell_size(IconSize::SMALL, text_size).width.max(1);
+                let inner = width - SMALL_ICONS_SIDE_PADDING;
+                let columns = (inner / cell).max(1);
+                (inner - columns * cell).max(0)
+            }
+            _ => 0,
+        };
+        if imp.grid.margin_end() != spare {
+            imp.grid.set_margin_end(spare);
+        }
         if imp.grid.max_columns() != lines {
             imp.grid.set_max_columns(lines);
         }
@@ -467,7 +540,8 @@ impl IconView {
     /// Gives the grid `layout`'s CSS classes, orientation and cells.
     fn apply_layout(&self, layout: GridLayout) {
         let imp = self.imp();
-        let regroups = imp.layout.replace(layout).shows_groups() != layout.shows_groups();
+        // List lays its groups out in columns, the others in rows.
+        let regroups = imp.layout.replace(layout).flows_sideways() != layout.flows_sideways();
         for class in IconSize::css_classes().chain([COMPACT_CLASS, TILES_CLASS, CONTENT_CLASS]) {
             imp.grid.remove_css_class(class);
         }
@@ -495,6 +569,7 @@ impl IconView {
         if regroups && imp.group_title.borrow().is_some() && imp.items.borrow().is_some() {
             self.show_model();
         }
+        self.mark_icon_groups();
     }
 
     /// Keeps the lines at what the view's size holds.

@@ -567,6 +567,16 @@ impl FolderPane {
         }
     }
 
+    /// The listing position of the first item the visible view shows: the
+    /// first item, or in a grouped view the first one not in a collapsed
+    /// group; `None` when it shows none.
+    pub(super) fn first_shown_position(&self) -> Option<u32> {
+        match self.grouped() {
+            Some(grouped) => grouped.layout()?.end_item(false),
+            None => (self.model().n_items() > 0).then_some(0),
+        }
+    }
+
     /// The visible view's vertical scroll position.
     pub(super) fn scroll_position(&self) -> f64 {
         self.visible_vadjustment().value()
