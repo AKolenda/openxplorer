@@ -184,6 +184,7 @@ impl BrowserWindow {
             pane.model().set_show_hidden(preferences.show_hidden);
             pane.show_view(view);
             let details_view = pane.details();
+            details_view.set_name_starts_at_windows_width(preferences.name_column_windows_width);
             details_view.apply_column_widths(preferences.column_widths.as_ref());
             details_view.connect_columns_resized(glib::clone!(
                 #[weak(rename_to = window)]

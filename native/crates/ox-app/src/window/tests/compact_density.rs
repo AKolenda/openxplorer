@@ -86,7 +86,9 @@ fn compact_view_draws_closer_rows_and_is_saved() {
     });
     let compact_row = details_row_height(&test);
     let compact_side = sidebar_row_height(&test);
-    assert_eq!(compact_row, 19, "details rows, from {usual_row}");
+    // 21 pixels apart: a 22-pixel box overlapping the next by a pixel, as
+    // Windows 11's Compact view draws its hover and selection boxes.
+    assert_eq!(compact_row, 22, "details rows, from {usual_row}");
     assert_eq!(compact_side, 23, "sidebar rows, from {usual_side}");
     assert!(compact_row < usual_row && compact_side < usual_side);
     assert_eq!(selection_bar_offset(&test), 4, "centred on a 23-pixel row");

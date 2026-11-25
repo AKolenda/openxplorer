@@ -14,12 +14,16 @@
    src/folder_view/details.rs), and their cells and titles pad for them. */
 columnview.files { background-color: @ox_bg; color: @ox_text; }
 columnview.files > header { border-bottom: 1px solid @ox_border; padding: 0; }
+/* "Show a line under column titles" off: no line, as in Windows 11; the
+   titles keep their height. */
+window.no-column-title-line columnview.files > header { border-bottom-color: transparent; }
 columnview.files > header > button {
   background: none;
   border-style: none;
-  /* The dividers between titles show only while the pointer is over the
-     titles, as in Windows 11 File Explorer. */
-  border-right: 1px solid transparent;
+  /* A faint divider after each title, shown all the time as in Windows
+     11 File Explorer (its reference capture without hover: #636363 on
+     #191919, the full height of the titles). */
+  border-right: 1px solid alpha(@ox_text, 0.32);
   border-radius: 0;
   color: @ox_muted;
   font-weight: normal;
@@ -29,7 +33,6 @@ columnview.files > header > button {
   min-height: 31px;
   box-shadow: none;
 }
-columnview.files > header:hover > button { border-right-color: @ox_border; }
 columnview.files > header > button:hover { background-color: @ox_hover; }
 /* Name, which takes the room the other columns leave, gives way first
    when the list is narrower than its columns, as beside the details pane
@@ -430,7 +433,7 @@ gridview.files.icons-small.icon-groups > child > .item-cell.group-slot.heading-r
    of the grid too, and show none (src/folder_view/grid/grouped.rs).
    Tiles: the icon left of its name, type and size, 8px apart across and
    6px down, as Windows 11 spaces them. Content: one row per item across
-   the width, 16px in from each side, with a thin line under each. Their
+   the width, 34px in at the left and 16px at the right, with a thin line under each. Their
    heights follow the text size (src/theme/fonts.rs). */
 gridview.files.tiles > child, gridview.files.content > child {
   padding: 0;
@@ -448,13 +451,17 @@ gridview.files.content > child:selected:hover, gridview.files.content > child:fo
   box-shadow: none;
 }
 gridview.files.tiles > child > .item-cell:not(.group-slot) {
-  padding: 8px 12px 8px 8px;
+  /* The icon starts 4px into the tile and the text runs to 4px before
+     its right edge, as in Windows 11 (measured on its reference capture:
+     folder ink 7px in, a long name's "..." 5px before the edge). */
+  padding: 8px 4px;
   margin: 3px 4px;
   border-radius: 4px;
   transition: background-color 83ms linear;
 }
 gridview.files.content > child > .item-cell:not(.group-slot) {
-  padding: 6px 16px;
+  /* Windows 11 sets the icon's ink 36px in from the row's edge. */
+  padding: 6px 16px 6px 34px;
   border-bottom: 1px solid @ox_border;
   transition: background-color 83ms linear;
 }
@@ -490,7 +497,17 @@ gridview.files.content.keyboard-in > child:focus:not(:focus-visible):not(.file-d
    the icon have none. */
 gridview.files.tiles > child box, gridview.files.content > child box { margin: 0; }
 gridview.files > child .item-lines { border-spacing: 1px; }
+/* A name on two lines is a pixel taller than two lines of the pitch;
+   taking it back keeps the tile as tall as one of three single lines. */
+gridview.files.tiles > child .item-lines label.wrapped-name { margin-bottom: -1px; }
 gridview.files > child .item-properties { border-spacing: 1px; margin: 0 8px 0 24px; }
+/* Content's columns have no side margins: cells/content_columns.rs starts
+   each where Windows 11 does. */
+gridview.files.content > child .item-properties { margin-left: 0; margin-right: 0; }
+/* Content's name and date stand on the row's first line, 2 pixels lower
+   than the top in the usual view, where two lines used to center them. */
+window:not(.compact-density) gridview.files.content > child .item-lines,
+window:not(.compact-density) gridview.files.content > child .item-properties { margin-top: 2px; margin-bottom: -2px; }
 gridview.files > child .item-properties > box { border-spacing: 4px; }
 /* A group's heading, as the details view draws it (VIEW-022): the
    title over the items' left edge, with no line after it; the heading
@@ -527,7 +544,7 @@ gridview.files.icon-groups > child:active,
 gridview.files.icon-groups > child:selected,
 gridview.files.icon-groups > child:selected:hover { background: none; }
 gridview.files.icon-groups.keyboard-in > child:focus:not(:focus-visible):not(.file-drop-active),
-gridview.files.icon-groups > child:focus-visible { outline: none; }
+gridview.files.icon-groups > child:focus-visible { outline: none; box-shadow: none; }
 gridview.files.icon-groups > child > box:not(.group-slot) {
   border-radius: 4px;
   transition: background-color 83ms linear;
@@ -543,6 +560,9 @@ gridview.files.icon-groups.keyboard-in > child:focus:not(:focus-visible):not(.fi
 gridview.files.icon-groups > child:focus-visible > box:not(.group-slot) {
   outline: 2px solid @ox_item_focus_outer;
   outline-offset: -2px;
+  /* The focus ring's inner line on the box too, not on the taller cell,
+     so one ring hugs the icon and its name as in Windows 11. */
+  box-shadow: inset 0 0 0 3px @ox_item_focus_inner;
 }
 /* A heading's row acts as one, as Windows 11's does (VIEW-022): the
    pointer anywhere over it lights the whole row in the items' hover

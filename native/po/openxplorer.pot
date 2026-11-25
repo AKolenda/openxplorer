@@ -776,6 +776,10 @@ msgid "Date modified:"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/cells.rs
+msgid "Dimensions:"
+msgstr ""
+
+#: crates/ox-app/src/folder_view/cells.rs
 msgid "Folder contents — type a filename prefix to select"
 msgstr ""
 
@@ -785,6 +789,10 @@ msgstr ""
 
 #: crates/ox-app/src/folder_view/cells.rs
 msgid "Size:"
+msgstr ""
+
+#: crates/ox-app/src/folder_view/cells.rs
+msgid "Type:"
 msgstr ""
 
 #: crates/ox-app/src/folder_view/cells/expander.rs crates/ox-app/src/window/sidebar/menu.rs
@@ -3175,6 +3183,14 @@ msgid "Icons from Windows icon files"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "In the details view, Name starts 256 pixels wide, so the rows and their selection end after the last column, as in Windows 11. Off: Name fills the room the other columns leave."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "In the details view, a thin line separates the column titles from the list. Windows 11 draws none."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "Language"
 msgstr ""
 
@@ -3184,6 +3200,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs crates/ox-app/src/theme/appearance_button.rs
 msgid "Light"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Name column starts at Windows' width (256 px)"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -3232,6 +3252,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "Shift+F10 opens the classic menu"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "Show a line under column titles"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
@@ -3332,6 +3356,10 @@ msgid "appearance dark light system colour color mode"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
+msgid "column header title line border separator underline divider details view windows"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
 msgid "column header title sort sorted arrow chevron caret accent underline details view windows 11 style look"
 msgstr ""
 
@@ -3361,6 +3389,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs
 msgid "language languages translation translations locale localization interface display chinese english region"
+msgstr ""
+
+#: crates/ox-app/src/settings_page/appearance.rs
+msgid "name column width wide fill details view selection row windows 256"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/appearance.rs

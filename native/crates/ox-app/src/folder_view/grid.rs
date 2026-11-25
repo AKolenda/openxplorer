@@ -37,17 +37,17 @@ use crate::folder_view::details::GroupTitle;
 use crate::folder_view::group_slots::{GroupTarget, RowHeights};
 pub(crate) use crate::folder_view::icon_size::{cell_size, IconSize};
 use crate::folder_view::icon_size::{
-    compact_density_heading_row, compact_density_tiles_row, compact_row, content_row, group_heading_row,
-    tiles_cell, CONTENT_ICON, TILES_ICON,
+    compact_density_details_row, compact_density_heading_row, compact_density_tiles_row, compact_row,
+    content_row, group_heading_row, tiles_cell, CONTENT_ICON, TILES_ICON,
 };
 use crate::text_size::TextSize;
 
 /// The icon edge of the compact layout (Explorer's List uses small icons).
 const COMPACT_ICON_SIZE: i32 = 16;
 
-/// Pixels of Small icons' grid beside its items: its 12-pixel padding at
-/// the left and 8 at the right (`skin/folder-views.css`).
-const SMALL_ICONS_SIDE_PADDING: i32 = 12 + 8;
+/// Pixels of the icon grid beside its items: its padding at the left and
+/// right (`skin/folder-views.css`), 20 in every layout with columns.
+const GRID_SIDE_PADDING: i32 = 12 + 8;
 
 /// The CSS class of the compact layout.
 const COMPACT_CLASS: &str = "compact";
@@ -424,12 +424,15 @@ impl IconView {
     /// draw on their own boxes.
     fn mark_icon_groups(&self) {
         let imp = self.imp();
-        let icons = matches!(self.layout(), GridLayout::Icons(_));
-        crate::window::widget_tree::toggle_class(
-            &imp.grid,
-            ICON_GROUPS_CLASS,
-            icons && imp.grouping.borrow().is_some(),
-        );
+        // Every icon size above Small icons draws on its items' boxes, as
+        // Windows 11's boxes hug the icon and its name in a taller row;
+        // Small icons does so while grouped.
+        let boxes = match self.layout() {
+            GridLayout::Icons(IconSize::SMALL) => imp.grouping.borrow().is_some(),
+            GridLayout::Icons(_) => true,
+            GridLayout::Compact | GridLayout::Tiles | GridLayout::Content => false,
+        };
+        crate::window::widget_tree::toggle_class(&imp.grid, ICON_GROUPS_CLASS, boxes);
     }
 
     /// The adjustment of the scroll position: the horizontal one in List
@@ -496,28 +499,37 @@ impl IconView {
         let layout = imp.layout.get();
         let lines = match layout {
             _ if layout.flows_sideways() => {
-                let rows = imp.scroller.height() / compact_row(text_size).max(1);
+                // Compact view packs List's items 21 pixels apart at 100%,
+                // as Windows 11's (theme/fonts.rs); GTK stretches them to
+                // share the column's height between the rows set here.
+                let row = if self.in_compact_density() {
+                    compact_density_details_row(text_size)
+                } else {
+                    compact_row(text_size)
+                };
+                let rows = imp.scroller.height() / row.max(1);
                 u32::try_from(rows.max(1)).unwrap_or(1)
             }
-            GridLayout::Icons(IconSize::SMALL) => {
-                cell_size(IconSize::SMALL, text_size).columns_in(width - SMALL_ICONS_SIDE_PADDING)
-            }
-            GridLayout::Icons(size) => cell_size(size, text_size).columns_in(width),
-            GridLayout::Tiles => tiles_cell(text_size).columns_in(width),
+            GridLayout::Icons(size) => cell_size(size, text_size).columns_in(width - GRID_SIDE_PADDING),
+            GridLayout::Tiles => tiles_cell(text_size).columns_in(width - GRID_SIDE_PADDING),
             // List flows sideways above; Content is one column.
             GridLayout::Compact | GridLayout::Content => 1,
         };
-        // Small icons keep Windows 11's distance between columns: the
-        // grid takes only the width its columns need, as GTK would spread
-        // them over all of it.
-        let spare = match layout {
-            GridLayout::Icons(IconSize::SMALL) => {
-                let cell = cell_size(IconSize::SMALL, text_size).width.max(1);
-                let inner = width - SMALL_ICONS_SIDE_PADDING;
-                let columns = (inner / cell).max(1);
-                (inner - columns * cell).max(0)
-            }
-            _ => 0,
+        // The icon sizes and Tiles keep Windows 11's distance between
+        // columns: the grid takes only the width its columns need, as GTK
+        // would spread them over all of it, and the rest stays free at the
+        // right, as in Windows.
+        let pitch = match layout {
+            GridLayout::Icons(size) => cell_size(size, text_size).width,
+            GridLayout::Tiles => tiles_cell(text_size).width,
+            GridLayout::Compact | GridLayout::Content => 0,
+        };
+        let spare = if pitch > 0 {
+            let inner = width - GRID_SIDE_PADDING;
+            let columns = (inner / pitch).max(1);
+            (inner - columns * pitch).max(0)
+        } else {
+            0
         };
         if imp.grid.margin_end() != spare {
             imp.grid.set_margin_end(spare);

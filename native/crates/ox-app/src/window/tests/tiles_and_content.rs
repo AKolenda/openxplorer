@@ -67,7 +67,14 @@ fn tiles_and_content_show_each_items_type_and_size_beside_its_name() {
         show(&test, view);
         let notes = cell_named(&test, "Notes 2").shown_item_lines();
         let lines = notes.unwrap_or_else(|| panic!("{view:?} shows the item's lines"));
-        assert_eq!(lines.kind, "Text Document", "{view:?}");
+        // Windows 11's Content puts nothing under a name without authors
+        // or tags; its Tiles show the type (measured on its captures).
+        let kind = if view == FolderView::Tiles {
+            "Text Document"
+        } else {
+            ""
+        };
+        assert_eq!(lines.kind, kind, "{view:?}");
         assert_eq!(
             lines.size, "20\u{a0}bytes",
             "{view:?}: the fixture's 20-byte file"
@@ -81,16 +88,11 @@ fn tiles_and_content_show_each_items_type_and_size_beside_its_name() {
         );
         let folder = cell_named(&test, "Documents").shown_item_lines();
         let folder = folder.unwrap_or_else(|| panic!("{view:?} shows the folder's lines"));
-        // Windows 11's Content rows give a folder its name alone.
-        let kind = if view == FolderView::Tiles {
-            "File folder"
-        } else {
-            ""
-        };
+        // Windows 11's Tiles and Content give a folder its name alone.
         assert_eq!(
             (folder.kind.as_str(), folder.size.as_str()),
-            (kind, ""),
-            "{view:?}: a folder has no size"
+            ("", ""),
+            "{view:?}: a folder has no type or size"
         );
     }
     show(&test, FolderView::Details);

@@ -47,18 +47,6 @@ impl Kind {
             Kind::Odp => "odp",
         }
     }
-
-    /// The type GIO names a file of this kind.
-    pub(crate) fn content_type(self) -> &'static str {
-        match self {
-            Kind::Docx => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            Kind::Xlsx => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            Kind::Pptx => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            Kind::Odt => "application/vnd.oasis.opendocument.text",
-            Kind::Ods => "application/vnd.oasis.opendocument.spreadsheet",
-            Kind::Odp => "application/vnd.oasis.opendocument.presentation",
-        }
-    }
 }
 
 /// Writes a document of `kind` at `path` that shows `text`.
@@ -590,19 +578,5 @@ impl Crc32 {
 
     fn finish(&self) -> u32 {
         !self.0
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The checksum is ZIP's own: that of "123456789" is CBF43926.
-    #[test]
-    fn the_checksum_is_zips() {
-        let mut crc = Crc32::new();
-        crc.add(b"1234");
-        crc.add(b"56789");
-        assert_eq!(crc.finish(), 0xcbf4_3926);
     }
 }

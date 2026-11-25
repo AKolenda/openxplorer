@@ -345,19 +345,26 @@ fn the_real_ctrl_keypad_plus_fits_and_the_main_ctrl_plus_resizes_text() {
     pointer.tap_key(gdk::Key::equal);
     pointer.let_go_key(gdk::Key::Control_L);
     wait_until("the text to grow", || test.window.skin().text_size() != text_size);
-    // Ctrl+= fits nothing; only Size may widen, so its text still fits
-    // the larger font.
+    // Ctrl+= fits nothing: the fitted widths only grow with the text, as
+    // Windows' scaling grows them; Size may widen more, so its text still
+    // fits the larger font.
     let without_size = |widths: Vec<(SortColumn, i32)>| -> Vec<(SortColumn, i32)> {
         widths
             .into_iter()
             .filter(|(column, _)| *column != SortColumn::Size)
             .collect()
     };
-    assert_eq!(
-        without_size(shown_widths(&details)),
-        without_size(fitted_widths.clone()),
-        "Ctrl+= fits nothing"
-    );
+    let growth = test.window.skin().text_size().scale() / text_size.scale();
+    for ((column, after), (_, before)) in without_size(shown_widths(&details))
+        .into_iter()
+        .zip(without_size(fitted_widths.clone()))
+    {
+        let grown = f64::from(before) * growth;
+        assert!(
+            (f64::from(after) - grown).abs() <= 2.0,
+            "Ctrl+= fits nothing; {column:?} grew from {before} to {after}, not {grown:.0}"
+        );
+    }
     let size_before = fitted_widths
         .iter()
         .find(|(column, _)| *column == SortColumn::Size)

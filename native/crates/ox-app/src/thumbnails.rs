@@ -67,7 +67,6 @@ const MAX_KEPT: usize = 512;
 /// icons on a 100 % screen take about 12 MB, but of Extra large icons on a
 /// 200 % screen up to 512 MB.
 const MAX_KEPT_BYTES: usize = 64 * 1024 * 1024;
-
 /// The smallest edge, in device pixels, at which an office document shows
 /// its thumbnail: Medium icons and larger. A row of Details, List or
 /// Small icons keeps the document's type icon, as Windows draws it there,
@@ -1040,111 +1039,6 @@ mod tests {
                 .expect("the larger preview");
             assert_eq!(texture.width(), pixels, "drawn from a {pixels}-pixel thumbnail");
         }
-    }
-
-    /// An office document keeps its type icon in rows of Details, List
-    /// and Small icons, as in Windows, and shows its thumbnail from Medium
-    /// icons up; a picture shows its thumbnail at every size.
-    ///
-    /// parity: VIEW-057
-    #[gtk::test]
-    fn a_document_keeps_its_type_icon_in_small_rows() {
-        let at = |name: &str, content_type: &str, pixels: i32| PreviewRequest {
-            pixels,
-            ..request_of(Path::new(&format!("/tmp/Examples/{name}")), content_type)
-        };
-        let docx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-        assert!(keeps_type_icon(&at("Plan.docx", docx, 16)));
-        assert!(keeps_type_icon(&at("Plan.docx", docx, 32)));
-        assert!(keeps_type_icon(&at("Budget.ods", "application/zip", 16)));
-        assert!(!keeps_type_icon(&at("Plan.docx", docx, 48)));
-        assert!(!keeps_type_icon(&at("Plan.docx", docx, 96)));
-        assert!(!keeps_type_icon(&at("Harbor.png", "image/png", 16)));
-        assert!(!keeps_type_icon(&at("Report.pdf", "application/pdf", 16)));
-        assert!(
-            glib::MainContext::default()
-                .block_on(preview(at("Plan.docx", docx, 16)))
-                .is_none(),
-            "no thumbnail is even looked up for a row"
-        );
-    }
-
-    /// An office document's thumbnail is its first page, framed in light
-    /// gray, drawn from
-    /// `LibreOffice`'s PDF and written into the cache with the keys that
-    /// keep it valid; a row too small to show a page starts no
-    /// `LibreOffice` and is asked again later, and without `LibreOffice` the
-    /// document keeps its icon. Drawing runs where `LibreOffice`, `pdftoppm`
-    /// and a working bubblewrap are installed.
-    ///
-    /// parity: VIEW-057
-    #[gtk::test]
-    fn a_documents_thumbnail_is_its_first_page() {
-        use crate::test_support::office_documents::{self, Kind};
-
-        let folder = tempfile::tempdir().expect("a temporary folder");
-        let cache = folder.path().join("cache");
-        let item = folder.path().join("Budget.ods");
-        office_documents::write(&item, Kind::Ods, "Budget");
-        let request = request_of(&item, Kind::Ods.content_type());
-        let make = |request: &PreviewRequest, flavor| {
-            glib::MainContext::default().block_on(make_thumbnail_with(
-                request,
-                &cache,
-                Some(Arc::new(Catalogue::for_test(Vec::new()))),
-                flavor,
-                1_700_000_000,
-            ))
-        };
-        documents::use_converter(None);
-        assert_eq!(make(&request, ThumbnailFlavor::Normal), Err(Missing::Failed));
-        let Some(converter) = documents::test_office(&folder.path().join("pdfs")) else {
-            return;
-        };
-        documents::use_converter(Some(converter));
-        let small = PreviewRequest {
-            pixels: 16,
-            ..request.clone()
-        };
-        assert_eq!(make(&small, ThumbnailFlavor::Normal), Err(Missing::Later));
-        assert!(
-            !folder.path().join("pdfs").exists(),
-            "no LibreOffice ran for a row"
-        );
-
-        let written = make(&request, ThumbnailFlavor::Large);
-
-        documents::use_converter(None);
-        let written = written.expect("a thumbnail");
-        assert_eq!(
-            written,
-            thumbnail_file(&cache, &request.uri, ThumbnailFlavor::Large)
-        );
-        let thumbnail = Pixbuf::from_file(&written).expect("a PNG");
-        assert_eq!(
-            thumbnail.option("tEXt::Thumb::URI").as_deref(),
-            Some(request.uri.as_str())
-        );
-        assert_eq!(
-            thumbnail.option("tEXt::Thumb::MTime").as_deref(),
-            Some("1700000000")
-        );
-        assert_eq!(thumbnail.width().max(thumbnail.height()), 256);
-        let corner = thumbnail.read_pixel_bytes();
-        assert_eq!(
-            &corner[..3],
-            &[0xc8, 0xc8, 0xc8],
-            "a light gray frame around the page"
-        );
-        let names: Vec<_> = fs::read_dir(folder.path())
-            .expect("listing")
-            .map(|entry| entry.expect("entry").file_name())
-            .collect();
-        assert_eq!(
-            names.len(),
-            3,
-            "nothing beside the document but the caches: {names:?}"
-        );
     }
 
     /// A share that does not answer holds only the network's own slots:

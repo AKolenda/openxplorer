@@ -43,6 +43,10 @@ impl BrowserWindow {
     /// Draws the rows closer, or at their usual spacing.
     fn show_compact_density(&self, compact: bool) {
         toggle_class(self, DENSITY_CLASS, compact);
+        // List fits its rows to Compact view's closer items.
+        for pane in self.folder_panes() {
+            pane.icon_view().fit_lines();
+        }
         // Home's rows take their height when drawn (HOME-015).
         self.render_landing();
     }

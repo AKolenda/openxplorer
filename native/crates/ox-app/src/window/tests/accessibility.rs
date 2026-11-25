@@ -745,7 +745,7 @@ fn large_text_grows_rows_and_dialogs_still_fit_800_by_600() {
 /// At 200% text, the columns nobody resized and the navigation pane at
 /// its default width grow with the text, so dates, types and folder names
 /// are not cut short; back at 100% they return to their default widths.
-/// A width the user dragged is kept.
+/// A width the user dragged grows with the text too, as Windows grows it.
 ///
 /// parity: ACC-012, VIEW-028
 #[gtk::test]
@@ -795,7 +795,10 @@ fn large_text_widens_default_columns_and_the_navigation_pane() {
         "the list scrolls sideways: {header_width}"
     );
     assert_eq!(back, (176, 135, 210));
-    assert_eq!(dragged, 150, "a width the user chose stays");
+    assert_eq!(
+        dragged, 300,
+        "a width the user chose grows with the text, as in Windows"
+    );
 }
 
 /// A folder opened at 200% text starts with the wide defaults; Ctrl+0

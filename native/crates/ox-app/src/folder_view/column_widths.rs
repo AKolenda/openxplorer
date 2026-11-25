@@ -65,6 +65,10 @@ const fn default_width(column: SortColumn) -> Option<u32> {
     }
 }
 
+/// The width Windows 11 gives the Name column at 100% text, when Settings
+/// asks for it ("Name column starts at Windows' width").
+pub(crate) const WINDOWS_NAME_WIDTH: u32 = 256;
+
 /// The text size, in percent, at which `column`'s default width was
 /// chosen: the dates' at 125%, which their default already fits, the
 /// others' at 100%.
@@ -100,12 +104,21 @@ pub(crate) fn start_width(column: SortColumn, saved: Option<&ColumnWidths>) -> O
 }
 
 /// [`start_width`] with text drawn `scale` times its 100% size: a column
-/// without a saved width starts at [`scaled_default_width`].
+/// without a saved width starts at [`scaled_default_width`]. A saved width
+/// is a width at 100% and grows with the text, as Windows' scaling grows
+/// a column with the rest of the layout.
 pub(crate) fn start_width_at(column: SortColumn, saved: Option<&ColumnWidths>, scale: f64) -> Option<u32> {
     let limits = settings_column(column).width_range();
     let saved = saved.and_then(|widths| widths.get(settings_column(column)));
-    let width = saved.or(scaled_default_width(column, scale))?;
-    Some(width.clamp(*limits.start(), *limits.end()))
+    let Some(saved) = saved else {
+        return scaled_default_width(column, scale).map(|width| width.clamp(*limits.start(), *limits.end()));
+    };
+    Some(scaled_width(saved.clamp(*limits.start(), *limits.end()), scale))
+}
+
+/// `width`, a width at 100%, with text drawn `scale` times that size.
+pub(crate) fn scaled_width(width: u32, scale: f64) -> u32 {
+    fitted_pixels((f64::from(width) * scale).round())
 }
 
 /// The size the Size column fits whole at its narrowest and by default:
@@ -293,7 +306,11 @@ mod tests {
             file_type: Some(150),
             ..ColumnWidths::default()
         };
-        assert_eq!(start_width_at(SortColumn::Type, Some(&saved), 2.0), Some(150));
+        assert_eq!(
+            start_width_at(SortColumn::Type, Some(&saved), 2.0),
+            Some(300),
+            "a saved width is one at 100% and grows with the text"
+        );
     }
 
     /// Size's narrowest width is its measured text and padding, never

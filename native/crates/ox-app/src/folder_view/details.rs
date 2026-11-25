@@ -334,6 +334,9 @@ mod imp {
         /// widens the default column widths; 0 until a text size is set,
         /// which counts as 1 ([`super::DetailsView::text_scale`]).
         pub(super) text_scale: Cell<f64>,
+        /// Whether Name starts at Windows' width rather than filling the
+        /// room ([`super::DetailsView::set_name_starts_at_windows_width`]).
+        pub(super) name_windows_width: Cell<bool>,
         /// What the cells share, set by [`super::DetailsView::new`].
         pub(super) cells: OnceCell<super::CellContext>,
         /// The folder's selection model, while the view shows it.
@@ -845,6 +848,9 @@ impl DetailsView {
         let scale = self.text_scale();
         for (column, view_column) in self.view_columns() {
             let mut width = column_widths::start_width_at(column, saved, scale);
+            if column == SortColumn::Name && width.is_none() {
+                width = self.windows_name_width(scale);
+            }
             // Size starts wide enough for its text in the list's font, also
             // from a saved width narrower than that.
             if column == SortColumn::Size {
@@ -855,6 +861,45 @@ impl DetailsView {
         }
         // Applying widths is not a resize by the user: reporting it would
         // save widths the user never set.
+        self.cancel_resize_report();
+    }
+
+    /// Name's width at `scale` while it starts at Windows' width, else
+    /// `None`: it fills the room.
+    fn windows_name_width(&self, scale: f64) -> Option<u32> {
+        self.imp()
+            .name_windows_width
+            .get()
+            .then(|| column_widths::scaled_width(column_widths::WINDOWS_NAME_WIDTH, scale))
+    }
+
+    /// Starts Name at Windows' 256 pixels (times the text size) when `on`,
+    /// so the rows, their selection and their hover end after the last
+    /// column as in Windows 11; else Name fills the room again. A width
+    /// the user gave Name stays either way.
+    pub(crate) fn set_name_starts_at_windows_width(&self, on: bool) {
+        let imp = self.imp();
+        if imp.name_windows_width.replace(on) == on {
+            return;
+        }
+        let Some(name) = self.column(SortColumn::Name) else {
+            return;
+        };
+        let scale = self.text_scale();
+        let windows = column_widths::fixed_width(
+            SortColumn::Name,
+            Some(column_widths::scaled_width(
+                column_widths::WINDOWS_NAME_WIDTH,
+                scale,
+            )),
+        );
+        if on && name.expands() {
+            name.set_expand(false);
+            name.set_fixed_width(windows);
+        } else if !on && name.fixed_width() == windows {
+            name.set_fixed_width(column_widths::fixed_width(SortColumn::Name, None));
+            name.set_expand(true);
+        }
         self.cancel_resize_report();
     }
 
@@ -871,7 +916,8 @@ impl DetailsView {
     /// Draws the list's text `scale` times its 100% size: each column
     /// still at its default width for the old size takes its default for
     /// the new one, so larger text is not cut short (ACC-012); a width the
-    /// user chose stays. Not a resize by the user, so nothing is saved.
+    /// user chose grows by as much as the text, as Windows' scaling grows
+    /// it. Not a resize by the user, so nothing is saved.
     pub(crate) fn set_text_scale(&self, scale: f64) {
         let old = self.text_scale();
         self.imp().text_scale.set(scale);
@@ -885,9 +931,20 @@ impl DetailsView {
             }
             let at_default =
                 column_widths::fixed_width(column, column_widths::scaled_default_width(column, old));
-            if view_column.fixed_width() >= 0 && view_column.fixed_width() == at_default {
+            let fixed = view_column.fixed_width();
+            if fixed >= 0 && fixed == at_default {
                 let width = column_widths::scaled_default_width(column, scale);
                 view_column.set_fixed_width(column_widths::fixed_width(column, width));
+            } else if let Some(shown) = column_widths::saved_width(column, fixed) {
+                // A width the user chose grows and shrinks with the text.
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "widths are small and positive"
+                )]
+                let at_100 = (shown / old).round() as u32;
+                let width = column_widths::scaled_width(at_100, scale);
+                view_column.set_fixed_width(column_widths::fixed_width(column, Some(width)));
             }
         }
         self.cancel_resize_report();
@@ -964,15 +1021,17 @@ impl DetailsView {
         }
     }
 
-    /// The widths the user set, in the form settings save them. Name
-    /// counts only once it has a width of its own.
+    /// The widths the user set, in the form settings save them: as wide as
+    /// at 100% text, whatever the text size now. Name counts only once it
+    /// has a width of its own.
     pub(crate) fn widths_to_save(&self) -> Vec<ColumnWidth> {
         let listing = self.imp().listing.get();
+        let scale = self.text_scale();
         let saved = self
             .view_columns()
             .filter(|(column, _)| saves_width(*column, listing));
         let widths = saved.filter_map(|(column, view_column)| {
-            let pixels = column_widths::saved_width(column, view_column.fixed_width())?;
+            let pixels = (column_widths::saved_width(column, view_column.fixed_width())? / scale).round();
             let column = column_widths::settings_column(column);
             Some(ColumnWidth { column, pixels })
         });
