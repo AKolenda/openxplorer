@@ -25,7 +25,9 @@ use crate::test_support::harness::{
 use crate::window::command_bar::menus::sort_menu;
 use crate::window::menu_popover::MenuEntry;
 
-use super::view_styles::{ask_from_folder_options, close_folder_options, open_folder_options};
+use super::view_styles::{
+    ask_from_folder_options, change_preferences, close_folder_options, open_folder_options,
+};
 
 /// The headings the details view draws, top to bottom, each with its
 /// group's count.
@@ -204,6 +206,61 @@ fn date_groups_move_on_when_the_day_changes() {
     let shown = headings(&test);
     crate::folder_view::groups::set_clock_for_tests(None);
     assert_eq!(shown, ["Yesterday (2)", "A long time ago (1)"]);
+}
+
+/// The relative dates the details view shows, "Today at …" or "Yesterday
+/// at …", as drawn in its cells.
+fn shown_relative_dates(test: &TestWindow) -> Vec<String> {
+    wait_for_frames(&test.window, 3);
+    let column_view = test.window.folder_pane().details().column_view().clone();
+    descendants::<gtk::Label>(&column_view)
+        .into_iter()
+        .filter(WidgetExt::is_mapped)
+        .map(|label| label.text().to_string())
+        .filter(|text| text.starts_with("Today at ") || text.starts_with("Yesterday at "))
+        .collect()
+}
+
+/// Turns relative dates on, then pretends it is tomorrow and lets the
+/// window follow the day: the dates it shows then.
+fn relative_dates_after_midnight(test: &TestWindow) -> Vec<String> {
+    change_preferences(
+        test,
+        &PreferencesUpdate {
+            absolute_dates: Some(false),
+            ..PreferencesUpdate::default()
+        },
+    );
+    wait_until("today's dates read Today", || {
+        let shown = shown_relative_dates(test);
+        !shown.is_empty() && shown.iter().all(|date| date.starts_with("Today at "))
+    });
+    let tomorrow = glib::DateTime::now_local()
+        .and_then(|now| now.add_days(1))
+        .expect("tomorrow");
+    crate::folder_view::groups::set_clock_for_tests(Some(tomorrow));
+    test.window.follow_the_day();
+    let shown = shown_relative_dates(test);
+    crate::folder_view::groups::set_clock_for_tests(None);
+    shown
+}
+
+/// Relative dates follow the calendar past midnight in a folder that is
+/// not grouped: a file written today reads "Yesterday at …" once the day
+/// changes, without the folder being opened again. Overnight in a soak
+/// test the rows kept saying "Today at …" until they were drawn anew.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn relative_dates_move_on_when_the_day_changes() {
+    let fixture = Fixture::empty();
+    fixture.write("note.txt");
+    let test = TestWindow::open(&fixture.uri());
+    let shown = relative_dates_after_midnight(&test);
+    assert!(
+        !shown.is_empty() && shown.iter().all(|date| date.starts_with("Yesterday at ")),
+        "after midnight today's file reads Yesterday: {shown:?}"
+    );
 }
 
 /// Columns shown, hidden or moved while the groups are headed: Downloads

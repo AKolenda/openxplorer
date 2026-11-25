@@ -167,6 +167,8 @@ fn text_factory(
 struct CellContext {
     owners: Rc<CellOwners>,
     dates: Rc<Cell<DateStyle>>,
+    /// The day relative dates were last written from (year, month, day).
+    dates_day: Cell<Option<(i32, i32, i32)>>,
     tree: FolderTree,
     positions: PositionMap,
 }
@@ -188,6 +190,11 @@ impl CellContext {
             _ => text_factory(column, &self.owners, &self.dates, &self.positions),
         }
     }
+}
+
+/// Today's date on the clock the date cells and groups count from.
+fn today() -> Option<(i32, i32, i32)> {
+    crate::folder_view::groups::local_now().map(|now| now.ymd())
 }
 
 /// A resizable column showing `column`, sorted by its header.
@@ -512,6 +519,7 @@ impl DetailsView {
         let cells = CellContext {
             owners: Rc::clone(owners),
             dates: Rc::default(),
+            dates_day: Cell::new(today()),
             tree: model.tree().clone(),
             positions: Rc::new(move |row| match grouping.borrow().as_ref() {
                 Some(grouped) => grouped.item_at(row),
@@ -702,9 +710,26 @@ impl DetailsView {
     /// shown.
     pub(crate) fn set_date_style(&self, style: DateStyle) {
         if self.cells().dates.replace(style) != style {
-            for column in [SortColumn::Modified, SortColumn::Created, SortColumn::Deleted] {
-                self.redraw_column(column);
-            }
+            self.redraw_dates();
+        }
+    }
+
+    /// Writes relative dates from the new day once the day has changed
+    /// since they were written: "Today at …" becomes "Yesterday at …" at
+    /// midnight without the folder being opened again (VIEW-022). On the
+    /// same day, or with dates written in full, nothing is drawn again.
+    pub(crate) fn follow_the_day(&self) {
+        let today = today();
+        let changed = self.cells().dates_day.replace(today) != today;
+        if changed && self.date_style() == DateStyle::Relative {
+            self.redraw_dates();
+        }
+    }
+
+    /// Binds the date cells shown again.
+    fn redraw_dates(&self) {
+        for column in [SortColumn::Modified, SortColumn::Created, SortColumn::Deleted] {
+            self.redraw_column(column);
         }
     }
 

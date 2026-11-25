@@ -324,10 +324,17 @@ pub fn date_short_time_text(unix_seconds: Option<u64>) -> String {
 /// "Yesterday at 7:35 PM" for recent dates in [`DateStyle::Relative`],
 /// else [`date_short_time_text`] (VIEW-004).
 pub fn column_date_text(unix_seconds: Option<u64>, style: DateStyle) -> String {
+    column_date_text_at(unix_seconds, style, DateTime::now_local().ok().as_ref())
+}
+
+/// [`column_date_text`] as it reads at `now`: "Today at" and "Yesterday
+/// at" count from `now`'s day, so a view that follows the calendar past
+/// midnight writes them from the moment it draws. Without `now` dates are
+/// written in full.
+pub fn column_date_text_at(unix_seconds: Option<u64>, style: DateStyle, now: Option<&DateTime>) -> String {
     let relative = || {
         let time = local_time(unix_seconds?)?;
-        let now = DateTime::now_local().ok()?;
-        relative_date::relative_text(&time, &now, locale_pattern::current(), clock_format())
+        relative_date::relative_text(&time, now?, locale_pattern::current(), clock_format())
     };
     let text = match style {
         DateStyle::Relative => relative(),

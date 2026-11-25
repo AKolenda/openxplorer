@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //! Date groups follow the calendar (VIEW-022): "Today", "Yesterday" and
 //! Explorer's other periods count from the day the listing was grouped,
-//! so when the day changes the window groups its folders again.
+//! so when the day changes the window groups its folders again, and the
+//! details view writes its relative dates ("Today at …") anew.
 //!
 //! A timer wakes the window just after the next local midnight. A timer
 //! does not run while the computer sleeps, so the window also checks the
@@ -23,6 +24,8 @@ impl BrowserWindow {
             if pane.model().day_changed() {
                 super::view_style::group_pane(pane, pane.model().grouping());
             }
+            // Grouped or not, "Today at …" reads "Yesterday at …" now.
+            pane.details().follow_the_day();
         }
     }
 
