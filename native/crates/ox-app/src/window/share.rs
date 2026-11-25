@@ -194,6 +194,10 @@ impl BrowserWindow {
     /// The addresses of the files Share attaches for the selection
     /// ([`attachment_sources`]): Recent rows by the file they stand for.
     fn selected_sources(&self) -> Option<Vec<String>> {
+        // A row selected on Home stands for its file (HOME-036).
+        if let Some(uri) = self.selected_home_file() {
+            return attachment_sources(std::iter::once((uri.as_str(), None, EntryKind::File)));
+        }
         let items = self.folder_pane().model().selected_items();
         attachment_sources(items.iter().map(|item| {
             let entry = item.entry();

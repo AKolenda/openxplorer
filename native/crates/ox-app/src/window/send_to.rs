@@ -176,6 +176,10 @@ impl BrowserWindow {
     /// The selected rows' own addresses, to select them again, and the
     /// addresses Send to sends for them ([`send_source`]).
     fn selected_rows_and_sources(&self) -> (Vec<String>, Vec<String>) {
+        // A row selected on Home stands for its file (HOME-036).
+        if let Some(uri) = self.selected_home_file() {
+            return (vec![uri.clone()], vec![uri]);
+        }
         let items = self.folder_pane().model().selected_items();
         items
             .iter()

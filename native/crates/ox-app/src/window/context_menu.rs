@@ -432,6 +432,18 @@ impl BrowserWindow {
         }
     }
 
+    /// What a Home Recent row's menu offers for `entry`, its file, where
+    /// this computer has it: Share, Share with and the text editor's "Edit
+    /// in", built as the file list builds them (HOME-036).
+    pub(super) fn recent_row_extras(&self, entry: &Entry) -> super::home_page::RecentRowExtras {
+        let facts = self.item_facts(entry, true);
+        super::home_page::RecentRowExtras {
+            share: entries::share_item(&facts),
+            share_with: entries::share_with_item(&facts),
+            editors: entries::editor_items(&facts),
+        }
+    }
+
     /// What a file's menu says of Favorites (HOME-014): the real file, a
     /// Recent row's included, and whether it is one already. Every file's
     /// menu offers it, as Windows 11's does, whatever Home shows.

@@ -117,6 +117,17 @@ impl BrowserWindow {
     /// selected; `None` for several items or a landing page. A row of
     /// Recent files is the file it stands for.
     fn command_subject(&self) -> Option<CommandSubject> {
+        // A row selected on Home stands for its file (HOME-036), which may
+        // have gone since Home listed it.
+        if let Some(uri) = self.selected_home_file() {
+            let name = self.imp().locations.borrow().base_name(&uri);
+            return Some(CommandSubject {
+                uri,
+                name,
+                is_folder: false,
+                is_recent_file: true,
+            });
+        }
         let items = self.folder_pane().model().selected_items();
         match items.as_slice() {
             [] => self.folder_subject(),

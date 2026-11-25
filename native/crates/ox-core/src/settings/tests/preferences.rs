@@ -768,3 +768,46 @@ fn favorites_change_whatever_home_shows() {
     assert_eq!(preferences.favorites, [plan]);
     assert!(!preferences.home_quick_access);
 }
+
+/// A renamed favorite, or a favorite inside a renamed folder, keeps its
+/// place in Favorites under its new address; the others stay as they are
+/// (HOME-036).
+///
+/// parity: HOME-036
+#[test]
+fn a_renamed_favorite_keeps_its_place_under_its_new_name() {
+    let root = temporary_folder();
+    let mut store = Settings::open(root.path());
+    store
+        .update_preferences(&PreferencesUpdate {
+            home_quick_access: Some(true),
+            ..PreferencesUpdate::default()
+        })
+        .expect("on");
+    let notes = "file:///home/ana/Notes.txt";
+    let plan = "file:///home/ana/Work/Plan.txt";
+    let photo = "file:///home/ana/Work%20old/Beach.jpg";
+    for favorite in [notes, plan, photo] {
+        store.set_favorite(favorite, true).expect("added");
+    }
+
+    store
+        .move_favorites(notes, "file:///home/ana/Notes%20(final).txt")
+        .expect("renamed");
+    store
+        .move_favorites("file:///home/ana/Work", "file:///home/ana/Projects")
+        .expect("folder renamed");
+    store
+        .move_favorites("file:///home/ana/Unrelated.txt", "file:///home/ana/Other.txt")
+        .expect("nothing to follow");
+
+    let preferences = Settings::open(root.path()).snapshot().preferences;
+    assert_eq!(
+        preferences.favorites,
+        [
+            favorite_key("file:///home/ana/Notes%20(final).txt").unwrap(),
+            "file:///home/ana/Projects/Plan.txt".to_owned(),
+            photo.to_owned(),
+        ]
+    );
+}

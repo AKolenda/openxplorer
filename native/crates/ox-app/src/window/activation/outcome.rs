@@ -138,6 +138,7 @@ impl BrowserWindow {
             ox_core::i18n::gettext_static(NOT_FOUND),
             ox_core::i18n::format_message(NO_LONGER_LOCATED, &[("folder", &folder)]),
         );
+        let gone = uri.to_owned();
         glib::spawn_future_local(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -148,6 +149,8 @@ impl BrowserWindow {
                 dialog.open();
                 dialog.next_response().await;
                 dialog.finish();
+                // Home's Recent no longer lists it (HOME-036).
+                window.drop_recent_row(&gone);
             }
         ));
     }

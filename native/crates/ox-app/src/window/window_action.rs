@@ -435,6 +435,9 @@ pub(crate) enum WindowAction {
     AddToFavorites,
     /// Removes the file in the string target from Favorites (HOME-014).
     RemoveFromFavorites,
+    /// Takes the file in the target off the desktop's recently used list
+    /// (HOME-036).
+    RemoveFromRecent,
     /// Opens the item in the string target as a double-click does: a
     /// folder in the tab, a file in its default application (Home's
     /// Recent and Favorites).
@@ -741,6 +744,7 @@ impl WindowAction {
             WindowAction::OpenFileLocationInWindow => "open-file-location-in-window",
             WindowAction::AddToFavorites => "add-to-favorites",
             WindowAction::RemoveFromFavorites => "remove-from-favorites",
+            WindowAction::RemoveFromRecent => "remove-from-recent",
             WindowAction::OpenItemAt => "open-item-at",
             WindowAction::OpenFileLocationOf => "open-file-location-of",
             WindowAction::GalleryCollection => "gallery-collection",

@@ -53,9 +53,12 @@ use crate::settings_store::Change;
 
 use super::context_menu::{MENU_KEY, SHIFT_F10_KEY};
 use super::gestures;
-use super::menu_popover::{MenuEntry, MenuItem, MenuPopover, MenuStyle};
-use super::place_menus::{classic_or_compact, popup_item_place_menu, PlaceMenu};
+#[cfg(test)]
+use super::menu_popover::MenuPopover;
+use super::menu_popover::{MenuEntry, MenuItem, MenuStyle};
+use super::place_menus::{popup_item_place_menu, PlaceMenu};
 use super::result_location::LocationTarget;
+use super::sidebar::menu::compress_to_item;
 use super::widget_tree::{children, remove_children, toggle_class};
 use super::window_action::WindowAction;
 use super::BrowserWindow;
@@ -188,22 +191,15 @@ impl Tab {
     }
 }
 
-/// The right-click menu of a tile or row of Home.
-enum ItemMenu {
-    /// A Recent or Favorites file's rows, in the compact style.
-    Entries(Vec<MenuEntry>),
-    /// A Quick access tile's: the pin's place menu, Windows 11's, with
-    /// its icon strip and "Show more options".
-    Place(PlaceMenu),
-}
-
 /// One tile or row of Home and what it does.
 struct Item {
     child: gtk::FlowBoxChild,
     /// Double-click and Enter: an action and its target.
     open: (WindowAction, String),
-    /// The right-click menu.
-    menu: ItemMenu,
+    /// The right-click menu: a tile's is the pin's place menu, a row's
+    /// the file's ([`PlaceMenu::HomeFile`]); both are Windows 11's, with
+    /// their icon strip and "Show more options".
+    menu: PlaceMenu,
     /// What Alt+Enter shows the Properties of, and Ctrl+Shift+C copies
     /// the path of.
     properties: String,
@@ -216,7 +212,9 @@ impl Item {
     }
 
     /// Opens the menu at `x`, `y` in the item, hung from the folder pane,
-    /// which outlives a redraw of Home.
+    /// which outlives a redraw of Home; "Show more options" opens the
+    /// classic menu in its place, and the item takes the keyboard back
+    /// when it closes.
     fn popup_menu(&self, x: f64, y: f64, classic: bool) {
         let window = self.child.root().and_downcast::<BrowserWindow>();
         let style = if classic {
@@ -224,115 +222,190 @@ impl Item {
         } else {
             window.map_or(MenuStyle::Compact, |window| window.preferred_menu_style())
         };
-        let entries = match &self.menu {
-            ItemMenu::Entries(entries) => entries,
-            ItemMenu::Place(place) => {
-                // Hung from the folder pane too; "Show more options" opens
-                // the classic menu in its place.
-                popup_item_place_menu(place, &self.child, x, y, style);
-                return;
-            }
-        };
-        let owner = self
-            .child
-            .ancestor(super::folder_pane::FolderPane::static_type())
-            .unwrap_or_else(|| self.child.clone().upcast());
-        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
-        let at = gtk::graphene::Point::new(x as f32, y as f32);
-        let point = self.child.compute_point(&owner, &at).unwrap_or(at);
-        // The pane keeps one menu for Home's items and shows it again each
-        // time ([`MenuPopover::kept_by`]).
-        let popover = MenuPopover::kept_by(&owner, "home-item-menu");
-        popover.set_entries(classic_or_compact(copy_entries(entries), style));
-        popover.set_style_and_strip(style, Vec::new());
-        popover.set_offset(0, 0);
-        popover.set_position(gtk::PositionType::Bottom);
-        #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
-        let pointing_to = gtk::gdk::Rectangle::new(point.x() as i32, point.y() as i32, 1, 1);
-        popover.set_pointing_to(Some(&pointing_to));
-        let opener = self.child.downgrade();
-        popover.after_close(move |closed| {
-            let closed = closed.clone();
-            // Once the chosen item has run.
-            glib::idle_add_local_once(move || {
-                let window = closed.root().and_downcast::<gtk::Window>();
-                if let (Some(window), Some(opener)) = (window, opener.upgrade()) {
-                    give_focus_back(&window, &opener);
-                }
-            });
-        });
-        popover.popup();
+        popup_item_place_menu(&self.menu, &self.child, x, y, style);
+    }
+
+    /// Whether it is a row of Recent or Favorites, which stands for a file.
+    fn is_file_row(&self) -> bool {
+        matches!(self.menu, PlaceMenu::HomeFile { .. })
+    }
+
+    /// Whether it is a row of Recent, which Windows 11 neither cuts,
+    /// renames nor deletes from Home.
+    fn is_recent_row(&self) -> bool {
+        matches!(self.menu, PlaceMenu::HomeFile { recent: true, .. })
     }
 }
 
-/// Gives the keyboard back to `opener`, the tile or row whose menu just
-/// closed, unless what the menu chose took it elsewhere or left Home: so
-/// the arrows and Enter go on from there, as with the navigation pane's
-/// menus. Focus left nowhere, on a hidden widget or on a container of
-/// `opener` counts as lost.
-fn give_focus_back(window: &gtk::Window, opener: &gtk::FlowBoxChild) {
-    if !opener.is_drawable() {
-        return;
-    }
-    let focus = GtkWindowExt::focus(window);
-    let lost = focus.is_none_or(|focus| !focus.is_drawable() || opener.is_ancestor(&focus));
-    if lost {
-        opener.grab_focus();
-    }
-}
-
-/// A copy of `entries`, which a menu takes for its own.
-fn copy_entries(entries: &[MenuEntry]) -> Vec<MenuEntry> {
-    entries.to_vec()
-}
-
-/// An item of a file's menu running `action` on `uri`; `label` is a
-/// message id ([`message_id`]), translated here.
-fn file_item(label: &str, glyph: Icon, action: WindowAction, uri: &str) -> MenuEntry {
-    MenuItem::with_text_target(&ox_core::i18n::gettext(label), glyph, action, uri).into()
-}
-
-/// The menu of a Recent or Favorites row for the file at `uri`.
-fn file_menu(uri: &str, is_favorite: bool) -> Vec<MenuEntry> {
+/// The menu of a Favorites row for the file at `uri`, in `style`, and its
+/// icon strip (HOME-036): Cut, Copy, Rename and Delete in the strip, which
+/// act on the file itself as in its folder; then Open, Open file location,
+/// Add to or Remove from Favorites, Copy as path and Properties. The
+/// classic menu behind "Show more options" lists the same commands, Cut,
+/// Copy, Delete and Rename as rows. A Recent row's, when `is_recent`
+/// says so, is [`recent_file_menu`]'s, here without what only the window
+/// knows ([`BrowserWindow::home_recent_menu`] adds it).
+pub(super) fn file_menu(
+    uri: &str,
+    is_favorite: bool,
+    is_recent: bool,
+    style: MenuStyle,
+) -> (Vec<MenuEntry>, Vec<MenuItem>) {
+    // `label` is a message id ([`message_id`]), translated here.
+    let target = |label: &str, glyph: Icon, action: WindowAction| -> MenuItem {
+        MenuItem::with_text_target(&ox_core::i18n::gettext(label), glyph, action, uri)
+    };
     let favorite = if is_favorite {
-        file_item(
+        target(
             message_id("Remove from Favorites"),
             Icon::StarFilled,
             WindowAction::RemoveFromFavorites,
-            uri,
         )
     } else {
-        file_item(
+        target(
             message_id("Add to Favorites"),
             Icon::Star,
             WindowAction::AddToFavorites,
-            uri,
         )
     };
-    vec![
-        file_item(message_id("Open"), Icon::Open, WindowAction::OpenItemAt, uri),
-        file_item(
+    if is_recent {
+        return recent_file_menu(uri, is_favorite, RecentRowExtras::default(), style);
+    }
+    let open = target(message_id("Open"), Icon::Open, WindowAction::OpenItemAt).with_shortcut("Enter");
+    let location = target(
+        message_id("Open file location"),
+        Icon::Folder,
+        WindowAction::OpenFileLocationOf,
+    );
+    let copy_path = target(message_id("Copy as path"), Icon::Copy, WindowAction::CopyPathOf)
+        .with_shortcut("Ctrl+Shift+C");
+    let properties =
+        target(message_id("Properties"), Icon::Info, WindowAction::PropertiesOf).with_shortcut("Alt+Enter");
+    let cut = target(message_id("Cut"), Icon::Cut, WindowAction::CutFolder).with_shortcut("Ctrl+X");
+    let copy = target(message_id("Copy"), Icon::Copy, WindowAction::CopyFolder).with_shortcut("Ctrl+C");
+    let rename = target(message_id("Rename"), Icon::Rename, WindowAction::RenameFolder).with_shortcut("F2");
+    let delete =
+        target(message_id("Delete"), Icon::Delete, WindowAction::TrashFolder).with_shortcut("Delete");
+    match style {
+        MenuStyle::Compact => {
+            let entries: Vec<MenuEntry> = vec![
+                open.into(),
+                location.into(),
+                favorite.into(),
+                copy_path.into(),
+                properties.into(),
+            ];
+            (entries, vec![cut, copy, rename, delete])
+        }
+        MenuStyle::Classic => {
+            let entries: Vec<MenuEntry> = vec![
+                open.into(),
+                location.into(),
+                MenuEntry::Divider,
+                favorite.into(),
+                MenuEntry::Divider,
+                cut.into(),
+                copy.into(),
+                MenuEntry::Divider,
+                delete.into(),
+                rename.into(),
+                MenuEntry::Divider,
+                copy_path.into(),
+                properties.into(),
+            ];
+            (entries, Vec::new())
+        }
+    }
+}
+
+/// What a Recent row's menu offers where the computer has it: Share in
+/// the strip and Share with where the desktop can share, and the text
+/// editor's "Edit in" for its type, as the file list's menu offers them
+/// ([`super::context_menu::recent_row_extras`]).
+#[derive(Default)]
+pub(super) struct RecentRowExtras {
+    pub(super) share: Option<MenuItem>,
+    pub(super) share_with: Option<MenuEntry>,
+    pub(super) editors: Vec<MenuEntry>,
+}
+
+/// The menu of a Recent row for the file at `uri`, in `style`, and its
+/// icon strip (HOME-036), as Windows 11's Home has it (checked on Windows
+/// 11, Home > Recent, 2026-11-22): Copy and Share alone in the strip, then
+/// "Open with" (Enter, which opens the file as a double-click does), Share
+/// with, Open file location, Remove from list (which takes the file off
+/// the desktop's recently used list and leaves it), Add to or Remove from
+/// Favorites, Compress to, Copy as path, Properties and the text editor's
+/// "Edit in". No Cut, Rename or Delete: Windows offers none on a Recent
+/// file. The classic menu behind "Show more options" lists the same, Copy
+/// and Share as rows.
+pub(super) fn recent_file_menu(
+    uri: &str,
+    is_favorite: bool,
+    extras: RecentRowExtras,
+    style: MenuStyle,
+) -> (Vec<MenuEntry>, Vec<MenuItem>) {
+    // `label` is a message id ([`message_id`]), translated here.
+    let target = |label: &str, glyph: Icon, action: WindowAction| -> MenuItem {
+        MenuItem::with_text_target(&ox_core::i18n::gettext(label), glyph, action, uri)
+    };
+    let favorite = if is_favorite {
+        target(
+            message_id("Remove from Favorites"),
+            Icon::StarFilled,
+            WindowAction::RemoveFromFavorites,
+        )
+    } else {
+        target(
+            message_id("Add to Favorites"),
+            Icon::Star,
+            WindowAction::AddToFavorites,
+        )
+    };
+    let copy = target(message_id("Copy"), Icon::Copy, WindowAction::CopyFolder).with_shortcut("Ctrl+C");
+    let mut strip = vec![copy];
+    strip.extend(extras.share);
+    let mut entries: Vec<MenuEntry> =
+        vec![
+            target(message_id("Open with"), Icon::Open, WindowAction::OpenItemAt)
+                .with_shortcut("Enter")
+                .into(),
+        ];
+    entries.extend(extras.share_with);
+    entries.extend([
+        target(
             message_id("Open file location"),
             Icon::Folder,
             WindowAction::OpenFileLocationOf,
-            uri,
-        ),
-        MenuEntry::Divider,
-        favorite,
-        MenuEntry::Divider,
-        file_item(
-            message_id("Copy as path"),
-            Icon::Copy,
-            WindowAction::CopyPathOf,
-            uri,
-        ),
-        file_item(
-            message_id("Properties"),
-            Icon::Info,
-            WindowAction::PropertiesOf,
-            uri,
-        ),
-    ]
+        )
+        .into(),
+        target(
+            message_id("Remove from list"),
+            Icon::Dismiss,
+            WindowAction::RemoveFromRecent,
+        )
+        .into(),
+        favorite.into(),
+        compress_to_item(uri).into(),
+        target(message_id("Copy as path"), Icon::Copy, WindowAction::CopyPathOf)
+            .with_shortcut("Ctrl+Shift+C")
+            .into(),
+        target(message_id("Properties"), Icon::Info, WindowAction::PropertiesOf)
+            .with_shortcut("Alt+Enter")
+            .into(),
+    ]);
+    if !extras.editors.is_empty() {
+        entries.push(MenuEntry::Divider);
+        entries.extend(extras.editors);
+    }
+    match style {
+        MenuStyle::Compact => (entries, strip),
+        MenuStyle::Classic => {
+            entries.push(MenuEntry::Divider);
+            entries.extend(strip.into_iter().map(MenuEntry::from));
+            (entries, Vec::new())
+        }
+    }
 }
 
 fn label(text: &str, class: &str) -> gtk::Label {
@@ -412,10 +485,10 @@ fn folder_tile(place: &Place, locations: &LocationContext, compact: bool) -> Ite
     Item {
         child,
         open: (WindowAction::GoTo, place.uri.clone()),
-        menu: ItemMenu::Place(PlaceMenu::QuickAccessPin {
+        menu: PlaceMenu::QuickAccessPin {
             uri: place.uri.clone(),
             editable: place.known_folder.is_none(),
-        }),
+        },
         properties: place.uri.clone(),
     }
 }
@@ -631,10 +704,17 @@ impl Columns {
     }
 }
 
-/// A row of the Recent or Favorites list for the file named `name` at
-/// `uri`, last used at `accessed`: its icon and name, Date accessed and
-/// File location, as Windows 11's Home lists them.
-fn file_row(name: &str, uri: &str, accessed: Option<u64>, favorites: &[String], columns: &Columns) -> Item {
+/// A row of the Recent list, when `recent` says so, or of Favorites, for
+/// the file named `name` at `uri`, last used at `accessed`: its icon and
+/// name, Date accessed and File location, as Windows 11's Home lists
+/// them.
+fn file_row(
+    name: &str,
+    uri: &str,
+    accessed: Option<u64>,
+    (favorites, recent): (&[String], bool),
+    columns: &Columns,
+) -> Item {
     let row = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     row.add_css_class("home-row");
     row.set_halign(gtk::Align::Start);
@@ -673,7 +753,11 @@ fn file_row(name: &str, uri: &str, accessed: Option<u64>, favorites: &[String], 
     Item {
         child,
         open: (WindowAction::OpenItemAt, uri.to_owned()),
-        menu: ItemMenu::Entries(file_menu(uri, is_favorite)),
+        menu: PlaceMenu::HomeFile {
+            uri: uri.to_owned(),
+            favorite: is_favorite,
+            recent,
+        },
         properties: uri.to_owned(),
     }
 }
@@ -1051,30 +1135,70 @@ fn connect_item_keys(flow: &gtk::FlowBox, items: &Rc<Vec<Item>>) {
     ));
     let trigger = gtk::ShortcutTrigger::parse_string("<Control><Shift>c");
     shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(copy_path)));
-    // Ctrl+C on a Quick access tile copies its folder, as its menu's
-    // Copy says; a share's root has no Copy, and other rows leave Ctrl+C
-    // to the window.
-    let copy = gtk::CallbackAction::new(glib::clone!(
+    // Ctrl+C copies a Quick access tile's folder, as its menu's Copy
+    // says, and a row's file; a share's root has no Copy, and is left to
+    // the window.
+    add_item_shortcut(&shortcuts, items, &["<Control>c", "<Control>Insert"], |item| {
+        if !item.is_file_row() && ox_core::location::is_smb_share_root(&item.properties) {
+            return false;
+        }
+        WindowAction::CopyFolder.activate_from(&item.child, Some(&item.properties.to_variant()));
+        true
+    });
+    // A Favorites row stands for its file, which Ctrl+X cuts, F2 renames
+    // and Delete moves to the Recycle Bin (Shift+Delete deletes for good,
+    // after its question), as in the file's folder (HOME-036). On a Recent
+    // row the keys do nothing, as in Windows 11's Home (checked on Windows
+    // 11, 2026-11-22), and go no further, where the window's own Cut,
+    // Rename and Delete would act. A tile's folder is left alone.
+    let file_keys: [(&[&str], WindowAction); 4] = [
+        (&["<Control>x"], WindowAction::CutFolder),
+        (&["F2"], WindowAction::RenameFolder),
+        (&["Delete", "KP_Delete"], WindowAction::TrashFolder),
+        (&["<Shift>Delete", "<Shift>KP_Delete"], WindowAction::DeleteFolder),
+    ];
+    for (keys, action) in file_keys {
+        add_item_shortcut(&shortcuts, items, keys, move |item| {
+            if !item.is_file_row() {
+                return false;
+            }
+            if !item.is_recent_row() {
+                action.activate_from(&item.child, Some(&item.properties.to_variant()));
+            }
+            true
+        });
+    }
+    flow.add_controller(shortcuts);
+}
+
+/// Adds to `shortcuts` an action for `keys` that runs `run` on the item
+/// selected among `items`, and lets the key go on when nothing is
+/// selected or `run` declines it.
+fn add_item_shortcut(
+    shortcuts: &gtk::ShortcutController,
+    items: &Rc<Vec<Item>>,
+    keys: &[&str],
+    run: impl Fn(&Item) -> bool + 'static,
+) {
+    let action = gtk::CallbackAction::new(glib::clone!(
         #[strong]
         items,
         move |flow, _| {
-            let Some(item) = flow
+            let ran = flow
                 .downcast_ref::<gtk::FlowBox>()
                 .and_then(|flow| selected_item(flow, &items))
-            else {
-                return glib::Propagation::Proceed;
-            };
-            let is_tile = matches!(item.menu, ItemMenu::Place(_));
-            if !is_tile || ox_core::location::is_smb_share_root(&item.properties) {
-                return glib::Propagation::Proceed;
+                .is_some_and(&run);
+            if ran {
+                glib::Propagation::Stop
+            } else {
+                glib::Propagation::Proceed
             }
-            WindowAction::CopyFolder.activate_from(&item.child, Some(&item.properties.to_variant()));
-            glib::Propagation::Stop
         }
     ));
-    let trigger = gtk::ShortcutTrigger::parse_string("<Control>c");
-    shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(copy)));
-    flow.add_controller(shortcuts);
+    for key in keys {
+        let trigger = gtk::ShortcutTrigger::parse_string(key);
+        shortcuts.add_shortcut(gtk::Shortcut::new(trigger, Some(action.clone())));
+    }
 }
 
 /// Pixels from one Quick access tile to the next across, as Windows 11's
@@ -1104,6 +1228,99 @@ fn keep_tiles_apart(flow: &gtk::FlowBox) {
     );
 }
 
+/// What a dragged Quick access tile carries before its folder's address,
+/// so no text dragged from elsewhere is taken for a tile.
+const TILE_DRAG_PREFIX: &str = "openxplorer-quick-access-tile:";
+
+/// Lets the Quick access tiles of `flow` be dragged into a new order
+/// (HOME-037), as Windows 11's Home and the navigation pane's Quick
+/// access let pins be: a tile dropped on the left half of another goes
+/// before it, on the right half after it, and on blank space after the
+/// last tile. The order is the navigation pane's, saved as
+/// `quickOrder`, so both show it.
+fn connect_tile_reordering(flow: &gtk::FlowBox) {
+    for child in children(flow).filter_map(|child| child.downcast::<gtk::FlowBoxChild>().ok()) {
+        let source = gtk::DragSource::new();
+        source.set_actions(gtk::gdk::DragAction::MOVE);
+        source.connect_prepare(|source, _, _| {
+            let tile = source.widget()?;
+            let carried = format!("{TILE_DRAG_PREFIX}{}", tile.widget_name());
+            Some(gtk::gdk::ContentProvider::for_value(&carried.to_value()))
+        });
+        source.connect_drag_begin(|source, _| {
+            if let Some(tile) = source.widget() {
+                let icon = gtk::WidgetPaintable::new(Some(&tile));
+                source.set_icon(Some(&icon), 24, 24);
+            }
+        });
+        child.add_controller(source);
+    }
+    let target = gtk::DropTarget::new(String::static_type(), gtk::gdk::DragAction::MOVE);
+    target.connect_drop(|target, value, x, y| {
+        let Some(uri) = value
+            .get::<String>()
+            .ok()
+            .and_then(|carried| carried.strip_prefix(TILE_DRAG_PREFIX).map(str::to_owned))
+        else {
+            return false;
+        };
+        let Some(flow) = target.widget().and_downcast::<gtk::FlowBox>() else {
+            return false;
+        };
+        let before = match tile_drop_place(&flow, x, y) {
+            TileDrop::Before(before) if before == uri => return true,
+            TileDrop::Before(before) => Some(before),
+            TileDrop::AtEnd => None,
+            TileDrop::Nowhere => return true,
+        };
+        let Some(window) = flow.root().and_downcast::<BrowserWindow>() else {
+            return false;
+        };
+        if let Err(refusal) = window.pin_dropped(std::slice::from_ref(&uri), before) {
+            window.show_message(&refusal.to_string());
+        }
+        true
+    });
+    flow.add_controller(target);
+}
+
+/// Where a dropped tile goes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TileDrop {
+    /// Before the tile of this folder.
+    Before(String),
+    /// After the last tile.
+    AtEnd,
+    /// Where it is: dropped on a tile that is not in the box.
+    Nowhere,
+}
+
+/// Where a tile dropped at `x`, `y` in `flow` goes.
+fn tile_drop_place(flow: &gtk::FlowBox, x: f64, y: f64) -> TileDrop {
+    let tiles: Vec<gtk::FlowBoxChild> = children(flow)
+        .filter_map(|child| child.downcast::<gtk::FlowBoxChild>().ok())
+        .collect();
+    #[expect(clippy::cast_possible_truncation, reason = "pointer positions are small")]
+    let Some(onto) = flow.child_at_pos(x as i32, y as i32) else {
+        return TileDrop::AtEnd;
+    };
+    let (Some(index), Some(bounds)) = (
+        tiles.iter().position(|tile| *tile == onto),
+        onto.compute_bounds(flow),
+    ) else {
+        return TileDrop::Nowhere;
+    };
+    let right_half = x > f64::from(bounds.x() + bounds.width() / 2.0);
+    let before = if right_half {
+        tiles.get(index + 1)
+    } else {
+        Some(&onto)
+    };
+    before.map_or(TileDrop::AtEnd, |tile| {
+        TileDrop::Before(tile.widget_name().to_string())
+    })
+}
+
 /// A box of `items`: tiles for Quick access, one row each for the lists.
 /// Double-click and Enter open an item; a right-click (which selects it),
 /// the Menu key or Shift+F10 opens its menu, and Alt+Enter its
@@ -1129,6 +1346,7 @@ fn item_box(page: &gtk::Box, items: Vec<Item>, section: Section, rows: bool) -> 
     }
     if !rows {
         keep_tiles_apart(&flow);
+        connect_tile_reordering(&flow);
     }
     let items = Rc::new(items);
     flow.connect_child_activated(glib::clone!(
@@ -1168,18 +1386,21 @@ fn item_box(page: &gtk::Box, items: Vec<Item>, section: Section, rows: bool) -> 
     connect_item_keys(&flow, &items);
     connect_edge_keys(&flow, page, section);
     // One selection on the page at a time, as in one item view: selecting
-    // in one section clears the other.
+    // in one section clears the other. The command bar follows it.
     flow.connect_selected_children_changed(glib::clone!(
         #[weak]
         page,
         move |flow| {
-            if flow.selected_children().is_empty() {
-                return;
-            }
-            for other in descendants_of_type::<gtk::FlowBox>(&page) {
-                if other != *flow {
-                    other.unselect_all();
+            if !flow.selected_children().is_empty() {
+                for other in descendants_of_type::<gtk::FlowBox>(&page) {
+                    if other != *flow {
+                        other.unselect_all();
+                    }
                 }
+            }
+            if let Some(window) = page.root().and_downcast::<BrowserWindow>() {
+                window.update_file_commands();
+                window.update_share_command();
             }
         }
     ));
@@ -1357,6 +1578,7 @@ pub(super) fn render(
     let kept = KeptFocus::read(page);
     remove_children(page);
     page.add_css_class(HOME_CLASS);
+    connect_blank_space_clicks(page);
     let drawn = page.has_css_class(DRAWN_CLASS);
     let folded = |section: Section| {
         if drawn {
@@ -1417,6 +1639,37 @@ pub(super) fn render(
     recount(page);
 }
 
+/// The class the page carries once a click on its blank space clears
+/// the selection.
+const BLANK_SPACE_CLASS: &str = "home-blank-space";
+
+/// A click on Home's blank space, with either button, selects nothing,
+/// as in an item view; a right-click then goes on to the menu of Home's
+/// blank space, which the folder pane's scroller opens. The page
+/// outlives a redraw, so this is done once.
+fn connect_blank_space_clicks(page: &gtk::Box) {
+    if page.has_css_class(BLANK_SPACE_CLASS) {
+        return;
+    }
+    page.add_css_class(BLANK_SPACE_CLASS);
+    let click = gtk::GestureClick::new();
+    click.set_button(0);
+    click.connect_pressed(|gesture, _, x, y| {
+        let Some(page) = gesture.widget().and_downcast::<gtk::Box>() else {
+            return;
+        };
+        let on_item = page.pick(x, y, gtk::PickFlags::DEFAULT).is_some_and(|picked| {
+            picked.is::<gtk::FlowBoxChild>() || picked.ancestor(gtk::FlowBoxChild::static_type()).is_some()
+        });
+        if page.has_css_class(HOME_CLASS) && !on_item {
+            for flow in descendants_of_type::<gtk::FlowBox>(&page) {
+                flow.unselect_all();
+            }
+        }
+    });
+    page.add_controller(click);
+}
+
 /// How many items Home shows, as Windows 11's status bar counts them on
 /// Home: the Quick access tiles and the rows of the list shown.
 pub(super) fn item_count(page: &gtk::Box) -> Option<u32> {
@@ -1438,6 +1691,8 @@ pub(super) fn item_count(page: &gtk::Box) -> Option<u32> {
 fn recount(page: &gtk::Box) {
     if let Some(window) = page.root().and_downcast::<BrowserWindow>() {
         window.update_status();
+        // The Details pane counts Home's items too.
+        window.update_details_pane();
     }
 }
 
@@ -1625,7 +1880,7 @@ fn list_favorites(page: &gtk::Box, list: &gtk::Box, favorites: &[String]) {
     let columns = Columns::for_page(page);
     let rows: Vec<Item> = favorites
         .iter()
-        .map(|uri| file_row(&favorite_name(uri), uri, None, favorites, &columns))
+        .map(|uri| file_row(&favorite_name(uri), uri, None, (favorites, false), &columns))
         .collect();
     let dates: Vec<(String, glib::WeakRef<gtk::Label>)> = rows
         .iter()
@@ -1673,7 +1928,7 @@ fn list_recent(page: &gtk::Box, list: &gtk::Box, favorites: Vec<String>) {
         let columns = Columns::for_page(&page);
         let rows = files
             .iter()
-            .map(|(entry, target, used)| file_row(&entry.name, target, *used, &favorites, &columns))
+            .map(|(entry, target, used)| file_row(&entry.name, target, *used, (&favorites, true), &columns))
             .collect();
         fill_list(&page, &list, rows, Tab::Recent, &columns);
         list.set_visible(shown_tab(&page) == Tab::Recent);
@@ -1693,6 +1948,7 @@ impl BrowserWindow {
             text_action(WindowAction::RemoveFromFavorites, |window, uri| {
                 window.set_favorite(uri, false);
             }),
+            text_action(WindowAction::RemoveFromRecent, BrowserWindow::remove_from_recent),
             text_action(WindowAction::OpenItemAt, BrowserWindow::open_item_at),
             text_action(WindowAction::OpenFileLocationOf, |window, uri| {
                 window.open_item_location(uri.to_owned(), LocationTarget::ThisTab);
@@ -1721,6 +1977,143 @@ impl BrowserWindow {
                 }
             ),
         );
+    }
+
+    /// "Remove from list": takes the file at `uri` off the desktop's
+    /// recently used list, which every application shares, and its row
+    /// off Home's Recent at once; the file stays (HOME-036). Tests change
+    /// only a private data folder's list (native/tools/check.py).
+    fn remove_from_recent(&self, uri: &str) {
+        #[cfg(test)]
+        if !glib::user_data_dir().starts_with(std::env::temp_dir()) {
+            return;
+        }
+        let manager = gtk::RecentManager::default();
+        if let Err(error) = manager.remove_item(uri) {
+            // Already gone from the list, as another window or
+            // application took it off: the row goes all the same.
+            if !error.matches(gtk::RecentManagerError::NotFound) {
+                self.show_message(&ox_core::i18n::format_message(
+                    "Could not remove from Recent: {error}",
+                    &[("error", &error.to_string())],
+                ));
+                return;
+            }
+        }
+        self.drop_recent_row(uri);
+    }
+
+    /// Takes the row of the file at `uri` off Recent wherever this window
+    /// shows Home, as the file left the list or is gone (HOME-036): the
+    /// desktop's list is read again only once it changes, and `GVfs`
+    /// leaves out a file that is gone when it next lists it.
+    pub(super) fn drop_recent_row(&self, uri: &str) {
+        for pane in self.folder_panes() {
+            let page = pane.landing();
+            if !page.has_css_class(HOME_CLASS) {
+                continue;
+            }
+            for list in descendants_with_class(page, Tab::Recent.list_class()) {
+                let Ok(list) = list.downcast::<gtk::Box>() else {
+                    continue;
+                };
+                for child in descendants_of_type::<gtk::FlowBoxChild>(&list) {
+                    if child.widget_name() != uri {
+                        continue;
+                    }
+                    if let Some(flow) = child.parent().and_downcast::<gtk::FlowBox>() {
+                        flow.remove(&child);
+                        if flow.first_child().is_none() {
+                            remove_children(&list);
+                            list.append(&empty_label(Tab::Recent.empty_text()));
+                        }
+                    }
+                }
+            }
+            recount(page);
+        }
+    }
+
+    /// Follows the rename of the item at `from` to `to` (HOME-036): the
+    /// desktop's recently used list and Favorites go on naming it, and the
+    /// files inside a renamed folder, under its new name, as Windows' Home
+    /// follows a renamed file. Tests change only a private data folder's
+    /// recently used list (native/tools/check.py).
+    pub(super) fn follow_renamed_item(&self, from: &str, to: &str) {
+        if from == to {
+            return;
+        }
+        let moved = |kept: &str| -> Option<String> {
+            if kept == from {
+                return Some(to.to_owned());
+            }
+            let inside = format!("{}/", from.trim_end_matches('/'));
+            kept.strip_prefix(&inside)
+                .map(|rest| format!("{}/{rest}", to.trim_end_matches('/')))
+        };
+        #[cfg(test)]
+        let private = glib::user_data_dir().starts_with(std::env::temp_dir());
+        #[cfg(not(test))]
+        let private = true;
+        if private {
+            let manager = gtk::RecentManager::default();
+            for item in manager.items() {
+                let uri = item.uri();
+                if let Some(new) = moved(&uri) {
+                    // Best effort, as recording is: the list may have
+                    // changed meanwhile.
+                    let _ = manager.move_item(&uri, Some(&new));
+                }
+            }
+        }
+        let (from, to) = (from.to_owned(), to.to_owned());
+        let change: Change = Box::new(move |settings| settings.move_favorites(&from, &to).map(|_| ()));
+        self.context().remember_change(change);
+    }
+
+    /// The menu of the Recent row for the file at `uri`, in `style`, with
+    /// what this computer offers for it: Share, Share with and the text
+    /// editor of its type, read from its name alone, so the menu reads no
+    /// drive or share (HOME-036).
+    pub(super) fn home_recent_menu(
+        &self,
+        uri: &str,
+        is_favorite: bool,
+        style: MenuStyle,
+    ) -> (Vec<MenuEntry>, Vec<MenuItem>) {
+        let name = favorite_name(uri);
+        let info = gio::FileInfo::new();
+        info.set_name(&name);
+        info.set_display_name(&name);
+        info.set_file_type(gio::FileType::Regular);
+        let (content_type, _) = gio::content_type_guess(Some(name.as_str()), None::<&[u8]>);
+        info.set_content_type(&content_type);
+        let entry = entry::entry_from_info(&gio::File::for_uri(uri), &info);
+        let extras = self.recent_row_extras(&entry);
+        recent_file_menu(uri, is_favorite, extras, style)
+    }
+
+    /// The file of the Recent or Favorites row selected on the Home page
+    /// the tab shows, which the command bar's Cut, Copy, Rename and Delete
+    /// act on (HOME-036); `None` elsewhere, during a search from Home and
+    /// while the lists are folded.
+    pub(crate) fn selected_home_file(&self) -> Option<String> {
+        let shows_home = self
+            .current_uri()
+            .is_some_and(|uri| crate::locations::Page::from_uri(&uri) == Some(crate::locations::Page::Home));
+        let page = self.folder_pane().landing();
+        if !shows_home || self.is_searching() || !page.has_css_class(HOME_CLASS) {
+            return None;
+        }
+        let flow = shown_items(page, Section::Files)?;
+        let child = flow.selected_children().into_iter().next()?;
+        Some(child.widget_name().to_string())
+    }
+
+    /// Whether the row selected on Home is a row of Recent, which Windows
+    /// 11 copies and shares but neither cuts, renames nor deletes.
+    pub(crate) fn selected_home_file_is_recent(&self) -> bool {
+        self.selected_home_file().is_some() && shown_tab(self.folder_pane().landing()) == Tab::Recent
     }
 
     /// Whether the file at `uri` is among the Favorites.

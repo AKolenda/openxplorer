@@ -60,6 +60,7 @@ mod group_heading_look;
 mod hidden_selection;
 mod history;
 mod home_page;
+mod home_recent;
 mod icons;
 mod input;
 mod item_check_boxes;
