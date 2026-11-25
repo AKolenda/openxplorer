@@ -381,14 +381,20 @@ fn commands_that_do_not_fit_move_into_see_more() {
     wait_for_frames(&test.window, 4);
     let (more, labels) = see_more(&test);
     let more_shows = shows_whole_in_the_bar(&test, &more);
-    // Tab from the last command shown goes to "…", never to one that
-    // moved into it.
+    // Tab from the last command shown that takes the keyboard goes to
+    // "…", never to one that moved into it. Which command that is depends
+    // on the font: Sort in Noto Sans; the wider DejaVu Sans of the
+    // distribution jobs moves Sort into "…" too.
     let left_out = test.window.command_bar().commands_left_out();
-    let sort = descendants::<gtk::MenuButton>(test.window.upcast_ref::<gtk::Widget>())
-        .into_iter()
-        .find(|button| button.has_css_class("sort-command"))
-        .expect("Sort");
-    sort.grab_focus();
+    let last_shown = std::iter::successors(more.prev_sibling(), gtk::Widget::prev_sibling)
+        .find(|command| {
+            command.is_child_visible()
+                && command.is_visible()
+                && command.is_sensitive()
+                && !command.is::<gtk::Separator>()
+        })
+        .expect("a command shown before See more");
+    assert!(last_shown.grab_focus(), "{last_shown:?} takes the keyboard");
     test.window.emit_move_focus(gtk::DirectionType::TabForward);
     let focus = gtk::prelude::GtkWindowExt::focus(&test.window).expect("a focus");
     let tab_reaches_left_out = left_out
@@ -408,7 +414,10 @@ fn commands_that_do_not_fit_move_into_see_more() {
         !tab_reaches_left_out,
         "Tab skips the commands in See more, reaching {focus:?}"
     );
-    assert!(tab_reaches_more, "Tab goes from Sort to See more, not {focus:?}");
+    assert!(
+        tab_reaches_more,
+        "Tab goes from {last_shown:?} to See more, not {focus:?}"
+    );
     assert!(view_in_menu, "View moved into See more: {labels:?}");
     assert!(
         !labels_wide.iter().any(|label| label == "View"),

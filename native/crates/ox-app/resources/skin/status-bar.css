@@ -17,7 +17,7 @@
 /* 24px buttons side by side, as Windows 11 draws them (reference ref-01):
    the bar's 18px gap less `margin-left:-18px`. Flat and borderless; the
    current view's sits on a square gray box with a 1px edge, its glyph in
-   the text color. Their 16px glyphs (I09) sit on whole pixels. */
+   the text color. Their 18px glyphs (I09) sit on whole pixels. */
 window.ox .statusbar button {
   min-width: 24px;
   min-height: 24px;

@@ -524,15 +524,18 @@ fn a_batch_of_thumbnails_is_decoded_by_one_decoder() {
     assert_eq!(answers, vec![Err(Refusal::Cancelled); 3]);
 }
 
-/// Whether the process `pid` has ended, reaped or not.
+/// Whether the child `pid` has ended, reaped or not. Ended means every
+/// thread of it has, so it can be waited for: a decoder is the test
+/// program, whose test runs on a thread of its own, and when it is killed
+/// its first thread shows as a zombie in `/proc` while the others are
+/// still ending, too early for the pool to see it ended.
 fn has_ended(pid: u32) -> bool {
-    let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
+    let Some(pid) = i32::try_from(pid).ok().and_then(Pid::from_raw) else {
         return true;
     };
-    stat.rsplit(')')
-        .next()
-        .and_then(|rest| rest.split_whitespace().next())
-        == Some("Z")
+    let ended = WaitIdOptions::EXITED | WaitIdOptions::NOHANG | WaitIdOptions::NOWAIT;
+    // Reaped already, it is no longer a child: an error.
+    !matches!(waitid(WaitId::Pid(pid), ended), Ok(None))
 }
 
 /// A decoder kept idle in the pool serves the next picture although the

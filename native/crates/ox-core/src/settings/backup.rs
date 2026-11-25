@@ -435,6 +435,7 @@ mod tests {
             "progressDetails": true, "recycleReplacedFiles": false, "restoreOverOriginal": true,
             "extensionWordStarts": true, "showAllSearchMatches": true,
             "neutralSelectionColors": true, "recentFilesInNavigationPane": false,
+            "systemWindowDecorations": true,
             "connectExternalShares": true, "modalDialogsOnGnome": true,
             "allowLinuxNameCharacters": true, "searchSystemDirectories": false,
             "searchCompressedFiles": true, "enabledServiceActions": ["0123abcd"],

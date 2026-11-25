@@ -49,6 +49,11 @@ const COMPACT_ICON_SIZE: i32 = 16;
 /// right (`skin/folder-views.css`), 20 in every layout with columns.
 const GRID_SIDE_PADDING: i32 = 12 + 8;
 
+/// The icon grid's padding at the right in Small icons, and in the other
+/// layouts with columns (`skin/folder-views.css`).
+const SMALL_ICONS_RIGHT_PADDING: i32 = 8;
+const GRID_RIGHT_PADDING: i32 = 12;
+
 /// The CSS class of the compact layout.
 const COMPACT_CLASS: &str = "compact";
 
@@ -141,6 +146,12 @@ mod imp {
         pub(super) scroller: gtk::ScrolledWindow,
         /// The tiles.
         pub(super) grid: gtk::GridView,
+        /// The grid's own style: the width left free at the right of its
+        /// columns ([`super::IconView::fit_lines`]).
+        pub(super) spare_style: gtk::CssProvider,
+        /// The padding at the right [`Self::spare_style`] gives the grid,
+        /// or 0 while it gives none.
+        pub(super) spare: Cell<i32>,
         /// Set by [`super::IconView::new`].
         pub(super) registries: OnceCell<TileRegistries>,
         /// How the items are laid out.
@@ -178,6 +189,8 @@ mod imp {
             Self {
                 scroller: gtk::ScrolledWindow::default(),
                 grid: gtk::GridView::default(),
+                spare_style: gtk::CssProvider::new(),
+                spare: Cell::new(0),
                 registries: OnceCell::new(),
                 layout: Cell::new(GridLayout::Icons(IconSize::LARGE)),
                 icon_size: Cell::new(IconSize::LARGE),
@@ -207,6 +220,10 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
             self.grid.add_css_class("files");
+            #[expect(deprecated, reason = "GTK 4.14 offers no other way to style one widget")]
+            self.grid
+                .style_context()
+                .add_provider(&self.spare_style, gtk::STYLE_PROVIDER_PRIORITY_USER + 10);
             self.grid.set_tab_behavior(gtk::ListTabBehavior::Item);
             super::cells::label_view(self.grid.upcast_ref());
             self.scroller.set_child(Some(&self.grid));
@@ -516,9 +533,14 @@ impl IconView {
             GridLayout::Compact | GridLayout::Content => 1,
         };
         // The icon sizes and Tiles keep Windows 11's distance between
-        // columns: the grid takes only the width its columns need, as GTK
-        // would spread them over all of it, and the rest stays free at the
-        // right, as in Windows.
+        // columns: the grid lays its columns out in only the width they
+        // need, as GTK would spread them over all of it, and the rest stays
+        // free at the right, as in Windows. The free width is padding of
+        // the grid's own, not a margin or border (GTK picks a grid only
+        // inside its padding box), so it is still the folder's blank
+        // space: a right-click there opens the folder's menu, a click
+        // clears the selection, a band starts and a drop lands, as in
+        // Windows.
         let pitch = match layout {
             GridLayout::Icons(size) => cell_size(size, text_size).width,
             GridLayout::Tiles => tiles_cell(text_size).width,
@@ -531,8 +553,18 @@ impl IconView {
         } else {
             0
         };
-        if imp.grid.margin_end() != spare {
-            imp.grid.set_margin_end(spare);
+        let right = match layout {
+            _ if spare == 0 => 0,
+            GridLayout::Icons(IconSize::SMALL) => SMALL_ICONS_RIGHT_PADDING + spare,
+            _ => GRID_RIGHT_PADDING + spare,
+        };
+        if imp.spare.replace(right) != right {
+            let style = if right > 0 {
+                format!("gridview {{ padding-right: {right}px; }}")
+            } else {
+                String::new()
+            };
+            imp.spare_style.load_from_string(&style);
         }
         if imp.grid.max_columns() != lines {
             imp.grid.set_max_columns(lines);

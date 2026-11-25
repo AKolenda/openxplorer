@@ -5,31 +5,63 @@ use super::*;
 use crate::test_support::desktop_setting::DesktopSetting;
 use crate::test_support::harness::wait_until;
 
+/// GNOME's colour scheme decides first when it has a preference, over
+/// the portal's and any theme name.
+///
 /// parity: LOOK-004
 #[test]
 fn color_scheme_decides_first() {
+    let gnome = |key| appearance_from_gnome_scheme(Some(key));
+    let dark_theme = Some(appearance_of_theme_name("ZorinBlue-Dark"));
     assert_eq!(
-        appearance_from_gnome_keys(Some("prefer-dark"), Some("Adwaita")),
-        Some(Appearance::Dark)
+        decide(&[gnome("prefer-dark"), Some(Appearance::Light)], &[None]),
+        Appearance::Dark
     );
     assert_eq!(
-        appearance_from_gnome_keys(Some("prefer-light"), Some("ZorinBlue-Dark")),
-        Some(Appearance::Light)
+        decide(&[gnome("prefer-light"), None], &[dark_theme]),
+        Appearance::Light
     );
 }
 
+/// GNOME's `default` scheme leaves it to the portal's colour scheme,
+/// which KDE Plasma, Cinnamon and COSMIC set while GNOME's schema keeps
+/// its defaults, and then to the theme names.
+///
 /// parity: LOOK-004
 #[test]
-fn default_scheme_falls_back_to_the_theme_name() {
+fn default_scheme_falls_back_to_the_portal_then_the_theme_names() {
+    let default = appearance_from_gnome_scheme(Some("default"));
+    assert_eq!(default, None);
+    let adwaita = Some(appearance_of_theme_name("Adwaita"));
     assert_eq!(
-        appearance_from_gnome_keys(Some("default"), Some("ZorinBlue-Dark")),
-        Some(Appearance::Dark)
+        decide(&[default, appearance_from_portal(1)], &[adwaita]),
+        Appearance::Dark,
+        "the portal prefers dark"
     );
     assert_eq!(
-        appearance_from_gnome_keys(Some("default"), Some("ZorinBlue-Light")),
-        Some(Appearance::Light)
+        decide(&[default, appearance_from_portal(0)], &[adwaita]),
+        Appearance::Light,
+        "no preference and a light theme"
     );
-    assert_eq!(appearance_from_gnome_keys(None, None), None);
+}
+
+/// Without a colour scheme, any theme name with "dark" in it asks for
+/// dark: GNOME's may still be Adwaita on Xfce, MATE and Cinnamon, while
+/// GTK's own name is the desktop's (`Greybird-dark`).
+///
+/// parity: LOOK-004
+#[test]
+fn any_dark_theme_name_asks_for_dark() {
+    let theme = |name| Some(appearance_of_theme_name(name));
+    assert_eq!(
+        decide(&[None, None], &[theme("Adwaita"), None, theme("Greybird-dark")]),
+        Appearance::Dark
+    );
+    assert_eq!(
+        decide(&[None, None], &[theme("ZorinBlue-Light"), theme("Mint-Y")]),
+        Appearance::Light
+    );
+    assert_eq!(decide(&[None, None], &[None]), Appearance::Light);
 }
 
 /// GTK's `HighContrastInverse` is light text on black, so it asks for the
@@ -38,14 +70,12 @@ fn default_scheme_falls_back_to_the_theme_name() {
 /// parity: LOOK-004, ACC-011
 #[test]
 fn the_inverse_high_contrast_theme_is_dark() {
+    let theme = |name| Some(appearance_of_theme_name(name));
     assert_eq!(
-        appearance_from_gnome_keys(Some("default"), Some("HighContrastInverse")),
-        Some(Appearance::Dark)
+        decide(&[None, None], &[theme("HighContrastInverse")]),
+        Appearance::Dark
     );
-    assert_eq!(
-        appearance_from_gnome_keys(Some("default"), Some("HighContrast")),
-        Some(Appearance::Light)
-    );
+    assert_eq!(decide(&[None, None], &[theme("HighContrast")]), Appearance::Light);
 }
 
 /// parity: LOOK-004
@@ -107,7 +137,7 @@ fn a_changed_gnome_color_scheme_is_followed_at_once() {
         return;
     };
     let heard = Rc::new(Cell::new(None));
-    let scheme = SystemScheme::new(Appearance::Light, {
+    let scheme = SystemScheme::new(&GtkDesktop::preferring(Appearance::Light), {
         let heard = Rc::clone(&heard);
         move |appearance| heard.set(Some(appearance))
     });
