@@ -4380,10 +4380,6 @@ msgstr ""
 msgid "Expandable folders in Details"
 msgstr ""
 
-#: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Files larger than 50 MB keep their icon."
-msgstr ""
-
 #: crates/ox-app/src/settings_page/files_folders.rs crates/ox-app/src/window/folder_options.rs
 msgid "Folder Options"
 msgstr ""
@@ -4425,7 +4421,7 @@ msgid "Names you type may contain : * ? \" < > | as Linux allows, when renaming 
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "Off by default, as in Windows: files on shares, servers, phones and cameras show their type icons. Turn on to show their thumbnails and previews too."
+msgid "On by default, as in Windows. Turn off to show type icons for files on shares, servers, phones and cameras, which is faster on slow connections."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -4446,6 +4442,10 @@ msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
 msgid "Photos, drawings and other images."
+msgstr ""
+
+#: crates/ox-app/src/settings_page/files_folders.rs
+msgid "Pictures and documents larger than 50 MB keep their icon. Videos always show a frame."
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
@@ -4605,7 +4605,7 @@ msgid "show hidden items hidden files dot files dotfiles invisible ctrl+h folder
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs
-msgid "show previews in network folders thumbnails remote network smb nas sftp phone camera also"
+msgid "show previews in network folders thumbnails remote network smb nas sftp phone camera also icons slow connection"
 msgstr ""
 
 #: crates/ox-app/src/settings_page/files_folders.rs

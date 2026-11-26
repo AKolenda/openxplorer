@@ -7,9 +7,10 @@
 use serde::Serialize;
 use serde_json::Value;
 
-/// Files larger than this, 50 MB, get no preview while
+/// Pictures and documents larger than this, 50 MB, get no preview while
 /// [`ViewOptions::skip_large_previews`] is on: decoding them costs more
-/// than a preview is worth, as Files' `thumbnail-limit` decides. Settings
+/// than a preview is worth, as Files' `thumbnail-limit` decides. Videos
+/// have no limit, as their thumbnailer reads a single frame. Settings
 /// names the limit in its text.
 pub const PREVIEW_SIZE_LIMIT: u64 = 50 * 1024 * 1024;
 
@@ -33,11 +34,13 @@ pub struct ViewOptions {
     /// Items show a preview of their contents in place of their icon
     /// (Dolphin's Show Previews).
     pub show_previews: bool,
-    /// Items in network folders get previews too; off, as Windows 11 File
-    /// Explorer shows only icons in network folders by default (and
-    /// Dolphin and Files start with it off).
+    /// Items in network folders get previews too. On by default, as
+    /// Windows 10 and 11 File Explorer show thumbnails on SMB shares out of
+    /// the box; off, files on shares, servers and devices keep their type
+    /// icons, which is faster on a slow connection.
     pub remote_previews: bool,
-    /// Files over [`PREVIEW_SIZE_LIMIT`] get no preview.
+    /// Pictures and documents over [`PREVIEW_SIZE_LIMIT`] get no preview;
+    /// videos always do.
     pub skip_large_previews: bool,
     /// Pictures get previews; this and the next two choose the types, as
     /// Dolphin's list of preview plugins does.
@@ -58,7 +61,7 @@ impl Default for ViewOptions {
     fn default() -> Self {
         Self {
             show_previews: true,
-            remote_previews: false,
+            remote_previews: true,
             skip_large_previews: true,
             preview_pictures: true,
             preview_videos: true,
@@ -129,7 +132,7 @@ mod tests {
     fn view_options_round_trip_and_ignore_odd_values() {
         let options = ViewOptions {
             show_previews: false,
-            remote_previews: true,
+            remote_previews: false,
             skip_large_previews: false,
             preview_pictures: true,
             preview_videos: false,
@@ -146,18 +149,17 @@ mod tests {
         assert_eq!(ViewOptions::from_json(&json!([])), None);
     }
 
-    /// Network folders show icons, not thumbnails, until the user turns
-    /// their previews on, as Windows 11 File Explorer "displays only icons
-    /// and never displays thumbnail images on network folders by default";
-    /// a file that stored no choice reads the same.
+    /// Network folders show thumbnails, as Windows 10 and 11 File
+    /// Explorer show them on SMB shares out of the box; a file that stored
+    /// no choice reads the same, and a choice of icons stays.
     ///
     /// parity: VIEW-058
     #[test]
-    fn network_previews_are_off_by_default_as_in_windows() {
-        assert!(!ViewOptions::default().remote_previews);
+    fn network_previews_are_on_by_default_as_in_windows() {
+        assert!(ViewOptions::default().remote_previews);
         let unchosen = ViewOptions::from_json(&json!({"showPreviews": true})).expect("an object");
-        assert!(!unchosen.remote_previews);
-        let chosen = ViewOptions::from_json(&json!({"remotePreviews": true})).expect("an object");
-        assert!(chosen.remote_previews, "a choice to show them stays");
+        assert!(unchosen.remote_previews);
+        let icons = ViewOptions::from_json(&json!({"remotePreviews": false})).expect("an object");
+        assert!(!icons.remote_previews, "a choice of icons stays");
     }
 }

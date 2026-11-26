@@ -73,34 +73,58 @@ fn stored_old_default_item_counts_turn_off_unless_chosen() {
     assert!(reread.view_options.count_folder_items, "counts turned on stay");
 }
 
-/// Thumbnails in network folders that 2.0.18 stored as its default, with
-/// another view option, give way to icons there once; thumbnails turned
-/// on in this app are marked and stay after a restart.
+/// Icons in network folders that 2.0.19 to 2.0.26 stored as their
+/// default, with another view option, give way to thumbnails there once;
+/// icons chosen in this app are marked and stay after a restart, and
+/// thumbnails stored on stay on, whether or not 2.0.18 or a later release
+/// marked them chosen.
 /// parity: VIEW-058
 #[test]
-fn stored_old_default_remote_previews_turn_off_unless_chosen() {
+fn stored_old_default_network_icons_turn_to_thumbnails_unless_chosen() {
     let root = temporary_folder();
     let older = json!({"version": 2, "preferences": {
-        "viewOptions": {"previewVideos": false, "remotePreviews": true}
+        "viewOptions": {"previewVideos": false, "remotePreviews": false}
     }});
     std::fs::write(root.path().join("settings.json"), older.to_string()).unwrap();
     let mut store = Settings::open(root.path());
     let options = store.snapshot().preferences.view_options;
-    assert!(!options.remote_previews, "the old default gives way");
+    assert!(options.remote_previews, "the old default gives way");
     assert!(!options.preview_videos, "the other options are read as before");
 
     save_preferences(
         &mut store,
-        &json!({"viewOptions": {"previewVideos": false, "remotePreviews": true}}),
+        &json!({"viewOptions": {"previewVideos": false, "remotePreviews": false}}),
     );
     let file = std::fs::read_to_string(root.path().join("settings.json")).unwrap();
-    assert!(file.contains("\"remotePreviewsChosen\": true"), "{file}");
+    assert!(file.contains("\"remotePreviewsOffChosen\": true"), "{file}");
     let reread = Settings::open(root.path()).snapshot().preferences;
-    assert!(reread.view_options.remote_previews, "thumbnails turned on stay");
+    assert!(!reread.view_options.remote_previews, "icons chosen stay");
 
-    save_preferences(&mut store, &json!({"viewOptions": {"remotePreviews": false}}));
+    save_preferences(&mut store, &json!({"viewOptions": {"remotePreviews": true}}));
     let file = std::fs::read_to_string(root.path().join("settings.json")).unwrap();
-    assert!(!file.contains("remotePreviewsChosen"), "{file}");
+    assert!(!file.contains("remotePreviewsOffChosen"), "{file}");
+
+    for stored_on in [
+        json!({"viewOptions": {"previewVideos": false, "remotePreviews": true}}),
+        json!({"remotePreviewsChosen": true,
+               "viewOptions": {"previewVideos": false, "remotePreviews": true}}),
+    ] {
+        let older = json!({"version": 2, "preferences": stored_on});
+        std::fs::write(root.path().join("settings.json"), older.to_string()).unwrap();
+        let options = Settings::open(root.path()).snapshot().preferences.view_options;
+        assert!(options.remote_previews, "thumbnails stored on stay: {older}");
+    }
+
+    // 2.0.18 defaulted to thumbnails and stored icons chosen there with
+    // every other view option at its default, which no later release
+    // stored at all: that choice stays.
+    let chosen_in_2_0_18 = json!({"version": 2, "preferences": {"viewOptions": {
+        "showPreviews": true, "remotePreviews": false, "skipLargePreviews": true,
+        "previewPictures": true, "previewVideos": true, "previewDocuments": true
+    }}});
+    std::fs::write(root.path().join("settings.json"), chosen_in_2_0_18.to_string()).unwrap();
+    let options = Settings::open(root.path()).snapshot().preferences.view_options;
+    assert!(!options.remote_previews, "icons chosen in 2.0.18 stay");
 }
 
 /// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_network_interval_whitelist`

@@ -81,9 +81,10 @@ impl Contents {
     }
 
     /// [`Self::shown`] with "Skip very large files" as `size_limit` says:
-    /// a picture or video larger than it keeps its icon wherever it is
-    /// listed, so it does not peek out of its folder either; the other one,
-    /// or the first file's page, shows instead.
+    /// a picture larger than it keeps its icon wherever it is listed, so it
+    /// does not peek out of its folder either; the video, or the first
+    /// file's page, shows instead. A video has no limit, as its thumbnailer
+    /// reads one frame ([`super::PreviewPolicy::allows`]).
     pub(crate) fn shown_within(&self, pictures: bool, videos: bool, size_limit: Option<u64>) -> Shown {
         let within_limit = |item: &&Peeking| match (size_limit, item.size) {
             (Some(limit), Some(size)) => size <= limit,
@@ -93,8 +94,8 @@ impl Contents {
             .picture
             .iter()
             .filter(|_| pictures)
-            .chain(self.video.iter().filter(|_| videos))
             .filter(within_limit)
+            .chain(self.video.iter().filter(|_| videos))
             .min_by_key(|item| NameOrder::of(&item.name))
             .cloned();
         let page = if picture.is_none() {
@@ -629,14 +630,20 @@ mod tests {
         assert_eq!(picture.content_type, "image/png");
         assert!(picture.modified.is_some() && picture.size.is_some_and(|size| size > 0));
 
-        // "Skip very large files": one larger than the limit keeps its
-        // icon, so it does not peek out either, and the other does.
+        // "Skip very large files": a picture larger than the limit keeps its
+        // icon, so it does not peek out either, and the video does.
         let video_size = shown.picture.and_then(|video| video.size).expect("a size");
         let small = contents.shown_within(true, true, Some(video_size));
         assert_eq!(
             name(small.picture.as_ref()),
             Some("Arrival.mp4"),
             "the small video still peeks out"
+        );
+        let large_video = contents.shown_within(true, true, Some(1));
+        assert_eq!(
+            name(large_video.picture.as_ref()),
+            Some("Arrival.mp4"),
+            "a video over the limit still peeks out"
         );
         let too_large = contents.shown_within(true, false, Some(video_size));
         assert_eq!(too_large.picture, None, "the larger pictures keep their icons");
@@ -724,7 +731,11 @@ mod tests {
         assert!(PreviewPolicy::for_folder(&icons_only, false)
             .folder_request(&folder, 96)
             .is_none());
-        assert!(PreviewPolicy::for_folder(&ViewOptions::default(), true)
+        let network_icons = ViewOptions {
+            remote_previews: false,
+            ..ViewOptions::default()
+        };
+        assert!(PreviewPolicy::for_folder(&network_icons, true)
             .folder_request(&folder, 96)
             .is_none());
         let file = crate::test_support::file_entry("Photos.png");

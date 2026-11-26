@@ -162,16 +162,17 @@ impl PreviewPolicy {
     }
 
     /// Whether `entry` may show a preview: a file of a known type within
-    /// the size limit.
+    /// the size limit. A video has no limit: its thumbnailer reads one
+    /// frame, not the whole file, and a phone's or camera's clip is
+    /// mostly over the limit, yet Windows File Explorer shows its frame.
     pub(crate) fn allows(self, entry: &Entry) -> bool {
+        let content_type = entry.content_type.as_deref();
+        let is_video = content_type.is_some_and(|content_type| content_type.starts_with("video/"));
         let within_limit = match (self.size_limit, entry.size) {
-            (Some(limit), Some(size)) => size <= limit,
+            (Some(limit), Some(size)) => is_video || size <= limit,
             _ => true,
         };
-        let type_allowed = entry
-            .content_type
-            .as_deref()
-            .is_some_and(|content_type| self.allows_type(content_type));
+        let type_allowed = content_type.is_some_and(|content_type| self.allows_type(content_type));
         let reachable = self.remote || !is_remote_item(entry);
         self.shown && !entry.is_dir && !entry.is_virtual && type_allowed && within_limit && reachable
     }
@@ -1274,10 +1275,10 @@ mod tests {
         assert!(pixbuf_may_read("application/x-font-ttf", &font));
     }
 
-    /// Previews follow Settings: off, only in folders on this computer
-    /// unless network previews are on (they are off by default, as
-    /// Windows 11 File Explorer shows only icons in network folders), and
-    /// not for files over the limit.
+    /// Previews follow Settings: in network folders too unless network
+    /// previews are off (they are on by default, as Windows File Explorer
+    /// shows thumbnails on shares), and not for files over the limit,
+    /// videos aside.
     ///
     /// parity: VIEW-058
     #[test]
@@ -1285,17 +1286,25 @@ mod tests {
         let mut picture = crate::test_support::file_entry("photo.jpg");
         picture.content_type = Some("image/jpeg".to_owned());
         picture.size = Some(PREVIEW_SIZE_LIMIT + 1);
-        let options = ViewOptions::default();
+        let everywhere = ViewOptions::default();
+        let options = ViewOptions {
+            remote_previews: false,
+            ..ViewOptions::default()
+        };
 
         assert!(
-            !PreviewPolicy::for_folder(&options, false).allows(&picture),
+            !PreviewPolicy::for_folder(&everywhere, false).allows(&picture),
             "too large"
         );
         picture.size = Some(4096);
         assert!(PreviewPolicy::for_folder(&options, false).allows(&picture));
         assert!(
+            PreviewPolicy::for_folder(&everywhere, true).allows(&picture),
+            "a network folder, by default"
+        );
+        assert!(
             !PreviewPolicy::for_folder(&options, true).allows(&picture),
-            "a network folder"
+            "a network folder with network previews off"
         );
         let off = ViewOptions {
             show_previews: false,
@@ -1308,9 +1317,22 @@ mod tests {
         };
         assert!(!PreviewPolicy::for_folder(&no_pictures, false).allows(&picture));
 
+        // A video over the limit keeps its preview: only one frame is read.
+        let mut clip = crate::test_support::file_entry("20230610_174935.mp4");
+        clip.content_type = Some("video/mp4".to_owned());
+        clip.size = Some(4 * PREVIEW_SIZE_LIMIT);
+        assert!(
+            PreviewPolicy::for_folder(&everywhere, false).allows(&clip),
+            "a large video"
+        );
+        assert!(
+            PreviewPolicy::for_folder(&everywhere, true).allows(&clip),
+            "a large video on a share"
+        );
+
         // A file of a server or a phone listed in a folder of this
         // computer, as a recent item or a search result is, keeps its icon
-        // unless network previews are on.
+        // while network previews are off.
         let local = PreviewPolicy::for_folder(&options, false);
         let mut shared = picture.clone();
         shared.uri = "smb://fileserver.example/team/photo.jpg".to_owned();
@@ -1335,10 +1357,6 @@ mod tests {
             request.target_uri.as_deref(),
             Some("file:///home/demo/Pictures/photo.jpg")
         );
-        let everywhere = ViewOptions {
-            remote_previews: true,
-            ..ViewOptions::default()
-        };
         assert!(PreviewPolicy::for_folder(&everywhere, true).allows(&picture));
         assert!(PreviewPolicy::for_folder(&everywhere, false).allows(&shared));
         assert!(PreviewPolicy::for_folder(&everywhere, false).allows(&recent));
@@ -1366,10 +1384,7 @@ mod tests {
         let mut picture = crate::test_support::file_entry("photo.jpg");
         picture.content_type = Some("image/jpeg".to_owned());
         picture.uri = "file:///mnt/nas/Photos/photo.jpg".to_owned();
-        let everywhere = ViewOptions {
-            remote_previews: true,
-            ..ViewOptions::default()
-        };
+        let everywhere = ViewOptions::default();
 
         let request = PreviewPolicy::for_folder(&everywhere, true)
             .request(&picture, 128)

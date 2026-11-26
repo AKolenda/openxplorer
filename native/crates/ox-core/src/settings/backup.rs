@@ -417,7 +417,7 @@ mod tests {
             r#"{
             "theme": "dark", "view": "grid", "details": true, "showHidden": true,
             "autoIndex": false, "contextMenu": "win10", "classicMenuChosen": true,
-            "itemCountsChosen": true, "remotePreviewsChosen": true,
+            "itemCountsChosen": true, "remotePreviewsOffChosen": true,
             "menuStripPosition": "top", "columnHeaderStyle": "windows", "columnTitleLine": false,
             "shiftF10Classic": true, "f6LikeWindows": true, "networkInterval": 300,
             "showDriveLetters": false, "textSize": 125, "sidebarWidth": 300,
@@ -427,7 +427,7 @@ mod tests {
             "showFullPath": true, "editableLocation": true, "externalFoldersInNewWindow": true,
             "browseArchives": false, "zipOpening": "window",
             "detailsPaneOptions": {"followHover": true, "hiddenFields": ["Size"]},
-            "viewOptions": {"showPreviews": false, "countFolderItems": true, "remotePreviews": true,
+            "viewOptions": {"showPreviews": false, "countFolderItems": true, "remotePreviews": false,
                             "detailsColumns": ["size", "created"]},
             "fullPathInTitle": true, "confirmTrash": true, "confirmDelete": false,
             "confirmEmptyTrash": false, "deleteRemovablePermanently": true,
