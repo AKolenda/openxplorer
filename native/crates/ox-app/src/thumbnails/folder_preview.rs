@@ -618,7 +618,11 @@ mod tests {
         assert!(PreviewPolicy::for_folder(&icons_only, false)
             .folder_request(&folder, 96)
             .is_none());
-        assert!(PreviewPolicy::for_folder(&ViewOptions::default(), true)
+        let network_icons = ViewOptions {
+            remote_previews: false,
+            ..ViewOptions::default()
+        };
+        assert!(PreviewPolicy::for_folder(&network_icons, true)
             .folder_request(&folder, 96)
             .is_none());
         let file = crate::test_support::file_entry("Photos.png");

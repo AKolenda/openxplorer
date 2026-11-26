@@ -300,13 +300,14 @@ pub struct Preferences {
     /// (`read.rs`). Stored only when set.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub item_counts_chosen: bool,
-    /// Thumbnails in network folders were turned on in this app since
-    /// 2.0.18, which stored `viewOptions.remotePreviews: true`, its short-
-    /// lived default, whenever any view option changed. Without this mark
-    /// that value gives way to icons in network folders, the default
-    /// again, once (`read.rs`). Stored only when set.
+    /// Thumbnails in network folders were turned off in this app.
+    /// Releases 2.0.19 to 2.0.26 stored
+    /// `viewOptions.remotePreviews: false`, then the default, whenever any
+    /// view option changed, so without this mark that value gives way to
+    /// thumbnails in network folders, the default again, once (`read.rs`).
+    /// Stored only when set.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub remote_previews_chosen: bool,
+    pub remote_previews_off_chosen: bool,
     /// The classic menu was chosen in this app. Files the Python app or an
     /// older release wrote store `"win10"`, its default, whether chosen or
     /// not, so without this mark that value gives way to the compact menu
@@ -819,7 +820,7 @@ impl Default for Preferences {
             f6_like_windows: false,
             classic_menu_chosen: false,
             item_counts_chosen: false,
-            remote_previews_chosen: false,
+            remote_previews_off_chosen: false,
             network_interval: DEFAULT_NETWORK_INTERVAL,
             show_drive_letters: true,
             text_size: DEFAULT_TEXT_SIZE,
@@ -1238,7 +1239,7 @@ impl Preferences {
         let columns_changed = options.details_columns != self.view_options.details_columns;
         self.view_options = options.clone();
         self.item_counts_chosen = options.count_folder_items;
-        self.remote_previews_chosen = options.remote_previews;
+        self.remote_previews_off_chosen = !options.remote_previews;
         columns_changed
     }
 

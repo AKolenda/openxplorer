@@ -128,15 +128,15 @@ const SHOW_PREVIEWS: RowText = RowText {
 
 const REMOTE_PREVIEWS: RowText = RowText {
     title: "Show thumbnails in network folders",
-    description: "Off by default, as in Windows: files on shares, servers, phones and cameras \
-                  show their type icons. Turn on to show their thumbnails and previews too.",
+    description: "On by default, as in Windows. Turn off to show type icons for files on shares, \
+                  servers, phones and cameras, which is faster on slow connections.",
     keywords: "show previews in network folders thumbnails remote network smb nas sftp phone camera \
-               also",
+               also icons slow connection",
 };
 
 const LARGE_PREVIEWS: RowText = RowText {
     title: "Skip very large files",
-    description: "Files larger than 50 MB keep their icon.",
+    description: "Pictures and documents larger than 50 MB keep their icon. Videos always show a frame.",
     keywords: "skip previews of large files thumbnails size limit big files",
 };
 

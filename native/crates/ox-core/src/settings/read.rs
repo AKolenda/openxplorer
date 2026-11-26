@@ -113,7 +113,7 @@ pub(super) fn read_sections(source: &Value, settings: &mut SettingsData) -> Resu
         let mut update = PreferencesUpdate::from_json(preferences)?;
         forget_the_old_default_menu(preferences, &mut update);
         forget_the_old_default_item_counts(preferences, &mut update);
-        forget_the_old_default_remote_previews(preferences, &mut update);
+        forget_the_old_default_network_icons(preferences, &mut update);
         settings.preferences.apply(&update);
         keep_shared_previews_off(preferences, &mut settings.preferences);
     }
@@ -142,15 +142,15 @@ fn forget_the_old_default_item_counts(values: &Value, update: &mut PreferencesUp
     }
 }
 
-/// Thumbnails in network folders stored on (`viewOptions.remotePreviews`),
-/// which 2.0.18 wrote as its default with any other view option before
-/// 2.0.19 turned the default back off, give way to icons there, the
-/// default, unless they were turned on since (`remotePreviewsChosen`,
-/// VIEW-058).
-fn forget_the_old_default_remote_previews(values: &Value, update: &mut PreferencesUpdate) {
-    let chosen = values.get("remotePreviewsChosen").and_then(Value::as_bool) == Some(true);
+/// Icons in network folders stored (`viewOptions.remotePreviews: false`),
+/// which 2.0.19 to 2.0.26 wrote as their default with any other view
+/// option, give way to thumbnails there, the default again, unless they
+/// were turned off since (`remotePreviewsOffChosen`, VIEW-058). A stored
+/// `true` stays.
+fn forget_the_old_default_network_icons(values: &Value, update: &mut PreferencesUpdate) {
+    let chosen = values.get("remotePreviewsOffChosen").and_then(Value::as_bool) == Some(true);
     if let (false, Some(options)) = (chosen, update.view_options.as_mut()) {
-        options.remote_previews = false;
+        options.remote_previews = true;
     }
 }
 
