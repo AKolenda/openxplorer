@@ -90,6 +90,16 @@ impl Step {
     }
 }
 
+/// Where a [`History`] stood: how often its location had changed, how
+/// many steps it held and which was current. Any navigation, Back or
+/// Forward, or a step added changes it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct HistoryMark {
+    moves: u64,
+    len: usize,
+    position: usize,
+}
+
 /// The locations a tab has visited, with the current position.
 ///
 /// `steps` is never empty and `position` always points into it, so
@@ -190,6 +200,24 @@ impl History {
         true
     }
 
+    /// Where the history stands now, to tell later whether it moved or
+    /// gained a step since ([`Self::drop_last_at`]).
+    pub(crate) fn mark(&self) -> HistoryMark {
+        HistoryMark {
+            moves: self.moves,
+            len: self.steps.len(),
+            position: self.position,
+        }
+    }
+
+    /// [`Self::drop_last`], only while the history stands where `mark`,
+    /// taken right after the last step was added, says: the step dropped
+    /// is that very one. A tab that left it and came back to the same
+    /// location since keeps its own, newer step.
+    pub(crate) fn drop_last_at(&mut self, mark: HistoryMark) -> bool {
+        self.mark() == mark && self.drop_last()
+    }
+
     /// Forgets the current location, the last entry, and goes back to the
     /// one before it, as if the navigation to it had never happened.
     /// Returns false (and changes nothing) when the current location is
@@ -278,6 +306,29 @@ impl History {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A step dropped by its mark is the one added then: once the tab
+    /// went elsewhere and came back to the same location, its own newer
+    /// step stays, as when a drive that could not be removed puts back a
+    /// tab moved Home that the user had already taken on and back.
+    ///
+    /// parity: DEV-009
+    #[test]
+    fn only_the_step_a_mark_names_is_dropped() {
+        let mut history = History::new("file:///media/stick");
+        history.push("file:///home/demo");
+        let mark = history.mark();
+        let mut left_and_back = history.clone();
+
+        assert!(history.drop_last_at(mark));
+        assert_eq!(history.current(), "file:///media/stick");
+
+        left_and_back.push("file:///home/demo/Documents");
+        left_and_back.push("file:///home/demo");
+        assert!(!left_and_back.drop_last_at(mark), "the user's own step stays");
+        assert_eq!(left_and_back.current(), "file:///home/demo");
+        assert_eq!(left_and_back.len(), 4);
+    }
 
     /// parity: NAV-001
     #[test]

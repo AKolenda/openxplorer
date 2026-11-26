@@ -482,8 +482,12 @@ impl BrowserWindow {
     /// Asks off the main loop whether the file system of the folder at
     /// `uri` is read-only, and keeps the answer while that folder is shown,
     /// updating the commands when it changed. A question that fails
-    /// changes nothing.
+    /// changes nothing, and neither does one a newer question overtook:
+    /// its answer, from before a drive was mounted again, say, may come
+    /// back after the newer one.
     fn ask_whether_read_only(&self, uri: String) {
+        let generation = self.imp().read_only_asked.get().wrapping_add(1);
+        self.imp().read_only_asked.set(generation);
         let folder = gtk::gio::File::for_uri(&uri);
         gtk::glib::spawn_future_local(gtk::glib::clone!(
             #[weak(rename_to = window)]
@@ -498,6 +502,9 @@ impl BrowserWindow {
                 else {
                     return;
                 };
+                if window.imp().read_only_asked.get() != generation {
+                    return;
+                }
                 let read_only = info.boolean(gtk::gio::FILE_ATTRIBUTE_FILESYSTEM_READONLY);
                 let known = window.imp().read_only_drive.borrow().clone();
                 if known.0 == uri && known.1 != read_only {

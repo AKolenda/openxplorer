@@ -485,6 +485,61 @@ fn list_heads_each_group_at_the_top_of_its_column() {
     );
     press(gdk::Key::Left);
     assert_eq!(model.selected_positions(), [first_note], "Left comes back");
+    // A click on the notes' heading selects the group and gives the heading
+    // the keyboard; Right then goes on to the same row of the next column,
+    // and Down from the heading to the group's first item, rather than
+    // Left and Right being taken as Collapse and Expand, which List has not.
+    let click_heading = || {
+        let heading = descendants::<FileCell>(&grid)
+            .into_iter()
+            .find(|cell| {
+                cell.is_mapped()
+                    && cell
+                        .group_heading()
+                        .is_some_and(|title| title.starts_with("Text Document"))
+            })
+            .expect("the notes' heading");
+        let bounds = heading.compute_bounds(&grid).expect("the heading is laid out");
+        let x = f64::from(bounds.x() + bounds.width() / 2.0);
+        let y = f64::from(bounds.y() + bounds.height() / 2.0);
+        // As the view's press on a heading's row runs it.
+        let pressed = test
+            .window
+            .press_heading(&grid, x, y, 1, gdk::ModifierType::empty());
+        assert!(pressed, "a press on the heading at {bounds:?}");
+        crate::test_support::harness::settle();
+        // The press gives the heading the keyboard; in List the selected
+        // group's first item may take it back as the list settles, so the
+        // heading is given it again, as an arrow onto it would, and the key
+        // goes to it at once.
+        let slot = heading.slot().expect("the heading's slot");
+        test.window.keep_heading_focus(&slot);
+        assert!(
+            test.window.focused_heading().is_some(),
+            "the heading has the keyboard"
+        );
+    };
+    click_heading();
+    assert_eq!(
+        model.selected_positions().first().copied(),
+        Some(first_note),
+        "the click selects the notes"
+    );
+    press(gdk::Key::Right);
+    assert_eq!(
+        model.selected_positions(),
+        [first_note + lines - 1],
+        "Right from the heading goes to the same row of the next column"
+    );
+    pane.reveal(first_note);
+    wait_for_frames(&test.window, 4);
+    click_heading();
+    press(gdk::Key::Down);
+    assert_eq!(
+        model.selected_positions(),
+        [first_note],
+        "Down goes to its first item"
+    );
     // A key on a group's second column keeps List's sideways scroll: the
     // other grouped views' keeping of a heading in sight measured rows,
     // and snapped List back towards its left edge.

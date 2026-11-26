@@ -355,10 +355,17 @@ pub trait Node: Send + Sync {
     /// or the power lost (XFER-013). Backends that write through, or
     /// cannot be told to, do nothing.
     ///
+    /// `published` is who the item published here is, by device and inode,
+    /// recorded before it was published: the item at this place must
+    /// still be one of them, or what would be written out is some other
+    /// item, as when the drive went and its mount point now leads onto the
+    /// disk below, which may hold an item of the same name.
+    ///
     /// # Errors
     ///
-    /// The drive's error when it cannot write the item out.
-    fn flush(&self) -> Result<(), TransferError> {
+    /// The drive's error when it cannot write the item out, or the item
+    /// here is not the one published.
+    fn flush(&self, _published: &[ItemIdentity]) -> Result<(), TransferError> {
         Ok(())
     }
 }

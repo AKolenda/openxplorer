@@ -216,11 +216,20 @@ fn peeking_at(folder: &Path, name: String, content_type: String) -> Option<Peeki
 }
 
 /// The items `known` names, each with its time and size read again, as a
-/// picture may change without its folder changing.
+/// picture may change without its folder changing. An item that is gone
+/// is left out (its folder's time changed too, so the folder is read anew
+/// next); one that could not be read just now, as a drive busy for a
+/// moment cannot, keeps what was read of it last, rather than the folder
+/// being kept as having no such item for as long as its time stays.
 fn read_again(folder: &Path, known: &Contents) -> Contents {
     let again = |item: &Option<Peeking>| {
         let item = item.as_ref()?;
-        peeking_at(folder, item.name.clone(), item.content_type.clone())
+        match std::fs::metadata(folder.join(&item.name)) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(_) => Some(item.clone()),
+            Ok(_) => peeking_at(folder, item.name.clone(), item.content_type.clone())
+                .or_else(|| Some(item.clone())),
+        }
     };
     Contents {
         picture: again(&known.picture),
@@ -635,6 +644,38 @@ mod tests {
             too_large.page.map(|page| page.name).as_deref(),
             Some("Agenda.txt"),
             "the first file's page instead"
+        );
+    }
+
+    /// Reading a folder's items again keeps one that could not be read for
+    /// a moment as it was last read, so its art is not lost for as long as
+    /// the folder's time stays; one that is gone is left out.
+    ///
+    /// parity: VIEW-058
+    #[gtk::test]
+    fn an_item_that_cannot_be_read_for_a_moment_keeps_its_place() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        picture_at(folder.path(), "Harbor.png", 0x3366_99ff);
+        let known = read_contents(folder.path());
+        assert_eq!(name(known.picture.as_ref()), Some("Harbor.png"));
+
+        // A folder that cannot be searched just now: its items cannot be
+        // stated, as a busy drive's cannot.
+        std::fs::set_permissions(folder.path(), std::fs::Permissions::from_mode(0o600)).expect("mode");
+        let unreadable = std::fs::metadata(folder.path().join("Harbor.png")).is_err();
+        let again = read_again(folder.path(), &known);
+        std::fs::set_permissions(folder.path(), std::fs::Permissions::from_mode(0o755)).expect("mode");
+        if unreadable {
+            assert_eq!(again.picture, known.picture, "kept as read last");
+        }
+
+        std::fs::remove_file(folder.path().join("Harbor.png")).expect("removed");
+        assert_eq!(
+            read_again(folder.path(), &known).picture,
+            None,
+            "a gone item goes"
         );
     }
 

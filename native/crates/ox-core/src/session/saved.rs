@@ -103,7 +103,7 @@ impl SavedSession {
     ///
     /// [`StorageError`] when the file cannot be written.
     pub fn save(&self, directory: &Path) -> Result<(), StorageError> {
-        let contents = self.to_json().to_string();
+        let contents = fitting_contents(std::slice::from_ref(self));
         replace_file_atomically(&session_file(directory), TEMPORARY_PREFIX, contents.as_bytes())
     }
 
@@ -155,23 +155,15 @@ impl SavedWindows {
     /// Every window may hold up to [`MAX_SAVED_TABS`] tabs, each with a
     /// long history and many selected items, so twenty of them can take
     /// more than the session file read back ([`MAX_FILE_BYTES`]), which
-    /// would then reopen nothing. Windows are left out from the last, the
-    /// one used longest ago, until the rest fit; the window in front is
-    /// always kept, as one window alone always was.
+    /// would then reopen nothing. The file is kept within it as
+    /// [`fitting_contents`] says: the window in front always, its tabs'
+    /// histories shortened if need be, then as many other windows as fit.
     ///
     /// # Errors
     ///
     /// [`StorageError`] when the file cannot be written.
     pub fn save(&self, directory: &Path) -> Result<(), StorageError> {
-        let mut kept = self.windows.len().min(MAX_SAVED_WINDOWS);
-        let contents = loop {
-            let contents = windows_json(&self.windows[..kept]).to_string();
-            let fits = u64::try_from(contents.len()).unwrap_or(u64::MAX) <= MAX_FILE_BYTES;
-            if fits || kept <= 1 {
-                break contents;
-            }
-            kept -= 1;
-        };
+        let contents = fitting_contents(&self.windows);
         replace_file_atomically(&session_file(directory), TEMPORARY_PREFIX, contents.as_bytes())
     }
 
@@ -192,6 +184,81 @@ fn windows_json(windows: &[SavedSession]) -> Value {
         value["otherWindows"] = Value::Array(others);
     }
     value
+}
+
+/// The session file's text for `windows`, the one in front first, within
+/// [`MAX_FILE_BYTES`], so it is always read back.
+///
+/// The window in front is always kept. Its tabs, with as many as
+/// [`MAX_SAVED_TABS`] tabs of up to [`super::tab::MAX_HISTORY_ENTRIES`]
+/// long addresses each, can alone take more: their Back and Forward
+/// entries are then halved, the oldest going first, each tab keeping its
+/// location and the window its tab in front, until it fits, and as a last
+/// resort the tabs' selections go too. The other windows follow, the one
+/// used most recently first, while they fit. Each window is serialized
+/// once for its size (and the window in front once a shortening), rather
+/// than the whole file again for each window left out.
+fn fitting_contents(windows: &[SavedSession]) -> String {
+    let limit = usize::try_from(MAX_FILE_BYTES).unwrap_or(usize::MAX);
+    let mut windows = windows.iter().take(MAX_SAVED_WINDOWS);
+    let Some(front) = windows.next() else {
+        return json!({}).to_string();
+    };
+    let mut front = front.clone();
+    let mut value = front.to_json();
+    let mut text = value.to_string();
+    let mut selections_kept = true;
+    while text.len() > limit {
+        if !shorten_histories(&mut front) {
+            if !selections_kept {
+                break;
+            }
+            for pane in front.tabs.iter_mut().flat_map(|tab| tab.panes.iter_mut()) {
+                pane.selection.clear();
+            }
+            selections_kept = false;
+        }
+        value = front.to_json();
+        text = value.to_string();
+    }
+    // `,"otherWindows":[` and `]`, and a comma between two windows.
+    let mut size = text.len() + ",\"otherWindows\":[]".len();
+    let mut others = Vec::new();
+    for window in windows {
+        let other = window.to_json();
+        let length = other.to_string().len() + usize::from(!others.is_empty());
+        if size + length > limit {
+            break;
+        }
+        size += length;
+        others.push(other);
+    }
+    if others.is_empty() {
+        return text;
+    }
+    value["otherWindows"] = Value::Array(others);
+    value.to_string()
+}
+
+/// Halves the Back and Forward entries of each tab of `session` with
+/// more than its location, the oldest Back entries first, then the
+/// furthest Forward ones, keeping each tab's location. False when no tab
+/// had any to lose.
+fn shorten_histories(session: &mut SavedSession) -> bool {
+    let mut shortened = false;
+    for pane in session.tabs.iter_mut().flat_map(|tab| tab.panes.iter_mut()) {
+        let length = pane.history.len();
+        if length <= 1 {
+            continue;
+        }
+        let keep = length.div_ceil(2);
+        let older = pane.index.min(length - keep);
+        pane.history.drain(..older);
+        pane.index -= older;
+        pane.history.truncate(keep.max(pane.index + 1));
+        shortened = true;
+    }
+    shortened
 }
 
 /// The session file in `directory` as JSON, when it can be read.
@@ -417,6 +484,56 @@ mod tests {
             windows.windows[..count],
             "the front ones, in order"
         );
+    }
+
+    /// One window of a hundred tabs with full, long histories takes more
+    /// than the session file read back on its own: its tabs' Back and
+    /// Forward entries are shortened, the oldest first, until it fits, so
+    /// the next start still reopens every tab at its location, with the
+    /// same tab in front, rather than nothing.
+    ///
+    /// parity: TAB-053
+    #[test]
+    fn a_front_window_too_large_to_read_back_keeps_every_tab() {
+        let directory = tempfile::tempdir().expect("a temporary directory");
+        let long = "x".repeat(190);
+        let pane = |tab: usize| {
+            let history: Vec<String> = (0..super::super::tab::MAX_HISTORY_ENTRIES)
+                .map(|step| format!("file:///srv/example/{long}/{tab}/{step}"))
+                .collect();
+            let index = history.len() - 10;
+            TabSnapshot::from_json(&json!({ "uri": history[index], "history": history, "index": index }))
+                .expect("a valid tab")
+        };
+        let front = SavedSession {
+            tabs: (0..MAX_SAVED_TABS)
+                .map(|tab| SavedTab {
+                    panes: vec![pane(tab)],
+                    active_pane: 0,
+                })
+                .collect(),
+            active_tab: 37,
+        };
+        let whole = u64::try_from(front.to_json().to_string().len()).expect("a length");
+        assert!(whole > MAX_FILE_BYTES, "{whole} bytes whole");
+
+        let windows = SavedWindows {
+            windows: vec![front.clone(), front.clone()],
+        };
+        windows.save(directory.path()).expect("the windows are saved");
+        let loaded = SavedWindows::load(directory.path()).expect("the session is read back");
+
+        assert_eq!(loaded.windows.len(), 1, "the front window alone fits");
+        let read = &loaded.windows[0];
+        assert_eq!(read.active_tab, 37);
+        assert_eq!(read.tabs.len(), MAX_SAVED_TABS);
+        for (saved, read) in front.tabs.iter().zip(&read.tabs) {
+            let (saved, read) = (&saved.panes[0], &read.panes[0]);
+            assert_eq!(read.uri, saved.uri, "each tab keeps its location");
+            assert!(read.history.len() < saved.history.len());
+            assert_eq!(read.history[read.index], read.uri);
+            assert_eq!(read.history.last(), saved.history.last(), "the newest stay");
+        }
     }
 
     /// Saving and reading session files strips account names from every

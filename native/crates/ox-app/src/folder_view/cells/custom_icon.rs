@@ -286,6 +286,11 @@ impl FileCell {
                     Some(FolderContentsStart::Known)
                 }
             }
+            // Known plain, which a picture that could not be read for a
+            // moment can leave too: read again the same way.
+            Some(KnownArt::Plain) if contents_need_checking(&request) => {
+                Some(FolderContentsStart::Wanted(request))
+            }
             Some(KnownArt::Plain) => Some(FolderContentsStart::Known),
             None => Some(FolderContentsStart::Wanted(request)),
         }

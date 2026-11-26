@@ -262,9 +262,9 @@ fn the_apps_own_style_comes_back_with_its_accent() {
 
 /// With Windows' style the chevron stands at the title's top edge, well
 /// clear of the text under it (3 pixels above its capitals, as in Windows
-/// 11), in a column as wide as a new window's and in one narrower than its
-/// title, where the text runs under the middle, and in Compact view, whose
-/// titles are six pixels shorter.
+/// 11), in a column as wide as a new window's, in one narrower than its
+/// title, where the text runs under the middle, and in a wide one, in
+/// normal and in Compact view, whose titles are six pixels shorter.
 ///
 /// parity: VIEW-014, VIEW-067
 #[gtk::test]
@@ -275,17 +275,36 @@ fn windows_style_keeps_the_chevron_clear_of_the_text_in_any_column_width() {
     let view = test.window.folder_pane().details();
     let modified = view.column(SortColumn::Modified).expect("a Date modified column");
     let normal_height = title_of(&test, SortColumn::Modified).height();
-    for (compact, width) in [(false, None), (false, Some(70)), (true, None), (true, Some(70))] {
-        if compact && width.is_none() {
+    // A new window's width, then one narrower than the title and one wider
+    // than a new window's, in each density; each case sets its own.
+    let new_window_width = modified.fixed_width();
+    let cases = [
+        (false, new_window_width),
+        (false, 70),
+        (false, 320),
+        (true, new_window_width),
+        (true, 70),
+        (true, 320),
+    ];
+    let mut is_compact = false;
+    for (compact, width) in cases {
+        if compact != is_compact {
             test.activate("compact-density", None);
             wait_until("the compact titles", || {
                 title_of(&test, SortColumn::Modified).height() < normal_height
             });
             settle_colors(&test);
+            is_compact = compact;
         }
-        if let Some(width) = width {
-            modified.set_fixed_width(width);
+        let before = title_of(&test, SortColumn::Modified).width();
+        let changes = modified.fixed_width() != width;
+        modified.set_fixed_width(width);
+        if changes {
+            wait_until("the column laid out at its new width", || {
+                title_of(&test, SortColumn::Modified).width() != before
+            });
         }
+        wait_for_frames(&test.window, 3);
         for direction in ["ascending", "descending"] {
             sort_by(&test, "modified", direction);
             let title = title_of(&test, SortColumn::Modified);

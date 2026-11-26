@@ -128,7 +128,9 @@ fn only_a_typed_folder_marks_its_first_item_for_the_keyboard() {
     test.wait_for_listing("the fixture");
     let marked = || {
         let session = test.window.imp().session.borrow();
-        session.active().is_some_and(|tab| tab.focuses_first_item)
+        session
+            .active()
+            .is_some_and(|tab| tab.first_item_focus != crate::window::session::FirstItemFocus::None)
     };
 
     test.activate("location", None);
@@ -145,6 +147,41 @@ fn only_a_typed_folder_marks_its_first_item_for_the_keyboard() {
 
     assert!(!after_a_file, "a typed file marks nothing");
     assert!(!after_nothing, "an address that names nothing marks nothing");
+}
+
+/// A landing page typed into the address bar, This PC here, lists no
+/// items, so it leaves no request for a first item behind: the folder
+/// opened from it next some other way keeps the keyboard where a plain
+/// navigation leaves it, without the typed folder's ring on its first
+/// item. The request used to stay on the tab until the next folder was
+/// listed.
+///
+/// parity: SEL-020, NAV-033
+#[gtk::test]
+fn a_typed_landing_page_leaves_no_first_item_request_behind() {
+    use gtk::subclass::prelude::*;
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    test.wait_for_listing("Documents");
+    let requested = || {
+        let session = test.window.imp().session.borrow();
+        session
+            .active()
+            .is_some_and(|tab| tab.first_item_focus != crate::window::session::FirstItemFocus::None)
+    };
+
+    go_to(&test, "This PC", crate::locations::Page::ThisPc.uri());
+    let on_the_page = requested();
+    test.window.navigate(&fixture.uri()).expect("the fixture");
+    test.wait_for_listing("the fixture");
+    wait_for(Duration::from_millis(200));
+
+    assert!(!on_the_page, "the page asks nothing of a later listing");
+    assert_eq!(
+        test.window.imp().ringed_item.get(),
+        None,
+        "the folder opened next rings no first item"
+    );
 }
 
 /// Tab with the suggestions shown puts the next one into the address, as

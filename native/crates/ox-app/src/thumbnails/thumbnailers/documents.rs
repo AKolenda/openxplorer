@@ -744,10 +744,31 @@ impl Cache {
     /// The kept PDF named `name`, marked as just used; `None` when there
     /// is none, or something else is there, such as a PDF cut at the
     /// conversion's file size limit that an earlier version kept.
+    ///
+    /// A kept PDF is checked as one just made is ([`read_pdf`]), by its
+    /// start and its last kilobyte, not read whole: one cut short, which an
+    /// earlier version could keep, is removed and made again rather than
+    /// found and shown broken in every run.
     fn find(&self, name: &str) -> Option<PathBuf> {
+        use std::io::{Seek, SeekFrom};
+
         let path = self.folder.join(name);
         let metadata = fs::symlink_metadata(&path).ok()?;
         if !metadata.is_file() || metadata.len() >= PDF_SIZE_LIMIT {
+            return None;
+        }
+        let whole = || -> Option<bool> {
+            let mut file = fs::File::open(&path).ok()?;
+            let mut start = [0_u8; 5];
+            file.read_exact(&mut start).ok()?;
+            let tail_length = metadata.len().min(1024);
+            file.seek(SeekFrom::End(-i64::try_from(tail_length).ok()?)).ok()?;
+            let mut tail = Vec::new();
+            file.take(tail_length).read_to_end(&mut tail).ok()?;
+            Some(&start == b"%PDF-" && ends_as_a_pdf(&tail))
+        };
+        if whole() != Some(true) {
+            let _ = fs::remove_file(&path);
             return None;
         }
         if let Ok(file) = fs::OpenOptions::new().write(true).open(&path) {
@@ -1365,8 +1386,8 @@ mod tests {
 
         let folder = tempfile::tempdir().expect("a temporary folder");
         let cache = Cache::new(folder.path().join("previews"));
-        let kept = cache.keep("a.pdf", b"%PDF-1.7 a").expect("kept");
-        assert_eq!(fs::read(&kept).expect("read"), b"%PDF-1.7 a");
+        let kept = cache.keep("a.pdf", b"%PDF-1.7 a\n%%EOF\n").expect("kept");
+        assert_eq!(fs::read(&kept).expect("read"), b"%PDF-1.7 a\n%%EOF\n");
         assert_eq!(
             fs::metadata(&kept).expect("meta").permissions().mode() & 0o777,
             0o600
@@ -1381,6 +1402,11 @@ mod tests {
         );
         assert_eq!(cache.find("a.pdf"), Some(kept));
         assert_eq!(cache.find("b.pdf"), None);
+        // A PDF kept cut short, without its %%EOF, is not found, and goes,
+        // so it is made again.
+        let cut = cache.keep("cut.pdf", b"%PDF-1.7 fictional pa").expect("kept");
+        assert_eq!(cache.find("cut.pdf"), None);
+        assert!(!cut.exists(), "removed to be made again");
 
         let old = SystemTime::UNIX_EPOCH + Duration::from_secs(1_600_000_000);
         for index in 0..CACHE_COUNT_LIMIT + 2 {

@@ -243,6 +243,12 @@ impl BrowserWindow {
             return None;
         }
         let heading = self.focused_heading()?;
+        // List's groups do not collapse: there Left and Right move on from
+        // the heading to the column before or after (`grid_keys.rs`).
+        let in_list = heading.model().is_some_and(|model| model.is_list());
+        if in_list && effect.collapses().is_some() {
+            return None;
+        }
         self.reset_typeahead();
         match effect.collapses() {
             Some(collapsed) => heading.set_group_collapsed(collapsed),
