@@ -349,6 +349,9 @@ mod imp {
         /// The groups collapsed under their headings, which the folder
         /// model shares.
         pub(super) collapsed: RefCell<super::CollapsedGroups>,
+        /// The rows bound now, whose descriptions a screen reader hears
+        /// ([`super::DetailsView::describe_bound_rows`]).
+        pub(super) bound_rows: RefCell<Vec<glib::WeakRef<gtk::ColumnViewRow>>>,
     }
 
     impl std::fmt::Debug for DetailsView {
@@ -588,13 +591,17 @@ impl DetailsView {
             if let Some(row) = object.downcast_ref::<gtk::ColumnViewRow>() {
                 forget_heading_title(&titles, row);
                 let item = row.item();
+                if let Some(view) = view.upgrade() {
+                    view.note_bound_row(row);
+                    // A heading's row, or one bound again to a heading
+                    // after a file, has no description: GTK reuses rows,
+                    // and a heading was heard with the file's details.
+                    view.describe_row(row);
+                }
                 if let Some(item) = item.and_downcast_ref::<FileItem>() {
                     // Named as the Name column shows it, without a hidden
                     // extension.
                     owners.name_detail_row(row, item);
-                    if let Some(view) = view.upgrade() {
-                        row.set_accessible_description(&view.row_description(item));
-                    }
                     row.set_selectable(true);
                     row.set_activatable(true);
                 } else if let Some(heading) = item.and_downcast_ref::<GroupSlot>() {
@@ -610,12 +617,34 @@ impl DetailsView {
                 }
             }
         });
+        let view = self.downgrade();
         rows.connect_unbind(move |_, object| {
             if let Some(row) = object.downcast_ref::<gtk::ColumnViewRow>() {
                 forget_heading_title(&unbind_titles, row);
+                row.set_accessible_description("");
+                if let Some(view) = view.upgrade() {
+                    view.forget_bound_row(row);
+                }
             }
         });
         column_view.set_row_factory(Some(&rows));
+        // What a row says follows the columns shown, their order, the date
+        // style and the item counts, as its cells do, not only when GTK
+        // binds it again.
+        let view = self.downgrade();
+        column_view.columns().connect_items_changed(move |_, _, _, _| {
+            if let Some(view) = view.upgrade() {
+                view.describe_bound_rows();
+            }
+        });
+        for (_, view_column) in self.view_columns() {
+            let view = self.downgrade();
+            view_column.connect_visible_notify(move |_| {
+                if let Some(view) = view.upgrade() {
+                    view.describe_bound_rows();
+                }
+            });
+        }
         model.selection().connect_items_changed(glib::clone!(
             #[weak]
             column_view,
@@ -672,6 +701,74 @@ impl DetailsView {
             })
             .collect::<Vec<_>>()
             .join(", ")
+    }
+
+    /// Gives `row` what a screen reader hears after its name: its item's
+    /// other columns ([`Self::row_description`]), or nothing for a group's
+    /// heading.
+    fn describe_row(&self, row: &gtk::ColumnViewRow) {
+        let description = row
+            .item()
+            .and_downcast_ref::<FileItem>()
+            .map(|item| self.row_description(item))
+            .unwrap_or_default();
+        row.set_accessible_description(&description);
+    }
+
+    /// Describes every row bound now again ([`Self::describe_row`]): the
+    /// columns shown, their order, the date style or the item counts
+    /// changed, which redraws the cells without binding the rows again, so
+    /// a screen reader heard the old columns and dates ("Today at …" after
+    /// midnight) until a row was reused.
+    fn describe_bound_rows(&self) {
+        let rows: Vec<gtk::ColumnViewRow> = self
+            .imp()
+            .bound_rows
+            .borrow()
+            .iter()
+            .filter_map(glib::WeakRef::upgrade)
+            .collect();
+        for row in &rows {
+            self.describe_row(row);
+        }
+    }
+
+    /// Keeps `row`, just bound, among the rows [`Self::describe_bound_rows`]
+    /// describes again.
+    fn note_bound_row(&self, row: &gtk::ColumnViewRow) {
+        let mut rows = self.imp().bound_rows.borrow_mut();
+        rows.retain(|kept| kept.upgrade().is_some_and(|kept| kept != *row));
+        rows.push(row.downgrade());
+    }
+
+    /// Forgets `row`, unbound.
+    fn forget_bound_row(&self, row: &gtk::ColumnViewRow) {
+        self.imp()
+            .bound_rows
+            .borrow_mut()
+            .retain(|kept| kept.upgrade().is_some_and(|kept| kept != *row));
+    }
+
+    /// The descriptions of the rows bound now, a file's with its name, a
+    /// heading's with `None`, for tests.
+    #[cfg(test)]
+    pub(crate) fn bound_row_descriptions(&self) -> Vec<(Option<String>, String)> {
+        let rows: Vec<gtk::ColumnViewRow> = self
+            .imp()
+            .bound_rows
+            .borrow()
+            .iter()
+            .filter_map(glib::WeakRef::upgrade)
+            .collect();
+        rows.iter()
+            .map(|row| {
+                let name = row
+                    .item()
+                    .and_downcast::<FileItem>()
+                    .map(|item| item.entry().name.clone());
+                (name, row.accessible_description().to_string())
+            })
+            .collect()
     }
 
     /// What `column` shows for the first `limit` items the view lists.
@@ -751,10 +848,12 @@ impl DetailsView {
         }
     }
 
-    /// Binds every shown cell of `column` again, through a new factory.
+    /// Binds every shown cell of `column` again, through a new factory,
+    /// and describes the rows again with what the cells now say.
     pub(crate) fn redraw_column(&self, column: SortColumn) {
         if let Some(view_column) = self.column(column) {
             view_column.set_factory(Some(&self.cells().factory(column)));
+            self.describe_bound_rows();
         }
     }
 
@@ -917,7 +1016,12 @@ impl DetailsView {
     /// still at its default width for the old size takes its default for
     /// the new one, so larger text is not cut short (ACC-012); a width the
     /// user chose grows by as much as the text, as Windows' scaling grows
-    /// it. Not a resize by the user, so nothing is saved.
+    /// it. Size at its default, measured in the list's font, follows the
+    /// font once it is laid out again ([`Self::follow_size_font`]); a Size
+    /// the user widened grows with the text as the others do, and as it
+    /// does when the window opens at that text size
+    /// ([`Self::apply_column_widths`]), keeping room for its text. Not a
+    /// resize by the user, so nothing is saved.
     pub(crate) fn set_text_scale(&self, scale: f64) {
         let old = self.text_scale();
         self.imp().text_scale.set(scale);
@@ -925,13 +1029,22 @@ impl DetailsView {
         if (old - scale).abs() < f64::EPSILON {
             return;
         }
+        // Size's default for the font laid out last, before this change.
+        let size_at_default = column_widths::fixed_width(
+            SortColumn::Size,
+            column_widths::start_width_at(SortColumn::Size, None, 1.0)
+                .map(|width| width.max(self.imp().size_minimum.get())),
+        );
         for (column, view_column) in self.view_columns() {
-            if column == SortColumn::Size {
+            let at_default = if column == SortColumn::Size {
+                size_at_default
+            } else {
+                column_widths::fixed_width(column, column_widths::scaled_default_width(column, old))
+            };
+            let fixed = view_column.fixed_width();
+            if column == SortColumn::Size && fixed == at_default {
                 continue;
             }
-            let at_default =
-                column_widths::fixed_width(column, column_widths::scaled_default_width(column, old));
-            let fixed = view_column.fixed_width();
             if fixed >= 0 && fixed == at_default {
                 let width = column_widths::scaled_default_width(column, scale);
                 view_column.set_fixed_width(column_widths::fixed_width(column, width));

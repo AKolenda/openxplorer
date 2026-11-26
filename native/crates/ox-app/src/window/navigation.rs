@@ -291,8 +291,12 @@ impl BrowserWindow {
             self.show_tab(id);
             // As any other way of opening a folder does, a tab opened in
             // front takes the keyboard into its list, also from the "+"
-            // button or for another application (SEL-020).
-            self.focus_files_after_navigation();
+            // button or for another application (SEL-020), and also from
+            // the tab strip: Ctrl+T on a focused tab, or Enter on "+", is
+            // no browsing of the tabs, which keeps the keyboard there.
+            if !self.focus_is_in_text_field() {
+                self.folder_pane().focus_view();
+            }
         } else {
             self.render_tabs();
         }

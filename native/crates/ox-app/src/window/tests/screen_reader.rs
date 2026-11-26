@@ -276,6 +276,70 @@ fn the_column_titles_are_heard_as_buttons_with_the_sort_order() {
     );
 }
 
+/// A Details row is heard with its columns as they are now: hiding a
+/// column, or writing dates another way (as a new day does at midnight
+/// with relative dates), redraws the cells without binding the rows
+/// again, and the rows' descriptions used to keep the old columns and
+/// dates until a row was reused. A group's heading is heard with no
+/// file's details.
+///
+/// parity: ACC-002, VIEW-004
+#[gtk::test]
+fn a_details_rows_description_follows_its_columns_and_dates() {
+    use crate::folder_view::sorting::SortColumn;
+    use ox_core::format::DateStyle;
+    let fixture = Fixture::standard();
+    // Changed now, so its date reads "Today at …" written relatively.
+    fixture.write("Fresh notes.txt");
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("view", Some("details"));
+    let details = test.window.folder_pane().details();
+    let description = || {
+        details
+            .bound_row_descriptions()
+            .into_iter()
+            .find(|(name, _)| name.as_deref() == Some("Fresh notes.txt"))
+            .map(|(_, description)| description)
+            .unwrap_or_default()
+    };
+    wait_until("the row's description", || description().contains("Size: "));
+
+    details
+        .column(SortColumn::Size)
+        .expect("a Size column")
+        .set_visible(false);
+    let without_size = description();
+    let before = details.date_style();
+    let other = match before {
+        DateStyle::Relative => DateStyle::Absolute,
+        DateStyle::Absolute => DateStyle::Relative,
+    };
+    details.set_date_style(other);
+    let dated_otherwise = description();
+    details.set_date_style(before);
+    test.activate("group-by", Some("type"));
+    wait_until("a heading's row", || {
+        details
+            .bound_row_descriptions()
+            .iter()
+            .any(|(name, _)| name.is_none())
+    });
+    let headings: Vec<String> = details
+        .bound_row_descriptions()
+        .into_iter()
+        .filter(|(name, _)| name.is_none())
+        .map(|(_, description)| description)
+        .collect();
+
+    assert!(!without_size.contains("Size: "), "{without_size}");
+    assert!(without_size.contains("Type: Text Document"), "{without_size}");
+    assert_ne!(dated_otherwise, without_size, "dates written the other way");
+    assert!(
+        headings.iter().all(String::is_empty),
+        "headings have no file's details: {headings:?}"
+    );
+}
+
 /// A row of the Details view is heard with the other columns shown after
 /// its name, each after its title, as the row shows them: Orca heard only
 /// "Notes 2", never that it is a text document, its size or its date.

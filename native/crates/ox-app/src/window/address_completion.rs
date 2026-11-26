@@ -107,7 +107,7 @@ impl BrowserWindow {
         // quotes it, is completed without the quote.
         let split = split_typed(typed.strip_prefix('"').unwrap_or(typed));
         let folder = split.and_then(|(base, _)| {
-            let expanded = typed_address(base, |name| std::env::var(name).ok());
+            let expanded = typed_address(base, ox_core::location::environment_variable);
             self.resolve_address(&expanded).ok()
         });
         let (Some((base, prefix)), Some(folder)) = (split, folder) else {

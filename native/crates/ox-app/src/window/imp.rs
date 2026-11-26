@@ -105,6 +105,10 @@ pub(crate) struct BrowserWindow {
     /// The folder last asked whether its drive may be written, and the
     /// answer: true when its file system is read-only (New is greyed).
     pub(super) read_only_drive: RefCell<(String, bool)>,
+    /// How many times the drive was asked whether it is read-only: only
+    /// the newest question's answer counts, as an older one may come
+    /// back last.
+    pub(super) read_only_asked: Cell<u64>,
     /// The generation of the icons chosen in File icons (LOOK-029) the
     /// details pane last showed.
     pub(super) file_icons_shown: Cell<u32>,

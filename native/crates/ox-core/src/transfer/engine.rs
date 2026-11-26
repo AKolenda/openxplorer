@@ -1056,8 +1056,11 @@ impl TransferEngine {
         }
         // XFER-013: the copy reaches its drive before an original goes, so
         // a USB stick pulled, or the power lost, right after the move does
-        // not lose both. A drive that cannot write it out keeps them all.
-        destination.flush().map_err(|error| {
+        // not lose both. A drive that cannot write it out keeps them all, and
+        // so does an item at the copy's place that is not the copy published
+        // there, recorded before publication (the drive went, and its mount
+        // point leads onto the disk below).
+        destination.flush(&staging.published).map_err(|error| {
             TransferError::RecoveryRequired(crate::i18n::format_message(
                 "The copy at {uri} could not be written to its drive, so the original was kept. {error}",
                 &[("uri", &destination.uri()), ("error", &error.to_string())],

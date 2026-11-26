@@ -99,7 +99,10 @@ impl RadioCards {
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |_, key, _, modifiers| {
-                if !modifiers.is_empty() {
+                // Caps Lock and Num Lock make no other key: only the
+                // shortcut modifiers do, as GTK's own accelerators count
+                // them.
+                if modifiers.intersects(gtk::accelerator_get_default_mod_mask()) {
                     return glib::Propagation::Proceed;
                 }
                 let step: isize = match key {

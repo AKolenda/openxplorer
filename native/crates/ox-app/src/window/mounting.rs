@@ -24,6 +24,7 @@ use ox_core::network::{mount_volume, NetworkError, WriteActivity};
 
 use crate::devices::Removal;
 use crate::dialog::DialogButton;
+use crate::history::HistoryMark;
 use crate::locations::Page;
 use crate::window::{ButtonStyle, Dialog};
 
@@ -34,12 +35,14 @@ use super::BrowserWindow;
 /// were when the drive could not be removed.
 #[derive(Debug)]
 pub(super) struct MovedTabs {
-    /// The home folder they were moved to.
-    home: String,
-    /// The tabs behind the one in front that were on the drive.
-    behind: Vec<TabId>,
-    /// Whether the tab in front was on the drive.
-    front: bool,
+    /// The tabs behind the one in front that were on the drive, each with
+    /// where its history stood right after the step to Home was added:
+    /// only that step is taken back.
+    behind: Vec<(TabId, HistoryMark)>,
+    /// The tab that was in front, when it was on the drive, with its
+    /// history's mark too: kept by its id, since the user may show another
+    /// tab while the removal runs.
+    front: Option<(TabId, HistoryMark)>,
 }
 
 /// The note of "Disconnect this mount?", under the location.
@@ -358,45 +361,67 @@ impl BrowserWindow {
     pub(super) fn move_tabs_from(&self, root: &str, home: &str) -> MovedTabs {
         let home = home.to_owned();
         let mut behind = Vec::new();
-        let (stale, is_active_inside): (Vec<gio::ListStore>, bool) = {
+        let (stale, front): (Vec<gio::ListStore>, Option<TabId>) = {
             let mut session = self.imp().session.borrow_mut();
             let active = session.active_id();
-            let is_active_inside = session.active().is_some_and(|tab| is_inside(tab.uri(), root));
+            let front = session
+                .active()
+                .filter(|tab| is_inside(tab.uri(), root))
+                .map(|tab| tab.id);
             let mut stale = Vec::new();
             session.change_panes(|tab| {
                 if Some(tab.id) != active && is_inside(tab.uri(), root) && tab.history.push(&home) {
-                    behind.push(tab.id);
+                    behind.push((tab.id, tab.history.mark()));
                     tab.forget_location_state();
                     stale.push(tab.mark_stale());
                 }
             });
-            (stale, is_active_inside)
+            (stale, front)
         };
         self.change_model(|| {
             for items in &stale {
                 items.remove_all();
             }
         });
-        if is_active_inside {
+        if front.is_some() {
             self.navigate_or_report(&home);
         }
+        // The step the navigation added, if it went to Home.
+        let front = front.and_then(|id| {
+            let session = self.imp().session.borrow();
+            let tab = session.tab(id).filter(|tab| tab.uri() == home)?;
+            Some((id, tab.history.mark()))
+        });
         self.render_tabs();
-        MovedTabs {
-            home,
-            behind,
-            front: is_active_inside,
-        }
+        MovedTabs { behind, front }
     }
 
     /// Puts the tabs `moved` to Home back on the folders they showed,
-    /// unless they left Home meanwhile: the tab in front goes back, and a
-    /// tab behind it lists its folder again when it is next shown.
+    /// unless they left Home meanwhile: the tab that was in front goes
+    /// back, and a tab behind it lists its folder again when it is next
+    /// shown. The user may have shown another tab while the drive was
+    /// being removed: the tab that was in front is the one put back,
+    /// found by its id, and goes back as a tab behind does when it is no
+    /// longer in front; another tab now in front at Home stays there. Only
+    /// the very step to Home the removal added is taken back, by the mark
+    /// its history had then: a tab the user took elsewhere and back to Home
+    /// meanwhile keeps its own, newer step.
     fn return_moved_tabs(&self, moved: &MovedTabs) {
+        let active = self.imp().session.borrow().active_id();
+        let front_in_front = moved.front.is_some_and(|(id, _)| Some(id) == active);
         let stale: Vec<gio::ListStore> = {
             let mut session = self.imp().session.borrow_mut();
             let mut stale = Vec::new();
             session.change_panes(|tab| {
-                if moved.behind.contains(&tab.id) && tab.uri() == moved.home && tab.history.drop_last() {
+                let front = moved.front.filter(|(id, _)| *id == tab.id && !front_in_front);
+                let mark = moved
+                    .behind
+                    .iter()
+                    .find(|(id, _)| *id == tab.id)
+                    .copied()
+                    .or(front)
+                    .map(|(_, mark)| mark);
+                if mark.is_some_and(|mark| tab.history.drop_last_at(mark)) {
                     tab.forget_location_state();
                     stale.push(tab.mark_stale());
                 }
@@ -408,8 +433,11 @@ impl BrowserWindow {
                 items.remove_all();
             }
         });
-        let front_at_home = self.current_uri().is_some_and(|uri| uri == moved.home);
-        if moved.front && front_at_home {
+        let unmoved_since = moved.front.is_some_and(|(id, mark)| {
+            let session = self.imp().session.borrow();
+            session.tab(id).is_some_and(|tab| tab.history.mark() == mark)
+        });
+        if front_in_front && unmoved_since {
             self.go_history(Direction::Backward);
         }
         self.render_tabs();

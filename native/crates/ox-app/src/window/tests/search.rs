@@ -589,6 +589,10 @@ fn a_results_folder_opens_in_a_new_tab_or_window_with_it_selected() {
     let selected = window.folder_model().selected_items();
     let names: Vec<&str> = selected.iter().map(|item| item.entry().name.as_str()).collect();
     assert_eq!(names, ["deep notes.txt"]);
+    assert!(
+        window.remembers_session(),
+        "a browsing window \"Reopen my tabs\" reopens, as any new one"
+    );
 }
 
 /// parity: SRCH-020

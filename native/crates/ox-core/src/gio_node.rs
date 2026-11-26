@@ -318,13 +318,13 @@ impl Node for GioNode {
         Ok(())
     }
 
-    fn flush(&self) -> Result<(), TransferError> {
+    fn flush(&self, published: &[ItemIdentity]) -> Result<(), TransferError> {
         // Only real local items: a GVfs FUSE path of a share or phone is
         // written through by its backend.
         let Some(path) = self.file.path().filter(|_| self.file.has_uri_scheme("file")) else {
             return Ok(());
         };
-        flush_file_system(&path)
+        flush_file_system(&path, published)
     }
 
     fn filesystem(&self, cancel: Option<&Cancellation>) -> Option<FilesystemInfo> {
@@ -361,19 +361,64 @@ impl Node for GioNode {
     }
 }
 
-/// Writes out the file system that holds the item at `path` with
-/// `syncfs(2)`, through its folder: the item itself may be a link.
+/// Writes out the file system that holds the item at `path`, which must be
+/// one of `published` (by device and inode, recorded before the item was
+/// published), with `syncfs(2)` through its folder: the item itself may be
+/// a link, or a file its owner cannot read.
+///
+/// The folder is opened first and the item looked up through that open
+/// folder, so what is written out is the file system the copy is on. A
+/// USB stick pulled out between the copy and this flush may be unmounted
+/// meanwhile (udisks unmounts a drive that went away), and its mount point
+/// then leads onto the disk below, whose folder may hold an item of the
+/// same name: flushing that disk would succeed and say nothing of the
+/// copy, and the move would then remove the original. So unless the item
+/// found is the one published, on the file system of the folder opened,
+/// nothing is taken as written out and the move keeps its original. The
+/// open folder holds its file system, even one unmounted lazily since, so
+/// the flush reaches the drive the item was found on.
 ///
 /// # Errors
 ///
-/// The folder cannot be opened, or the drive reports a write error.
-fn flush_file_system(path: &std::path::Path) -> Result<(), TransferError> {
-    use rustix::fs::{Mode, OFlags};
-    let folder = path.parent().unwrap_or(path);
+/// The folder cannot be opened, the item in it is not one of `published`
+/// or is on another file system, or the drive reports a write error.
+fn flush_file_system(path: &std::path::Path, published: &[ItemIdentity]) -> Result<(), TransferError> {
+    use rustix::fs::{AtFlags, Mode, OFlags};
+    // "The device is not connected.": the item found is not the copy the
+    // move published, or not on its drive.
+    let not_the_copy = || TransferError::from(std::io::Error::from(rustix::io::Errno::NODEV));
+    let (Some(folder), Some(name)) = (path.parent(), path.file_name()) else {
+        return Err(not_the_copy());
+    };
     let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC;
     let opened = rustix::fs::open(folder, flags, Mode::empty()).map_err(std::io::Error::from)?;
+    let held = rustix::fs::fstat(&opened).map_err(std::io::Error::from)?;
+    // The copy must be there before the flush, and still after it: one
+    // removed or replaced while it was written out was not written out.
+    let is_still_the_copy = || -> Result<bool, TransferError> {
+        let item =
+            rustix::fs::statat(&opened, name, AtFlags::SYMLINK_NOFOLLOW).map_err(std::io::Error::from)?;
+        let is_published = published
+            .iter()
+            .any(|identity| is_same_item(*identity, item.st_dev, item.st_ino));
+        Ok(is_published && item.st_dev == held.st_dev)
+    };
+    if !is_still_the_copy()? {
+        return Err(not_the_copy());
+    }
     rustix::fs::syncfs(&opened).map_err(std::io::Error::from)?;
+    if !is_still_the_copy()? {
+        return Err(not_the_copy());
+    }
     Ok(())
+}
+
+/// Whether `identity` is the item on device `device` with inode `inode`.
+/// GIO reports a device number in 32 bits (`unix::device`), so only those
+/// are compared when the identity came from it.
+fn is_same_item(identity: ItemIdentity, device: u64, inode: u64) -> bool {
+    let low = |device: u64| device & u64::from(u32::MAX);
+    identity.inode == inode && (identity.device == device || identity.device == low(device))
 }
 
 /// True when both URIs name the same host or device, like comparing
@@ -394,4 +439,57 @@ fn byte_count(value: i64) -> u64 {
 /// The GIO cancellable behind an optional cancellation, for GIO calls.
 fn gio_cancellable(cancel: Option<&Cancellation>) -> Option<&gio::Cancellable> {
     cancel.map(Cancellation::cancellable)
+}
+
+#[cfg(test)]
+mod flush_tests {
+    use std::os::unix::fs::MetadataExt;
+
+    use super::{flush_file_system, ItemIdentity};
+    use crate::transfer::Node;
+
+    /// Who the item at `path` is, as GIO reports it.
+    fn identity_of(path: &std::path::Path) -> ItemIdentity {
+        let node = super::GioNode::new(&crate::location::file_uri(path));
+        node.info(None).expect("its info").identity.expect("an identity")
+    }
+
+    /// A copy is written out through the folder it is in while it is the
+    /// item published there; one no longer there, or replaced by another
+    /// item of the same name, as when its drive was unmounted and the
+    /// folder's name leads onto the disk below that holds such an item, is
+    /// refused, so a move by copying keeps its original.
+    ///
+    /// parity: XFER-013
+    #[test]
+    fn a_copy_is_written_out_only_while_its_folder_still_holds_it() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let copy = folder.path().join("Report.txt");
+        std::fs::write(&copy, "fictional report").expect("the copy");
+        let published = [identity_of(&copy)];
+        let node = super::GioNode::new(&crate::location::file_uri(&copy));
+
+        assert!(node.flush(&published).is_ok(), "the copy is written out");
+        assert!(
+            node.flush(&[]).is_err(),
+            "an item not known to be published is not"
+        );
+
+        // Another item now has the copy's name: same folder, same disk.
+        let other = folder.path().join("Other report.txt");
+        std::fs::write(&other, "another fictional report").expect("another item");
+        let first_inode = std::fs::metadata(&copy).expect("the copy").ino();
+        std::fs::rename(&other, &copy).expect("the other item takes the name");
+        assert_ne!(std::fs::metadata(&copy).expect("the item").ino(), first_inode);
+        assert!(
+            flush_file_system(&copy, &published).is_err(),
+            "another item under the copy's name is not taken as written out"
+        );
+
+        std::fs::remove_file(&copy).expect("the item goes");
+        assert!(
+            flush_file_system(&copy, &published).is_err(),
+            "a copy no longer in its folder is not taken as written out"
+        );
+    }
 }

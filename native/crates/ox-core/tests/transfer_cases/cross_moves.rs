@@ -9,7 +9,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use ox_core::transfer::{
-    Cancellation, ConflictPolicy, FilesystemInfo, Node, TransferEngine, TransferError, UnstorableAnswer,
+    Cancellation, ConflictPolicy, FilesystemInfo, ItemIdentity, Node, TransferEngine, TransferError,
+    UnstorableAnswer,
 };
 
 use crate::transfer_support::{
@@ -35,6 +36,10 @@ enum Event {
     /// The drive cannot write out what it holds in memory (the USB stick
     /// was pulled after the copy was published).
     FlushFails,
+    /// The published copy is no longer at its place, another folder of its
+    /// name is, as when the drive went and its mount point leads onto the
+    /// disk below.
+    ReplacedBeforeFlush,
 }
 
 /// A destination on another file system: the user's items cannot be moved
@@ -118,13 +123,21 @@ impl Provider for OtherFilesystem {
         node.local_delete()
     }
 
-    fn flush(&self, node: &LocalNode) -> Result<(), TransferError> {
+    fn flush(&self, node: &LocalNode, published: &[ItemIdentity]) -> Result<(), TransferError> {
         if node.local_path().starts_with(&self.source_folder) {
             return Ok(());
         }
         if self.event == Event::FlushFails {
             return Err(TransferError::failed("Input/output error."));
         }
+        if self.event == Event::ReplacedBeforeFlush {
+            // The published folder goes, and another of its name is there.
+            let path = node.local_path();
+            fs::rename(path, path.with_file_name("album, published")).unwrap();
+            fs::create_dir(path).unwrap();
+            write(&path.join("other.jpg"), "another photo");
+        }
+        node.local_flush(published)?;
         let name = node
             .local_path()
             .file_name()
@@ -363,4 +376,27 @@ fn the_copy_reaches_its_drive_before_an_original_is_removed() {
     assert!(failed.errors[0].contains(&file_uri(&copy)), "{failed:?}");
     assert!(failed.errors[0].contains("the original was kept"), "{failed:?}");
     fixture.assert_no_staging();
+}
+
+/// What is written out before an original goes is the copy the move
+/// published, by the device and inode recorded before publication: when
+/// another folder of its name is at its place by then, as the disk below
+/// a mount point of a drive that went can hold, nothing is taken as
+/// written out and every original is kept.
+///
+/// parity: XFER-013
+#[test]
+fn an_original_is_kept_when_another_item_took_the_copys_place() {
+    let fixture = Fixture::new();
+    let source = album(&fixture);
+    let mut engine = consenting(
+        &fixture,
+        Arc::new(OtherFilesystem::new(&fixture, Event::ReplacedBeforeFlush)),
+    );
+
+    let failed = fixture.run(&mut engine, &[&source], Request::Move(ConflictPolicy::Skip));
+
+    assert_eq!(list(&source), ["one.jpg", "two.jpg"], "every original is kept");
+    assert_eq!(failed.errors.len(), 1, "{failed:?}");
+    assert!(failed.errors[0].contains("the original was kept"), "{failed:?}");
 }

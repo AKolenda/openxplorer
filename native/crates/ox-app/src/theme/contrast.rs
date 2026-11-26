@@ -60,6 +60,9 @@ struct Sources {
     settings: Option<gio::Settings>,
     /// Whether the portal's contrast asks for more.
     portal: Cell<bool>,
+    /// Whether a `SettingChanged` signal for the contrast arrived, which
+    /// is newer than the first read's reply.
+    portal_signal_seen: Cell<bool>,
     /// Whether the GTK theme the user chose is a high-contrast one.
     theme: bool,
     /// Hears every later change.
@@ -75,6 +78,21 @@ impl Sources {
             .as_ref()
             .is_some_and(|settings| settings.boolean(HIGH_CONTRAST_KEY));
         Contrast::from_asked(gnome || self.portal.get() || self.theme)
+    }
+
+    /// Records the portal's `value` from a `SettingChanged` signal.
+    fn record_portal_change(&self, value: &glib::Variant) {
+        self.portal_signal_seen.set(true);
+        self.record_portal(value);
+    }
+
+    /// Records the portal's `value` read at the start, unless a signal
+    /// came while the read was on its way: its value is newer, as
+    /// `SystemScheme::follow_portal` keeps it for the color scheme.
+    fn record_portal_reply(&self, value: &glib::Variant) {
+        if !self.portal_signal_seen.get() {
+            self.record_portal(value);
+        }
     }
 
     /// Records the portal's `value` and reports the contrast when it
@@ -130,6 +148,7 @@ impl ContrastSetting {
         let sources = Rc::new(Sources {
             settings,
             portal: Cell::new(false),
+            portal_signal_seen: Cell::new(false),
             theme: theme == Contrast::High,
             on_change: Box::new(on_change),
             subscription: std::cell::RefCell::default(),
@@ -181,7 +200,7 @@ async fn follow_portal(sources: Weak<Sources>, connection: &gio::DBusConnection,
                 return;
             };
             if namespace == super::system::APPEARANCE_NAMESPACE && key == PORTAL_CONTRAST_KEY {
-                sources.record_portal(&value);
+                sources.record_portal_change(&value);
             }
         },
     );
@@ -196,7 +215,7 @@ async fn follow_portal(sources: Weak<Sources>, connection: &gio::DBusConnection,
     )
     .await;
     if let (Some(sources), Some(value)) = (sources.upgrade(), value) {
-        sources.record_portal(&value);
+        sources.record_portal_reply(&value);
     }
 }
 
@@ -268,5 +287,29 @@ mod tests {
         let themed = ContrastSetting::with_portal(Contrast::High, |_| {}, Some(&portal.name()));
         crate::test_support::harness::wait_for(std::time::Duration::from_millis(200));
         assert_eq!(themed.contrast(), Contrast::High);
+    }
+
+    /// A change the portal signals while the first read is on its way
+    /// wins over that read's older reply, as the color scheme's does: high
+    /// contrast stays as the desktop last said, not as it was a moment
+    /// before.
+    ///
+    /// parity: ACC-011
+    #[gtk::test]
+    fn a_signalled_change_wins_over_an_older_first_reply() {
+        let setting = ContrastSetting::with_portal(Contrast::Normal, |_| {}, None);
+        let sources = &setting.sources;
+        let gnome = sources
+            .settings
+            .as_ref()
+            .is_some_and(|settings| settings.boolean(HIGH_CONTRAST_KEY));
+        if gnome {
+            return; // GNOME's own key asks for it whatever the portal says.
+        }
+        sources.record_portal_change(&1_u32.to_variant());
+        sources.record_portal_reply(&0_u32.to_variant());
+        assert_eq!(setting.contrast(), Contrast::High, "the signal is newer");
+        sources.record_portal_change(&0_u32.to_variant());
+        assert_eq!(setting.contrast(), Contrast::Normal, "a later signal counts");
     }
 }

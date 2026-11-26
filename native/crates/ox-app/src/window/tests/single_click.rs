@@ -15,7 +15,7 @@ use ox_core::settings::{PreferencesUpdate, Settings};
 use super::gallery::{gallery_window, write_modified, PicturesHome};
 use super::right_drag::{blank_on_screen, item_on_screen, HOLD, PROBE};
 use crate::folder_view::cells::FileCell;
-use crate::test_support::harness::{wait_for, wait_for_frames, wait_until, Fixture, TestWindow};
+use crate::test_support::harness::{descendants, wait_for, wait_for_frames, wait_until, Fixture, TestWindow};
 use crate::test_support::pointer::{screen_point, Button, Pointer};
 use crate::window::single_click::{ClickMode, HOVER_SELECT_DELAY, POINTED_CLASS};
 
@@ -278,6 +278,95 @@ fn a_key_takes_the_selection_over_from_pointing() {
         test.selected_names(),
         [next],
         "the key's selection stays; pointing selects nothing"
+    );
+    pointer.move_to(720, 500);
+}
+
+/// With single-click on, the list scrolled under a resting pointer within
+/// the time pointing takes to select leaves the item scrolled away
+/// unselected: the item under the pointer once the time is up is selected
+/// instead. The item first pointed at used to be selected though another
+/// one was under the pointer by then.
+///
+/// parity: SEL-018
+#[gtk::test]
+fn scrolling_under_a_resting_pointer_selects_the_item_now_under_it() {
+    let fixture = Fixture::empty();
+    for number in 0..80 {
+        fixture.write(&format!("Notes {number:02}.txt"));
+    }
+    let mut pointer = Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    single_click(&test, PreferencesUpdate::default());
+    test.activate("view", Some("details"));
+    wait_for_frames(&test.window, 3);
+    test.window.folder_model().select_none();
+    let pane = test.window.folder_pane();
+    let view = pane.input_widget();
+    // Where the pointer rests, in the view, as `item_on_screen` aims.
+    let first_bounds = pane
+        .owners()
+        .file_cell_at(test.position_of("Notes 03.txt"), &view)
+        .and_then(|cell| cell.compute_bounds(&view))
+        .expect("the item is laid out");
+    let resting = gtk::graphene::Point::new(
+        first_bounds.x() + 30.0,
+        first_bounds.y() + first_bounds.height() / 2.0,
+    );
+    let under_the_pointer = || {
+        descendants::<FileCell>(&view)
+            .into_iter()
+            .filter(|cell| cell.is_mapped() && !cell.name().is_empty())
+            .find(|cell| {
+                cell.compute_bounds(&view)
+                    .is_some_and(|bounds| bounds.contains_point(&resting))
+            })
+            .map(|cell| cell.name())
+    };
+
+    let first = item_on_screen(&mut pointer, &test, "Notes 03.txt");
+    // Off the list: the window's edge.
+    let away = screen_point(&mut pointer, &test.window, (4.0, 4.0), PROBE);
+    let adjustment = pane.details().vadjustment();
+    // The case needs the new row laid out under the resting pointer before
+    // pointing's delay is up; a runner too slow to lay it out in that time
+    // shows nothing of the change, so the case is set up again, a few
+    // times at most, rather than judged on a race.
+    let mut judged = None;
+    for _ in 0..5 {
+        adjustment.set_value(adjustment.lower());
+        wait_until("the first item under the pointer's place", || {
+            under_the_pointer().as_deref() == Some("Notes 03")
+        });
+        pointer.move_to(away.0, away.1);
+        wait_for_frames(&test.window, 2);
+        test.window.folder_model().select_none();
+        // The motion onto the item arms pointing's delay.
+        let armed = std::time::Instant::now();
+        pointer.move_to(first.0, first.1);
+        wait_until("the item to be pointed at", || {
+            cell_of(&test, "Notes 03.txt").has_css_class(POINTED_CLASS)
+        });
+        adjustment.set_value(adjustment.upper() - adjustment.page_size());
+        wait_until("another item laid out under the pointer", || {
+            under_the_pointer().is_some_and(|name| name != "Notes 03")
+        });
+        let in_time = armed.elapsed() < HOVER_SELECT_DELAY * 3 / 4 && test.selected_names().is_empty();
+        if in_time {
+            judged = under_the_pointer();
+            break;
+        }
+    }
+    let now_under = judged.expect("the row laid out under the pointer within pointing's delay");
+    wait_until("the item now under the pointer to be selected", || {
+        test.selected_names() == [format!("{now_under}.txt")]
+    });
+    pause();
+
+    assert_eq!(
+        test.selected_names(),
+        [format!("{now_under}.txt")],
+        "only the item under the pointer is selected, never the one scrolled away"
     );
     pointer.move_to(720, 500);
 }

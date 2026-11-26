@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ox_core::transfer::{Cancellation, FilesystemInfo, Node, NodeInfo, TransferError};
+use ox_core::transfer::{Cancellation, FilesystemInfo, ItemIdentity, Node, NodeInfo, TransferError};
 
 use super::LocalNode;
 use crate::transfer_support::file_uri;
@@ -127,11 +127,12 @@ pub trait Provider: Send + Sync + 'static {
         }
     }
 
-    /// [`Node::flush`]: nothing to write out by default.
-    fn flush(&self, node: &LocalNode) -> Result<(), TransferError> {
+    /// [`Node::flush`]: nothing to write out by default, but the item must
+    /// be one of `published` ([`LocalNode::local_flush`]).
+    fn flush(&self, node: &LocalNode, published: &[ItemIdentity]) -> Result<(), TransferError> {
         match self.base() {
-            Some(base) => base.flush(node),
-            None => Ok(()),
+            Some(base) => base.flush(node, published),
+            None => node.local_flush(published),
         }
     }
 

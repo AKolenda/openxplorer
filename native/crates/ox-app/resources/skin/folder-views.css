@@ -99,6 +99,14 @@ columnview.files > header > button.custom-sort {
    whose padding is even once the 14px ends are left out, so it stands
    over the column's middle. */
 .windows-column-headers columnview.files > header > button > box { margin-bottom: 4px; }
+/* Compact view's titles are 6 pixels shorter (theme/fonts.rs), and the
+   chevron keeps its place at their top: the text, centered, would come 3
+   pixels higher and touch it. It sits a pixel lower than centered
+   instead, its capitals again 3 pixels clear of the chevron. */
+window.compact-density.windows-column-headers columnview.files > header > button > box {
+  margin-bottom: 0;
+  margin-top: 2px;
+}
 .windows-column-headers columnview.files > header > button.sort-ascending,
 .windows-column-headers columnview.files > header > button.sort-descending {
   color: @ox_muted;
@@ -791,9 +799,13 @@ gallery.files > child.gallery-tile.keyboard-focus {
   outline: 2px solid @ox_item_focus_outer;
   outline-offset: 1px;
 }
-gallery.files > child.gallery-tile.cut > picture,
-gallery.files > child.gallery-tile.drag-source > picture,
-gallery.files > child.gallery-tile.hidden-item > picture { opacity: .5; }
+/* A photo cut to the clipboard, dragged out or hidden fades. The cells'
+   classes are on the tile's picture itself (CellOwners::style_cell styles
+   the picture, which has no .item-art inside), so the other views' `.cut
+   .item-art` never faded a cut photo. */
+gallery.files > child.gallery-tile > picture.cut,
+gallery.files > child.gallery-tile > picture.drag-source,
+gallery.files > child.gallery-tile > picture.hidden-item { opacity: .5; }
 .gallery-view scrubber { min-width: 44px; margin: 0 4px 12px 0; color: @ox_muted; }
 .gallery-view scrubber .scrubber-arrow { min-height: 20px; min-width: 20px; padding: 2px; }
 .gallery-view scrubber .scrubber-track { min-width: 40px; }

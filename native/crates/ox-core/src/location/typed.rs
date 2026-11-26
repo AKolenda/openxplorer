@@ -14,20 +14,23 @@ use std::borrow::Cow;
 
 /// The text `typed` with one pair of surrounding double quotes removed
 /// and its environment variables expanded through `variable`, which gives
-/// a variable's value or `None` when it is not set.
+/// the value of the variable named, or `None` when it is not set: with
+/// `any_case`, a variable whose name differs only in case counts, as
+/// Windows' variables are named in any case ([`environment_variable`]).
 ///
-/// `%NAME%` is expanded anywhere; `$NAME` only where the name ends the
-/// text or is followed by `/`, so a name such as `$HOME notes` stays as
-/// typed; `${NAME}` anywhere. An empty value expands to nothing.
-pub fn typed_address(typed: &str, variable: impl Fn(&str) -> Option<String>) -> Cow<'_, str> {
+/// `%NAME%` is expanded anywhere, its name in any case; `$NAME` only where
+/// the name ends the text or is followed by `/`, so a name such as `$HOME
+/// notes` stays as typed; `${NAME}` anywhere. The `$` forms keep the case
+/// of the name, as a Linux shell does. An empty value expands to nothing.
+pub fn typed_address(typed: &str, variable: impl Fn(&str, bool) -> Option<String>) -> Cow<'_, str> {
     let unquoted = without_quotes(typed);
     if !unquoted.contains(['%', '$']) {
         return unquoted;
     }
     let lookup = |name: &str, any_case: bool| {
-        let value = variable(name).or_else(|| any_case.then(|| variable(&name.to_uppercase())).flatten());
+        let value = variable(name, any_case);
         let is_home_alias = any_case && name.eq_ignore_ascii_case("USERPROFILE");
-        value.or_else(|| is_home_alias.then(|| variable("HOME")).flatten())
+        value.or_else(|| is_home_alias.then(|| variable("HOME", false)).flatten())
     };
     let mut expanded = String::with_capacity(unquoted.len());
     let mut rest: &str = &unquoted;
@@ -48,6 +51,37 @@ pub fn typed_address(typed: &str, variable: impl Fn(&str) -> Option<String>) -> 
     } else {
         Cow::Owned(expanded)
     }
+}
+
+/// The value of this process's environment variable `name`, for
+/// [`typed_address`]: the one of that very name, else, with `any_case`, the
+/// first whose name differs from it only in ASCII case, as Windows finds
+/// `%PROJECTROOT%` for a variable set as `projectRoot`. `None` when none is
+/// set, or its value is no UTF-8.
+pub fn environment_variable(name: &str, any_case: bool) -> Option<String> {
+    variable_in(std::env::vars_os(), name, any_case)
+}
+
+/// The value of `name` among `variables`, as [`environment_variable`]
+/// finds it in the environment.
+fn variable_in(
+    variables: impl IntoIterator<Item = (std::ffi::OsString, std::ffi::OsString)>,
+    name: &str,
+    any_case: bool,
+) -> Option<String> {
+    let mut same_but_case = None;
+    for (key, value) in variables {
+        let Some(key) = key.to_str() else {
+            continue;
+        };
+        if key == name {
+            return value.into_string().ok();
+        }
+        if any_case && same_but_case.is_none() && key.eq_ignore_ascii_case(name) {
+            same_but_case = Some(value);
+        }
+    }
+    same_but_case.and_then(|value| value.into_string().ok())
 }
 
 /// `typed` without one pair of double quotes around all of it, spaces
@@ -101,4 +135,45 @@ fn is_variable_name(name: &str) -> bool {
         .next()
         .is_some_and(|first| first.is_ascii_alphabetic() || first == '_');
     starts_well && characters.all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '(' | ')'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `%NAME%` finds a variable whatever the case of its name, as Windows
+    /// does, preferring the one of that very name; `$NAME` and `${NAME}`
+    /// keep their case, as a shell does. `%USERPROFILE%` stands for
+    /// `HOME` when it is not set itself.
+    ///
+    /// parity: NAV-033
+    #[test]
+    fn percent_variables_are_found_in_any_case_and_dollar_ones_as_typed() {
+        let variables = [
+            ("projectRoot", "/srv/example/project"),
+            ("PROJECTROOT", "/srv/example/upper"),
+            ("teamShare", "/srv/example/team"),
+            ("HOME", "/home/demo"),
+        ];
+        let variable = |name: &str, any_case: bool| {
+            let pairs = variables
+                .iter()
+                .map(|(key, value)| ((*key).into(), (*value).into()));
+            variable_in(pairs, name, any_case)
+        };
+        let expand = |typed: &str| typed_address(typed, variable).into_owned();
+
+        assert_eq!(expand("%TEAMSHARE%/Plans"), "/srv/example/team/Plans");
+        assert_eq!(expand("%teamshare%"), "/srv/example/team");
+        assert_eq!(
+            expand("%projectRoot%"),
+            "/srv/example/project",
+            "its very name first"
+        );
+        assert_eq!(expand("%PROJECTROOT%"), "/srv/example/upper");
+        assert_eq!(expand("$TEAMSHARE/Plans"), "$TEAMSHARE/Plans", "a shell's case");
+        assert_eq!(expand("${teamShare}/Plans"), "/srv/example/team/Plans");
+        assert_eq!(expand("%UserProfile%/Notes"), "/home/demo/Notes");
+        assert_eq!(expand("%NOT_SET%/x"), "%NOT_SET%/x");
+    }
 }

@@ -90,7 +90,9 @@ impl BrowserWindow {
         Ok(())
     }
 
-    /// Opens `folder` in a new window, with `uri` selected there.
+    /// Opens `folder` in a new window, with `uri` selected there: a
+    /// browsing window as any other new one, at the saved size and among
+    /// the windows "Reopen my tabs" reopens.
     fn open_located_window(&self, folder: &str, uri: String) -> Result<(), LocationError> {
         let Some(app) = self.application() else {
             return Ok(());
@@ -101,7 +103,7 @@ impl BrowserWindow {
             return Err(error);
         }
         window.locate_in_active_tab(uri);
-        window.present();
+        window.present_as_new_window();
         Ok(())
     }
 

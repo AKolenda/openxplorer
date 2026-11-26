@@ -94,6 +94,22 @@ impl Direction {
     }
 }
 
+/// Which listing of a tab puts the keyboard on its folder's first item:
+/// the request is tied to the listing of the navigation that asked, so a
+/// landing page, which lists nothing, a refused address or a navigation
+/// that superseded it never leaves it for a later folder.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) enum FirstItemFocus {
+    /// None.
+    #[default]
+    None,
+    /// The next listing to start: the tab has not started listing the
+    /// folder yet, as a tab waiting to mount a share has not.
+    NextListing,
+    /// The listing of this generation ([`Tab::begin_load`]).
+    Listing(u64),
+}
+
 /// One tab: its history, its items and the state of its listing.
 #[derive(Debug)]
 #[expect(
@@ -128,10 +144,10 @@ pub(super) struct Tab {
     /// The next listing starts renaming the selected item in place: Tab
     /// moved on from a rename (OPS-012).
     pub renames_selection: bool,
-    /// The next listing of a location the tab goes to puts the keyboard
-    /// on its first item without selecting it: another application opened
-    /// the folder, or it was typed into the address bar (SEL-020).
-    pub focuses_first_item: bool,
+    /// Which listing puts the keyboard on its folder's first item without
+    /// selecting it: another application opened the folder, or it was
+    /// typed into the address bar (SEL-020).
+    pub first_item_focus: FirstItemFocus,
     /// The vertical scroll position, restored when the tab is shown again.
     pub scroll: f64,
     /// The URI of the item with keyboard focus, which gets it back when
@@ -193,7 +209,7 @@ impl Tab {
             selected: Vec::new(),
             reveals_selection: false,
             renames_selection: false,
-            focuses_first_item: false,
+            first_item_focus: FirstItemFocus::default(),
             scroll: 0.0,
             focused: None,
             scroll_after_listing: None,
@@ -237,7 +253,33 @@ impl Tab {
         self.generation = self.generation.wrapping_add(1);
         self.listing_state.begin();
         self.error = None;
+        // A request for the next listing becomes this one's; a request for
+        // an earlier listing ends, as this load supersedes it.
+        self.first_item_focus = match self.first_item_focus {
+            FirstItemFocus::NextListing => FirstItemFocus::Listing(self.generation),
+            FirstItemFocus::None | FirstItemFocus::Listing(_) => FirstItemFocus::None,
+        };
         self.generation
+    }
+
+    /// Asks the listing running now, or else the next one, to put the
+    /// keyboard on the first item it lists ([`FirstItemFocus`]); nothing
+    /// when the tab is listed already, as a landing page is as soon as it
+    /// shows.
+    pub(super) fn focus_first_item_of_listing(&mut self) {
+        self.first_item_focus = match self.listing_state {
+            ListingState::Listing { .. } => FirstItemFocus::Listing(self.generation),
+            ListingState::NotListed => FirstItemFocus::NextListing,
+            ListingState::Listed => FirstItemFocus::None,
+        };
+    }
+
+    /// Whether the listing of `generation`, which just ended, was asked to
+    /// put the keyboard on its first item; the request ends either way.
+    pub(super) fn takes_first_item_focus(&mut self, generation: u64) -> bool {
+        let asked = self.first_item_focus == FirstItemFocus::Listing(generation);
+        self.first_item_focus = FirstItemFocus::None;
+        asked
     }
 
     /// Forgets what belonged to the previous location: the selection and

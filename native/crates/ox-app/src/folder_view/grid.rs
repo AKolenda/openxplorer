@@ -340,9 +340,16 @@ impl IconView {
     /// listing's `position` when the item is in its group's first row and
     /// the heading is above the view, as Windows 11 keeps a group's
     /// heading in sight over its first row; Home so goes back to the top
-    /// of the list (VIEW-022). Nothing while the view is not grouped.
+    /// of the list (VIEW-022). Nothing while the view is not grouped, nor
+    /// in grouped List, whose headings top columns that run sideways: there
+    /// a group's lines of slots are columns on screen and the heading
+    /// shares its first one with the first items, so the rows' heights say
+    /// nothing of where it is, and List's scroll is the sideways one.
     pub(crate) fn show_heading_above(&self, position: u32) {
-        let Some(layout) = self.grouped().and_then(|grouped| grouped.layout()) else {
+        let Some(grouped) = self.grouped().filter(|grouped| !grouped.is_list()) else {
+            return;
+        };
+        let Some(layout) = grouped.layout() else {
             return;
         };
         let Some(group) = layout.group_of(position) else {

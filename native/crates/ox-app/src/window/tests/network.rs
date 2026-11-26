@@ -1175,6 +1175,48 @@ fn the_tabs_on_a_drive_move_home_before_it_is_ejected() {
     );
 }
 
+/// While a drive is being removed the user may show another tab, also one
+/// at Home: when the drive then cannot be removed, the tab that was in
+/// front, moved to Home, goes back to its folder though it is behind now,
+/// and the tab shown stays where it is. The tab shown used to be sent
+/// Back, and the moved tab stayed at Home.
+///
+/// parity: DEV-009
+#[gtk::test]
+fn a_tab_moved_home_goes_back_though_another_tab_was_shown_meanwhile() {
+    use gtk::subclass::prelude::*;
+    let fixture = Fixture::standard();
+    let home = ox_core::location::file_uri(&gtk::glib::home_dir());
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    let drive_tab = test.active_tab().expect("a tab on the drive");
+    test.window
+        .open_tab(&home, TabPlacement::Background)
+        .expect("a tab at Home");
+    let home_tab = {
+        let session = test.window.imp().session.borrow();
+        let tabs = session.tabs().iter().map(|tab| tab.id);
+        tabs.filter(|id| *id != drive_tab).last().expect("the Home tab")
+    };
+    let uri_of = |id| {
+        let session = test.window.imp().session.borrow();
+        session.tab(id).map(|tab| tab.uri().to_owned())
+    };
+
+    test.activate("eject", Some(&fixture.uri()));
+    let moved = uri_of(drive_tab);
+    test.activate_tab(home_tab);
+    message_box_texts("Could not eject");
+
+    assert_eq!(moved, Some(home.clone()), "the drive's tab left it first");
+    assert_eq!(test.active_tab(), Some(home_tab));
+    assert_eq!(test.window.current_uri(), Some(home), "the tab shown stays");
+    assert_eq!(
+        uri_of(drive_tab),
+        Some(fixture.uri_of("Documents")),
+        "the moved tab goes back to its folder"
+    );
+}
+
 /// With `OX_NATIVE_CAPTURE_DIR` set, saves the network surfaces for visual
 /// review in both themes: `native-network-discovered-*.png`,
 /// `native-this-pc-saved-share-*.png`, `native-sign-in-*.png`,

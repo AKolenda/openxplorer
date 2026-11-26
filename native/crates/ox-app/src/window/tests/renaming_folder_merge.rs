@@ -217,3 +217,50 @@ fn replacing_a_taken_file_is_undone_with_both_files_back() {
     assert!(fixture.path("Alpha/Sub/c.txt").is_file());
     assert!(!fixture.path("Beta/a.txt").exists());
 }
+
+/// When the emptied Alpha cannot be removed for another reason than an
+/// item left in it, here the folder it is in taking no changes, the
+/// window says so once the items are moved, rather than taking the merge
+/// as done in full; Alpha stays, empty, and nothing is lost.
+///
+/// parity: OPS-008
+#[gtk::test]
+fn a_merged_folder_that_cannot_be_removed_is_said() {
+    use std::os::unix::fs::PermissionsExt;
+
+    /// Gives the folder its permissions back, also when the test fails.
+    struct Unlock(std::path::PathBuf);
+    impl Drop for Unlock {
+        fn drop(&mut self) {
+            let _ = fs::set_permissions(&self.0, fs::Permissions::from_mode(0o755));
+        }
+    }
+
+    let fixture = two_folders(false);
+    let mut pointer = Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("view", Some("details"));
+
+    let question = rename_alpha_to_beta(&test, &mut pointer);
+    let _unlock = Unlock(fixture.path(""));
+    fs::set_permissions(fixture.path(""), fs::Permissions::from_mode(0o555)).expect("mode");
+    if fs::write(fixture.path("probe"), "").is_ok() {
+        question.press("No");
+        return; // Running as root, which removes anything.
+    }
+    question.press("Yes");
+    wait_until("the items moved", || {
+        fixture.path("Beta/a.txt").is_file() && fixture.path("Beta/Sub/c.txt").is_file()
+    });
+    wait_until("the message", || {
+        test.window
+            .shown_message()
+            .starts_with("The items were moved, but the folder ")
+    });
+
+    let message = test.window.shown_message().to_string();
+    assert!(message.contains("Alpha"), "{message}");
+    assert!(message.contains("Access is denied."), "{message}");
+    assert!(fixture.path("Alpha").is_dir(), "Alpha stays");
+    assert_eq!(text(&fixture, "Beta/a.txt"), "Alpha");
+}

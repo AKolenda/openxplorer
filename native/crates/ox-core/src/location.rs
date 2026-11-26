@@ -85,7 +85,7 @@ pub use parts::{
     canonical_remote_scheme, split_location, LocationKind, LocationParts, CLOUD_SCHEMES, REMOTE_SCHEMES,
 };
 pub use text::{breaks_a_line, without_line_breaks};
-pub use typed::typed_address;
+pub use typed::{environment_variable, typed_address};
 pub use virtual_place::{
     is_virtual_location, normalise_navigation, VirtualPlace, GALLERY_URI, HOME_URI, NETWORK_URI, PC_URI,
     RECENT_LOCATIONS_URI, RECENT_URI, SETTINGS_URI, TRASH_URI,

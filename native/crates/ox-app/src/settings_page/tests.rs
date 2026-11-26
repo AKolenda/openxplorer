@@ -1692,6 +1692,67 @@ fn tab_leaves_the_theme_cards_and_the_arrows_still_choose() {
     wait_until("Tab leaves the theme cards from the new choice", || !in_cards());
 }
 
+/// The capture-phase key controller of `widget`.
+fn capture_keys(widget: &impl IsA<gtk::Widget>) -> gtk::EventControllerKey {
+    widget
+        .observe_controllers()
+        .iter::<gtk::glib::Object>()
+        .filter_map(Result::ok)
+        .filter_map(|controller| controller.downcast::<gtk::EventControllerKey>().ok())
+        .find(|keys| keys.propagation_phase() == gtk::PropagationPhase::Capture)
+        .expect("a capture-phase key controller")
+}
+
+/// Caps Lock and Num Lock make no other key: the theme cards' arrows
+/// still choose, and Tab still leaves the category list, while either is
+/// on. Both took the lock as a held modifier and let GTK's own keys run.
+///
+/// parity: SET-019, ACC-016
+#[gtk::test]
+fn the_settings_keys_work_with_caps_lock_or_num_lock_on() {
+    use gtk::glib::translate::IntoGlib;
+    let _theme = ThemeGuard::keep();
+    let settings = SettingsTest::open();
+    // Before the page shows, which a new pointer would put away.
+    let mut pointer = crate::test_support::pointer::Pointer::connect();
+    settings
+        .page
+        .show_view(SettingsView::Category(Category::Appearance));
+    let system = settings.theme_radio("System");
+    let light = settings.theme_radio("Light");
+    system.activate();
+    wait_until("the cards to be laid out", || light.width() > 0);
+    assert!(system.grab_focus());
+    let (x, y) =
+        crate::test_support::pointer::screen_point(&mut pointer, &settings.test.window, (4.0, 4.0), (8, 8));
+    // The keyboard follows the pointer on the private display. It rests on
+    // the window's edge, where no widget has a tooltip.
+    pointer.move_to(x, y);
+    wait_until("the chosen card to have the keyboard", || system.has_focus());
+    // Caps Lock, and the bit X11 gives Num Lock.
+    let locks = gtk::gdk::ModifierType::LOCK_MASK | gtk::gdk::ModifierType::from_bits_truncate(1 << 4);
+    let press = |keys: &gtk::EventControllerKey, key: gtk::gdk::Key| {
+        keys.emit_by_name::<bool>("key-pressed", &[&key.into_glib(), &0_u32, &locks])
+    };
+    let cards = system
+        .ancestor(super::radio_cards::RadioCards::static_type())
+        .expect("the theme cards");
+
+    assert!(
+        press(&capture_keys(&cards), gtk::gdk::Key::Right),
+        "Right is taken"
+    );
+    assert!(light.is_active(), "and chooses the next card");
+
+    let list = settings.page.imp().category_list.get();
+    let chosen = list.selected_row();
+    assert!(
+        press(&capture_keys(&list), gtk::gdk::Key::Tab),
+        "Tab leaves the list, rather than GTK's list box taking it as Down"
+    );
+    assert_eq!(list.selected_row(), chosen, "no other category opened");
+}
+
 /// "Icons from Windows icon files" is off by default with no file chosen;
 /// turned on with chosen files, it saves both, says how many icons the
 /// files gave, and the navigation pane draws them. The files are
