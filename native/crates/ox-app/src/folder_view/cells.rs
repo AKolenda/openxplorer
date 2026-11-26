@@ -151,20 +151,36 @@ const MOST_DIMENSIONS_KEPT: usize = 4096;
 /// one whose header said nothing.
 type KnownDimensions = std::collections::HashMap<(String, Option<i64>), Option<(i32, i32)>>;
 
-/// A picture whose dimensions are being read, by its URI and time, with
-/// the cells waiting for them, each with the item it showed when it asked.
-type PendingDimensions =
-    std::collections::HashMap<(String, Option<i64>), Vec<(glib::WeakRef<FileCell>, glib::WeakRef<FileItem>)>>;
+/// A picture whose dimensions are to be read: the cells waiting for them,
+/// each with the item it showed when it asked, when it was asked for, and
+/// the read itself.
+#[derive(Default)]
+struct PendingRead {
+    waiting: Vec<(glib::WeakRef<FileCell>, glib::WeakRef<FileItem>)>,
+    asked: u64,
+    read: Option<glib::JoinHandle<()>>,
+}
+
+/// The pictures whose dimensions are to be read, by URI and time.
+type PendingDimensions = std::collections::HashMap<(String, Option<i64>), PendingRead>;
 
 /// How many pictures' headers Content reads at once.
 const DIMENSIONS_READ_AT_ONCE: usize = 2;
 
+/// How many pictures may wait for their dimensions to be read: scrolling
+/// a large folder while slow reads hold the slots drops the ones asked
+/// for longest ago, which are off screen by then, rather than piling up
+/// reads; a row bound again asks again.
+const MOST_DIMENSIONS_PENDING: usize = 64;
+
 thread_local! {
     /// The dimensions found for each picture.
     static DIMENSIONS: std::cell::RefCell<KnownDimensions> = std::cell::RefCell::default();
-    /// The pictures whose dimensions are being read: each is read once,
+    /// The pictures whose dimensions are to be read: each is read once,
     /// however many cells ask while it is.
     static PENDING_DIMENSIONS: std::cell::RefCell<PendingDimensions> = std::cell::RefCell::default();
+    /// How many pictures' dimensions were asked for, which orders them.
+    static DIMENSIONS_ASKED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     /// The slots the reads wait for, so a large folder scrolled through
     /// reads a few headers at a time, those on screen first.
     static DIMENSION_SLOTS: std::rc::Rc<crate::thumbnails::Slots> =
@@ -208,16 +224,17 @@ fn picture_dimensions(uri: &str) -> Option<(i32, i32)> {
 
 /// Reads the dimensions of the picture `key` names, once, a few pictures at
 /// a time, and shows them in each cell that asked while it still shows the
-/// item it asked for. A read waits while none of those cells shows that
-/// item any more, as when the view scrolled on, and is dropped then.
-fn read_dimensions(key: (String, Option<i64>)) {
+/// item it asked for. A read is dropped when none of those cells shows that
+/// item any more, as when the view scrolled on, before it waits for a
+/// slot and again once it has one.
+fn read_dimensions(key: (String, Option<i64>)) -> glib::JoinHandle<()> {
     glib::spawn_future_local(async move {
         let wanted = {
             let key = key.clone();
             move || {
                 PENDING_DIMENSIONS.with_borrow(|pending| {
-                    pending.get(&key).is_some_and(|waiting| {
-                        waiting.iter().any(|(cell, item)| {
+                    pending.get(&key).is_some_and(|pending| {
+                        pending.waiting.iter().any(|(cell, item)| {
                             let (Some(cell), Some(item)) = (cell.upgrade(), item.upgrade()) else {
                                 return false;
                             };
@@ -227,6 +244,10 @@ fn read_dimensions(key: (String, Option<i64>)) {
                 })
             }
         };
+        if !wanted() {
+            PENDING_DIMENSIONS.with_borrow_mut(|pending| pending.remove(&key));
+            return;
+        }
         let slots = DIMENSION_SLOTS.with(std::rc::Rc::clone);
         let uri = key.0.clone();
         // The slot is held until the read ends, those on screen first.
@@ -240,6 +261,7 @@ fn read_dimensions(key: (String, Option<i64>)) {
         };
         let waiting = PENDING_DIMENSIONS
             .with_borrow_mut(|pending| pending.remove(&key))
+            .map(|pending| pending.waiting)
             .unwrap_or_default();
         // Not read: no cell wanted it by its turn; asked again when shown.
         let Some(found) = read else {
@@ -259,7 +281,7 @@ fn read_dimensions(key: (String, Option<i64>)) {
                 cell.show_picture_dimensions(found);
             }
         }
-    });
+    })
 }
 
 /// Where a [`FileCell`] is shown.
@@ -1092,12 +1114,40 @@ impl FileCell {
         // One read for each picture, whichever cells ask while it runs.
         let waiter = (self.downgrade(), item.downgrade());
         let is_new = PENDING_DIMENSIONS.with_borrow_mut(|pending| {
-            let waiting = pending.entry(key.clone()).or_default();
-            waiting.push(waiter);
-            waiting.len() == 1
+            if let Some(read) = pending.get_mut(&key) {
+                read.waiting.push(waiter);
+                return false;
+            }
+            if pending.len() >= MOST_DIMENSIONS_PENDING {
+                let oldest = pending
+                    .iter()
+                    .min_by_key(|(_, read)| read.asked)
+                    .map(|(key, _)| key.clone());
+                if let Some(read) = oldest.and_then(|oldest| pending.remove(&oldest)) {
+                    if let Some(handle) = read.read {
+                        handle.abort();
+                    }
+                }
+            }
+            let asked = DIMENSIONS_ASKED.get().wrapping_add(1);
+            DIMENSIONS_ASKED.set(asked);
+            pending.insert(
+                key.clone(),
+                PendingRead {
+                    waiting: vec![waiter],
+                    asked,
+                    read: None,
+                },
+            );
+            true
         });
         if is_new {
-            read_dimensions(key);
+            let handle = read_dimensions(key.clone());
+            PENDING_DIMENSIONS.with_borrow_mut(|pending| {
+                if let Some(read) = pending.get_mut(&key) {
+                    read.read = Some(handle);
+                }
+            });
         }
     }
 

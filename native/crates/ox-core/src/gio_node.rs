@@ -392,15 +392,24 @@ fn flush_file_system(path: &std::path::Path, published: &[ItemIdentity]) -> Resu
     };
     let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC;
     let opened = rustix::fs::open(folder, flags, Mode::empty()).map_err(std::io::Error::from)?;
-    let item = rustix::fs::statat(&opened, name, AtFlags::SYMLINK_NOFOLLOW).map_err(std::io::Error::from)?;
     let held = rustix::fs::fstat(&opened).map_err(std::io::Error::from)?;
-    let is_published = published
-        .iter()
-        .any(|identity| is_same_item(*identity, item.st_dev, item.st_ino));
-    if !is_published || item.st_dev != held.st_dev {
+    // The copy must be there before the flush, and still after it: one
+    // removed or replaced while it was written out was not written out.
+    let is_still_the_copy = || -> Result<bool, TransferError> {
+        let item =
+            rustix::fs::statat(&opened, name, AtFlags::SYMLINK_NOFOLLOW).map_err(std::io::Error::from)?;
+        let is_published = published
+            .iter()
+            .any(|identity| is_same_item(*identity, item.st_dev, item.st_ino));
+        Ok(is_published && item.st_dev == held.st_dev)
+    };
+    if !is_still_the_copy()? {
         return Err(not_the_copy());
     }
     rustix::fs::syncfs(&opened).map_err(std::io::Error::from)?;
+    if !is_still_the_copy()? {
+        return Err(not_the_copy());
+    }
     Ok(())
 }
 

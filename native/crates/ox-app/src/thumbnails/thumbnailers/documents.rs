@@ -747,8 +747,8 @@ impl Cache {
     ///
     /// A kept PDF is checked as one just made is ([`read_pdf`]), by its
     /// start and its last kilobyte, not read whole: one cut short, which an
-    /// earlier version could keep, is removed and made again rather than
-    /// found and shown broken in every run.
+    /// earlier version could keep, is not found, so it is made again and
+    /// replaces it, rather than being shown broken in every run.
     fn find(&self, name: &str) -> Option<PathBuf> {
         use std::io::{Seek, SeekFrom};
 
@@ -767,8 +767,9 @@ impl Cache {
             file.take(tail_length).read_to_end(&mut tail).ok()?;
             Some(&start == b"%PDF-" && ends_as_a_pdf(&tail))
         };
+        // Not removed here: a fresh PDF may have taken the name meanwhile;
+        // the one made again replaces it by its atomic rename.
         if whole() != Some(true) {
-            let _ = fs::remove_file(&path);
             return None;
         }
         if let Ok(file) = fs::OpenOptions::new().write(true).open(&path) {
@@ -1402,11 +1403,16 @@ mod tests {
         );
         assert_eq!(cache.find("a.pdf"), Some(kept));
         assert_eq!(cache.find("b.pdf"), None);
-        // A PDF kept cut short, without its %%EOF, is not found, and goes,
-        // so it is made again.
+        // A PDF kept cut short, without its %%EOF, is not found, so it is
+        // made again, and the one made replaces it under its name.
         let cut = cache.keep("cut.pdf", b"%PDF-1.7 fictional pa").expect("kept");
         assert_eq!(cache.find("cut.pdf"), None);
-        assert!(!cut.exists(), "removed to be made again");
+        assert!(cut.exists(), "left for the new one to replace");
+        let made = cache
+            .keep("cut.pdf", b"%PDF-1.7 fictional pages\n%%EOF\n")
+            .expect("kept");
+        assert_eq!(cache.find("cut.pdf"), Some(made));
+        fs::remove_file(&cut).expect("removed");
 
         let old = SystemTime::UNIX_EPOCH + Duration::from_secs(1_600_000_000);
         for index in 0..CACHE_COUNT_LIMIT + 2 {

@@ -419,6 +419,8 @@ fn list_heads_each_group_at_the_top_of_its_column() {
     for name in ["Lighthouse.jpg", "Morning tide.mp3", "Archive of logs.zip"] {
         fixture.write(name);
     }
+    // Before the window opens, which a new pointer would put away.
+    let mut pointer = crate::test_support::pointer::Pointer::connect();
     let test = TestWindow::open(&fixture.uri());
     test.activate("group-by", Some("type"));
     let expected = details_headings(&test);
@@ -485,11 +487,15 @@ fn list_heads_each_group_at_the_top_of_its_column() {
     );
     press(gdk::Key::Left);
     assert_eq!(model.selected_positions(), [first_note], "Left comes back");
-    // A click on the notes' heading selects the group and gives the heading
-    // the keyboard; Right then goes on to the same row of the next column,
-    // and Down from the heading to the group's first item, rather than
-    // Left and Right being taken as Collapse and Expand, which List has not.
-    let click_heading = || {
+    // A real click on the notes' heading selects the group, as Windows 11's
+    // does, and leaves the keyboard on the heading; a real Right then goes
+    // on to the same row of the next column, and Down from the heading to
+    // the group's first item, rather than Left and Right being taken as
+    // Collapse and Expand, which List has not.
+    // In front of any window an earlier test left on the display.
+    test.window.present();
+    wait_for_frames(&test.window, 3);
+    let click_heading = |pointer: &mut crate::test_support::pointer::Pointer| {
         let heading = descendants::<FileCell>(&grid)
             .into_iter()
             .find(|cell| {
@@ -500,46 +506,49 @@ fn list_heads_each_group_at_the_top_of_its_column() {
             })
             .expect("the notes' heading");
         let bounds = heading.compute_bounds(&grid).expect("the heading is laid out");
-        let x = f64::from(bounds.x() + bounds.width() / 2.0);
-        let y = f64::from(bounds.y() + bounds.height() / 2.0);
-        // As the view's press on a heading's row runs it.
-        let pressed = test
-            .window
-            .press_heading(&grid, x, y, 1, gdk::ModifierType::empty());
-        assert!(pressed, "a press on the heading at {bounds:?}");
-        crate::test_support::harness::settle();
-        // The press gives the heading the keyboard; in List the selected
-        // group's first item may take it back as the list settles, so the
-        // heading is given it again, as an arrow onto it would, and the key
-        // goes to it at once.
-        let slot = heading.slot().expect("the heading's slot");
-        test.window.keep_heading_focus(&slot);
+        let at = crate::test_support::pointer::screen_point(
+            pointer,
+            &grid,
+            (
+                f64::from(bounds.x() + bounds.width() / 2.0),
+                f64::from(bounds.y() + bounds.height() / 2.0),
+            ),
+            super::right_drag::PROBE,
+        );
+        // Past the double-click time since any click before, so this one
+        // is a click of its own, not the second of a double-click, which
+        // would fold the group back to the selection before it.
+        let double_click = gtk::Settings::default().map_or(400, |settings| settings.gtk_double_click_time());
+        crate::test_support::harness::wait_for(std::time::Duration::from_millis(
+            u64::try_from(double_click).unwrap_or(400) + 100,
+        ));
+        pointer.move_to(at.0, at.1);
+        pointer.tap(crate::test_support::pointer::Button::Primary);
+        wait_until("the notes selected", || {
+            let selected = model.selected_positions();
+            selected.len() == 60 && selected.first() == Some(&first_note)
+        });
+        wait_for_frames(&test.window, 4);
         assert!(
             test.window.focused_heading().is_some(),
-            "the heading has the keyboard"
+            "the click leaves the keyboard on the heading"
         );
     };
-    click_heading();
-    assert_eq!(
-        model.selected_positions().first().copied(),
-        Some(first_note),
-        "the click selects the notes"
-    );
-    press(gdk::Key::Right);
-    assert_eq!(
-        model.selected_positions(),
-        [first_note + lines - 1],
-        "Right from the heading goes to the same row of the next column"
+    click_heading(&mut pointer);
+    let wait_for_selection = |expected: u32, what: &str| {
+        wait_until(what, || model.selected_positions() == [expected]);
+    };
+    pointer.tap_key(gdk::Key::Right);
+    wait_for_selection(
+        first_note + lines - 1,
+        "Right from the heading to the same row of the next column",
     );
     pane.reveal(first_note);
     wait_for_frames(&test.window, 4);
-    click_heading();
-    press(gdk::Key::Down);
-    assert_eq!(
-        model.selected_positions(),
-        [first_note],
-        "Down goes to its first item"
-    );
+    click_heading(&mut pointer);
+    pointer.tap_key(gdk::Key::Down);
+    wait_for_selection(first_note, "Down from the heading to its first item");
+    pointer.move_to(720, 500);
     // A key on a group's second column keeps List's sideways scroll: the
     // other grouped views' keeping of a heading in sight measured rows,
     // and snapped List back towards its left edge.

@@ -844,8 +844,9 @@ fn held_start_limit(bytes: &[u8]) -> usize {
     entries
         .chunks_exact(16)
         .map(|entry| u32::from_le_bytes([entry[12], entry[13], entry[14], entry[15]]))
-        // A bitmap header's width and height end 12 bytes in.
-        .map(|offset| usize::try_from(offset).unwrap_or(usize::MAX).saturating_add(12))
+        // A bitmap header's width and height end 12 bytes in, a PNG's
+        // IHDR sides 24.
+        .map(|offset| usize::try_from(offset).unwrap_or(usize::MAX).saturating_add(24))
         .max()
         .unwrap_or(0)
         .clamp(HEADER_LIMIT, most)
@@ -880,9 +881,22 @@ fn icon_size(bytes: &[u8]) -> Declared {
         if offset.saturating_add(length) > MAX_ICON_DATA_END || at < directory {
             return Declared::Damaged;
         }
-        // A PNG image's size is read by the loader as any PNG's is.
+        // A PNG image must give its size in its IHDR within the entry's own
+        // bytes, within an icon's sides: one that ends before it, or says
+        // nothing there, is refused, as gdk-pixbuf would read on past the
+        // entry for it.
         match starts_with(bytes.get(at..).unwrap_or_default(), PNG_SIGNATURE) {
-            Some(true) => continue,
+            Some(true) => {
+                let end = at.saturating_add(usize::try_from(length).unwrap_or(usize::MAX));
+                let png = bytes.get(at..end.min(bytes.len())).unwrap_or_default();
+                match png_size(png) {
+                    Declared::Size { width, height, .. }
+                        if width > 0 && height > 0 && width <= MAX_ICON_EDGE && height <= MAX_ICON_EDGE => {}
+                    Declared::Incomplete if end > bytes.len() => incomplete = true,
+                    _ => return Declared::Damaged,
+                }
+                continue;
+            }
             Some(false) => {}
             None => {
                 incomplete = true;
@@ -1547,7 +1561,7 @@ mod tests {
         let (good, wide) = (far(16), far(289_865_731));
 
         assert_eq!(declared_size(&good[..HEADER_LIMIT]), Declared::Incomplete);
-        assert_eq!(held_start_limit(&good[..HEADER_LIMIT]), 22 + padding + 12);
+        assert_eq!(held_start_limit(&good[..HEADER_LIMIT]), 22 + padding + 24);
         assert_eq!(declared_size(&good), Declared::Unknown);
         assert_eq!(declared_size(&wide), Declared::Damaged);
         let mut reader = std::io::Cursor::new(wide);
@@ -1590,6 +1604,55 @@ mod tests {
         assert_eq!(
             held_start(b"\x89PNG\r\n\x1a\n", 0, Limits::DISPLAY),
             HeldStart::Release
+        );
+    }
+
+    /// A PNG image inside an icon must give its size in its IHDR within the
+    /// entry's own bytes, as an icon's: one whose entry ends before its
+    /// IHDR, or whose IHDR is far wider than any icon's, is refused, and
+    /// one cut short by the end of the file is refused there, before the
+    /// loader gets any of it. Its signature alone used to count as whole.
+    #[test]
+    fn a_png_inside_an_icon_is_refused_without_a_readable_header() {
+        let pixbuf = Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, true, 8, 16, 16).expect("a picture");
+        pixbuf.fill(0x3366_99ff);
+        let png = pixbuf.save_to_bufferv("png", &[]).expect("a PNG");
+        let icon = |png: &[u8], length: usize| {
+            let mut icon = vec![0, 0, 1, 0, 1, 0];
+            icon.extend_from_slice(&[16, 16, 0, 0, 1, 0, 32, 0]);
+            icon.extend_from_slice(&u32::try_from(length).expect("a length").to_le_bytes());
+            icon.extend_from_slice(&22_u32.to_le_bytes());
+            icon.extend_from_slice(png);
+            icon
+        };
+        let good = icon(&png, png.len());
+        assert_eq!(declared_size(&good), Declared::Unknown);
+        assert_eq!(
+            held_start(&good, 0, Limits::DISPLAY),
+            HeldStart::Release,
+            "a whole one goes to the loader"
+        );
+
+        let short_entry = icon(&png, 16);
+        assert_eq!(
+            declared_size(&short_entry),
+            Declared::Damaged,
+            "the entry ends before IHDR"
+        );
+        let mut wide = png.clone();
+        wide[16..20].copy_from_slice(&289_865_731_u32.to_be_bytes());
+        assert_eq!(
+            declared_size(&icon(&wide, wide.len())),
+            Declared::Damaged,
+            "too wide"
+        );
+
+        let cut = &good[..22 + 14];
+        assert_eq!(declared_size(cut), Declared::Incomplete);
+        assert_eq!(
+            held_start(cut, 0, Limits::DISPLAY),
+            HeldStart::Refuse(Refusal::Damaged),
+            "cut short at the end of the file"
         );
     }
 

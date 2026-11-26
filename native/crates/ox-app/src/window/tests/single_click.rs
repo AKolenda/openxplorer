@@ -325,17 +325,39 @@ fn scrolling_under_a_resting_pointer_selects_the_item_now_under_it() {
     };
 
     let first = item_on_screen(&mut pointer, &test, "Notes 03.txt");
-    pointer.move_to(first.0, first.1);
-    // Pointing has started on the item: it is underlined, the delay runs.
-    wait_until("the item to be pointed at", || {
-        cell_of(&test, "Notes 03.txt").has_css_class(POINTED_CLASS)
-    });
+    // Off the list: the window's edge.
+    let away = screen_point(&mut pointer, &test.window, (4.0, 4.0), PROBE);
     let adjustment = pane.details().vadjustment();
-    adjustment.set_value(adjustment.upper() - adjustment.page_size());
-    wait_until("another item under the pointer", || {
-        under_the_pointer().is_some_and(|name| name != "Notes 03")
-    });
-    let now_under = under_the_pointer().expect("an item under the pointer");
+    // The case needs the new row laid out under the resting pointer before
+    // pointing's delay is up; a runner too slow to lay it out in that time
+    // shows nothing of the change, so the case is set up again, a few
+    // times at most, rather than judged on a race.
+    let mut judged = None;
+    for _ in 0..5 {
+        adjustment.set_value(adjustment.lower());
+        wait_until("the first item under the pointer's place", || {
+            under_the_pointer().as_deref() == Some("Notes 03")
+        });
+        pointer.move_to(away.0, away.1);
+        wait_for_frames(&test.window, 2);
+        test.window.folder_model().select_none();
+        // The motion onto the item arms pointing's delay.
+        let armed = std::time::Instant::now();
+        pointer.move_to(first.0, first.1);
+        wait_until("the item to be pointed at", || {
+            cell_of(&test, "Notes 03.txt").has_css_class(POINTED_CLASS)
+        });
+        adjustment.set_value(adjustment.upper() - adjustment.page_size());
+        wait_until("another item laid out under the pointer", || {
+            under_the_pointer().is_some_and(|name| name != "Notes 03")
+        });
+        let in_time = armed.elapsed() < HOVER_SELECT_DELAY * 3 / 4 && test.selected_names().is_empty();
+        if in_time {
+            judged = under_the_pointer();
+            break;
+        }
+    }
+    let now_under = judged.expect("the row laid out under the pointer within pointing's delay");
     wait_until("the item now under the pointer to be selected", || {
         test.selected_names() == [format!("{now_under}.txt")]
     });
