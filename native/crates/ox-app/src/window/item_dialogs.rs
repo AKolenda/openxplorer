@@ -601,8 +601,9 @@ impl BrowserWindow {
 
 /// When to list a folder again after its `.hidden` list changed: `GLib`
 /// keeps the list it read for five seconds by its source, measured at 7 to
-/// 8 seconds on `GLib` 2.80 as its timer runs on its worker thread.
-const HIDDEN_CACHE_SECONDS: [u32; 2] = [6, 11];
+/// 8 seconds on `GLib` 2.80 as its timer runs on its worker thread, and
+/// later still on a busy machine, whose worker thread runs it late.
+const HIDDEN_CACHE_SECONDS: [u32; 3] = [6, 11, 16];
 
 /// A folder or a file, as `info` says without following a link.
 fn item_kind(info: &gio::FileInfo) -> ItemKind {
