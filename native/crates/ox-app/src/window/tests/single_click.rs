@@ -282,6 +282,42 @@ fn a_key_takes_the_selection_over_from_pointing() {
     pointer.move_to(720, 500);
 }
 
+/// With single-click on, the list scrolled under a resting pointer within
+/// the time pointing takes to select leaves the item scrolled away
+/// unselected: only the item under the pointer when that time is up can
+/// be. The item first pointed at used to be selected though another one
+/// was under the pointer by then.
+///
+/// parity: SEL-018
+#[gtk::test]
+fn scrolling_under_a_resting_pointer_selects_no_item_scrolled_away() {
+    let fixture = Fixture::empty();
+    for number in 0..80 {
+        fixture.write(&format!("Notes {number:02}.txt"));
+    }
+    let mut pointer = Pointer::connect();
+    let test = TestWindow::open(&fixture.uri());
+    single_click(&test, PreferencesUpdate::default());
+    test.activate("view", Some("details"));
+    wait_for_frames(&test.window, 3);
+    test.window.folder_model().select_none();
+
+    let first = item_on_screen(&mut pointer, &test, "Notes 03.txt");
+    pointer.move_to(first.0, first.1);
+    let adjustment = test.window.folder_pane().details().vadjustment();
+    adjustment.set_value(adjustment.upper() - adjustment.page_size());
+    pause();
+    wait_for_frames(&test.window, 3);
+    pause();
+
+    assert!(
+        !test.selected_names().contains(&"Notes 03.txt".to_owned()),
+        "the item scrolled away is not selected: {:?}",
+        test.selected_names()
+    );
+    pointer.move_to(720, 500);
+}
+
 /// With single-click on, in Gallery: the pointer resting on a photo
 /// selects it alone; with Ctrl held by the time pointing selects, the
 /// photo joins the selection; with Shift, the photos from the one

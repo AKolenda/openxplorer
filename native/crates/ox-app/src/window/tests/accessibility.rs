@@ -783,9 +783,15 @@ fn large_text_widens_default_columns_and_the_navigation_pane() {
         .column(SortColumn::Type)
         .expect("Type")
         .set_fixed_width(150);
+    // Size widened to 250 pixels, and its 14-pixel end gutter.
+    details
+        .column(SortColumn::Size)
+        .expect("Size")
+        .set_fixed_width(264);
     skin.set_text_size(TextSize::from_percent(200));
     wait_for_frames(&test.window, 3);
     let dragged = width_of(SortColumn::Type);
+    let size_dragged = width_of(SortColumn::Size);
     skin.set_text_size(before);
 
     assert_eq!(large, (282, 270, 420), "twice the text, wider columns and pane");
@@ -798,6 +804,11 @@ fn large_text_widens_default_columns_and_the_navigation_pane() {
     assert_eq!(
         dragged, 300,
         "a width the user chose grows with the text, as in Windows"
+    );
+    assert_eq!(
+        size_dragged,
+        500 + 14,
+        "Size's too, as when a window opens at that text size"
     );
 }
 

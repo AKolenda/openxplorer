@@ -453,7 +453,7 @@ fn a_batch_of_thumbnails_is_decoded_by_one_decoder() {
     let pictures: Vec<Vec<u8>> = (0..12).map(|seed| thumbnail(0x1000_00ff + seed)).collect();
     let mut answers = Vec::new();
     pool.decode_batch(
-        &pictures,
+        pictures.clone(),
         96,
         96,
         Limits::THUMBNAIL_FILE,
@@ -488,7 +488,7 @@ fn a_batch_of_thumbnails_is_decoded_by_one_decoder() {
     with_crash[4] = CRASH_PICTURE.to_vec();
     let mut answers = Vec::new();
     pool.decode_batch(
-        &with_crash,
+        with_crash,
         96,
         96,
         Limits::THUMBNAIL_FILE,
@@ -512,7 +512,7 @@ fn a_batch_of_thumbnails_is_decoded_by_one_decoder() {
     cancelled.cancel();
     let mut answers = Vec::new();
     pool.decode_batch(
-        &vec![thumbnail(1); 3],
+        vec![thumbnail(1); 3],
         96,
         96,
         Limits::THUMBNAIL_FILE,

@@ -525,6 +525,9 @@ impl BrowserWindow {
         if self.imp().session.borrow().is_active(id) {
             crate::startup_trace::window_listed(self);
             self.restore_selection(id);
+            // The drive may have become read-only, or writable, since its
+            // folder was last asked about, at the same address.
+            self.recheck_read_only_drive();
             self.update_content();
             self.update_details_pane();
             self.focus_new_file_list();

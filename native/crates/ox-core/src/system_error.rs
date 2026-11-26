@@ -191,8 +191,9 @@ pub const UNSPECIFIED: SystemError = SystemError {
     sentence: message_id("Unspecified error"),
 };
 
-/// Every error, for finding one by its words.
-const ALL: [SystemError; 42] = [
+/// Every error, for finding one by its words: each one the mappings below
+/// give, so a message carried as text keeps its code.
+const ALL: [SystemError; 43] = [
     INVALID_FUNCTION,
     FILE_NOT_FOUND,
     PATH_NOT_FOUND,
@@ -234,6 +235,7 @@ const ALL: [SystemError; 42] = [
     FILE_CORRUPT,
     TIMEOUT,
     CANT_RESOLVE_FILENAME,
+    NOT_A_REPARSE_POINT,
     UNSPECIFIED,
 ];
 
@@ -574,6 +576,64 @@ fn errno_in_message(message: &str) -> Option<SystemError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every error the mappings give is found again by its sentence, as a
+    /// failure carried as text is when its dialog shows the code ("Error
+    /// 0x80071126: The file or directory is not a reparse point.");
+    /// `NOT_A_REPARSE_POINT` was missing from the list searched.
+    #[test]
+    fn every_mapped_error_is_found_again_by_its_sentence() {
+        use gio::IOErrorEnum as Io;
+        let from_gio = [
+            Io::Failed,
+            Io::NotFound,
+            Io::Exists,
+            Io::WouldMerge,
+            Io::IsDirectory,
+            Io::NotDirectory,
+            Io::NotEmpty,
+            Io::NotSymbolicLink,
+            Io::FilenameTooLong,
+            Io::InvalidFilename,
+            Io::TooManyLinks,
+            Io::NoSpace,
+            Io::InvalidArgument,
+            Io::PermissionDenied,
+            Io::NotSupported,
+            Io::NotRegularFile,
+            Io::NotMountableFile,
+            Io::NotMounted,
+            Io::Closed,
+            Io::Cancelled,
+            Io::FailedHandled,
+            Io::ReadOnly,
+            Io::TimedOut,
+            Io::Busy,
+            Io::HostNotFound,
+            Io::TooManyOpenFiles,
+            Io::NotInitialized,
+            Io::InvalidData,
+            Io::PartialInput,
+            Io::HostUnreachable,
+            Io::NetworkUnreachable,
+            Io::ProxyFailed,
+            Io::ConnectionRefused,
+            Io::BrokenPipe,
+            Io::NotConnected,
+            Io::NoSuchDevice,
+        ]
+        .map(SystemError::from_gio_code);
+        let from_errno = (1..=133).filter_map(SystemError::from_errno);
+        for error in from_gio.into_iter().chain(from_errno) {
+            let found = SystemError::from_sentence(&error.message());
+            assert!(
+                found.is_some_and(|found| found.sentence == error.sentence),
+                "{:#010X}: {}",
+                error.hresult,
+                error.sentence
+            );
+        }
+    }
 
     /// An error that names an item keeps it, as a path, before Windows'
     /// words; one of the app's own keeps its message.

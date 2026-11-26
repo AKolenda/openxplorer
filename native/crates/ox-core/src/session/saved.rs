@@ -126,13 +126,7 @@ impl SavedWindows {
     /// at the top, as [`SavedSession::to_json`] writes them, and the
     /// others in `otherWindows`.
     pub fn to_json(&self) -> Value {
-        let mut windows = self.windows.iter().take(MAX_SAVED_WINDOWS);
-        let mut value = windows.next().map_or_else(|| json!({}), SavedSession::to_json);
-        let others: Vec<Value> = windows.map(SavedSession::to_json).collect();
-        if !others.is_empty() {
-            value["otherWindows"] = Value::Array(others);
-        }
-        value
+        windows_json(&self.windows)
     }
 
     /// Validates saved windows in their JSON form: the front window must
@@ -158,11 +152,26 @@ impl SavedWindows {
 
     /// Saves the windows in `directory`, replacing the last session.
     ///
+    /// Every window may hold up to [`MAX_SAVED_TABS`] tabs, each with a
+    /// long history and many selected items, so twenty of them can take
+    /// more than the session file read back ([`MAX_FILE_BYTES`]), which
+    /// would then reopen nothing. Windows are left out from the last, the
+    /// one used longest ago, until the rest fit; the window in front is
+    /// always kept, as one window alone always was.
+    ///
     /// # Errors
     ///
     /// [`StorageError`] when the file cannot be written.
     pub fn save(&self, directory: &Path) -> Result<(), StorageError> {
-        let contents = self.to_json().to_string();
+        let mut kept = self.windows.len().min(MAX_SAVED_WINDOWS);
+        let contents = loop {
+            let contents = windows_json(&self.windows[..kept]).to_string();
+            let fits = u64::try_from(contents.len()).unwrap_or(u64::MAX) <= MAX_FILE_BYTES;
+            if fits || kept <= 1 {
+                break contents;
+            }
+            kept -= 1;
+        };
         replace_file_atomically(&session_file(directory), TEMPORARY_PREFIX, contents.as_bytes())
     }
 
@@ -171,6 +180,18 @@ impl SavedWindows {
     pub fn load(directory: &Path) -> Option<Self> {
         Self::from_json(&read_session(directory)?)
     }
+}
+
+/// The first [`MAX_SAVED_WINDOWS`] of `windows` in the JSON form
+/// [`SavedWindows::to_json`] writes.
+fn windows_json(windows: &[SavedSession]) -> Value {
+    let mut windows = windows.iter().take(MAX_SAVED_WINDOWS);
+    let mut value = windows.next().map_or_else(|| json!({}), SavedSession::to_json);
+    let others: Vec<Value> = windows.map(SavedSession::to_json).collect();
+    if !others.is_empty() {
+        value["otherWindows"] = Value::Array(others);
+    }
+    value
 }
 
 /// The session file in `directory` as JSON, when it can be read.
@@ -350,6 +371,51 @@ mod tests {
                 &json!({ "tabs": [], "otherWindows": [window(&["file:///srv/x"], 0).to_json()] })
             ),
             None
+        );
+    }
+
+    /// Twenty windows of a hundred tabs with long histories take more than
+    /// the session file read back: the windows used longest ago are left
+    /// out until the rest fit, so the next start still reopens the window
+    /// in front and as many others as fit, rather than nothing.
+    ///
+    /// parity: TAB-053
+    #[test]
+    fn a_session_too_large_to_read_back_keeps_the_windows_that_fit() {
+        let directory = tempfile::tempdir().expect("a temporary directory");
+        let long = "x".repeat(90);
+        let pane = |window: usize, tab: usize| {
+            let history: Vec<String> = (0..20)
+                .map(|step| format!("file:///srv/example/{long}/{window}/{tab}/{step}"))
+                .collect();
+            TabSnapshot::from_json(&json!({ "uri": history[19], "history": history, "index": 19 }))
+                .expect("a valid tab")
+        };
+        let windows = SavedWindows {
+            windows: (0..MAX_SAVED_WINDOWS)
+                .map(|window| SavedSession {
+                    tabs: (0..MAX_SAVED_TABS)
+                        .map(|tab| SavedTab {
+                            panes: vec![pane(window, tab)],
+                            active_pane: 0,
+                        })
+                        .collect(),
+                    active_tab: 0,
+                })
+                .collect(),
+        };
+        let whole = u64::try_from(windows.to_json().to_string().len()).expect("a length");
+        assert!(whole > MAX_FILE_BYTES, "{whole} bytes whole");
+
+        windows.save(directory.path()).expect("the windows are saved");
+        let loaded = SavedWindows::load(directory.path()).expect("the session is read back");
+
+        let count = loaded.windows.len();
+        assert!(count > 1 && count < MAX_SAVED_WINDOWS, "{count} windows");
+        assert_eq!(
+            loaded.windows[..],
+            windows.windows[..count],
+            "the front ones, in order"
         );
     }
 

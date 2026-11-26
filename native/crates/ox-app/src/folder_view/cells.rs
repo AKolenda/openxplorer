@@ -139,16 +139,61 @@ fn dim_cell_label_with(text: &str) -> gtk::Label {
     label
 }
 
-/// The width and height of the picture at `uri`, read from its header,
-/// for a file on this computer; `None` elsewhere, where reading could
-/// wait on a network, or when the header says nothing.
-fn picture_dimensions(uri: &str) -> Option<(i32, i32)> {
+/// The most of a picture's first bytes read for its header in Content's
+/// "Dimensions:", as the picture guard holds back at most.
+const PICTURE_HEADER_BYTES: u64 = 256 * 1024;
+
+/// How many pictures' dimensions Content keeps known, so a row bound
+/// again as the view scrolls shows them at once.
+const MOST_DIMENSIONS_KEPT: usize = 4096;
+
+/// The dimensions found for each picture, by its URI and time: none for
+/// one whose header said nothing.
+type KnownDimensions = std::collections::HashMap<(String, Option<i64>), Option<(i32, i32)>>;
+
+thread_local! {
+    /// The dimensions found for each picture.
+    static DIMENSIONS: std::cell::RefCell<KnownDimensions> = std::cell::RefCell::default();
+}
+
+/// The width and height of the picture at `uri`, of `content_type`, read
+/// from its header, for a file on this computer's own disks; `None`
+/// elsewhere, where reading could wait on a network (a share mounted by
+/// the kernel or through `GVfs`), or when the header says nothing. Blocks:
+/// run it off the main thread.
+///
+/// The header is read in this process by
+/// [`crate::picture_guard::declared_dimensions`], which decodes nothing,
+/// and a raster format it does not know by
+/// [`crate::picture_guard::dimensions`], in the sandboxed decoder process.
+/// `gdk_pixbuf_get_file_info`, which Content asked on the main thread,
+/// decodes a whole picture through glycin to find its size, and aborts
+/// the process on a huge one.
+fn picture_dimensions(uri: &str, content_type: &str) -> Option<(i32, i32)> {
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+
     let path = gtk::gio::File::for_uri(uri).path()?;
-    if path.components().any(|part| part.as_os_str() == "gvfs") {
+    if crate::thumbnails::is_on_network_filesystem(&path) {
         return None;
     }
-    let (_, width, height) = gtk::gdk_pixbuf::Pixbuf::file_info(&path)?;
-    Some((width, height))
+    // A pipe or a device named like a picture is not waited on.
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(rustix::fs::OFlags::NONBLOCK.bits().cast_signed())
+        .open(&path)
+        .ok()
+        .filter(|file| file.metadata().is_ok_and(|metadata| metadata.is_file()))?;
+    let mut start = Vec::new();
+    file.take(PICTURE_HEADER_BYTES).read_to_end(&mut start).ok()?;
+    if let Some((width, height)) = crate::picture_guard::declared_dimensions(&start) {
+        return Some((i32::try_from(width).ok()?, i32::try_from(height).ok()?));
+    }
+    // A vector picture has no pixels of its own to count.
+    if content_type == "image/svg+xml" {
+        return None;
+    }
+    crate::picture_guard::dimensions(&gtk::gio::File::for_path(&path))
 }
 
 /// Where a [`FileCell`] is shown.
@@ -969,13 +1014,56 @@ impl FileCell {
             return;
         }
         imp.picture_kind.set_text(kind);
-        let dimensions = picture_dimensions(&entry.uri)
+        // Read off the main thread, as a slow drive or a damaged picture
+        // would hold the window up, and shown if the cell still shows the
+        // item then; known dimensions show at once.
+        let key = (entry.uri.clone(), entry.modified);
+        if let Some(known) = DIMENSIONS.with_borrow(|known| known.get(&key).copied()) {
+            self.show_picture_dimensions(known);
+            return;
+        }
+        self.show_picture_dimensions(None);
+        let content_type = entry.content_type.clone().unwrap_or_default();
+        let cell = self.downgrade();
+        let item = item.clone();
+        glib::spawn_future_local(async move {
+            let uri = key.0.clone();
+            let found = gtk::gio::spawn_blocking(move || picture_dimensions(&uri, &content_type))
+                .await
+                .ok()
+                .flatten();
+            DIMENSIONS.with_borrow_mut(|known| {
+                if known.len() >= MOST_DIMENSIONS_KEPT {
+                    known.clear();
+                }
+                known.insert(key, found);
+            });
+            if let Some(cell) = cell
+                .upgrade()
+                .filter(|cell| cell.imp().bound.upgrade() == Some(item))
+            {
+                cell.show_picture_dimensions(found);
+            }
+        });
+    }
+
+    /// Shows a picture's `dimensions` in Content's "Dimensions:", or hides
+    /// that line without them.
+    fn show_picture_dimensions(&self, dimensions: Option<(i32, i32)>) {
+        let imp = self.imp();
+        let text = dimensions
             .map(|(width, height)| format!("{width} x {height}"))
             .unwrap_or_default();
-        imp.picture_dimensions.set_text(&dimensions);
+        imp.picture_dimensions.set_text(&text);
         if let Some(line) = imp.picture_dimensions.parent() {
-            line.set_visible(!dimensions.is_empty());
+            line.set_visible(!text.is_empty());
         }
+    }
+
+    /// The dimensions Content's row shows, for tests.
+    #[cfg(test)]
+    pub(crate) fn shown_picture_dimensions(&self) -> String {
+        self.imp().picture_dimensions.text().to_string()
     }
 
     /// Shows `item`'s art and emblems, as File icons now has them
@@ -1242,6 +1330,9 @@ pub(crate) fn connect_mapped_file_cells(
         let cell = list_item.child().and_downcast::<FileCell>();
         if let (Some(slot), Some(cell)) = (list_item.item().and_downcast::<GroupSlot>(), cell.as_ref()) {
             show_slot_item(list_item, cell, Some(&slot));
+            // GTK reuses list items: a heading bound where a file was is
+            // not heard with that file's details.
+            list_item.set_accessible_description("");
             CellOwners::unstyle_cell(cell);
             return;
         }

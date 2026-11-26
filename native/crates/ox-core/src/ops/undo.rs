@@ -382,12 +382,26 @@ impl UndoRecord {
     /// not moved back but taken away as copies are, to the Recycle Bin,
     /// under Undo Copy, as Windows names the Undo of Extract All. Files
     /// a Replace answered there still come back from the Recycle Bin;
-    /// the private folder's removal is not undone. `None` when nothing is
-    /// left to undo.
+    /// the private folder's removal is not undone. A file a Replace
+    /// overwrote, because its old one could not go to the Recycle Bin (on
+    /// a share, or with Windows' overwrite chosen), is no copy to take
+    /// away: as for any copy that overwrote a file, Undo leaves it in
+    /// place and only says the old one is gone, so Undo never deletes the
+    /// one file left of the two. `None` when nothing is left to undo.
     pub fn as_extraction(self) -> Option<UndoRecord> {
+        self.extraction_keeping(&[])
+    }
+
+    /// [`Self::as_extraction`], leaving out of the copies Undo takes away
+    /// the files at `overwritten`, which the move overwrote.
+    fn extraction_keeping(self, overwritten: &[String]) -> Option<UndoRecord> {
         match self {
             UndoRecord::Move { items } => {
-                let copies: Vec<String> = items.into_iter().map(|item| item.moved_uri).collect();
+                let copies: Vec<String> = items
+                    .into_iter()
+                    .map(|item| item.moved_uri)
+                    .filter(|copy| !overwritten.contains(copy))
+                    .collect();
                 (!copies.is_empty()).then_some(UndoRecord::Copy { copies })
             }
             UndoRecord::Replace {
@@ -397,8 +411,10 @@ impl UndoRecord {
                 overwritten,
                 ..
             } => {
-                let steps: Vec<UndoRecord> =
-                    steps.into_iter().filter_map(UndoRecord::as_extraction).collect();
+                let steps: Vec<UndoRecord> = steps
+                    .into_iter()
+                    .filter_map(|step| step.extraction_keeping(&overwritten))
+                    .collect();
                 if steps.is_empty() && replaced.is_empty() && overwritten.is_empty() {
                     return None;
                 }
@@ -746,6 +762,34 @@ mod tests {
             }
         );
         assert_eq!(UndoRecord::Move { items: Vec::new() }.as_extraction(), None);
+
+        // A file a Replace overwrote, its old one not in the Recycle Bin
+        // (a share's), is no copy Undo takes away: it stays, and Undo says
+        // the old one is gone, as for a copy that overwrote it.
+        let overwriting = UndoRecord::Replace {
+            operation: Operation::Move,
+            steps: vec![UndoRecord::Move {
+                items: vec![
+                    moved(&format!("{private}/c.txt"), "file:///tmp/Work/c.txt"),
+                    moved(&format!("{private}/d.txt"), "file:///tmp/Work/d.txt"),
+                ],
+            }],
+            replaced: Vec::new(),
+            replaced_since: 3,
+            overwritten: vec!["file:///tmp/Work/c.txt".into()],
+        };
+        assert_eq!(
+            overwriting.as_extraction(),
+            Some(UndoRecord::Replace {
+                operation: Operation::Copy,
+                steps: vec![UndoRecord::Copy {
+                    copies: vec!["file:///tmp/Work/d.txt".into()]
+                }],
+                replaced: Vec::new(),
+                replaced_since: 3,
+                overwritten: vec!["file:///tmp/Work/c.txt".into()],
+            })
+        );
     }
 
     /// A reversal that finished `done`.

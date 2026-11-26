@@ -38,8 +38,9 @@ pub(super) struct MovedTabs {
     home: String,
     /// The tabs behind the one in front that were on the drive.
     behind: Vec<TabId>,
-    /// Whether the tab in front was on the drive.
-    front: bool,
+    /// The tab that was in front, when it was on the drive: kept by its
+    /// id, since the user may show another tab while the removal runs.
+    front: Option<TabId>,
 }
 
 /// The note of "Disconnect this mount?", under the location.
@@ -358,10 +359,13 @@ impl BrowserWindow {
     pub(super) fn move_tabs_from(&self, root: &str, home: &str) -> MovedTabs {
         let home = home.to_owned();
         let mut behind = Vec::new();
-        let (stale, is_active_inside): (Vec<gio::ListStore>, bool) = {
+        let (stale, front): (Vec<gio::ListStore>, Option<TabId>) = {
             let mut session = self.imp().session.borrow_mut();
             let active = session.active_id();
-            let is_active_inside = session.active().is_some_and(|tab| is_inside(tab.uri(), root));
+            let front = session
+                .active()
+                .filter(|tab| is_inside(tab.uri(), root))
+                .map(|tab| tab.id);
             let mut stale = Vec::new();
             session.change_panes(|tab| {
                 if Some(tab.id) != active && is_inside(tab.uri(), root) && tab.history.push(&home) {
@@ -370,33 +374,37 @@ impl BrowserWindow {
                     stale.push(tab.mark_stale());
                 }
             });
-            (stale, is_active_inside)
+            (stale, front)
         };
         self.change_model(|| {
             for items in &stale {
                 items.remove_all();
             }
         });
-        if is_active_inside {
+        if front.is_some() {
             self.navigate_or_report(&home);
         }
         self.render_tabs();
-        MovedTabs {
-            home,
-            behind,
-            front: is_active_inside,
-        }
+        MovedTabs { home, behind, front }
     }
 
     /// Puts the tabs `moved` to Home back on the folders they showed,
-    /// unless they left Home meanwhile: the tab in front goes back, and a
-    /// tab behind it lists its folder again when it is next shown.
+    /// unless they left Home meanwhile: the tab that was in front goes
+    /// back, and a tab behind it lists its folder again when it is next
+    /// shown. The user may have shown another tab while the drive was
+    /// being removed: the tab that was in front is the one put back,
+    /// found by its id, and goes back as a tab behind does when it is no
+    /// longer in front; another tab now in front at Home stays there.
     fn return_moved_tabs(&self, moved: &MovedTabs) {
+        let active = self.imp().session.borrow().active_id();
+        let front_in_front = moved.front.is_some() && moved.front == active;
         let stale: Vec<gio::ListStore> = {
             let mut session = self.imp().session.borrow_mut();
             let mut stale = Vec::new();
             session.change_panes(|tab| {
-                if moved.behind.contains(&tab.id) && tab.uri() == moved.home && tab.history.drop_last() {
+                let moved_behind =
+                    moved.behind.contains(&tab.id) || (moved.front == Some(tab.id) && !front_in_front);
+                if moved_behind && tab.uri() == moved.home && tab.history.drop_last() {
                     tab.forget_location_state();
                     stale.push(tab.mark_stale());
                 }
@@ -409,7 +417,7 @@ impl BrowserWindow {
             }
         });
         let front_at_home = self.current_uri().is_some_and(|uri| uri == moved.home);
-        if moved.front && front_at_home {
+        if front_in_front && front_at_home {
             self.go_history(Direction::Backward);
         }
         self.render_tabs();

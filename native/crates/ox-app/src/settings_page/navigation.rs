@@ -129,7 +129,10 @@ impl SettingsPage {
             #[upgrade_or]
             glib::Propagation::Proceed,
             move |_, key, _, modifiers| {
-                let others = modifiers - gdk::ModifierType::SHIFT_MASK;
+                // Caps Lock and Num Lock make no other key: only the
+                // shortcut modifiers but Shift do.
+                let others =
+                    (modifiers & gtk::accelerator_get_default_mod_mask()) - gdk::ModifierType::SHIFT_MASK;
                 if !others.is_empty() {
                     return glib::Propagation::Proceed;
                 }

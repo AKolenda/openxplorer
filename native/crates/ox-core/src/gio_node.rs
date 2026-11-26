@@ -364,14 +364,36 @@ impl Node for GioNode {
 /// Writes out the file system that holds the item at `path` with
 /// `syncfs(2)`, through its folder: the item itself may be a link.
 ///
+/// The folder is opened first and the item looked up through it, so what
+/// is written out is the file system the copy is on. A USB stick pulled
+/// out between the copy and this flush may be unmounted meanwhile (udisks
+/// unmounts a drive that went away), and its mount point then names a
+/// folder of the file system below it: flushing that one would succeed and
+/// say nothing of the copy, and the move would then remove the original.
+/// So an item no longer in the folder opened, or on another file system
+/// than that folder, is not written out, and the move keeps its original.
+/// The open folder holds its file system, even one unmounted lazily since,
+/// so the flush reaches the drive the item was found on.
+///
 /// # Errors
 ///
-/// The folder cannot be opened, or the drive reports a write error.
+/// The folder cannot be opened, the item is not in it on the same file
+/// system, or the drive reports a write error.
 fn flush_file_system(path: &std::path::Path) -> Result<(), TransferError> {
-    use rustix::fs::{Mode, OFlags};
+    use rustix::fs::{AtFlags, Mode, OFlags};
     let folder = path.parent().unwrap_or(path);
     let flags = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC;
     let opened = rustix::fs::open(folder, flags, Mode::empty()).map_err(std::io::Error::from)?;
+    if let Some(name) = path.file_name() {
+        let item =
+            rustix::fs::statat(&opened, name, AtFlags::SYMLINK_NOFOLLOW).map_err(std::io::Error::from)?;
+        let held = rustix::fs::fstat(&opened).map_err(std::io::Error::from)?;
+        if item.st_dev != held.st_dev {
+            // "The device is not connected.": the copy's drive is not the
+            // one its folder's name leads to now.
+            return Err(std::io::Error::from(rustix::io::Errno::NODEV).into());
+        }
+    }
     rustix::fs::syncfs(&opened).map_err(std::io::Error::from)?;
     Ok(())
 }
@@ -394,4 +416,29 @@ fn byte_count(value: i64) -> u64 {
 /// The GIO cancellable behind an optional cancellation, for GIO calls.
 fn gio_cancellable(cancel: Option<&Cancellation>) -> Option<&gio::Cancellable> {
     cancel.map(Cancellation::cancellable)
+}
+
+#[cfg(test)]
+mod flush_tests {
+    use super::flush_file_system;
+
+    /// A copy is written out through the folder it is in; one no longer
+    /// there, as when its drive was unmounted and the folder's name leads
+    /// onto another file system, is refused, so a move by copying keeps
+    /// its original.
+    ///
+    /// parity: XFER-013
+    #[test]
+    fn a_copy_is_written_out_only_while_its_folder_still_holds_it() {
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let copy = folder.path().join("Report.txt");
+        std::fs::write(&copy, "fictional report").expect("the copy");
+
+        assert!(flush_file_system(&copy).is_ok(), "the copy is written out");
+        std::fs::remove_file(&copy).expect("the copy goes");
+        assert!(
+            flush_file_system(&copy).is_err(),
+            "a copy no longer in its folder is not taken as written out"
+        );
+    }
 }

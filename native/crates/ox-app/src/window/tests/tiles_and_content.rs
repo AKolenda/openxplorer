@@ -485,6 +485,18 @@ fn list_heads_each_group_at_the_top_of_its_column() {
     );
     press(gdk::Key::Left);
     assert_eq!(model.selected_positions(), [first_note], "Left comes back");
+    // A key on a group's second column keeps List's sideways scroll: the
+    // other grouped views' keeping of a heading in sight measured rows,
+    // and snapped List back towards its left edge.
+    let sideways = pane.icon_view().scroll_adjustment();
+    let right = (sideways.upper() - sideways.page_size()).max(0.0);
+    sideways.set_value(right);
+    pane.icon_view().show_heading_above(first_note + lines);
+    assert!(
+        (sideways.value() - right).abs() < 0.5,
+        "List stays scrolled where it was: {} after {right}",
+        sideways.value()
+    );
 }
 
 /// A group heading's accessible name follows its title when the groups
@@ -599,6 +611,177 @@ fn a_cell_that_showed_a_heading_follows_whether_check_boxes_take_clicks() {
         }
     }
     assert!(reused > 0, "scrolling shows items in cells that showed headings");
+}
+
+/// A group's heading is heard without a file's details, also in a cell
+/// that showed a file before: GTK reuses its list items as the view
+/// scrolls, and a heading bound where a file was kept that file's type,
+/// size and date as its description.
+///
+/// parity: VIEW-071, ACC-002
+#[gtk::test]
+fn a_heading_in_a_reused_cell_is_heard_without_a_files_details() {
+    let fixture = Fixture::empty();
+    let extensions = [
+        "txt", "md", "pdf", "png", "ods", "sh", "svg", "zip", "csv", "html", "json", "xml",
+    ];
+    for (number, extension) in extensions.iter().cycle().take(36).enumerate() {
+        fixture.write(&format!("file {number:02}.{extension}"));
+    }
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    show(&test, FolderView::Content);
+    let pane = test.window.folder_pane();
+    wait_until("the headings", || grid_headings(&test).len() >= 3);
+    let grid = pane.view_widget();
+    let items: Vec<FileCell> = descendants::<FileCell>(&grid)
+        .into_iter()
+        .filter(|cell| cell.is_mapped() && cell.group_heading().is_none() && !cell.name().is_empty())
+        .collect();
+    let owners = pane.owners();
+    let adjustment = pane.icon_view().scroll_adjustment();
+    let mut reused = 0;
+    for step in (1..=12).chain((0..12).rev()) {
+        adjustment.set_value(adjustment.upper() * f64::from(step) / 12.0);
+        wait_for_frames(&test.window, 2);
+        reused += items
+            .iter()
+            .filter(|cell| cell.is_mapped() && cell.group_heading().is_some())
+            .count();
+        let described: Vec<String> = owners
+            .bound_slot_descriptions()
+            .into_iter()
+            .filter(|description| !description.is_empty())
+            .collect();
+        assert!(described.is_empty(), "step {step}: {described:?}");
+    }
+    assert!(reused > 0, "scrolling shows headings in cells that showed items");
+}
+
+/// Content gives a picture its dimensions, read from its header off the
+/// main thread by the picture guard, which decodes nothing: binding a
+/// row used to ask gdk-pixbuf on the main thread, which through glycin
+/// decodes the whole picture and aborts on a huge one. A file that only
+/// claims to be a picture shows none.
+///
+/// parity: VIEW-071
+#[gtk::test]
+fn content_shows_a_pictures_dimensions_read_off_the_main_thread() {
+    let fixture = Fixture::empty();
+    let picture =
+        gtk::gdk_pixbuf::Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, false, 8, 64, 48).expect("a picture");
+    picture.fill(0x3366_99ff);
+    picture
+        .savev(fixture.path("Harbor.png"), "png", &[])
+        .expect("png");
+    std::fs::write(fixture.path("Not a photo.png"), "fictional text").expect("fixture file");
+    let test = TestWindow::open(&fixture.uri());
+    show(&test, FolderView::Content);
+
+    let harbor = cell_named(&test, "Harbor");
+    wait_until("the picture's dimensions", || {
+        harbor.shown_picture_dimensions() == "64 x 48"
+    });
+    let other = cell_named(&test, "Not a photo");
+    crate::test_support::harness::wait_for(std::time::Duration::from_millis(300));
+    assert_eq!(other.shown_picture_dimensions(), "", "no dimensions");
+}
+
+/// Grouped List's groups stand side by side as columns, which do not
+/// collapse, so neither the folder menu's View nor a heading's menu offers
+/// Collapse group, Expand all groups or Collapse all groups there, which
+/// did nothing; Tiles still offers them.
+///
+/// parity: VIEW-022, VIEW-008
+#[gtk::test]
+fn grouped_list_offers_no_collapse_commands() {
+    use crate::folder_view::grid::SlotKind;
+    use crate::window::menu_popover::{MenuAction, MenuEntry};
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("group-by", Some("type"));
+    let group_commands = |entries: &[MenuEntry]| {
+        entries
+            .iter()
+            .filter(|entry| {
+                matches!(entry, MenuEntry::Item(item) if matches!(
+                    item.action,
+                    MenuAction::Window(
+                        WindowAction::CollapseGroup
+                            | WindowAction::ExpandGroup
+                            | WindowAction::CollapseAllGroups
+                            | WindowAction::ExpandAllGroups
+                    )
+                ))
+            })
+            .count()
+    };
+    for (view, offered) in [(FolderView::Tiles, true), (FolderView::Compact, false)] {
+        show(&test, view);
+        let grid = test.window.folder_pane().view_widget();
+        let heading = || {
+            descendants::<FileCell>(&grid)
+                .into_iter()
+                .find_map(|cell| cell.slot().filter(|slot| slot.kind() == SlotKind::Heading))
+        };
+        wait_until("a heading", || heading().is_some());
+        let heading = heading().expect("a heading");
+        let in_view = group_commands(&test.window.background_view_menu());
+        let on_heading = group_commands(&test.window.heading_menu_for(&heading));
+        assert_eq!(in_view > 0, offered, "{view:?}: View has {in_view}");
+        assert_eq!(on_heading > 0, offered, "{view:?}: the heading has {on_heading}");
+    }
+}
+
+/// A view chosen while an item of a collapsed group stays selected, beside
+/// one selected far down in a group that shows, reveals that one and gives
+/// it the keyboard. The hidden item, first in the listing, used to be the
+/// one asked for, which no row shows, so the new view stayed at its top.
+///
+/// parity: VIEW-022
+#[gtk::test]
+fn a_new_view_reveals_the_first_selected_item_it_shows() {
+    let fixture = Fixture::empty();
+    std::fs::create_dir(fixture.path("Harbor survey")).expect("fixture subfolder");
+    for number in 0..80 {
+        fixture.write(&format!("Notes {number:02}.txt"));
+    }
+    let test = TestWindow::open(&fixture.uri());
+    test.activate("view", Some("details"));
+    test.activate("group-by", Some("type"));
+    let pane = test.window.folder_pane();
+    wait_until("the groups", || {
+        pane.grouped().is_some_and(|grouped| grouped.layout().is_some())
+    });
+    let folder = test.position_of("Harbor survey");
+    let last = test.position_of("Notes 79.txt");
+    pane.model().select_positions(&[folder, last]);
+    pane.grouped()
+        .expect("a grouped view")
+        .set_collapsed("File folder", true);
+    pane.focus_view();
+    wait_until("the list to have the keyboard", || pane.view_has_focus());
+
+    test.activate("view", Some(FolderView::Content.as_str()));
+    wait_until("the last note to have the keyboard", || {
+        pane.focused_position() == Some(last)
+    });
+    let view = pane.view_widget();
+    wait_until("the last note to be scrolled into view", || {
+        let bounds = pane
+            .owners()
+            .file_cell_at(last, &view)
+            .filter(WidgetExt::is_mapped)
+            .and_then(|cell| cell.compute_bounds(&view));
+        #[expect(clippy::cast_precision_loss, reason = "widget sizes are small")]
+        let height = view.height() as f32;
+        bounds.is_some_and(|bounds| bounds.y() >= 0.0 && bounds.y() + bounds.height() <= height)
+    });
+    let mut selected = pane.model().selected_positions();
+    selected.sort_unstable();
+    let mut expected = vec![folder, last];
+    expected.sort_unstable();
+    assert_eq!(selected, expected, "both stay selected");
 }
 
 /// Shows `view` in a folder with nothing to lay out.

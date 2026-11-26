@@ -461,21 +461,47 @@ impl BrowserWindow {
             return;
         }
         self.imp().read_only_drive.replace((uri.clone(), false));
+        self.ask_whether_read_only(uri);
+    }
+
+    /// Asks again whether the drive of the folder shown is read-only, once
+    /// the folder was listed anew (F5, a share reconnected, a drive
+    /// mounted again): the drive at the same address may have changed,
+    /// as a USB stick plugged back with its write-protect switch moved,
+    /// and a first question that failed is asked again. The answer known
+    /// holds until the new one comes, so New does not flicker.
+    pub(in crate::window) fn recheck_read_only_drive(&self) {
+        let Some(uri) = self.current_uri() else {
+            return;
+        };
+        if self.imp().read_only_drive.borrow().0 == uri {
+            self.ask_whether_read_only(uri);
+        }
+    }
+
+    /// Asks off the main loop whether the file system of the folder at
+    /// `uri` is read-only, and keeps the answer while that folder is shown,
+    /// updating the commands when it changed. A question that fails
+    /// changes nothing.
+    fn ask_whether_read_only(&self, uri: String) {
         let folder = gtk::gio::File::for_uri(&uri);
         gtk::glib::spawn_future_local(gtk::glib::clone!(
             #[weak(rename_to = window)]
             self,
             async move {
-                let read_only = folder
+                let Ok(info) = folder
                     .query_filesystem_info_future(
                         gtk::gio::FILE_ATTRIBUTE_FILESYSTEM_READONLY,
                         gtk::glib::Priority::DEFAULT,
                     )
                     .await
-                    .is_ok_and(|info| info.boolean(gtk::gio::FILE_ATTRIBUTE_FILESYSTEM_READONLY));
-                let still_shown = window.imp().read_only_drive.borrow().0 == uri;
-                if still_shown && read_only {
-                    window.imp().read_only_drive.replace((uri, true));
+                else {
+                    return;
+                };
+                let read_only = info.boolean(gtk::gio::FILE_ATTRIBUTE_FILESYSTEM_READONLY);
+                let known = window.imp().read_only_drive.borrow().clone();
+                if known.0 == uri && known.1 != read_only {
+                    window.imp().read_only_drive.replace((uri, read_only));
                     window.update_file_commands();
                 }
             }

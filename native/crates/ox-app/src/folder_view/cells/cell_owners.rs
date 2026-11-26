@@ -659,6 +659,19 @@ impl CellOwners {
         labels
     }
 
+    /// The accessible descriptions of the list items bound now to a
+    /// group's heading, line or blank, rather than a file, for tests.
+    #[cfg(test)]
+    pub(crate) fn bound_slot_descriptions(&self) -> Vec<String> {
+        self.owners
+            .borrow()
+            .iter()
+            .filter_map(CellOwner::gtk_list_item)
+            .filter(|list_item| list_item.item().is_some_and(|item| !item.is::<FileItem>()))
+            .map(|list_item| list_item.accessible_description().to_string())
+            .collect()
+    }
+
     /// Whether items have check boxes.
     pub(crate) fn shows_item_checks(&self) -> bool {
         !self.hides_item_checks.get()

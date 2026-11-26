@@ -97,6 +97,46 @@ fn scratch() -> &'static Path {
         .path()
 }
 
+/// The folder each extraction's own folder is made in: eight folders down
+/// in [`scratch`], so a member that climbs out of the extraction with as
+/// many as ten `..` still lands in the scratch folder, where
+/// [`check_nothing_escaped`] finds it.
+fn cases() -> PathBuf {
+    let cases = scratch().join("cases/1/2/3/4/5/6/7/8");
+    fs::create_dir_all(&cases).expect("the cases' folder");
+    cases
+}
+
+/// Checks that the scratch folder holds nothing outside `root`, the
+/// extraction's own folder, but the members' preview copies and the
+/// folders `root` is in: an extraction that climbed out of its new folder
+/// above `root` wrote there, and would also leave files behind for the
+/// next inputs.
+///
+/// # Panics
+///
+/// When something is there.
+fn check_nothing_escaped(root: &Path) {
+    fn walk(folder: &Path, root: &Path, previews: &Path) {
+        let Ok(entries) = fs::read_dir(folder) else {
+            return;
+        };
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            if path == root || path == previews {
+                continue;
+            }
+            assert!(
+                root.starts_with(&path),
+                "the extraction wrote {} outside its folder",
+                path.display()
+            );
+            walk(&path, root, previews);
+        }
+    }
+    walk(scratch(), root, &scratch().join("previews"));
+}
+
 /// Lower limits than the app's, so a fuzzed archive that is within every
 /// limit still extracts in well under a second.
 fn fuzz_limits() -> ExtractionLimits {
@@ -186,8 +226,9 @@ fn check_preview(path: &Path, size: u64) {
 }
 
 /// Extracts the archive into a new folder in an empty folder, as Extract
-/// All does, then checks that nothing was written outside the new folder
-/// and that every link it holds stays inside it.
+/// All does, then checks that nothing was written outside the new folder,
+/// in the folders above it too, and that every link it holds stays inside
+/// it.
 ///
 /// # Panics
 ///
@@ -200,7 +241,7 @@ pub fn extract(data: &[u8]) {
     let cancel = Cancellation::new();
     let root = tempfile::Builder::new()
         .prefix("extract-")
-        .tempdir_in(scratch())
+        .tempdir_in(cases())
         .expect("a temporary folder");
     let destination = root.path().join("Destination");
     fs::create_dir(&destination).expect("the destination folder");
@@ -236,6 +277,7 @@ pub fn extract(data: &[u8]) {
     };
     let result = extractor.extract(&request, &cancel);
     let new_folder = destination.join("Extracted");
+    check_nothing_escaped(root.path());
     check_only_child(root.path(), "Destination");
     match result {
         Ok(extracted) => {

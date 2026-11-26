@@ -164,6 +164,14 @@ pub(crate) fn is_document(content_type: &str, name: &str) -> bool {
     if DOCUMENT_TYPES.contains(&content_type.as_str()) {
         return true;
     }
+    has_document_extension(name)
+}
+
+/// Whether a file named `name` has the extension of a document
+/// `LibreOffice` converts here, whatever its content: an `.xls` or `.doc`
+/// many sites export is HTML or Office 2003's XML, which the system may
+/// name as text, and which `LibreOffice` draws as the document it is.
+pub(crate) fn has_document_extension(name: &str) -> bool {
     let extension = name
         .rsplit_once('.')
         .filter(|(stem, _)| !stem.is_empty())
@@ -642,8 +650,13 @@ fn open_plain(path: &Path) -> Option<fs::File> {
 }
 
 /// The PDF `LibreOffice` wrote at `path`, read with care: a link, a pipe
-/// or a device is not followed or read, and a file larger than
-/// [`PDF_SIZE_LIMIT`] or one that is no PDF is refused.
+/// or a device is not followed or read, and a file as large as
+/// [`PDF_SIZE_LIMIT`] or larger, one that is no PDF or one cut short is
+/// refused. The conversion runs with a limit on the size of the files it
+/// writes (the thumbnailers' `FILE_SIZE_LIMIT`), as large as [`PDF_SIZE_LIMIT`]: a
+/// PDF that reached it was cut there, so one of exactly that size is no
+/// whole PDF, and one cut short anyhow lacks the `%%EOF` a PDF ends with.
+/// Kept, it would be found in the cache and shown broken in every run.
 fn read_pdf(path: &Path) -> Option<Vec<u8>> {
     let flags = rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::NONBLOCK;
     let file = fs::OpenOptions::new()
@@ -652,12 +665,20 @@ fn read_pdf(path: &Path) -> Option<Vec<u8>> {
         .open(path)
         .ok()?;
     let metadata = file.metadata().ok()?;
-    if !metadata.is_file() || metadata.len() > PDF_SIZE_LIMIT {
+    if !metadata.is_file() || metadata.len() >= PDF_SIZE_LIMIT {
         return None;
     }
     let mut bytes = Vec::new();
     file.take(PDF_SIZE_LIMIT).read_to_end(&mut bytes).ok()?;
-    bytes.starts_with(b"%PDF-").then_some(bytes)
+    (bytes.starts_with(b"%PDF-") && ends_as_a_pdf(&bytes)).then_some(bytes)
+}
+
+/// Whether `pdf` ends as a whole PDF does: its last end-of-file marker,
+/// `%%EOF`, in its last kilobyte, where the format puts it (a writer may
+/// follow it with a line break or a few bytes).
+fn ends_as_a_pdf(pdf: &[u8]) -> bool {
+    let tail = &pdf[pdf.len().saturating_sub(1024)..];
+    tail.windows(5).any(|window| window == b"%%EOF")
 }
 
 /// A document as it is now: where it really is, its size and when it
@@ -721,11 +742,12 @@ impl Cache {
     }
 
     /// The kept PDF named `name`, marked as just used; `None` when there
-    /// is none, or something else is there.
+    /// is none, or something else is there, such as a PDF cut at the
+    /// conversion's file size limit that an earlier version kept.
     fn find(&self, name: &str) -> Option<PathBuf> {
         let path = self.folder.join(name);
         let metadata = fs::symlink_metadata(&path).ok()?;
-        if !metadata.is_file() || metadata.len() > PDF_SIZE_LIMIT {
+        if !metadata.is_file() || metadata.len() >= PDF_SIZE_LIMIT {
             return None;
         }
         if let Ok(file) = fs::OpenOptions::new().write(true).open(&path) {
@@ -951,12 +973,21 @@ impl Sandbox {
 /// The thumbnail of the document `job` names: the first page of its PDF
 /// ([`Converter::pdf`]) drawn to fit the thumbnail's size, written into
 /// the shared cache as the Thumbnail Managing Standard asks. Blocks.
+///
+/// `target` is the file the item stands for when it is another, as a
+/// Recently used files row (`recent:///…`) stands for a file elsewhere:
+/// the row has no path of its own, so that file is the one converted,
+/// while the thumbnail stays the item's, under its own address.
 pub(in crate::thumbnails) fn write_thumbnail(
     job: &Job,
+    target: Option<&str>,
     cancellation: &gio::Cancellable,
 ) -> Result<writer::Made, Failure> {
     let converter = converter().ok_or(Failure::Unavailable)?;
-    let path = gio::File::for_uri(&job.uri).path().ok_or(Failure::Refused)?;
+    let path = gio::File::for_uri(&job.uri)
+        .path()
+        .or_else(|| target.and_then(|target| gio::File::for_uri(target).path()))
+        .ok_or(Failure::Refused)?;
     let pdf = converter.pdf(&path, Priority::Thumbnail, cancellation)?;
     let pixels = job.flavor.pixels();
     let picture = twice(cancellation, || {
@@ -1287,6 +1318,41 @@ mod tests {
             assert_eq!(thread.join().expect("joined"), Err(Failure::Cancelled));
         }
         drop(busy);
+    }
+
+    /// A PDF the conversion's file size limit cut, at exactly that size, or
+    /// one cut short another way, without the `%%EOF` a PDF ends with, is
+    /// refused rather than kept and shown broken in every run; a whole one
+    /// is read.
+    ///
+    /// parity: VIEW-070
+    #[test]
+    fn a_pdf_cut_short_is_refused() {
+        use std::io::Seek;
+
+        let folder = tempfile::tempdir().expect("a temporary folder");
+        let whole = folder.path().join("whole.pdf");
+        fs::write(&whole, b"%PDF-1.7\nfictional pages\n%%EOF\n").expect("a PDF");
+        let short = folder.path().join("short.pdf");
+        fs::write(&short, b"%PDF-1.7\nfictional pa").expect("a PDF cut short");
+        let at_limit = folder.path().join("at-limit.pdf");
+        let file = fs::File::create(&at_limit).expect("a PDF at the limit");
+        file.set_len(PDF_SIZE_LIMIT).expect("its length");
+        drop(file);
+        let mut ending = fs::OpenOptions::new()
+            .write(true)
+            .open(&at_limit)
+            .expect("opened");
+        ending.write_all(b"%PDF-1.7").expect("its start");
+        ending
+            .seek(std::io::SeekFrom::Start(PDF_SIZE_LIMIT - 6))
+            .expect("its end");
+        ending.write_all(b"%%EOF\n").expect("its end");
+        drop(ending);
+
+        assert!(read_pdf(&whole).is_some(), "a whole PDF is read");
+        assert_eq!(read_pdf(&short), None, "no %%EOF");
+        assert_eq!(read_pdf(&at_limit), None, "cut at the file size limit");
     }
 
     /// The cache keeps a PDF whole under its name, readable by its owner

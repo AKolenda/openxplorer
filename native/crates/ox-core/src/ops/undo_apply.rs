@@ -380,7 +380,7 @@ fn move_back(engine: &mut TransferEngine, items: &[MovedItem], context: &Operati
         let mut part = engine
             .run(operation, &group.uris, &context.cancel)
             .unwrap_or_else(|error| failed_request(&error.into(), context));
-        let blocked = take_blocked(&mut part, &group.folder_uri);
+        let blocked = take_blocked(&mut part, &group.folder_uri, context);
         merge_results(&mut total, part);
         if total.cancelled {
             return total;
@@ -433,21 +433,25 @@ fn move_back(engine: &mut TransferEngine, items: &[MovedItem], context: &Operati
 /// in `folder_uri` and returns them; an item skipped for another reason,
 /// as a name the destination cannot store that the user chose to skip,
 /// stays skipped.
-fn take_blocked(part: &mut TransferResult, folder_uri: &str) -> Vec<String> {
+fn take_blocked(part: &mut TransferResult, folder_uri: &str, context: &OperationContext) -> Vec<String> {
     let (blocked, skipped): (Vec<String>, Vec<String>) = std::mem::take(&mut part.skipped)
         .into_iter()
-        .partition(|uri| name_is_taken(folder_uri, &GioNode::new(uri).name()));
+        .partition(|uri| name_is_taken(folder_uri, &GioNode::new(uri).name(), context));
     part.skipped = skipped;
     blocked
 }
 
 /// Whether an item called `name` is in the folder at `folder_uri`; a link
-/// counts, even one whose target is gone.
-fn name_is_taken(folder_uri: &str, name: &std::ffi::OsStr) -> bool {
-    gio::File::for_uri(folder_uri)
-        .child(name)
-        .query_file_type(gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS, gio::Cancellable::NONE)
-        != gio::FileType::Unknown
+/// counts, even one whose target is gone. The look is made with the
+/// operation's cancellable, so Cancel in the progress window stops one
+/// waiting on a slow or disconnected server, as it stops the rest of the
+/// Undo; a look cancelled finds nothing, and the Undo then ends as
+/// cancelled.
+fn name_is_taken(folder_uri: &str, name: &std::ffi::OsStr, context: &OperationContext) -> bool {
+    gio::File::for_uri(folder_uri).child(name).query_file_type(
+        gio::FileQueryInfoFlags::NOFOLLOW_SYMLINKS,
+        Some(context.cancellable()),
+    ) != gio::FileType::Unknown
 }
 
 /// Moves the item at `uri` back into `folder_uri` as `name`, asking
@@ -469,14 +473,14 @@ fn move_back_asking(
         more_items,
     };
     let attempt = || {
-        if name_is_taken(folder_uri, name) {
+        if name_is_taken(folder_uri, name, context) {
             return Err(name_taken_on_undo(&name.to_string_lossy(), uri, folder_uri));
         }
         let part = engine
             .run_renamed(TransferMode::Move, folder_uri, uri, name, &context.cancel)
             .unwrap_or_else(|error| failed_request(&error.into(), context));
         // Taken in the moment between the look and the move.
-        if part.skipped.iter().any(|skipped| skipped == uri) && name_is_taken(folder_uri, name) {
+        if part.skipped.iter().any(|skipped| skipped == uri) && name_is_taken(folder_uri, name, context) {
             return Err(name_taken_on_undo(&name.to_string_lossy(), uri, folder_uri));
         }
         Ok(part)

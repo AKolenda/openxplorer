@@ -22,6 +22,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
+use std::time::{Duration, Instant};
 
 use gtk::prelude::*;
 use gtk::{gdk, gio};
@@ -76,11 +77,24 @@ impl Contents {
     /// videos' previews are on as `pictures` and `videos` say: its first
     /// picture or video by name, else its first file.
     pub(crate) fn shown(&self, pictures: bool, videos: bool) -> Shown {
+        self.shown_within(pictures, videos, None)
+    }
+
+    /// [`Self::shown`] with "Skip very large files" as `size_limit` says:
+    /// a picture or video larger than it keeps its icon wherever it is
+    /// listed, so it does not peek out of its folder either; the other one,
+    /// or the first file's page, shows instead.
+    pub(crate) fn shown_within(&self, pictures: bool, videos: bool, size_limit: Option<u64>) -> Shown {
+        let within_limit = |item: &&Peeking| match (size_limit, item.size) {
+            (Some(limit), Some(size)) => size <= limit,
+            _ => true,
+        };
         let picture = self
             .picture
             .iter()
             .filter(|_| pictures)
             .chain(self.video.iter().filter(|_| videos))
+            .filter(within_limit)
             .min_by_key(|item| NameOrder::of(&item.name))
             .cloned();
         let page = if picture.is_none() {
@@ -230,6 +244,15 @@ pub(crate) struct FolderRequest {
     pub on_screen: OnScreen,
 }
 
+impl FolderRequest {
+    /// What the folder's icon shows of `contents`, with the previews the
+    /// user wants: pictures and videos as on, none larger than "Skip very
+    /// large files" lets through ([`Contents::shown_within`]).
+    fn shown_of(&self, contents: &Contents) -> Shown {
+        contents.shown_within(self.policy.pictures, self.policy.videos, self.policy.size_limit)
+    }
+}
+
 /// What a folder's icon draws of its contents.
 #[derive(Debug, Clone)]
 pub(crate) struct FolderArt {
@@ -266,19 +289,31 @@ impl PreviewPolicy {
     }
 }
 
+/// How long the times and sizes of a folder's items read last are taken
+/// as they are: a picture overwritten in place leaves its folder's time
+/// as it was, so a folder whose art is drawn from memory has its items
+/// read again once this has passed ([`contents_need_checking`]).
+const CONTENTS_CHECKED_FOR: Duration = Duration::from_secs(2);
+
+/// The contents of the folders read, by URI and modification time, with
+/// when their items' times and sizes were read.
+type KnownContents = HashMap<(String, i64), (Rc<Contents>, Instant)>;
+
 thread_local! {
-    /// The contents of the folders read, by URI and modification time.
-    static KNOWN: RefCell<HashMap<(String, i64), Rc<Contents>>> = RefCell::new(HashMap::new());
+    /// The contents of the folders read.
+    static KNOWN: RefCell<KnownContents> = RefCell::new(HashMap::new());
     static READING: Rc<Slots> = Rc::new(Slots::new(READING_AT_ONCE));
 }
 
-/// The contents of `request`'s folder read for its current time, if any.
-fn known(request: &FolderRequest) -> Option<Rc<Contents>> {
+/// The contents of `request`'s folder read for its current time, if any,
+/// and when its items were read.
+fn known(request: &FolderRequest) -> Option<(Rc<Contents>, Instant)> {
     let key = (request.uri.clone(), request.modified?);
     KNOWN.with_borrow(|known| known.get(&key).cloned())
 }
 
-/// Keeps `contents` for `request`'s folder at its current time.
+/// Keeps `contents` for `request`'s folder at its current time, its items
+/// read now.
 fn keep(request: &FolderRequest, contents: Contents) -> Rc<Contents> {
     let contents = Rc::new(contents);
     if let Some(modified) = request.modified {
@@ -286,10 +321,24 @@ fn keep(request: &FolderRequest, contents: Contents) -> Rc<Contents> {
             if known.len() >= MOST_FOLDERS_KEPT {
                 known.clear();
             }
-            known.insert((request.uri.clone(), modified), Rc::clone(&contents));
+            known.insert(
+                (request.uri.clone(), modified),
+                (Rc::clone(&contents), Instant::now()),
+            );
         });
     }
     contents
+}
+
+/// Whether the art of `request`'s folder, drawn at once from what is
+/// known ([`kept_folder_art`]), should still be read again
+/// ([`folder_art`]): its items were read longer ago than
+/// [`CONTENTS_CHECKED_FOR`], and the picture peeking out may have been
+/// overwritten in place since, which leaves its folder's time as it was.
+/// Otherwise the folder's icon would keep the old picture for as long as
+/// its thumbnail stayed in memory.
+pub(crate) fn contents_need_checking(request: &FolderRequest) -> bool {
+    known(request).is_some_and(|(_, read)| read.elapsed() >= CONTENTS_CHECKED_FOR)
 }
 
 /// The request for the thumbnail of `item` peeking out of `request`'s
@@ -313,8 +362,8 @@ fn picture_request(request: &FolderRequest, item: &Peeking) -> PreviewRequest {
 /// thumbnail is kept in memory. `None` when it must be read
 /// ([`folder_art`]).
 pub(crate) fn kept_folder_art(request: &FolderRequest) -> Option<KnownArt> {
-    let contents = known(request)?;
-    let shown = contents.shown(request.policy.pictures, request.policy.videos);
+    let (contents, _) = known(request)?;
+    let shown = request.shown_of(&contents);
     let Some(item) = shown.picture else {
         return Some(shown.page.map_or(KnownArt::Plain, |page| {
             KnownArt::Drawn(FolderArt {
@@ -339,22 +388,21 @@ pub(crate) async fn folder_art(request: FolderRequest) -> Option<FolderArt> {
     if !request.policy.remote && super::is_on_network(&request.uri, None).await {
         return None;
     }
-    let known = known(&request).map(|known| Contents::clone(&known));
+    let known = known(&request).map(|(known, _)| Contents::clone(&known));
     let reading = READING.with(Rc::clone);
     let on_screen = request.on_screen.clone();
     let contents = reading
         .blocking_in_turn(&move || on_screen.get(), move |_| match known {
             // The picture's time is read again: it may have changed
             // without its folder changing.
-            Some(known) => (true, read_again(&folder, &known)),
-            None => (false, read_contents(&folder)),
+            Some(known) => read_again(&folder, &known),
+            None => read_contents(&folder),
         })
         .await?;
-    let contents = match contents {
-        (true, contents) => Rc::new(contents),
-        (false, contents) => keep(&request, contents),
-    };
-    let shown = contents.shown(request.policy.pictures, request.policy.videos);
+    // Kept as read now, so the art drawn at once next time is the
+    // picture's current version.
+    let contents = keep(&request, contents);
+    let shown = request.shown_of(&contents);
     if let Some(item) = &shown.picture {
         if let Some(picture) = super::preview(picture_request(&request, item)).await {
             return Some(FolderArt {
@@ -571,6 +619,23 @@ mod tests {
         assert!(picture.uri.starts_with("file:///") && picture.uri.ends_with("Harbor%202.png"));
         assert_eq!(picture.content_type, "image/png");
         assert!(picture.modified.is_some() && picture.size.is_some_and(|size| size > 0));
+
+        // "Skip very large files": one larger than the limit keeps its
+        // icon, so it does not peek out either, and the other does.
+        let video_size = shown.picture.and_then(|video| video.size).expect("a size");
+        let small = contents.shown_within(true, true, Some(video_size));
+        assert_eq!(
+            name(small.picture.as_ref()),
+            Some("Arrival.mp4"),
+            "the small video still peeks out"
+        );
+        let too_large = contents.shown_within(true, false, Some(video_size));
+        assert_eq!(too_large.picture, None, "the larger pictures keep their icons");
+        assert_eq!(
+            too_large.page.map(|page| page.name).as_deref(),
+            Some("Agenda.txt"),
+            "the first file's page instead"
+        );
     }
 
     /// A folder without pictures shows its first file as a page; an empty

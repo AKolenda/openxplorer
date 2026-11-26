@@ -263,9 +263,10 @@ fn the_apps_own_style_comes_back_with_its_accent() {
 /// With Windows' style the chevron stands at the title's top edge, well
 /// clear of the text under it (3 pixels above its capitals, as in Windows
 /// 11), in a column as wide as a new window's and in one narrower than its
-/// title, where the text runs under the middle.
+/// title, where the text runs under the middle, and in Compact view, whose
+/// titles are six pixels shorter.
 ///
-/// parity: VIEW-014
+/// parity: VIEW-014, VIEW-067
 #[gtk::test]
 fn windows_style_keeps_the_chevron_clear_of_the_text_in_any_column_width() {
     let fixture = Fixture::standard();
@@ -273,7 +274,15 @@ fn windows_style_keeps_the_chevron_clear_of_the_text_in_any_column_width() {
     save_style(&test, ColumnHeaderStyle::Windows);
     let view = test.window.folder_pane().details();
     let modified = view.column(SortColumn::Modified).expect("a Date modified column");
-    for width in [None, Some(70)] {
+    let normal_height = title_of(&test, SortColumn::Modified).height();
+    for (compact, width) in [(false, None), (false, Some(70)), (true, None), (true, Some(70))] {
+        if compact && width.is_none() {
+            test.activate("compact-density", None);
+            wait_until("the compact titles", || {
+                title_of(&test, SortColumn::Modified).height() < normal_height
+            });
+            settle_colors(&test);
+        }
         if let Some(width) = width {
             modified.set_fixed_width(width);
         }
@@ -286,13 +295,18 @@ fn windows_style_keeps_the_chevron_clear_of_the_text_in_any_column_width() {
                 .filter(|row| !ink(&rows[*row..=*row], 1).is_empty())
                 .collect();
             let top = *inked_rows.first().expect("a chevron");
-            assert!(top <= 2, "{width:?} {direction}: from row {top}");
+            assert!(
+                top <= 2,
+                "compact {compact}, {width:?} {direction}: from row {top}"
+            );
             let chevron_end = inked_rows
                 .iter()
                 .zip(inked_rows.iter().skip(1))
                 .find(|(row, next)| **next > **row + 1)
-                .map(|(row, _)| *row)
-                .expect("text under the chevron");
+                .map(|(row, _)| *row);
+            let Some(chevron_end) = chevron_end else {
+                panic!("compact {compact}, {width:?} {direction}: text clear of the chevron");
+            };
             // The capitals' top, where the title's first letter, the "D"
             // of "Date modified", starts at the text's left edge: a font's
             // taller letters, such as "d" and "f", may stand a pixel above
@@ -308,8 +322,9 @@ fn windows_style_keeps_the_chevron_clear_of_the_text_in_any_column_width() {
                 .expect("text under the chevron");
             assert!(
                 capitals_top - chevron_end > 3,
-                "{width:?} {direction}: the chevron ends at row {chevron_end}, the capitals start at {capitals_top}"
+                "compact {compact}, {width:?} {direction}: the chevron ends at row {chevron_end}, the capitals start at {capitals_top}"
             );
         }
     }
+    test.activate("compact-density", None);
 }
