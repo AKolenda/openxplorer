@@ -114,6 +114,17 @@ fn stored_old_default_network_icons_turn_to_thumbnails_unless_chosen() {
         let options = Settings::open(root.path()).snapshot().preferences.view_options;
         assert!(options.remote_previews, "thumbnails stored on stay: {older}");
     }
+
+    // 2.0.18 defaulted to thumbnails and stored icons chosen there with
+    // every other view option at its default, which no later release
+    // stored at all: that choice stays.
+    let chosen_in_2_0_18 = json!({"version": 2, "preferences": {"viewOptions": {
+        "showPreviews": true, "remotePreviews": false, "skipLargePreviews": true,
+        "previewPictures": true, "previewVideos": true, "previewDocuments": true
+    }}});
+    std::fs::write(root.path().join("settings.json"), chosen_in_2_0_18.to_string()).unwrap();
+    let options = Settings::open(root.path()).snapshot().preferences.view_options;
+    assert!(!options.remote_previews, "icons chosen in 2.0.18 stay");
 }
 
 /// Ported from `v2.0.0:desktop/tests/test_v05.py::SettingsWindowsTests::test_network_interval_whitelist`
