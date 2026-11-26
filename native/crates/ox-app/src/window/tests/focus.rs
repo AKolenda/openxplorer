@@ -156,12 +156,27 @@ fn a_tab_opened_in_front_puts_the_keyboard_in_its_folder() {
     settle();
     let after_request = test.window.folder_pane().view_has_focus();
 
+    // Ctrl+T on a tab of the strip: the new tab's list takes the keyboard
+    // too, though the strip keeps it while the tabs are browsed.
+    assert!(
+        test.window.tab_strip().focus_front_tab(),
+        "a tab takes the keyboard"
+    );
+    test.activate("new-tab", None);
+    test.wait_for_listing("the tab opened from the strip");
+    settle();
+    let after_new_tab_from_strip = test.window.folder_pane().view_has_focus();
+
     refresh_button(&test).grab_focus();
     test.activate("open-tab-background", Some(&fixture.uri()));
     settle();
     let after_background_tab = focused(&test);
 
     assert!(after_new_tab, "Ctrl+T leaves the keyboard in the new tab's list");
+    assert!(
+        after_new_tab_from_strip,
+        "Ctrl+T on a tab leaves the keyboard in the new tab's list"
+    );
     assert!(
         after_request,
         "a folder another application opens takes the keyboard"

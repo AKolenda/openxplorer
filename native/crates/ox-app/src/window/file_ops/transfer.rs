@@ -221,7 +221,7 @@ impl BrowserWindow {
         };
         if items.is_empty() {
             let origin = self.current_uri();
-            let removed = remove_if_empty(source).await;
+            let removed = remove_if_empty(source).await.map_err(OpsError::from);
             let finished = removed.map(|()| FinishedOperation {
                 undo: Some(
                     UndoRecord::Replace {
@@ -303,12 +303,23 @@ impl BrowserWindow {
             .chain([destination.as_str()]);
         let changed = changed_folders(written, incoming.uris.iter().map(String::as_str));
         self.context().search_cache().folders_written(changed);
-        // The merged folder goes only when nothing is left in it.
-        let emptied = match (merged_from, &outcome) {
-            (Some(folder), Ok(done)) if !done.result.cancelled => {
-                remove_if_empty(folder).await.ok().map(|()| folder.to_owned())
-            }
-            _ => None,
+        // The merged folder goes only when nothing is left in it. One that
+        // still holds an item skipped or not moved stays without a word;
+        // any other failure to remove it, such as a permission or a drive
+        // error, is said once the move is reported, and Undo then moves
+        // the items back without making the folder again.
+        let (emptied, not_removed) = match (merged_from, &outcome) {
+            (Some(folder), Ok(done)) if !done.result.cancelled => match remove_if_empty(folder).await {
+                Ok(()) => (Some(folder.to_owned()), None),
+                Err(error)
+                    if error.matches(gtk::gio::IOErrorEnum::NotEmpty)
+                        || error.matches(gtk::gio::IOErrorEnum::NotFound) =>
+                {
+                    (None, None)
+                }
+                Err(error) => (None, Some(self.merged_folder_kept(folder, &error))),
+            },
+            _ => (None, None),
         };
         let finished = outcome.clone().map(|outcome| {
             let mut finished = FinishedOperation::of_transfer(outcome);
@@ -324,7 +335,24 @@ impl BrowserWindow {
             finished
         });
         self.conclude_operation_in(finished, origin.as_deref()).await;
+        if let Some(message) = not_removed {
+            self.show_message(&message);
+        }
         outcome.ok()
+    }
+
+    /// What the window says when the folder at `folder`, whose items a
+    /// merge moved out, could not be removed for `error`: the items were
+    /// moved, and the folder, left empty, is still there.
+    fn merged_folder_kept(&self, folder: &str, error: &gtk::glib::Error) -> String {
+        let shown = self.imp().locations.borrow().display_location(folder);
+        ox_core::i18n::format_message(
+            "The items were moved, but the folder {folder} could not be removed. {error}",
+            &[
+                ("folder", &shown),
+                ("error", &ox_core::system_error::message_of(error)),
+            ],
+        )
     }
 
     /// Finds the name conflicts of `incoming`, inside merged folders too:
@@ -411,11 +439,10 @@ async fn folder_items(uri: &str) -> Result<Vec<String>, String> {
 /// Removes the folder at `uri` when it is empty; a folder that holds
 /// anything is never removed (the file system refuses to), so nothing in
 /// it is lost.
-async fn remove_if_empty(uri: &str) -> Result<(), OpsError> {
+async fn remove_if_empty(uri: &str) -> Result<(), gtk::glib::Error> {
     gtk::gio::File::for_uri(uri)
         .delete_future(gtk::glib::Priority::DEFAULT)
         .await
-        .map_err(OpsError::from)
 }
 
 #[cfg(test)]

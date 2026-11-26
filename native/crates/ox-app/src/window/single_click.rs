@@ -495,9 +495,20 @@ impl BrowserWindow {
             };
             (view, pointed.position)
         };
-        let Some(state) = held_now(&view) else {
+        let Some((state, pointer)) = held_now(&view) else {
             return;
         };
+        // The view may have scrolled under the resting pointer, which then
+        // points at another item, or at none: only the item under it now
+        // is selected, and the dwell starts again on another one.
+        let under = pointer.and_then(|point| self.click_item_at(&view, point));
+        if under != Some(position) {
+            self.forget_pointed_item();
+            if let Some(point) = pointer {
+                self.pointer_over_click_items(&view, Some(point));
+            }
+            return;
+        }
         let quiet = !state.intersects(held_buttons())
             && self.single_click_opens()
             && !self.band_is_shown()
@@ -553,14 +564,23 @@ impl BrowserWindow {
 /// The modifiers and pointer buttons held now on `view`'s seat, read when
 /// pointing selects rather than at the pointer's last move: Ctrl or Shift
 /// pressed or a button let go while the pointer rests count.
-fn held_now(view: &gtk::Widget) -> Option<gdk::ModifierType> {
+fn held_now(view: &gtk::Widget) -> Option<(gdk::ModifierType, Option<(f64, f64)>)> {
     let seat = view.display().default_seat()?;
-    let surface = view.native()?.surface()?;
-    let (_, _, pointer) = surface.device_position(&seat.pointer()?)?;
+    let native = view.native()?;
+    let surface = native.surface()?;
+    let (x, y, pointer) = surface.device_position(&seat.pointer()?)?;
     let keys = seat
         .keyboard()
         .map_or_else(gdk::ModifierType::empty, |keyboard| keyboard.modifier_state());
-    Some(pointer | keys)
+    // Where the pointer is now in `view`: the surface's coordinates less
+    // the native's offset in it, then from the native to the view.
+    let (offset_x, offset_y) = native.surface_transform();
+    #[expect(clippy::cast_possible_truncation, reason = "pixels on a screen")]
+    let in_native = gtk::graphene::Point::new((x - offset_x) as f32, (y - offset_y) as f32);
+    let in_view = native
+        .compute_point(view, &in_native)
+        .map(|point| (f64::from(point.x()), f64::from(point.y())));
+    Some((pointer | keys, in_view))
 }
 
 /// Whether the pointer at `to` is past the desktop's drag threshold from

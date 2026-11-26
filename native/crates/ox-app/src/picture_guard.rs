@@ -410,13 +410,13 @@ fn decode_loaded(
         let held;
         let bytes = if let Some(mut first) = start.take() {
             first.extend_from_slice(&buffer[..read]);
-            let declared = declared_size(&first);
-            if declared == Declared::Incomplete && read > 0 && first.len() < HEADER_LIMIT {
-                start = Some(first);
-                continue;
-            }
-            if let Some(refusal) = refusal_by_header(declared, limits) {
-                break Err(refusal);
+            match held_start(&first, read, limits) {
+                HeldStart::Hold => {
+                    start = Some(first);
+                    continue;
+                }
+                HeldStart::Refuse(refusal) => break Err(refusal),
+                HeldStart::Release => {}
             }
             held = first;
             &held[..]
@@ -782,14 +782,85 @@ fn bmp_size(bytes: &[u8]) -> Declared {
     })
 }
 
+/// What becomes of a picture's first bytes, held back from gdk-pixbuf
+/// while its header is looked for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HeldStart {
+    /// Read on: the header is not whole yet.
+    Hold,
+    /// Hand them to the loader.
+    Release,
+    /// Refuse the picture, before the loader gets any of it.
+    Refuse(Refusal),
+}
+
+/// What becomes of `first`, the first bytes read of a picture, after a
+/// read of `read` bytes (none at the end of the file), within `limits`:
+/// held back while its header is not whole and more may come, within
+/// [`held_start_limit`]; refused when the header refuses it; and released
+/// to the loader otherwise. An icon or cursor whose directory or bitmap
+/// headers are still not all read when the file ends or the hold-back's
+/// limit is reached is refused too: gdk-pixbuf would read on and reserve
+/// rows as wide as a bitmap header nobody checked says. Any other picture
+/// whose header was not found is left to gdk-pixbuf's own reading of its
+/// size.
+fn held_start(first: &[u8], read: usize, limits: Limits) -> HeldStart {
+    let declared = declared_size(first);
+    if declared == Declared::Incomplete {
+        if read > 0 && first.len() < held_start_limit(first) {
+            return HeldStart::Hold;
+        }
+        if is_icon(first) {
+            return HeldStart::Refuse(Refusal::Damaged);
+        }
+    }
+    refusal_by_header(declared, limits).map_or(HeldStart::Release, HeldStart::Refuse)
+}
+
+/// Whether `bytes` start as an icon's or a cursor's do.
+fn is_icon(bytes: &[u8]) -> bool {
+    matches!(bytes.get(..4), Some(b"\0\0\x01\0" | b"\0\0\x02\0"))
+}
+
+/// The most of a picture's first `bytes` held back from gdk-pixbuf while
+/// its header is looked for: [`HEADER_LIMIT`], or for an icon or cursor
+/// whose directory is read, as far as the furthest of its images' bitmap
+/// headers, within [`MAX_ICON_DATA_END`]. gdk-pixbuf reserves rows as wide
+/// as a bitmap header says, so every one is read ([`icon_size`]) before
+/// the loader is given any of the file: one placed past the first
+/// [`HEADER_LIMIT`] bytes used to reach the loader unread, its width
+/// whatever it said. An icon program writes several images of up to 256
+/// pixels square, each up to a quarter of a megabyte as a bitmap, so a
+/// real icon is held back as far as its last image.
+fn held_start_limit(bytes: &[u8]) -> usize {
+    let Some(count) = field(bytes, 4).map(u16::from_le_bytes).filter(|_| is_icon(bytes)) else {
+        return HEADER_LIMIT;
+    };
+    let directory = 6 + 16 * usize::from(count);
+    let Some(entries) = bytes.get(6..directory) else {
+        return HEADER_LIMIT;
+    };
+    let most = usize::try_from(MAX_ICON_DATA_END).unwrap_or(usize::MAX);
+    entries
+        .chunks_exact(16)
+        .map(|entry| u32::from_le_bytes([entry[12], entry[13], entry[14], entry[15]]))
+        // A bitmap header's width and height end 12 bytes in, a PNG's
+        // IHDR sides 24.
+        .map(|offset| usize::try_from(offset).unwrap_or(usize::MAX).saturating_add(24))
+        .max()
+        .unwrap_or(0)
+        .clamp(HEADER_LIMIT, most)
+}
+
 /// What an icon's or cursor's directory says: gdk-pixbuf reserves room
 /// from the start of the file to an image's data, as the image's entry
 /// gives its offset and length, and rows as wide as the image's bitmap
 /// header says, before it reads the image. An entry past
 /// [`MAX_ICON_DATA_END`] or inside the directory, and a bitmap header
-/// wider or taller than [`MAX_ICON_EDGE`], are refused; a bitmap header
-/// past the start read before deciding is left to the loader. Each image's
-/// size is read by the loader itself.
+/// wider or taller than [`MAX_ICON_EDGE`], are refused; while a bitmap
+/// header is not read yet, the size is incomplete, and the start of the
+/// file is held back further ([`held_start_limit`]). Each image's size is
+/// read by the loader itself.
 fn icon_size(bytes: &[u8]) -> Declared {
     let Some(count) = field(bytes, 4).map(u16::from_le_bytes) else {
         return Declared::Incomplete;
@@ -810,12 +881,25 @@ fn icon_size(bytes: &[u8]) -> Declared {
         if offset.saturating_add(length) > MAX_ICON_DATA_END || at < directory {
             return Declared::Damaged;
         }
-        // A PNG image's size is read by the loader as any PNG's is.
+        // A PNG image must give its size in its IHDR within the entry's own
+        // bytes, within an icon's sides: one that ends before it, or says
+        // nothing there, is refused, as gdk-pixbuf would read on past the
+        // entry for it.
         match starts_with(bytes.get(at..).unwrap_or_default(), PNG_SIGNATURE) {
-            Some(true) => continue,
+            Some(true) => {
+                let end = at.saturating_add(usize::try_from(length).unwrap_or(usize::MAX));
+                let png = bytes.get(at..end.min(bytes.len())).unwrap_or_default();
+                match png_size(png) {
+                    Declared::Size { width, height, .. }
+                        if width > 0 && height > 0 && width <= MAX_ICON_EDGE && height <= MAX_ICON_EDGE => {}
+                    Declared::Incomplete if end > bytes.len() => incomplete = true,
+                    _ => return Declared::Damaged,
+                }
+                continue;
+            }
             Some(false) => {}
             None => {
-                incomplete |= at < HEADER_LIMIT;
+                incomplete = true;
                 continue;
             }
         }
@@ -828,7 +912,7 @@ fn icon_size(bytes: &[u8]) -> Declared {
                 return Declared::Damaged;
             }
             Some(_) => {}
-            None => incomplete |= at + 12 <= HEADER_LIMIT,
+            None => incomplete = true,
         }
     }
     if incomplete {
@@ -1453,6 +1537,123 @@ mod tests {
         icon.extend_from_slice(&pixels);
         icon.extend_from_slice(&mask);
         icon
+    }
+
+    /// An icon whose bitmap lies past the start first held back, as the
+    /// last of several large images does, is held back as far as that
+    /// bitmap's header before the loader gets any of it: a bitmap far
+    /// wider than any icon's there is refused as one at the start is, and
+    /// one of an icon's size is read. It used to reach the loader unread,
+    /// which reserved rows as wide as it said (Codex review of #417).
+    #[test]
+    fn an_icon_bitmap_past_the_first_bytes_is_read_before_the_loader_is() {
+        let icon = bitmap_icon();
+        let padding = HEADER_LIMIT + 40_000;
+        let far = |width: i32| {
+            let mut far = icon[..22].to_vec();
+            far.extend(std::iter::repeat_n(0_u8, padding));
+            far.extend_from_slice(&icon[22..]);
+            let offset = u32::try_from(22 + padding).expect("an offset");
+            far[18..22].copy_from_slice(&offset.to_le_bytes());
+            far[22 + padding + 4..22 + padding + 8].copy_from_slice(&width.to_le_bytes());
+            far
+        };
+        let (good, wide) = (far(16), far(289_865_731));
+
+        assert_eq!(declared_size(&good[..HEADER_LIMIT]), Declared::Incomplete);
+        assert_eq!(held_start_limit(&good[..HEADER_LIMIT]), 22 + padding + 24);
+        assert_eq!(declared_size(&good), Declared::Unknown);
+        assert_eq!(declared_size(&wide), Declared::Damaged);
+        let mut reader = std::io::Cursor::new(wide);
+        let refused = decode_reader_here_to_fit(&mut reader, 64, 64, Limits::DISPLAY, None);
+        assert_eq!(refused.err(), Some(Refusal::Damaged));
+        let mut reader = std::io::Cursor::new(good.clone());
+        let decoded =
+            decode_reader_here_to_fit(&mut reader, 64, 64, Limits::DISPLAY, None).expect("the icon");
+        assert_eq!((decoded.width, decoded.height), (16, 16));
+
+        // The file ends before the bitmap header: refused when it ends,
+        // before the loader gets any of it.
+        let cut = &good[..22 + padding + 6];
+        assert_eq!(held_start(cut, 4096, Limits::DISPLAY), HeldStart::Hold);
+        assert_eq!(
+            held_start(cut, 0, Limits::DISPLAY),
+            HeldStart::Refuse(Refusal::Damaged),
+            "at the end of the file"
+        );
+        let mut reader = std::io::Cursor::new(cut.to_vec());
+        let refused = decode_reader_here_to_fit(&mut reader, 64, 64, Limits::DISPLAY, None);
+        assert_eq!(refused.err(), Some(Refusal::Damaged));
+
+        // A bitmap header past the most held back: refused at that limit.
+        let most = usize::try_from(MAX_ICON_DATA_END).expect("a length");
+        let mut beyond = vec![0_u8; most];
+        beyond[..22].copy_from_slice(&icon[..22]);
+        let offset = MAX_ICON_DATA_END - 4;
+        beyond[6 + 8..6 + 12].copy_from_slice(&4_u32.to_le_bytes());
+        beyond[18..22].copy_from_slice(&offset.to_le_bytes());
+        assert_eq!(held_start_limit(&beyond), most, "held back no further");
+        assert_eq!(declared_size(&beyond), Declared::Incomplete);
+        assert_eq!(
+            held_start(&beyond, 4096, Limits::DISPLAY),
+            HeldStart::Refuse(Refusal::Damaged),
+            "at the limit of what is held back"
+        );
+        // Any other picture whose header was not found is still left to
+        // gdk-pixbuf.
+        assert_eq!(
+            held_start(b"\x89PNG\r\n\x1a\n", 0, Limits::DISPLAY),
+            HeldStart::Release
+        );
+    }
+
+    /// A PNG image inside an icon must give its size in its IHDR within the
+    /// entry's own bytes, as an icon's: one whose entry ends before its
+    /// IHDR, or whose IHDR is far wider than any icon's, is refused, and
+    /// one cut short by the end of the file is refused there, before the
+    /// loader gets any of it. Its signature alone used to count as whole.
+    #[test]
+    fn a_png_inside_an_icon_is_refused_without_a_readable_header() {
+        let pixbuf = Pixbuf::new(gtk::gdk_pixbuf::Colorspace::Rgb, true, 8, 16, 16).expect("a picture");
+        pixbuf.fill(0x3366_99ff);
+        let png = pixbuf.save_to_bufferv("png", &[]).expect("a PNG");
+        let icon = |png: &[u8], length: usize| {
+            let mut icon = vec![0, 0, 1, 0, 1, 0];
+            icon.extend_from_slice(&[16, 16, 0, 0, 1, 0, 32, 0]);
+            icon.extend_from_slice(&u32::try_from(length).expect("a length").to_le_bytes());
+            icon.extend_from_slice(&22_u32.to_le_bytes());
+            icon.extend_from_slice(png);
+            icon
+        };
+        let good = icon(&png, png.len());
+        assert_eq!(declared_size(&good), Declared::Unknown);
+        assert_eq!(
+            held_start(&good, 0, Limits::DISPLAY),
+            HeldStart::Release,
+            "a whole one goes to the loader"
+        );
+
+        let short_entry = icon(&png, 16);
+        assert_eq!(
+            declared_size(&short_entry),
+            Declared::Damaged,
+            "the entry ends before IHDR"
+        );
+        let mut wide = png.clone();
+        wide[16..20].copy_from_slice(&289_865_731_u32.to_be_bytes());
+        assert_eq!(
+            declared_size(&icon(&wide, wide.len())),
+            Declared::Damaged,
+            "too wide"
+        );
+
+        let cut = &good[..22 + 14];
+        assert_eq!(declared_size(cut), Declared::Incomplete);
+        assert_eq!(
+            held_start(cut, 0, Limits::DISPLAY),
+            HeldStart::Refuse(Refusal::Damaged),
+            "cut short at the end of the file"
+        );
     }
 
     /// An icon whose directory puts an image gigabytes in is refused

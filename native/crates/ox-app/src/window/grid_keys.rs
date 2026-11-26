@@ -139,16 +139,18 @@ fn grouped_step(
 /// are columns on screen, keeping to `column`, the row on screen: Up and
 /// Down go to the item before or after, across the groups, Left and Right
 /// (and Page Up and Page Down) to the same row of the column before or
-/// after, Home and End to the first and last item. Its headings take no
-/// keyboard, as they have no chevron.
+/// after, Home and End to the first and last item. A heading takes the
+/// keyboard only when it is clicked, which selects its group: the keys
+/// then go on from there, as from the group's first item on its line.
 fn list_step(
     layout: &SlotLayout,
     movement: GroupedMove,
     from: GroupTarget,
     column: u32,
 ) -> Option<GroupTarget> {
-    let GroupTarget::Item(position) = from else {
-        return layout.end_item(false).map(GroupTarget::Item);
+    let position = match from {
+        GroupTarget::Item(position) => position,
+        GroupTarget::Heading(index) => return list_heading_step(layout, movement, index, column),
     };
     let to = match movement {
         GroupedMove::Up => layout.item_step(position, false),
@@ -159,6 +161,37 @@ fn list_step(
         GroupedMove::Last => layout.end_item(true),
     };
     to.filter(|to| *to != position).map(GroupTarget::Item)
+}
+
+/// Where `movement` goes in grouped List from the heading of the group at
+/// `index`, which a click gave the keyboard: the heading leads its
+/// group's items down its column, so Down goes to the group's first item,
+/// Up to the item before it (the last of the group before), Left and Right
+/// (and Page Up and Page Down) to the same row of the column before or
+/// after, as from that first item, and Home and End to the first and last
+/// item. Clicking a heading in a long folder used to send every key back
+/// to the folder's first item.
+fn list_heading_step(
+    layout: &SlotLayout,
+    movement: GroupedMove,
+    index: usize,
+    column: u32,
+) -> Option<GroupTarget> {
+    let start = layout.groups().get(index)?.start;
+    let first = layout.shown_items().find(|shown| *shown >= start);
+    let to = match movement {
+        GroupedMove::Up => layout.item_step(start, false),
+        GroupedMove::Down => first,
+        GroupedMove::Back | GroupedMove::PageUp => {
+            first.and_then(|first| layout.row_step(first, column, false))
+        }
+        GroupedMove::Forward | GroupedMove::PageDown => {
+            first.and_then(|first| layout.row_step(first, column, true))
+        }
+        GroupedMove::First => layout.end_item(false),
+        GroupedMove::Last => layout.end_item(true),
+    };
+    to.map(GroupTarget::Item)
 }
 
 impl BrowserWindow {
@@ -476,6 +509,34 @@ mod tests {
         assert_eq!(step(GroupedMove::Up, Heading(1)), Some(Item(0)));
         assert_eq!(step(GroupedMove::PageDown, Item(0)), Some(Item(4)));
         assert_eq!(step(GroupedMove::Last, Item(0)), Some(Item(4)));
+    }
+
+    /// In grouped List a heading a click gave the keyboard leads its
+    /// group's items: Down goes to the group's first item, Up to the item
+    /// before it, Right to the same row of the next column, Left to that
+    /// of the column before, and Home and End to the first and last item.
+    /// Every key used to go to the folder's first item.
+    ///
+    /// parity: VIEW-022, VIEW-008
+    #[test]
+    fn keys_go_on_from_a_clicked_list_heading() {
+        use GroupTarget::{Heading, Item};
+        // Lines of four slots: the heading of A, its items 0 to 2; the
+        // heading of B, its items 3 to 5; then B's 6 and 7.
+        let titles = ["A", "A", "A", "B", "B", "B", "B", "B"];
+        let layout = SlotLayout::inline(group_runs(titles), 4);
+        let step = |movement| grouped_step(&layout, movement, Heading(1), 0, PAGE);
+        assert_eq!(step(GroupedMove::Down), Some(Item(3)), "the group's first item");
+        assert_eq!(step(GroupedMove::Up), Some(Item(2)), "the item before the group");
+        assert_eq!(step(GroupedMove::Forward), Some(Item(6)), "the next column");
+        assert_eq!(step(GroupedMove::Back), Some(Item(0)), "the column before");
+        assert_eq!(step(GroupedMove::First), Some(Item(0)));
+        assert_eq!(step(GroupedMove::Last), Some(Item(7)));
+        assert_eq!(
+            grouped_step(&layout, GroupedMove::Up, Heading(0), 0, PAGE),
+            None,
+            "nothing before the first group"
+        );
     }
 
     /// parity: SEL-010

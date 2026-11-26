@@ -1088,10 +1088,13 @@ async fn by_document(
         size: request.size,
         shown: request.pixels,
     };
+    // A Recently used files row has no path of its own: its file is the
+    // one converted.
+    let target = request.target_uri.clone();
     let made = DOCUMENT_MAKING
         .with(Rc::clone)
         .blocking_in_turn(&|| request.on_screen.get(), move |cancel| {
-            documents::write_thumbnail(&job, cancel)
+            documents::write_thumbnail(&job, target.as_deref(), cancel)
         })
         .await;
     match made {

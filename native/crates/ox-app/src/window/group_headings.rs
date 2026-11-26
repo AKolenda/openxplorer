@@ -243,6 +243,12 @@ impl BrowserWindow {
             return None;
         }
         let heading = self.focused_heading()?;
+        // List's groups do not collapse: there Left and Right move on from
+        // the heading to the column before or after (`grid_keys.rs`).
+        let in_list = heading.model().is_some_and(|model| model.is_list());
+        if in_list && effect.collapses().is_some() {
+            return None;
+        }
         self.reset_typeahead();
         match effect.collapses() {
             Some(collapsed) => heading.set_group_collapsed(collapsed),
@@ -421,10 +427,15 @@ impl BrowserWindow {
 
     /// The folder menu's View: the command bar's, then Collapse all groups
     /// and Expand all groups while the view heads the folder's groups, as
-    /// Windows 11's folder menu has them.
+    /// Windows 11's folder menu has them. Grouped List has neither: its
+    /// groups stand side by side as columns, which do not collapse.
     pub(super) fn background_view_menu(&self) -> Vec<MenuEntry> {
         let mut entries = super::command_bar::view_menu();
-        if self.folder_pane().grouped().is_some() {
+        if self
+            .folder_pane()
+            .grouped()
+            .is_some_and(|grouped| !grouped.is_list())
+        {
             entries.push(MenuEntry::Divider);
             entries.extend(all_groups_entries());
         }
@@ -432,9 +443,13 @@ impl BrowserWindow {
     }
 
     /// The entries a menu opened on `heading` starts with, which its
-    /// commands then act on.
+    /// commands then act on: none on a List heading, whose group does not
+    /// collapse, so its menu is the group's items' menu alone.
     pub(super) fn heading_menu_for(&self, heading: &GroupSlot) -> Vec<MenuEntry> {
         self.imp().menu_heading.replace(Some(heading.clone()));
+        if heading.model().is_some_and(|model| model.is_list()) {
+            return Vec::new();
+        }
         heading_entries(heading.collapsed())
     }
 

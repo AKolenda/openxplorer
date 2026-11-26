@@ -130,3 +130,45 @@ fn a_cut_a_clipboard_manager_puts_back_after_the_paste_is_no_cut() {
     wait_until("a new cut to enable Paste", || is_enabled(&test, "paste"));
     close_when_read(&other);
 }
+
+/// Text another application copies after a cut was pasted replaces that
+/// cut: once the moved file is back where it was, as Undo puts it, a cut
+/// of it in another file manager is a new cut that pastes, not the old
+/// one a clipboard manager put back. The pasted cut used to be kept until
+/// another file list came, so that new cut stayed with Paste disabled.
+///
+/// parity: CLIP-008, CLIP-016
+#[gtk::test]
+fn text_copied_elsewhere_ends_a_pasted_cut() {
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    select_names(&test, &["Notes 10.txt"]);
+    test.activate("cut", None);
+    let cut = vec![fixture.uri_of("Notes 10.txt")];
+    test.activate("go-to", Some(&fixture.uri_of("Documents")));
+    test.wait_for_listing("the Documents folder");
+    wait_until("Paste to be enabled", || is_enabled(&test, "paste"));
+    test.activate("paste", None);
+    wait_until("the moved item", || {
+        fixture.path("Documents/Notes 10.txt").is_file()
+    });
+    wait_until("the cut to be emptied", || !is_enabled(&test, "paste"));
+
+    let clipboard = test.window.clipboard();
+    let editor = another_app_copies("Quarterly notes");
+    wait_until("the editor to own the clipboard", || !clipboard.is_local());
+    // The window reads the new clipboard and finds nothing to paste.
+    wait_for(Duration::from_millis(500));
+    close_when_read(&editor);
+    std::fs::rename(
+        fixture.path("Documents/Notes 10.txt"),
+        fixture.path("Notes 10.txt"),
+    )
+    .expect("the file goes back, as Undo puts it");
+
+    let other = another_app_offers_a_cut(&cut);
+    wait_until("the new cut of the same file to enable Paste", || {
+        is_enabled(&test, "paste")
+    });
+    close_when_read(&other);
+}

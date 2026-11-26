@@ -402,9 +402,10 @@ fn encode_gnome(mode: ClipboardMode, uris: &[String]) -> String {
     format!("{}\n{}", mode.gnome_verb(), uris.join("\n"))
 }
 
-/// The address another application gets for `uri`: the local file of a
-/// mounted share's item, which `local_path` finds, else `uri` itself.
-fn exported_uri(uri: &str, local_path: &impl Fn(&str) -> Option<PathBuf>) -> String {
+/// The address another application gets for `uri` in [`URI_LIST`]: the
+/// local file of a mounted share's item, which `local_path` finds, else
+/// `uri` itself ([`ClipboardFiles::encode_exporting`]).
+pub fn exported_uri(uri: &str, local_path: &impl Fn(&str) -> Option<PathBuf>) -> String {
     if !is_smb_location(uri) {
         return uri.to_owned();
     }

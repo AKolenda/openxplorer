@@ -152,6 +152,10 @@ pub(in crate::window) fn preview_page(selection: &[FileItem], rules: PreviewRule
     };
     if is_rich_text(content_type, &entry.name) {
         PreviewPage::RichText(file)
+    } else if crate::thumbnails::documents::has_document_extension(&entry.name) {
+        // Before text: an `.xls` or `.doc` exported as HTML or XML, which
+        // the system may name as text, shows as the document it is.
+        PreviewPage::Document(file, Art::for_entry(entry))
     } else if is_text(content_type, &entry.name) {
         PreviewPage::Text(file)
     } else if kind == "image" {
@@ -358,6 +362,18 @@ mod tests {
             page_of("setup.exe", "application/x-msdownload"),
             PreviewPage::Message(NO_PREVIEW)
         );
+        // An `.xls` or `.doc` a site exported as HTML or XML, which the
+        // system names as text, shows as the document LibreOffice draws.
+        for (name, content_type) in [
+            ("Budget.xls", "text/html"),
+            ("Letter.doc", "application/xml"),
+            ("Survey.xls", "text/plain"),
+        ] {
+            assert!(
+                matches!(page_of(name, content_type), PreviewPage::Document(..)),
+                "{name}"
+            );
+        }
         let folder = FileItem::new(folder_entry("Projects"));
         assert_eq!(preview_page(&[folder], LOCAL), PreviewPage::Message(NO_PREVIEW));
         let two = [item("a.txt", "text/plain"), item("b.txt", "text/plain")];

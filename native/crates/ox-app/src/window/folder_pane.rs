@@ -587,6 +587,16 @@ impl FolderPane {
         }
     }
 
+    /// Whether the visible view shows the item at listing position
+    /// `position`: every item does, but in a grouped view one in a
+    /// collapsed group, which stays selected though no row shows it.
+    pub(super) fn shows_position(&self, position: u32) -> bool {
+        match self.grouped() {
+            Some(grouped) => grouped.layout().is_none_or(|layout| layout.shows(position)),
+            None => true,
+        }
+    }
+
     /// The visible view's vertical scroll position.
     pub(super) fn scroll_position(&self) -> f64 {
         self.visible_vadjustment().value()

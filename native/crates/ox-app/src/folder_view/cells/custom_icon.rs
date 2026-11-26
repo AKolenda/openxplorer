@@ -24,7 +24,9 @@ use super::FileCell;
 use crate::folder_view::item::FileItem;
 use crate::icons::Art;
 use crate::picture_guard::{self, Limits};
-use crate::thumbnails::folder_preview::{folder_art, kept_folder_art, FolderArt, FolderRequest, KnownArt};
+use crate::thumbnails::folder_preview::{
+    contents_need_checking, folder_art, kept_folder_art, FolderArt, FolderRequest, KnownArt,
+};
 use crate::thumbnails::{self, OnScreen, PreviewPolicy, PreviewRequest};
 
 /// The metadata key Files stores a custom icon under.
@@ -140,6 +142,10 @@ impl FileCell {
                     if let Some(art) = art {
                         thumbnails::trace::event("folder-shown", &uri);
                         cell.show_folder_contents(&art);
+                    } else {
+                        // Art drawn at once from memory that is no
+                        // longer there.
+                        cell.hide_folder_contents();
                     }
                     cell.imp().picture_lookup.take();
                 }
@@ -268,10 +274,22 @@ impl FileCell {
             ..previews.folder_request(entry, pixels)?
         };
         match kept_folder_art(&request) {
+            // Drawn at once from memory; read again in the background once
+            // its items were read a while ago, as a picture overwritten in
+            // place leaves its folder's time as it was.
             Some(KnownArt::Drawn(art)) => {
                 thumbnails::trace::event("folder-shown-at-bind", &entry.uri);
                 self.show_folder_contents(&art);
-                Some(FolderContentsStart::Known)
+                if contents_need_checking(&request) {
+                    Some(FolderContentsStart::Wanted(request))
+                } else {
+                    Some(FolderContentsStart::Known)
+                }
+            }
+            // Known plain, which a picture that could not be read for a
+            // moment can leave too: read again the same way.
+            Some(KnownArt::Plain) if contents_need_checking(&request) => {
+                Some(FolderContentsStart::Wanted(request))
             }
             Some(KnownArt::Plain) => Some(FolderContentsStart::Known),
             None => Some(FolderContentsStart::Wanted(request)),

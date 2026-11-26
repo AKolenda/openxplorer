@@ -86,6 +86,13 @@ pub(crate) struct ItemStaging {
     /// The local staging folder the engine created, recorded when it was
     /// made private; `None` for remote and device staging.
     pub(crate) created: Option<ItemIdentity>,
+    /// Who the published item is, by device and inode, recorded before it
+    /// was published and carried across publication: the staged item,
+    /// which a rename keeps, and with Replace the folder it was merged
+    /// into. A move by copying writes out only that item before it removes
+    /// the original ([`Node::flush`]). Empty where the backend reports no
+    /// identity.
+    pub(crate) published: Vec<ItemIdentity>,
 }
 
 impl ItemStaging {
@@ -210,9 +217,11 @@ impl StagedCopy<'_> {
                 "The copy was not staged. Nothing was published.",
             ))
         })?;
+        let published = self.identities_to_publish(stage);
         let replaced = self
             .publish(stage, &mut modes)
             .map_err(|error| explain_publish_error(error, layout))?;
+        staging.published = published;
         if staging.place == StagingPlace::Device {
             // XFER-021: a device's success report is not proof.
             verify_device_publication(stage, self.destination)?;
@@ -337,6 +346,23 @@ impl StagedCopy<'_> {
             *item = renamed;
         }
         Ok(())
+    }
+
+    /// Who the item at the final name will be once `stage` is published,
+    /// read before it is: the staged item, which the rename keeps, and
+    /// with Replace a folder already there, which a staged folder is
+    /// merged into ([`ItemStaging::published`]).
+    fn identities_to_publish(&self, stage: &Stage) -> Vec<ItemIdentity> {
+        let staged = stage.item().info(Some(self.cancel)).ok();
+        let merged_into = (self.policy == ConflictPolicy::Replace)
+            .then(|| self.destination.info(Some(self.cancel)).ok())
+            .flatten()
+            .filter(|info| info.kind == NodeKind::Directory);
+        staged
+            .into_iter()
+            .chain(merged_into)
+            .filter_map(|info| info.identity)
+            .collect()
     }
 
     /// XFER-001: installs the completed item under its final name with a

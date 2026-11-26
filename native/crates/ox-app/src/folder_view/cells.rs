@@ -139,16 +139,149 @@ fn dim_cell_label_with(text: &str) -> gtk::Label {
     label
 }
 
-/// The width and height of the picture at `uri`, read from its header,
-/// for a file on this computer; `None` elsewhere, where reading could
-/// wait on a network, or when the header says nothing.
+/// The most of a picture's first bytes read for its header in Content's
+/// "Dimensions:", as the picture guard holds back at most.
+const PICTURE_HEADER_BYTES: u64 = 256 * 1024;
+
+/// How many pictures' dimensions Content keeps known, so a row bound
+/// again as the view scrolls shows them at once.
+const MOST_DIMENSIONS_KEPT: usize = 4096;
+
+/// The dimensions found for each picture, by its URI and time: none for
+/// one whose header said nothing.
+type KnownDimensions = std::collections::HashMap<(String, Option<i64>), Option<(i32, i32)>>;
+
+/// A picture whose dimensions are to be read: the cells waiting for them,
+/// each with the item it showed when it asked, when it was asked for, and
+/// the read itself.
+#[derive(Default)]
+struct PendingRead {
+    waiting: Vec<(glib::WeakRef<FileCell>, glib::WeakRef<FileItem>)>,
+    asked: u64,
+    read: Option<glib::JoinHandle<()>>,
+}
+
+/// The pictures whose dimensions are to be read, by URI and time.
+type PendingDimensions = std::collections::HashMap<(String, Option<i64>), PendingRead>;
+
+/// How many pictures' headers Content reads at once.
+const DIMENSIONS_READ_AT_ONCE: usize = 2;
+
+/// How many pictures may wait for their dimensions to be read: scrolling
+/// a large folder while slow reads hold the slots drops the ones asked
+/// for longest ago, which are off screen by then, rather than piling up
+/// reads; a row bound again asks again.
+const MOST_DIMENSIONS_PENDING: usize = 64;
+
+thread_local! {
+    /// The dimensions found for each picture.
+    static DIMENSIONS: std::cell::RefCell<KnownDimensions> = std::cell::RefCell::default();
+    /// The pictures whose dimensions are to be read: each is read once,
+    /// however many cells ask while it is.
+    static PENDING_DIMENSIONS: std::cell::RefCell<PendingDimensions> = std::cell::RefCell::default();
+    /// How many pictures' dimensions were asked for, which orders them.
+    static DIMENSIONS_ASKED: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// The slots the reads wait for, so a large folder scrolled through
+    /// reads a few headers at a time, those on screen first.
+    static DIMENSION_SLOTS: std::rc::Rc<crate::thumbnails::Slots> =
+        std::rc::Rc::new(crate::thumbnails::Slots::new(DIMENSIONS_READ_AT_ONCE));
+}
+
+/// The width and height of the picture at `uri`, read from its header, for
+/// a plain file on this computer's own disks; `None` elsewhere, where
+/// reading could wait on a network (a share mounted by the kernel or
+/// through `GVfs`), or when the header says nothing. Blocks: run it off
+/// the main thread.
+///
+/// The header is read by [`crate::picture_guard::declared_dimensions`],
+/// which decodes nothing, from the file opened once, without waiting on a
+/// pipe or a device, and checked to be a plain file through that very
+/// handle. A format it does not read (TIFF, HEIF and the like, or a vector
+/// picture) shows no dimensions: no decoder is started for them, as one
+/// started in this process, where no child decoder can run, could stop or
+/// end the app. `gdk_pixbuf_get_file_info`, which Content asked on the main
+/// thread, decodes a whole picture through glycin to find its size, and
+/// aborts the process on a huge one.
 fn picture_dimensions(uri: &str) -> Option<(i32, i32)> {
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+
     let path = gtk::gio::File::for_uri(uri).path()?;
-    if path.components().any(|part| part.as_os_str() == "gvfs") {
+    if crate::thumbnails::is_on_network_filesystem(&path) {
         return None;
     }
-    let (_, width, height) = gtk::gdk_pixbuf::Pixbuf::file_info(&path)?;
-    Some((width, height))
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(rustix::fs::OFlags::NONBLOCK.bits().cast_signed())
+        .open(&path)
+        .ok()
+        .filter(|file| file.metadata().is_ok_and(|metadata| metadata.is_file()))?;
+    let mut start = Vec::new();
+    file.take(PICTURE_HEADER_BYTES).read_to_end(&mut start).ok()?;
+    let (width, height) = crate::picture_guard::declared_dimensions(&start)?;
+    Some((i32::try_from(width).ok()?, i32::try_from(height).ok()?))
+}
+
+/// Reads the dimensions of the picture `key` names, once, a few pictures at
+/// a time, and shows them in each cell that asked while it still shows the
+/// item it asked for. A read is dropped when none of those cells shows that
+/// item any more, as when the view scrolled on, before it waits for a
+/// slot and again once it has one.
+fn read_dimensions(key: (String, Option<i64>)) -> glib::JoinHandle<()> {
+    glib::spawn_future_local(async move {
+        let wanted = {
+            let key = key.clone();
+            move || {
+                PENDING_DIMENSIONS.with_borrow(|pending| {
+                    pending.get(&key).is_some_and(|pending| {
+                        pending.waiting.iter().any(|(cell, item)| {
+                            let (Some(cell), Some(item)) = (cell.upgrade(), item.upgrade()) else {
+                                return false;
+                            };
+                            cell.imp().bound.upgrade() == Some(item)
+                        })
+                    })
+                })
+            }
+        };
+        if !wanted() {
+            PENDING_DIMENSIONS.with_borrow_mut(|pending| pending.remove(&key));
+            return;
+        }
+        let slots = DIMENSION_SLOTS.with(std::rc::Rc::clone);
+        let uri = key.0.clone();
+        // The slot is held until the read ends, those on screen first.
+        let _slot = slots.take_in_turn(&wanted).await;
+        let read = if wanted() {
+            gtk::gio::spawn_blocking(move || picture_dimensions(&uri))
+                .await
+                .ok()
+        } else {
+            None
+        };
+        let waiting = PENDING_DIMENSIONS
+            .with_borrow_mut(|pending| pending.remove(&key))
+            .map(|pending| pending.waiting)
+            .unwrap_or_default();
+        // Not read: no cell wanted it by its turn; asked again when shown.
+        let Some(found) = read else {
+            return;
+        };
+        DIMENSIONS.with_borrow_mut(|known| {
+            if known.len() >= MOST_DIMENSIONS_KEPT {
+                known.clear();
+            }
+            known.insert(key, found);
+        });
+        for (cell, item) in waiting {
+            let (Some(cell), Some(item)) = (cell.upgrade(), item.upgrade()) else {
+                continue;
+            };
+            if cell.imp().bound.upgrade() == Some(item) {
+                cell.show_picture_dimensions(found);
+            }
+        }
+    })
 }
 
 /// Where a [`FileCell`] is shown.
@@ -969,13 +1102,72 @@ impl FileCell {
             return;
         }
         imp.picture_kind.set_text(kind);
-        let dimensions = picture_dimensions(&entry.uri)
+        // Read off the main thread, as a slow drive or a damaged picture
+        // would hold the window up, and shown if the cell still shows the
+        // item then; known dimensions show at once.
+        let key = (entry.uri.clone(), entry.modified);
+        if let Some(known) = DIMENSIONS.with_borrow(|known| known.get(&key).copied()) {
+            self.show_picture_dimensions(known);
+            return;
+        }
+        self.show_picture_dimensions(None);
+        // One read for each picture, whichever cells ask while it runs.
+        let waiter = (self.downgrade(), item.downgrade());
+        let is_new = PENDING_DIMENSIONS.with_borrow_mut(|pending| {
+            if let Some(read) = pending.get_mut(&key) {
+                read.waiting.push(waiter);
+                return false;
+            }
+            if pending.len() >= MOST_DIMENSIONS_PENDING {
+                let oldest = pending
+                    .iter()
+                    .min_by_key(|(_, read)| read.asked)
+                    .map(|(key, _)| key.clone());
+                if let Some(read) = oldest.and_then(|oldest| pending.remove(&oldest)) {
+                    if let Some(handle) = read.read {
+                        handle.abort();
+                    }
+                }
+            }
+            let asked = DIMENSIONS_ASKED.get().wrapping_add(1);
+            DIMENSIONS_ASKED.set(asked);
+            pending.insert(
+                key.clone(),
+                PendingRead {
+                    waiting: vec![waiter],
+                    asked,
+                    read: None,
+                },
+            );
+            true
+        });
+        if is_new {
+            let handle = read_dimensions(key.clone());
+            PENDING_DIMENSIONS.with_borrow_mut(|pending| {
+                if let Some(read) = pending.get_mut(&key) {
+                    read.read = Some(handle);
+                }
+            });
+        }
+    }
+
+    /// Shows a picture's `dimensions` in Content's "Dimensions:", or hides
+    /// that line without them.
+    fn show_picture_dimensions(&self, dimensions: Option<(i32, i32)>) {
+        let imp = self.imp();
+        let text = dimensions
             .map(|(width, height)| format!("{width} x {height}"))
             .unwrap_or_default();
-        imp.picture_dimensions.set_text(&dimensions);
+        imp.picture_dimensions.set_text(&text);
         if let Some(line) = imp.picture_dimensions.parent() {
-            line.set_visible(!dimensions.is_empty());
+            line.set_visible(!text.is_empty());
         }
+    }
+
+    /// The dimensions Content's row shows, for tests.
+    #[cfg(test)]
+    pub(crate) fn shown_picture_dimensions(&self) -> String {
+        self.imp().picture_dimensions.text().to_string()
     }
 
     /// Shows `item`'s art and emblems, as File icons now has them
@@ -1242,6 +1434,9 @@ pub(crate) fn connect_mapped_file_cells(
         let cell = list_item.child().and_downcast::<FileCell>();
         if let (Some(slot), Some(cell)) = (list_item.item().and_downcast::<GroupSlot>(), cell.as_ref()) {
             show_slot_item(list_item, cell, Some(&slot));
+            // GTK reuses list items: a heading bound where a file was is
+            // not heard with that file's details.
+            list_item.set_accessible_description("");
             CellOwners::unstyle_cell(cell);
             return;
         }

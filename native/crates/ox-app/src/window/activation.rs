@@ -595,14 +595,11 @@ impl BrowserWindow {
 
     /// Opens the address `text`, given as `source` says.
     fn open_address(&self, text: &str, source: AddressSource) {
-        if source == AddressSource::Typed {
-            self.focus_first_item_when_listed();
-        }
         let typed = text.trim();
         // As in Windows' address bar, a path may come between double
         // quotes, as Copy as path copies it, and %NAME% (or $NAME) stands
         // for an environment variable; the history keeps what was typed.
-        let expanded = typed_address(typed, |name| std::env::var(name).ok());
+        let expanded = typed_address(typed, ox_core::location::environment_variable);
         let address = expanded.trim();
         if is_web_address(address) {
             self.accept_address(typed, source);
@@ -618,16 +615,14 @@ impl BrowserWindow {
             || Page::from_uri(address).is_some()
             || super::navigation::listed_place(VirtualPlace::from_uri(address)).is_some();
         if unchanged_page || is_page_uri {
-            self.accept_address(typed, source);
-            self.navigate_or_report(address);
+            self.go_to_typed_folder(typed, source, address);
             return;
         }
         // A standard folder's name opens it from any folder, before a
         // folder of that name in the current one, as typing "Documents"
         // in Windows 11 File Explorer opens the user's Documents.
         if let Some(standard) = self.standard_folder_titled(address) {
-            self.accept_address(typed, source);
-            self.navigate_or_report(&standard);
+            self.go_to_typed_folder(typed, source, &standard);
             return;
         }
         let folder = match self.resolve_relative(address) {
@@ -635,8 +630,7 @@ impl BrowserWindow {
             Err(error) => {
                 match place {
                     Some(place) => {
-                        self.accept_address(typed, source);
-                        self.navigate_or_report(&place);
+                        self.go_to_typed_folder(typed, source, &place);
                     }
                     None => self.show_message(&error.to_string()),
                 }
@@ -644,8 +638,7 @@ impl BrowserWindow {
             }
         };
         if let Some(inside) = self.typed_path_through_zip(&folder) {
-            self.accept_address(typed, source);
-            self.navigate_or_report(&inside);
+            self.go_to_typed_folder(typed, source, &inside);
             return;
         }
         let typed = typed.to_owned();
@@ -666,7 +659,7 @@ impl BrowserWindow {
         if self.is_going_to(tab, &folder) {
             match self.opening_kind(tab) {
                 None | Some(OpeningKind::Item) => {
-                    self.accept_address(&typed, source);
+                    self.accept_folder_address(&typed, source);
                     return;
                 }
                 Some(going) if going == kind && self.has_current_activation(tab) => return,
@@ -758,8 +751,7 @@ impl BrowserWindow {
             Err(_) => return,
         };
         if self.imp().session.borrow().is_active(id) {
-            self.accept_address(request.typed, request.source);
-            self.navigate_or_report(&folder);
+            self.go_to_typed_folder(request.typed, request.source, &folder);
         } else {
             self.navigate_background_tab(id, &folder);
         }
@@ -771,6 +763,35 @@ impl BrowserWindow {
         self.finish_address();
         if source == AddressSource::Typed {
             self.address_bar().remember_typed(typed);
+        }
+    }
+
+    /// [`Self::accept_address`] for an address whose folder the tab in
+    /// front is already going to: a typed one gives the folder's first item
+    /// the keyboard once that listing ends
+    /// ([`Self::focus_first_item_when_listed`]).
+    fn accept_folder_address(&self, typed: &str, source: AddressSource) {
+        self.accept_address(typed, source);
+        if source == AddressSource::Typed {
+            self.focus_first_item_when_listed();
+        }
+    }
+
+    /// Accepts the address `typed` and opens the folder `uri` it named in
+    /// the tab in front, saying why when it cannot. A typed one, once the
+    /// navigation started, asks that very listing to give the folder's first
+    /// item the keyboard ([`Self::focus_first_item_when_listed`]): only a
+    /// folder that opens is marked so, and only for its own listing. An
+    /// address that opened a web page or a file, named nothing or was
+    /// refused used to leave the mark on the tab, and so did a landing page
+    /// such as This PC, which lists nothing, and the next folder the tab
+    /// went to some other way took its first item as the typed folder's.
+    fn go_to_typed_folder(&self, typed: &str, source: AddressSource, uri: &str) {
+        self.accept_address(typed, source);
+        match self.navigate(uri) {
+            Ok(()) if source == AddressSource::Typed => self.focus_first_item_when_listed(),
+            Ok(()) => {}
+            Err(error) => self.show_message(&error.to_string()),
         }
     }
 
@@ -795,15 +816,13 @@ impl BrowserWindow {
         let entry = match (result, request.place) {
             (Ok(entry), _) => entry,
             (Err(EntryError::NotFound(_)), Some(place)) => {
-                self.accept_address(request.typed, request.source);
-                self.navigate_or_report(place);
+                self.go_to_typed_folder(request.typed, request.source, place);
                 return;
             }
             // An unmounted share opens in the tab, which says why it is
             // unavailable and offers Try again.
             (Err(EntryError::NotMounted(_)), _) => {
-                self.accept_address(request.typed, request.source);
-                self.navigate_or_report(request.uri);
+                self.go_to_typed_folder(request.typed, request.source, request.uri);
                 return;
             }
             // Plain words that name what was typed, as Windows says it,
@@ -823,7 +842,10 @@ impl BrowserWindow {
                 self.accept_address(request.typed, request.source);
                 self.show_in_its_folder(&entry.uri);
             }
-            _ => {
+            Activation::Folder(folder) => {
+                self.go_to_typed_folder(request.typed, request.source, &folder);
+            }
+            Activation::File | Activation::Archive => {
                 self.accept_address(request.typed, request.source);
                 self.activate_entry(&entry);
             }

@@ -464,18 +464,27 @@ impl BrowserWindow {
     /// the list had the keyboard, the first selected item takes it, else
     /// the first item, without scrolling: GTK scrolled to the item that
     /// had it last, selected or not, so a switch with nothing selected
-    /// could open the new view part way down.
+    /// could open the new view part way down. In a grouped view an item
+    /// in a collapsed group stays selected though no row shows it: the
+    /// first selected item the new view shows is the one revealed and
+    /// given the keyboard.
     fn change_view(&self, view: FolderView) {
         let pane = self.folder_pane();
         let had_keyboard = pane.view_has_focus();
         let selected = pane.model().selected_positions();
         self.show_view(view);
+        let first_selected_shown = || {
+            selected
+                .iter()
+                .copied()
+                .find(|position| pane.shows_position(*position))
+        };
         // The new view takes the keyboard on its first selected item, else
         // its first item, without scrolling: GTK would otherwise scroll to
         // the item that last had it there, selected or not.
         if had_keyboard {
             let first_shown = || pane.first_shown_position();
-            if let Some(target) = selected.first().copied().or_else(first_shown) {
+            if let Some(target) = first_selected_shown().or_else(first_shown) {
                 pane.focus_item(target);
             }
         }
@@ -497,7 +506,11 @@ impl BrowserWindow {
                 if pane.model().selected_positions() != selected || typing {
                     return;
                 }
-                if let Some(first) = selected.first().copied().filter(|first| *first < count) {
+                let shown = selected
+                    .iter()
+                    .copied()
+                    .find(|position| *position < count && pane.shows_position(*position));
+                if let Some(first) = shown {
                     pane.scroll_into_view(first);
                 }
             }

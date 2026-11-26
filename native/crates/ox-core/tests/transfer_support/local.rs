@@ -203,6 +203,22 @@ impl LocalNode {
         Ok(())
     }
 
+    /// Writes nothing out, as a local test folder needs nothing, but as a
+    /// local drive does, refuses when the item here is not one of
+    /// `published`, the items the engine recorded before publishing.
+    pub fn local_flush(&self, published: &[ItemIdentity]) -> Result<(), TransferError> {
+        let metadata = fs::symlink_metadata(&self.path)?;
+        let here = ItemIdentity {
+            device: metadata.dev(),
+            inode: metadata.ino(),
+        };
+        if published.contains(&here) {
+            Ok(())
+        } else {
+            Err(TransferError::failed("The device is not connected."))
+        }
+    }
+
     /// Removes one file, link or empty folder.
     pub fn local_delete(&self) -> Result<(), TransferError> {
         if fs::symlink_metadata(&self.path)?.is_dir() {
@@ -325,7 +341,7 @@ impl Node for LocalNode {
         self.provider.filesystem(self)
     }
 
-    fn flush(&self) -> Result<(), TransferError> {
-        self.provider.flush(self)
+    fn flush(&self, published: &[ItemIdentity]) -> Result<(), TransferError> {
+        self.provider.flush(self, published)
     }
 }

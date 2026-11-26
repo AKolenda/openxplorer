@@ -531,7 +531,12 @@ impl BrowserWindow {
     /// cut is no data: Paste stays disabled and nothing is dimmed. Only
     /// another application's format can be one, and only when every item
     /// is one a paste moved; any other file list or picture is new and
-    /// makes the application forget the moved items.
+    /// makes the application forget the moved items. So does anything else
+    /// another application puts there, such as text it copied: the cut was
+    /// replaced, and a later cut of the same paths (after Undo moved them
+    /// back) is a new cut, not one put back. An empty clipboard, as the
+    /// paste leaves it just before a manager puts the cut back, forgets
+    /// nothing.
     fn without_a_moved_cut(&self, content: ClipboardContent, from_another_app: bool) -> ClipboardContent {
         let context = self.context();
         match &content {
@@ -546,8 +551,23 @@ impl BrowserWindow {
                 context.forget_moved_cut();
                 content
             }
+            ClipboardContent::Nothing if self.another_app_holds_something() => {
+                context.forget_moved_cut();
+                content
+            }
             _ => content,
         }
+    }
+
+    /// Whether another application owns the clipboard and offers anything
+    /// at all on it, which this window may not paste.
+    fn another_app_holds_something(&self) -> bool {
+        let clipboard = self.clipboard();
+        if clipboard.is_local() {
+            return false;
+        }
+        let formats = clipboard.formats();
+        !formats.mime_types().is_empty() || !formats.types().is_empty()
     }
 
     /// Removes the items a move-paste of `pasted` moved from the clipboard,
@@ -562,7 +582,18 @@ impl BrowserWindow {
         if !current.consume(pasted.token(), moved) {
             return;
         }
-        self.context().remember_moved_cut(pasted.token(), moved);
+        // A clipboard manager may put the cut back as the URI list other
+        // applications read, where a mounted share's item is its local
+        // file (`exported_uri`): those addresses are the moved items too.
+        let local_path = share_paths();
+        let mut moved_names = moved.to_vec();
+        for uri in moved {
+            let exported = ox_core::clipboard::exported_uri(uri, &local_path);
+            if exported != *uri {
+                moved_names.push(exported);
+            }
+        }
+        self.context().remember_moved_cut(pasted.token(), &moved_names);
         let clipboard = self.clipboard();
         if current.uris().is_empty() {
             // Clearing fails only when another owner took the clipboard

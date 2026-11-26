@@ -84,8 +84,9 @@ fn a_quoted_path_as_copy_as_path_gives_it_opens_the_folder() {
     );
 }
 
-/// `%NAME%`, as in Windows, and `$NAME` or `${NAME}` stand for the
-/// environment variable's value; an unset one is looked up as typed.
+/// `%NAME%`, as in Windows, its name in any case, and `$NAME` or
+/// `${NAME}` stand for the environment variable's value; an unset one is
+/// looked up as typed.
 ///
 /// parity: NAV-033
 #[gtk::test]
@@ -101,11 +102,86 @@ fn environment_variables_in_a_typed_address_are_expanded() {
     go_to(&test, "$OX_TEST_TYPED_ROOT/Team files", &team_files);
     go_to(&test, "~", &ox_core::location::file_uri(&glib::home_dir()));
     go_to(&test, "\"${OX_TEST_TYPED_ROOT}/Team files\"", &team_files);
+    // A %NAME% finds a variable named in another case, as in Windows.
+    std::env::set_var("Ox_Test_Typed_Mixed", fixture.root());
+    go_to(&test, "~", &ox_core::location::file_uri(&glib::home_dir()));
+    go_to(&test, "%OX_TEST_TYPED_MIXED%/Team files", &team_files);
 
     test.activate("location", None);
     test.window.submit_address("%OX_TEST_NOT_SET%/Team files");
     wait_until("the not-found box", || test.window.has_open_dialog());
     assert_eq!(test.window.current_uri(), Some(team_files));
+}
+
+/// Only a typed address that opens a folder marks the tab for its first
+/// item to take the keyboard once listed: one that opens a file, or names
+/// nothing, leaves no mark, so the next folder the tab goes to some other
+/// way is not taken for the typed one. The tab used to be marked before
+/// the address was looked up.
+///
+/// parity: SEL-020, NAV-033
+#[gtk::test]
+fn only_a_typed_folder_marks_its_first_item_for_the_keyboard() {
+    use gtk::subclass::prelude::*;
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri());
+    test.wait_for_listing("the fixture");
+    let marked = || {
+        let session = test.window.imp().session.borrow();
+        session
+            .active()
+            .is_some_and(|tab| tab.first_item_focus != crate::window::session::FirstItemFocus::None)
+    };
+
+    test.activate("location", None);
+    let notes = fixture.path("Notes 2.txt").display().to_string();
+    test.window.submit_address(&notes);
+    wait_until("the typed file to open", || {
+        test.context.recorded_launches() == [fixture.uri_of("Notes 2.txt")]
+    });
+    let after_a_file = marked();
+    test.activate("location", None);
+    test.window.submit_address("%OX_TEST_NOT_SET%/nowhere");
+    wait_until("the not-found box", || test.window.has_open_dialog());
+    let after_nothing = marked();
+
+    assert!(!after_a_file, "a typed file marks nothing");
+    assert!(!after_nothing, "an address that names nothing marks nothing");
+}
+
+/// A landing page typed into the address bar, This PC here, lists no
+/// items, so it leaves no request for a first item behind: the folder
+/// opened from it next some other way keeps the keyboard where a plain
+/// navigation leaves it, without the typed folder's ring on its first
+/// item. The request used to stay on the tab until the next folder was
+/// listed.
+///
+/// parity: SEL-020, NAV-033
+#[gtk::test]
+fn a_typed_landing_page_leaves_no_first_item_request_behind() {
+    use gtk::subclass::prelude::*;
+    let fixture = Fixture::standard();
+    let test = TestWindow::open(&fixture.uri_of("Documents"));
+    test.wait_for_listing("Documents");
+    let requested = || {
+        let session = test.window.imp().session.borrow();
+        session
+            .active()
+            .is_some_and(|tab| tab.first_item_focus != crate::window::session::FirstItemFocus::None)
+    };
+
+    go_to(&test, "This PC", crate::locations::Page::ThisPc.uri());
+    let on_the_page = requested();
+    test.window.navigate(&fixture.uri()).expect("the fixture");
+    test.wait_for_listing("the fixture");
+    wait_for(Duration::from_millis(200));
+
+    assert!(!on_the_page, "the page asks nothing of a later listing");
+    assert_eq!(
+        test.window.imp().ringed_item.get(),
+        None,
+        "the folder opened next rings no first item"
+    );
 }
 
 /// Tab with the suggestions shown puts the next one into the address, as

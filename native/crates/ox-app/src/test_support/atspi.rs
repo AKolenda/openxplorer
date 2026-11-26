@@ -250,8 +250,11 @@ impl AtSpi {
     ///
     /// # Panics
     ///
-    /// When `OX_REQUIRE_ATSPI=1` is set and there is no bus, or when the
-    /// bus does not list this process.
+    /// When `OX_REQUIRE_ATSPI=1` is set and the bus cannot be reached in
+    /// any way (no bus, the session bus, the bus's address or the
+    /// connection to it failing), or when the bus does not list this
+    /// process: a run that requires the screen-reader tests never passes
+    /// by skipping them.
     pub(crate) fn connect(widget: &impl IsA<gtk::Accessible>) -> Option<Self> {
         let required = std::env::var(REQUIRE_VARIABLE).is_ok_and(|value| value == "1");
         if widget.at_context().type_().name() == TEST_CONTEXT {
@@ -261,7 +264,20 @@ impl AtSpi {
             );
             return None;
         }
-        let session = wait(gio::bus_get_future(gio::BusType::Session)).ok()?;
+        match Self::connect_to_bus() {
+            Ok(bus) => Some(bus),
+            Err(why) => {
+                assert!(!required, "{REQUIRE_VARIABLE}=1, but {why}");
+                None
+            }
+        }
+    }
+
+    /// Connects to the accessibility bus the session bus names, or says
+    /// which step failed.
+    fn connect_to_bus() -> Result<Self, String> {
+        let session = wait(gio::bus_get_future(gio::BusType::Session))
+            .map_err(|error| format!("the session bus cannot be reached: {error}"))?;
         let reply = wait(session.call_future(
             Some("org.a11y.Bus"),
             "/org/a11y/bus",
@@ -272,13 +288,16 @@ impl AtSpi {
             gio::DBusCallFlags::NONE,
             -1,
         ))
-        .ok()?;
-        let (address,) = reply.get::<(String,)>()?;
+        .map_err(|error| format!("org.a11y.Bus gives no address: {error}"))?;
+        let (address,) = reply
+            .get::<(String,)>()
+            .ok_or_else(|| format!("org.a11y.Bus answered {reply}, not an address"))?;
         let flags = gio::DBusConnectionFlags::AUTHENTICATION_CLIENT
             | gio::DBusConnectionFlags::MESSAGE_BUS_CONNECTION;
-        let connection = wait(gio::DBusConnection::for_address_future(&address, flags, None)).ok()?;
+        let connection = wait(gio::DBusConnection::for_address_future(&address, flags, None))
+            .map_err(|error| format!("the accessibility bus at {address} cannot be reached: {error}"))?;
         let application = own_application(&connection);
-        Some(Self {
+        Ok(Self {
             connection,
             application,
         })

@@ -66,7 +66,9 @@ impl AppContext {
     }
 
     /// Prepares and launches `uri` as [`AppContext::open_file`] does;
-    /// returns what was opened, or `None` when a test recorded the launch.
+    /// returns what was opened, or `None` when a test recorded the launch
+    /// or the user closed the desktop's app chooser without choosing,
+    /// which opened nothing to record among the recent files.
     async fn launch_in_application(
         &self,
         uri: String,
@@ -90,8 +92,8 @@ impl AppContext {
             });
             return Ok(None);
         }
-        launch(&prepared, window).await?;
-        Ok(Some(prepared))
+        let launched = launch(&prepared, window).await?;
+        Ok(launched.then_some(prepared))
     }
 }
 
@@ -113,8 +115,10 @@ pub(crate) fn add_to_desktop_history(uri: &str, content_type: &str) {
 }
 
 /// Starts the application `prepared` names on its file, with the
-/// window's launch context for startup notification and focus (INT-023).
-async fn launch(prepared: &PreparedOpen, window: &gtk::Window) -> Result<(), String> {
+/// window's launch context for startup notification and focus (INT-023):
+/// true once it started, false when the user closed the desktop's app
+/// chooser without choosing one.
+async fn launch(prepared: &PreparedOpen, window: &gtk::Window) -> Result<bool, String> {
     let file = match &prepared.target {
         OpenTarget::LocalPath(path) => gio::File::for_path(path),
         OpenTarget::Uri(uri) => gio::File::for_uri(uri),
@@ -126,16 +130,19 @@ async fn launch(prepared: &PreparedOpen, window: &gtk::Window) -> Result<(), Str
             let context = WidgetExt::display(window).app_launch_context();
             application
                 .launch(&[file], Some(&context))
+                .map(|()| true)
                 .map_err(|_| ox_core::i18n::gettext_static(NOT_ACCEPTED).to_owned())
         }
         // Closing the desktop's app chooser is the user's answer, not a
-        // failure to report.
+        // failure to report; nothing was opened.
         Launcher::DesktopPortal => match gtk::FileLauncher::new(Some(&file))
             .launch_future(Some(window))
             .await
         {
-            Err(error) if error.matches(gtk::DialogError::Dismissed) => Ok(()),
-            launched => launched.map_err(|error| ox_core::system_error::message_of(&error)),
+            Err(error) if error.matches(gtk::DialogError::Dismissed) => Ok(false),
+            launched => launched
+                .map(|()| true)
+                .map_err(|error| ox_core::system_error::message_of(&error)),
         },
     }
 }

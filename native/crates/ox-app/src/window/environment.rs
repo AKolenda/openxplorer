@@ -166,6 +166,9 @@ impl BrowserWindow {
         self.render_location();
         self.context().reload_settings();
         self.context().refresh_stable_mounts();
+        // A drive mounted again at the folder's address may be read-only
+        // now, or writable: its answer is asked again.
+        self.recheck_read_only_drive();
     }
 
     /// The sidebar and landing sections for the current settings, volumes

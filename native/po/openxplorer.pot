@@ -7304,6 +7304,11 @@ msgstr ""
 msgid "Open the destination folder before pasting."
 msgstr ""
 
+#. Keep each {name} as it is: the app puts a value there.
+#: crates/ox-app/src/window/file_ops/transfer.rs
+msgid "The items were moved, but the folder {folder} could not be removed. {error}"
+msgstr ""
+
 #: crates/ox-app/src/window/file_ops/unstorable_dialog.rs
 msgid "Do this for all such items"
 msgstr ""

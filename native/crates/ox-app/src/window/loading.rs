@@ -236,6 +236,9 @@ impl BrowserWindow {
         if let Some(tab) = self.imp().session.borrow_mut().tab_mut(id) {
             tab.listing_state = ListingState::Listed;
             tab.watch = None;
+            // A page has no first item to give the keyboard: a request
+            // made for it ends here, not on the next folder listed.
+            tab.first_item_focus = super::session::FirstItemFocus::None;
         }
         // A page lists no files: the rows of the folder the tab left go,
         // so nothing hidden behind the page can be selected, cut, copied
@@ -525,11 +528,14 @@ impl BrowserWindow {
         if self.imp().session.borrow().is_active(id) {
             crate::startup_trace::window_listed(self);
             self.restore_selection(id);
+            // The drive may have become read-only, or writable, since its
+            // folder was last asked about, at the same address.
+            self.recheck_read_only_drive();
             self.update_content();
             self.update_details_pane();
             self.focus_new_file_list();
             if run.mode == LoadMode::Navigate {
-                self.focus_first_item_if_asked(id);
+                self.focus_first_item_if_asked(id, run.generation);
             }
             self.restore_scroll_after_listing(id);
             self.folder_pane().move_keyboard_onto_an_item_once_drawn();
@@ -728,14 +734,18 @@ impl BrowserWindow {
         clock.request_phase(gtk::gdk::FrameClockPhase::PAINT);
     }
 
-    /// Asks the next listing of the active tab's location to put the
-    /// keyboard on its first item, unselected: another application opened
-    /// the folder, or it was typed into the address bar and opened with
-    /// Enter. Windows 11 File Explorer then rings the first item, so the
-    /// first Down selects the second (SEL-020).
+    /// Asks the listing of the active tab's location, the one the
+    /// navigation just started, or the next one when none started yet, to
+    /// put the keyboard on its first item, unselected: another application
+    /// opened the folder, or it was typed into the address bar and opened
+    /// with Enter. Windows 11 File Explorer then rings the first item, so
+    /// the first Down selects the second (SEL-020). Called once the
+    /// navigation went ahead; the request ends with that listing, so a
+    /// landing page or a later navigation never inherits it
+    /// ([`super::session::FirstItemFocus`]).
     pub(super) fn focus_first_item_when_listed(&self) {
         if let Some(tab) = self.imp().session.borrow_mut().active_mut() {
-            tab.focuses_first_item = true;
+            tab.focus_first_item_of_listing();
         }
     }
 
@@ -745,13 +755,13 @@ impl BrowserWindow {
     /// is selected there; the next Up or Down moves on from it
     /// ([`Self::step_from_ringed_item`]). A text field that has the
     /// keyboard keeps it.
-    fn focus_first_item_if_asked(&self, id: TabId) {
+    fn focus_first_item_if_asked(&self, id: TabId, generation: u64) {
         let asked = self
             .imp()
             .session
             .borrow_mut()
             .tab_mut(id)
-            .is_some_and(|tab| std::mem::take(&mut tab.focuses_first_item));
+            .is_some_and(|tab| tab.takes_first_item_focus(generation));
         let pane = self.folder_pane();
         if !asked || self.focus_is_in_text_field() || !pane.lists_items() || pane.model().n_items() == 0 {
             return;

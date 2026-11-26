@@ -147,7 +147,7 @@ pub(super) fn decode_batch(
     crate::thumbnails::trace::event("decode-batch", &pictures.len().to_string());
     match RUNNER.get_or_init(find_runner) {
         Runner::Pool(pool) => {
-            pool.decode_batch(&pictures, width, height, limits, cancellable, each);
+            pool.decode_batch(pictures, width, height, limits, cancellable, each);
             pool.stop_unused_later();
         }
         Runner::InProcess => {
@@ -452,15 +452,19 @@ impl Pool {
     /// screenful of tiles cost one request and one wait rather than one of
     /// each a picture. A picture that crashes or hangs its decoder is
     /// refused alone, and the pictures after it go to another decoder.
+    /// The pictures are shared with the thread that writes them to each
+    /// decoder, never copied: a batch of large cached thumbnails, a few
+    /// of them at once, would otherwise be held twice.
     fn decode_batch(
         &self,
-        pictures: &[Vec<u8>],
+        pictures: Vec<Vec<u8>>,
         width: i32,
         height: i32,
         limits: Limits,
         cancellable: Option<&gio::Cancellable>,
         each: &mut dyn FnMut(usize, Result<Decoded, Refusal>),
     ) {
+        let pictures: Arc<[Vec<u8>]> = pictures.into();
         let mut start = 0;
         while start < pictures.len() {
             if cancellable.is_some_and(CancellableExt::is_cancelled) {
@@ -474,11 +478,16 @@ impl Pool {
                     return;
                 }
             };
-            let rest = pictures.get(start..).unwrap_or_default().to_vec();
-            let (answered, kept) =
-                decoder.decode_many(rest, width, height, limits, cancellable, &mut |index, result| {
+            let (answered, kept) = decoder.decode_many(
+                (Arc::clone(&pictures), start),
+                width,
+                height,
+                limits,
+                cancellable,
+                &mut |index, result| {
                     each(start + index, result);
-                });
+                },
+            );
             start += answered.max(1);
             if let Some(decoder) = kept {
                 let mut idle = self.idle.lock().unwrap_or_else(PoisonError::into_inner);
@@ -667,21 +676,21 @@ impl Decoder {
 }
 
 impl Decoder {
-    /// Decodes `pictures` in turn, all of them sent at once by a thread of
-    /// their own and answered in order: how many were answered (the
-    /// picture a decoder crashed, hung or ended on is answered by its
-    /// refusal), and the decoder again when it answered them all and can
-    /// serve more.
+    /// Decodes the pictures of `batch` from its index on in turn, all of
+    /// them sent at once by a thread of their own and answered in order,
+    /// counted from that index: how many were answered (the picture a
+    /// decoder crashed, hung or ended on is answered by its refusal), and
+    /// the decoder again when it answered them all and can serve more.
     fn decode_many(
         self,
-        pictures: Vec<Vec<u8>>,
+        (batch, from): (Arc<[Vec<u8>]>, usize),
         width: i32,
         height: i32,
         limits: Limits,
         cancellable: Option<&gio::Cancellable>,
         each: &mut dyn FnMut(usize, Result<Decoded, Refusal>),
     ) -> (usize, Option<Self>) {
-        let count = pictures.len();
+        let count = batch.len().saturating_sub(from);
         self.limit
             .store(answer_limit(width, height, limits), Ordering::Relaxed);
         while self.answers.try_recv().is_ok() {}
@@ -691,6 +700,7 @@ impl Decoder {
         let spawned = thread::Builder::new()
             .name("ox-picture-batch".to_owned())
             .spawn(move || {
+                let pictures = batch.get(from..).unwrap_or_default();
                 let sent = pictures.iter().try_for_each(|picture| {
                     stdin.write_all(&request)?;
                     for chunk in picture.chunks(READ_CHUNK) {
